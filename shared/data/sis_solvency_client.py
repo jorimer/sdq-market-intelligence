@@ -83,7 +83,12 @@ class SISSolvencyClient(FixtureBackedClient):
     """Índices de Solvencia y Liquidez connector (per insurer)."""
 
     source = "SIS"
-    license = "https://sis.gob.do (público)"
+    # «público» era dónde está el archivo, no una licencia. Verificado el 2026-08-23: se
+    # raspa de `sis.gob.do/transparencia`, cuyos Términos de Uso reservan la propiedad
+    # intelectual y no conceden reutilización. Tampoco es uno de los cinco datasets ODbL
+    # que la SIS publica en datos.gob.do.
+    license = ("SIS — índices de solvencia del portal de transparencia (Ley 200-04); el "
+               "sitio RESERVA derechos y no declara licencia de reutilización.")
     license_ok = True
     fixture_file = "sis_solvency.json"
     live_phase = "solvencia (índices SIS live)"

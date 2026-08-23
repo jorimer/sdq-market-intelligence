@@ -25,7 +25,15 @@ logger = logging.getLogger("sdq.insurance_intel.financials_sync")
 _AUDITED_PAGE = "https://sis.gob.do/transparencia/estados-financieros-auditados/"
 _UA = "Mozilla/5.0 (SDQMIP research; +https://sdqconsulting.com.do)"
 _SOURCE = "SIS"
-_LICENSE = "https://opendatacommons.org/licenses/odbl/"
+#: NO es ODbL, y decía que sí. Verificado el 2026-08-23: los datasets `odc-odbl` del SIS en
+#: datos.gob.do son cinco y ninguno son los estados financieros auditados; esto se raspa de
+#: `sis.gob.do/transparencia`, cuyos Términos de Uso reservan la propiedad intelectual («Todos
+#: los Derechos Reservados») y no conceden licencia de reutilización. Publicar por mandato de
+#: transparencia no es conceder permiso de reúso: son cosas distintas y confundirlas fue el
+#: mismo error que con EM-DAT — la licencia de un canal aplicada al dato que llega por otro.
+_LICENSE = ("SIS — publicado en el portal de transparencia (Ley 200-04); el sitio RESERVA "
+            "derechos y no declara licencia de reutilización. No confundir con los datasets "
+            "`odc-odbl` que la SIS sí publica en datos.gob.do: estos no están ahí.")
 
 
 def discover_audited_urls() -> Dict[str, str]:

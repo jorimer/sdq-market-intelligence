@@ -328,24 +328,46 @@ LICENCIAS: Dict[str, Licencia] = {
               "Si alguna vez el CNSS declara otra cosa para su canal, esta entrada es el "
               "lugar donde se corrige."),
     ),
-    "https://opendatacommons.org/licenses/odbl/": Licencia(
-        terminos_url="https://opendatacommons.org/licenses/odbl/", verificado_el=None,
-        nota=("SIS (y `insurance_intel.financials_sync`). Nombra la cláusula y el "
-              "manifiesto la retiene, así que no "
-              "es del tipo subdeclarado. NO se promueve a verificada, y el motivo importa: "
-              "el 2026-08-23 se comprobó que la organización `superintendencia-de-seguros` "
-              "sí declara `odc-odbl` en sus 5 datasets de datos.gob.do — pero NINGUNO de "
-              "estos conectores lee de ahí. `sis_client` baja de `sis.gob.do/wp-content`, "
-              "`sisalril_client` de `cnss.gob.do` y `sisalril_ars_client` de "
-              "`redatam.sisalril.gob.do`. Es la misma forma del defecto de EM-DAT: la "
-              "licencia de UN canal aplicada al dato que se obtiene por OTRO. Puede que "
-              "coincida —mismo publicador, mismo dato— pero nadie lo verificó para el "
-              "canal que se usa. SISALRIL salió de esta entrada a la suya, promovida por "
-              "decisión del dueño; el SIS no, y sigue esperando que alguien lea los "
-              "términos de `sis.gob.do`.")),
-    "https://sis.gob.do (público)": Licencia(
-        terminos_url=None, verificado_el=None,
-        nota="«público» no es una licencia: es dónde está el archivo. Sin contrastar."),
+    ("SIS — Open Database License (ODbL) v1.0: los archivos que este conector baja SON "
+     "los recursos CKAN de datasets `odc-odbl` del portal, alojados en sis.gob.do. "
+     "Exige el aviso de atribución; el share-alike alcanza a las bases DERIVADAS y "
+     "no a un informe (§4.5) — https://opendatacommons.org/licenses/odbl/1-0/"): Licencia(
+        terminos_url="https://opendatacommons.org/licenses/odbl/1-0/",
+        verificado_el="2026-08-23",
+        atribucion=("Fuente: Superintendencia de Seguros (SIS), vía datos.gob.do. Contiene "
+                    "información disponible bajo la Open Database License (ODbL)."),
+        nota=("Promovida POR EVIDENCIA y no por decisión, y el camino importa porque yo "
+              "mismo había objetado esta cadena. No alcanza con que la organización del SIS "
+              "declare `odc-odbl` en el portal: el conector no llama al CKAN, baja dos "
+              "archivos de `sis.gob.do/wp-content`. Se comprobó que esas dos URL son, "
+              "carácter por carácter, los recursos XLSX de «Primas Netas Cobradas según "
+              "Ramo, 2020–2025» y «Ramos de Compañías de Seguros, 2018–2025», ambos "
+              "`odc-odbl`. El `wp-content` es sólo dónde CKAN aloja el recurso — el propio "
+              "nombre `_CKAN_PRIMAS_XLSX` lo decía. La objeción era razonable y resultó "
+              "falsa: se resolvió mirando, no discutiendo."),
+    ),
+    ("SIS — publicado en el portal de transparencia (Ley 200-04); el sitio RESERVA "
+     "derechos y no declara licencia de reutilización. No confundir con los datasets "
+     "`odc-odbl` que la SIS sí publica en datos.gob.do: estos no están ahí."): Licencia(
+        terminos_url="https://sis.gob.do/terminos-de-uso/",
+        verificado_el="2026-08-23",
+        nota=("Estados financieros auditados (`insurance_intel.financials_sync`). Decía ser "
+              "ODbL y NO lo es: los cinco datasets `odc-odbl` de la SIS en datos.gob.do no "
+              "incluyen los estados financieros. Los Términos de Uso de sis.gob.do reservan "
+              "la propiedad intelectual y el pie dice «Todos los Derechos Reservados». "
+              "VERIFICADA en el sentido de que se leyeron los términos y dicen que no hay "
+              "concesión — que es un hecho, no una deuda. Publicar por mandato de "
+              "transparencia NO es conceder permiso de reúso. Si hiciera falta usarlo en "
+              "material comercial, es una decisión o un pedido al SIS."),
+    ),
+    ("SIS — índices de solvencia del portal de transparencia (Ley 200-04); el "
+     "sitio RESERVA derechos y no declara licencia de reutilización."): Licencia(
+        terminos_url="https://sis.gob.do/terminos-de-uso/",
+        verificado_el="2026-08-23",
+        nota=("`sis_solvency_client`. Decía «https://sis.gob.do (público)», que es dónde "
+              "está el archivo y no una licencia. Misma situación que los estados "
+              "financieros: página de transparencia, no recurso del portal de datos."),
+    ),
     "open-data": Licencia(
         terminos_url=None, verificado_el=None,
         nota=("Dos palabras sin emisor ni cláusula, en el conector de IED del BCRD. La "

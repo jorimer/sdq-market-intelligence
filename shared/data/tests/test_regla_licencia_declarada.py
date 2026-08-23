@@ -124,7 +124,7 @@ _DECLARADAS = sorted(set(_declaraciones()))
 #: promoviera: salió de la cadena que compartía con el SIS a una entrada propia, y la del
 #: SIS sigue esperando que alguien lea los términos de su canal. El resto de la deuda no es
 #: «probablemente está bien».
-DEUDA_AL_2026_08_23 = 24
+DEUDA_AL_2026_08_23 = 22
 
 
 def test_el_detector_encuentra_las_declaraciones():

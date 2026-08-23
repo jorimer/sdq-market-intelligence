@@ -225,10 +225,17 @@ exactamente cómo empezó lo de abajo.
   resto del portal: aviso de atribución sí, share-alike no sobre un informe. Queda registrado
   que la decisión NO se apoya en los términos del canal que el conector usa (`cnss.gob.do`,
   `redatam.sisalril.gob.do`) sino en el criterio del dueño.
-- ⚠️ **SIS — su ODbL sigue sin verificar, y no por descuido.** La organización de la
-  Superintendencia de Seguros sí declara ODbL en datos.gob.do, pero `sis_client` **no lee de
-  ahí**: baja de `sis.gob.do/wp-content`. Es la licencia de un canal aplicada al dato que se
-  obtiene por otro — la misma forma del caso EM-DAT. Puede coincidir, pero nadie lo comprobó.
+- ✅ **SIS (primas y ramos) — ODbL verificado.** Los dos archivos que consumimos son, carácter
+  por carácter, los **recursos CKAN** de los datasets `odc-odbl` «Primas Netas Cobradas según
+  Ramo» y «Ramos de Compañías de Seguros»; el `sis.gob.do/wp-content` es sólo dónde el portal
+  aloja el recurso. Aviso de atribución sí, share-alike no sobre un informe.
+- ❌ **SIS (transparencia) — no hay licencia de reutilización, y decíamos que sí.** Los estados
+  financieros auditados y los índices de solvencia **no** están entre los cinco datasets ODbL
+  del portal: se raspan de `sis.gob.do/transparencia`, cuyos Términos de Uso reservan la
+  propiedad intelectual («Todos los Derechos Reservados»). **Publicar por mandato de
+  transparencia no es conceder permiso de reúso.** Si hace falta para material comercial, es
+  una decisión del dueño o un pedido formal al SIS. Afecta al ISF y a la solvencia por
+  compañía.
 - ❌ **Nunca** describir una licencia restrictiva en prosa («uso público con cita») en un
   contrato, un deck o un informe. El texto de la licencia es además una entrada de máquina:
   `shared.data_api.manifest.license_restricts_redistribution` decide si el dato se reexporta
