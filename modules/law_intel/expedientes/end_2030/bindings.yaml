@@ -460,11 +460,25 @@ bindings:
       alcanza el año que habría que reproducir.
     hipotesis_sin_comprobar: >-
       Que el 1,4 de la ley sea el gasto del gobierno CENTRAL y no el del gobierno general.
-      Encaja en magnitud —1,4% del PIB de 2009 son unos RD$23,5 mil millones, del orden del
-      presupuesto del ministerio de salud de esos años— y explicaría la brecha entera. No está
-      comprobado: exige la ejecución presupuestaria de 2009, que el emisor no publica en el
-      portal abierto. Mientras no se compruebe, la meta de 4,5% para 2025 no se puede medir
-      contra el agregado ancho sin darla por más cerca de lo que está.
+      Sigue siendo la mejor explicacion de la brecha —1,4% del PIB de 2009 son unos RD$23,5
+      mil millones, del orden del presupuesto del ministerio de salud de esos anios— y sigue
+      SIN COMPROBAR, pero ya no por falta de buscar.
+      DONDE SE BUSCO, el 2026-08-22, y que devolvio cada sitio:
+      el organismo internacional de salud publica dos agregados para 2009 y ninguno es 1,4
+      —gasto publico general 2,332% y gasto corriente total 4,767%— y su catalogo no tiene
+      ninguna serie de gobierno CENTRAL;
+      el portal nacional de datos abiertos publica ejecucion presupuestaria desde 2016 y
+      estadisticas de ejecucion de gastos desde 2017, ninguna alcanza 2009;
+      la serie fiscal historica del banco central SI cubre 2000-2013 pero esta clasificada por
+      concepto economico —ingresos, gastos corrientes, de capital— y no trae una linea de
+      salud;
+      el sitio de la oficina de presupuesto no expone informes historicos, solo los del anio
+      en curso.
+      QUE LA CERRARIA: un documento de archivo con la ejecucion presupuestaria de 2009 por
+      clasificacion funcional. Existe —es un informe que ese organismo produjo en su momento—
+      pero no esta en linea. Es trabajo de archivo, no de conexion, y hasta que aparezca la
+      meta de 4,5% para 2025 no se puede medir contra el agregado ancho sin darla por mas
+      cerca de lo que esta.
   - indicador: "2.34"
     serie: "wdi.SH.STA.BASS.ZS"
     fuente: wdi
