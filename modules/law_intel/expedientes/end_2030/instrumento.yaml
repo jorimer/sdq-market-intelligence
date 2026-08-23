@@ -134,6 +134,19 @@ fuentes_admitidas:
       medición del fenómeno. «Confianza en los partidos» mide lo que la gente declara sentir,
       y su serie se mueve con el ciclo político y con el diseño del cuestionario. Publicarla
       contra una meta legal sin decir eso convertiría una opinión en un hecho.
+    exige_atribucion: true
+    atribucion: >-
+      Fuente: Latinobarómetro. Cifra computada por SDQ sobre la tabulación que publica el
+      emisor.
+    nota_de_uso: >-
+      DECISIÓN DEL DUEÑO, 2026-08-22. El emisor no declara términos de reutilización en sus
+      páginas públicas: ni los permite ni los prohíbe. Lo que se publica no es su microdato ni
+      sus tablas sino UNA cifra por año, computada por nosotros sobre la tabulación que su
+      propia herramienta muestra a cualquiera sin registrarse. Se resolvió publicar con
+      atribución explícita en vez de esperar una respuesta que puede no llegar.
+      La atribución NO es una recomendación: `atribucion` es obligatoria para todo binding que
+      use esta fuente, y `modules.law_intel.ai_context.atribuciones_obligatorias` la computa
+      del expediente para que el informe no dependa de que alguien se acuerde.
 
   - id: pefa
     nombre: Evaluación PEFA

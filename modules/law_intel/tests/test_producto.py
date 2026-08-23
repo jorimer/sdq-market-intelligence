@@ -231,3 +231,47 @@ def test_el_vocabulario_obligatorio_distingue_estancada_de_retrocede():
     voc = law_ai_context(E, "2025")["vocabulario_obligatorio"]
     assert voc["estancada"] == GLOSA_ESTANCADA
     assert "no escribas «retrocede»" in GLOSA_ESTANCADA.lower()
+
+
+class TestLaAtribucionQueLaFuenteExige:
+    """Hay fuentes admitidas cuya condición de uso es que se las nombre. La decisión de
+    publicar así es del dueño (2026-08-22) y está registrada en el instrumento; estos tests
+    la vuelven exigible en vez de recordable.
+
+    El modo de falla que persiguen no es que la atribución esté mal escrita: es que
+    DESAPAREZCA. Un texto obligatorio que vive en la cabeza del redactor se pierde en la
+    primera reescritura, y nadie se entera hasta que el emisor reclama.
+    """
+
+    def test_la_obligacion_se_computa_de_la_fuente_y_no_de_una_lista(self):
+        from modules.law_intel.ai_context import atribuciones_obligatorias
+        from modules.law_intel.bindings import cargar_bindings
+        from modules.law_intel.registro import cargar
+
+        exigen = {f["id"] for f in cargar(E).meta["fuentes_admitidas"]
+                  if f.get("exige_atribucion")}
+        assert exigen, "ninguna fuente exige atribución: el barrido no probaría nada"
+        esperados = {b.indicador for b in cargar_bindings(E).values()
+                     if b.cuenta and b.fuente in exigen}
+        assert {a["indicador"] for a in atribuciones_obligatorias(E)} == esperados
+
+    def test_cada_atribucion_trae_su_texto(self):
+        """Sin texto, la obligación es un aviso que no dice qué escribir."""
+        from modules.law_intel.ai_context import atribuciones_obligatorias
+
+        for a in atribuciones_obligatorias(E):
+            assert len(a["atribucion"]) > 25, a
+
+    def test_la_regla_llega_al_modelo_junto_con_la_lista(self):
+        """La lista sin la regla se lee como información de contexto, no como obligación."""
+        ctx = law_ai_context(E, "2025")
+        assert ctx["atribuciones_obligatorias_por_indicador"]
+        assert "NOMBRANDO a su fuente" in ctx["regla_de_la_atribucion"]
+
+    def test_una_fuente_que_no_la_exige_no_aparece(self):
+        """La obligación es de la fuente concreta, no de todas las externas: inflarla haría
+        que el informe repitiera atribuciones que nadie pide y la regla perdería peso."""
+        from modules.law_intel.ai_context import atribuciones_obligatorias
+
+        fuentes = {a["fuente"] for a in atribuciones_obligatorias(E)}
+        assert "wdi" not in fuentes and "bcrd" not in fuentes
