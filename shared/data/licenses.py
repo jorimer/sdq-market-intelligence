@@ -198,12 +198,14 @@ LICENCIAS: Dict[str, Licencia] = {
               "verificación es de SUS datasets: los cuatro de la organización "
               "`sistema-unico-de-beneficiarios-siuben` dan `odc-odbl` (2026-08-23). "
               "Decía «uso público con cita». "
-              "ES LA ÚNICA DE ESTE LOTE CON EFECTO EN PRODUCCIÓN: el padrón provincial del "
-              "SIUBEN se sirve por la Data API vía `social_dev`, y al nombrar la cláusula "
-              "esas series pasan a cuarentena en su forma VERBATIM. Es lo correcto — "
-              "servir la serie cruda a un tercero es distribuir una base— y lo derivado "
-              "sigue saliendo. Si se quisieran exponer igual, la palanca es una decisión "
-              "de licencia o servirlas como `derived`, nunca una cadena que diga menos."),
+              "SIN EFECTO EN PRODUCCIÓN, y la primera lectura fue equivocada: parecía que "
+              "el padrón provincial pasaba a cuarentena en la Data API por la marca «odbl». "
+              "No pasa. El gate no es del catálogo sino de la LLAVE — "
+              "`build_manifest(allow_restricted=…)` levanta la retención para un consumidor "
+              "que declaró uso `internal`, y la única llave viva (SDQ-PMS) lo es: interpreta "
+              "el dato, no lo reexpide. Es el caso que `ApiKey.usage` documenta con ese "
+              "nombre. La cuarentena queda reservada a una llave `external`, que es cuando "
+              "servir la serie cruda sí sería distribuir una base."),
     ),
 
     # ── Deuda: heredadas de quien escribió el conector, sin contrastar ────────────────
@@ -307,9 +309,29 @@ LICENCIAS: Dict[str, Licencia] = {
         verificado_el=None,
         nota=("La cadena ES la URL de los términos, que es más honesto que una glosa — "
               "pero nadie registró qué dicen, y contradice a `comtrade_client`.")),
+    ("SISALRIL / CNSS — Open Database License (ODbL) v1.0: exige el aviso de atribución, "
+     "y el share-alike alcanza a las bases DERIVADAS. Un informe o un gráfico es "
+     "«Produced Work» y NO lo dispara (§4.5) — "
+     "https://opendatacommons.org/licenses/odbl/1-0/"): Licencia(
+        terminos_url="https://opendatacommons.org/licenses/odbl/1-0/",
+        verificado_el="2026-08-23",
+        atribucion=("Fuente: SISALRIL / CNSS (Seguro Familiar de Salud). Contiene "
+                    "información disponible bajo la Open Database License (ODbL)."),
+        nota=("PROMOVIDA POR DECISIÓN DEL DUEÑO el 2026-08-23, y conviene registrar en qué "
+              "se apoya y en qué no. NO se estableció leyendo los términos del canal que "
+              "el conector usa: `sisalril_client` baja de `cnss.gob.do` y "
+              "`sisalril_ars_client` de `redatam.sisalril.gob.do`, no del portal. Lo que "
+              "hay es (a) la organización del sector en datos.gob.do publicando bajo ODbL "
+              "y (b) la decisión del dueño de tratar el dato del SFS bajo esos términos. "
+              "Se separa de la cadena del SIS a propósito: compartían una sola y promover "
+              "las dos juntas habría hecho pasar por verificado algo que no se decidió. "
+              "Si alguna vez el CNSS declara otra cosa para su canal, esta entrada es el "
+              "lugar donde se corrige."),
+    ),
     "https://opendatacommons.org/licenses/odbl/": Licencia(
         terminos_url="https://opendatacommons.org/licenses/odbl/", verificado_el=None,
-        nota=("SIS y SISALRIL. Nombra la cláusula y el manifiesto la retiene, así que no "
+        nota=("SIS (y `insurance_intel.financials_sync`). Nombra la cláusula y el "
+              "manifiesto la retiene, así que no "
               "es del tipo subdeclarado. NO se promueve a verificada, y el motivo importa: "
               "el 2026-08-23 se comprobó que la organización `superintendencia-de-seguros` "
               "sí declara `odc-odbl` en sus 5 datasets de datos.gob.do — pero NINGUNO de "
@@ -318,8 +340,9 @@ LICENCIAS: Dict[str, Licencia] = {
               "`redatam.sisalril.gob.do`. Es la misma forma del defecto de EM-DAT: la "
               "licencia de UN canal aplicada al dato que se obtiene por OTRO. Puede que "
               "coincida —mismo publicador, mismo dato— pero nadie lo verificó para el "
-              "canal que se usa. Falta también SISALRIL, que no tiene organización en el "
-              "portal.")),
+              "canal que se usa. SISALRIL salió de esta entrada a la suya, promovida por "
+              "decisión del dueño; el SIS no, y sigue esperando que alguien lea los "
+              "términos de `sis.gob.do`.")),
     "https://sis.gob.do (público)": Licencia(
         terminos_url=None, verificado_el=None,
         nota="«público» no es una licencia: es dónde está el archivo. Sin contrastar."),

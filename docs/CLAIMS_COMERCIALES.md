@@ -218,13 +218,17 @@ exactamente cómo empezó lo de abajo.
   distingue *Derivative Database* de *Produced Work* (§4.5). **Un informe o un gráfico es
   Produced Work y no dispara share-alike** — solo exige el aviso de atribución, que la
   plataforma ya computa e inserta sola. Lo que sí sería distribuir una base es servir la serie
-  cruda por la Data API, y para eso está la cuarentena verbatim.
-- ⚠️ **SIS y SISALRIL — su ODbL NO está verificada, y no por descuido.** La organización de la
-  Superintendencia de Seguros sí declara ODbL en datos.gob.do, pero **nuestros conectores no
-  leen de ahí**: bajan de `sis.gob.do`, `cnss.gob.do` y `redatam.sisalril.gob.do`. Es la
-  licencia de un canal aplicada al dato que se obtiene por otro — la misma forma del caso
-  EM-DAT. Puede coincidir, pero nadie lo comprobó para el canal que se usa. No comprometer
-  seguros ni salud en material nuevo sin resolverlo.
+  cruda a un consumidor **externo**, y para eso está la cuarentena verbatim — que **no aplica
+  hoy**: la única llave viva de la Data API es SDQ-PMS, declarada `internal`, que interpreta el
+  dato y no lo reexpide. El gate es de la llave, no del catálogo.
+- ✅ **SISALRIL / CNSS — ODbL por decisión del dueño** (2026-08-23). Mismo tratamiento que el
+  resto del portal: aviso de atribución sí, share-alike no sobre un informe. Queda registrado
+  que la decisión NO se apoya en los términos del canal que el conector usa (`cnss.gob.do`,
+  `redatam.sisalril.gob.do`) sino en el criterio del dueño.
+- ⚠️ **SIS — su ODbL sigue sin verificar, y no por descuido.** La organización de la
+  Superintendencia de Seguros sí declara ODbL en datos.gob.do, pero `sis_client` **no lee de
+  ahí**: baja de `sis.gob.do/wp-content`. Es la licencia de un canal aplicada al dato que se
+  obtiene por otro — la misma forma del caso EM-DAT. Puede coincidir, pero nadie lo comprobó.
 - ❌ **Nunca** describir una licencia restrictiva en prosa («uso público con cita») en un
   contrato, un deck o un informe. El texto de la licencia es además una entrada de máquina:
   `shared.data_api.manifest.license_restricts_redistribution` decide si el dato se reexporta

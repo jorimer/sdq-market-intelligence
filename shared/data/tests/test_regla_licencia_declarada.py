@@ -119,7 +119,11 @@ _DECLARADAS = sorted(set(_declaraciones()))
 #: Comtrade (dos instancias más del mismo defecto), se confirmó el Banco Mundial como
 #: estaba, y la UIT salió de la deuda por una vía que no estaba prevista: una respuesta
 #: ESCRITA del emisor que ya estaba en el buzón. De 7 fuentes resueltas, 4 estaban
-#: subdeclaradas y 1 SOBRE-declarada; el resto de la deuda no es «probablemente está bien».
+#: subdeclaradas y 1 SOBRE-declarada. Después el lote de datos.gob.do: seis cadenas más que
+#: no nombraban ninguna cláusula, todas ODbL. La deuda NO baja con SISALRIL aunque se
+#: promoviera: salió de la cadena que compartía con el SIS a una entrada propia, y la del
+#: SIS sigue esperando que alguien lea los términos de su canal. El resto de la deuda no es
+#: «probablemente está bien».
 DEUDA_AL_2026_08_23 = 24
 
 

@@ -81,7 +81,10 @@ class SISALRILClient(FixtureBackedClient):
     """SFS health-coverage connector (CNSS/SISALRIL)."""
 
     source = "SISALRIL"
-    license = "https://opendatacommons.org/licenses/odbl/"
+    license = ("SISALRIL / CNSS — Open Database License (ODbL) v1.0: exige el aviso de atribución, "
+        "y el share-alike alcanza a las bases DERIVADAS. Un informe o un gráfico es "
+        "«Produced Work» y NO lo dispara (§4.5) — "
+        "https://opendatacommons.org/licenses/odbl/1-0/")
     license_ok = True
     fixture_file = "sisalril.json"
     live_phase = "F1c (CNSS CSV live)"

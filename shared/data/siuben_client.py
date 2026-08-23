@@ -57,11 +57,15 @@ SOURCE = "SIUBEN"
 #: organización `sistema-unico-de-beneficiarios-siuben` declaran `license_id: odc-odbl`.
 #: Decía «uso público con cita», que omitía las dos cláusulas de la ODbL.
 #:
-#: CONSECUENCIA que hay que conocer: esta cadena SÍ llega a la Data API —el padrón
-#: provincial del SIUBEN se sirve por `social_dev`— y `license_restricts_redistribution`
-#: reconoce «odbl», así que las series pasan a CUARENTENA en su forma verbatim. Es lo
-#: correcto: servir la serie cruda a un tercero ES distribuir una base, y ahí el
-#: share-alike aplica. Lo derivado sigue saliendo.
+#: SOBRE LA DATA API, porque la primera lectura fue equivocada y conviene dejarla escrita.
+#: Esta cadena llega al catálogo —el padrón provincial se sirve por `social_dev`— y
+#: `license_restricts_redistribution` reconoce «odbl», así que parecía que las series
+#: pasaban a cuarentena. NO pasan: el gate no es del catálogo sino de la LLAVE.
+#: `build_manifest(allow_restricted=ctx.allows_restricted_sources)` levanta la retención
+#: cuando el consumidor declaró uso `internal`, y hoy la única llave viva es SDQ-PMS, que
+#: es interno y no reexpide: interpreta. Es literalmente el caso que documenta
+#: `ApiKey.usage`. La cuarentena queda para una llave `external`, que es cuando servir la
+#: serie cruda sí sería distribuir una base.
 LICENSE = ("SIUBEN vía datos.gob.do — Open Database License (ODbL) v1.0: exige el aviso "
            "de atribución, y el share-alike alcanza a las bases DERIVADAS. Un informe o "
            "un gráfico es «Produced Work» y NO lo dispara (§4.5) — "
