@@ -450,6 +450,15 @@ class SocialDevProduct:
             "Encuesta regional de opinión (Latinobarómetro): porcentaje que declara mucha o "
             "algo de confianza, sobre la base sin no-respuesta; la suma es cómputo SDQ. Es "
             "una medición de PERCEPCIÓN. No alimenta el índice de desarrollo."),
+        # Indicador 3.23 de la END. El sufijo `_total` distingue esta serie NACIONAL de la
+        # que el eje sectorial ingiere por actividad: son el mismo dato con alcances
+        # distintos, y confundirlos publicaría la inversión de un rubro contra la meta del
+        # país.
+        "fdi_total_usd_mm": (
+            "fdi_total_usd_mm", HEALTH_ENTITY,
+            "Inversión extranjera directa — país (millones de US$)", "living_standards",
+            "Suma de las nueve actividades del cuadro del BCRD, cuya coincidencia con la "
+            "fila de total la comprueba el conector. No alimenta el índice de desarrollo."),
         # Indicador 2.38 de la END. Es una dispersión ENTRE regiones, así que el sujeto es
         # el país y no una demarcación — y la etiqueta lo dice, porque «brecha regional» a
         # secas se lee como si fuera el dato de una región.

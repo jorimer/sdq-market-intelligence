@@ -605,6 +605,39 @@ def _sync_gei_per_capita(db: Session, set_phase: Callable[[str], None]) -> int:
     return synced
 
 
+def _sync_ied_total(db: Session, set_phase: Callable[[str], None]) -> int:
+    """Indicador 3.23 de la END: flujo anual de inversion extranjera directa, TOTAL del pais.
+
+    El emisor publica la IED por ACTIVIDAD economica y el eje sectorial la ingiere asi, que
+    es lo que ese eje necesita. La ley fija una meta NACIONAL, y el proveedor de series del
+    modulo de leyes rechaza —bien— toda variable medida por sujeto: publicar la IED de una
+    actividad contra la meta del pais seria el mismo defecto que publico la pobreza de una
+    region como cifra nacional.
+
+    Asi que el total anual se computa aca y se persiste como serie nacional propia, igual que
+    el cociente de exportaciones o las emisiones per capita. La suma es segura porque el
+    conector ya la comprueba contra la fila `Total Flujos IED` del propio cuadro: si el
+    emisor renombra una actividad o la suma no cuadra, levanta en vez de devolver un total
+    corto.
+    """
+    from shared.data.ied_bcrd import LICENSE, SOURCE, IedBcrdClient
+
+    set_phase("IED total del pais (indicador 3.23 de la END)")
+    por_anio: Dict[str, float] = {}
+    for r in IedBcrdClient().fetch():          # la excepcion sube a _best_effort
+        if r.value is None:
+            continue
+        por_anio[str(r.period)] = por_anio.get(str(r.period), 0.0) + float(r.value)
+    synced = 0
+    for anio, total in sorted(por_anio.items()):
+        _upsert_indicator(db, theme="fdi_total_usd_mm", entity=HEALTH_ENTITY,
+                          period=anio, value=round(total, 2), source=SOURCE,
+                          disagg="nacional", unit="millones de US$")
+        synced += 1
+    logger.info("[social] IED total: %d anios (%s)", synced, LICENSE[:30])
+    return synced
+
+
 def _sync_confianza_partidos(db: Session, set_phase: Callable[[str], None]) -> int:
     """Indicador 1.1 de la END: confianza en los partidos políticos.
 
@@ -1109,6 +1142,9 @@ def one_social_sync(db: Session, set_phase: Optional[Callable[[str], None]] = No
     partidos_synced = _best_effort(
         "confianza en los partidos (1.1)",
         lambda: _sync_confianza_partidos(db, set_phase), errors)
+    ied_synced = _best_effort(
+        "IED total del país (3.23)",
+        lambda: _sync_ied_total(db, set_phase), errors)
     salud_synced = _best_effort(
         "cobertura del Seguro Familiar de Salud (2.36)",
         lambda: _sync_cobertura_salud(db, set_phase), errors)
@@ -1174,6 +1210,7 @@ def one_social_sync(db: Session, set_phase: Optional[Callable[[str], None]] = No
         "pobreza_rural_synced": rural_synced,
         "gei_per_capita_synced": gei_synced,
         "confianza_partidos_synced": partidos_synced,
+        "ied_total_synced": ied_synced,
         "cobertura_salud_synced": salud_synced,
         "participacion_export_synced": export_synced,
         "mem_electrico_synced": mem_synced,

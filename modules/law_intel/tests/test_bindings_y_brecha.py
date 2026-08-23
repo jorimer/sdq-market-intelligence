@@ -585,3 +585,20 @@ def test_los_CUATRO_cargos_electivos_tienen_binding_y_ninguno_comparte_serie():
     assert not faltan, f"cargos electivos sin binding: {faltan}"
     series = [bs[k].serie for k in cargos]
     assert len(set(series)) == 4, f"dos cargos comparten serie: {series}"
+
+
+def test_ninguna_serie_de_un_binding_que_CUENTA_omite_su_eje():
+    """El proveedor resuelve `<eje>:<variable>` y una serie sin prefijo no se encuentra.
+
+    Sale de un defecto real: el 3.23 se promovió apuntando a `ied_usd_mm` —sin eje y, peor,
+    a la variable que el emisor publica POR ACTIVIDAD—. Toda la suite pasaba porque ningún
+    test estructural toca la base; lo destapó producción, con el semáforo diciendo «sin
+    dato» sobre un binding verificado.
+
+    Un binding sin eje no falla al cargarse: DESAPARECE del informe.
+    """
+    sin_eje = [b.indicador for b in cargar_bindings(EXPEDIENTE).values()
+               if b.cuenta and ":" not in b.serie]
+    assert not sin_eje, (
+        f"estos bindings cuentan como cobertura y su serie no declara eje: {sin_eje}. "
+        f"El proveedor no la va a encontrar y el indicador saldrá «sin dato» en el informe.")
