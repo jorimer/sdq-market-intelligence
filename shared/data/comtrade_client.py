@@ -32,7 +32,28 @@ COMTRADE_URL = "https://comtradeapi.un.org/public/v1/preview/C/A/HS"
 WB_URL = "https://api.worldbank.org/v2"
 
 SOURCE = "UN Comtrade + World Bank WDI"
-LICENSE = "UN Comtrade & World Bank Open Data (free, attribution)"
+
+#: Dos emisores en una cadena, y la glosa «free, attribution» solo describía a uno.
+#: Verificado el 2026-08-23:
+#:   · **World Bank Open Data** sí es CC-BY 4.0 por defecto (datacatalog.worldbank.org/
+#:     public-licenses). Con una salvedad que el propio catálogo declara: no todos sus
+#:     datasets lo son —hay ODbL, licencias de microdatos y términos de terceros— así que
+#:     «Banco Mundial» no equivale a CC-BY para cualquier serie que se agregue mañana.
+#:   · **UN Comtrade NO es libre.** El dato es propiedad intelectual de Naciones Unidas,
+#:     se cede para uso INTERNO, y no se puede re-diseminar sin permiso escrito de la
+#:     UNSD. Re-diseminar dato original a no-suscriptores por encima de 100.000 registros
+#:     exige además pagar una «license to distribute» sobre una suscripción premium. El
+#:     dato TRANSFORMADO es otra cosa: la UN no lo reclama, y ahí está la vía legítima.
+#:
+#: El repo ya se contradecía: `modules/trade_intel/partner_chapters_sync.LICENCIA` apunta
+#: al acuerdo de licencia de Comtrade —el lado correcto— mientras esta cadena, que es la
+#: que viaja en el `meta` del dataset, decía «free». Cuando dos declaraciones de la misma
+#: fuente discrepan, la que gobierna es la que alguien lee, no la que tiene razón.
+LICENSE = ("World Bank Open Data CC-BY 4.0 (por defecto; el catálogo tiene datasets con "
+           "otras licencias) + UN Comtrade, que NO es libre: propiedad de Naciones "
+           "Unidas, uso interno, PROHIBIDA LA REDISTRIBUCIÓN del dato original sin "
+           "permiso escrito de la UNSD (el dato transformado no lo alcanza) — "
+           "https://comtrade.un.org/licenseagreement.html")
 
 _USD_TO_MILLIONS = 1_000_000.0
 
