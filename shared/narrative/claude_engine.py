@@ -10,6 +10,7 @@ from shared.cache import cache_get, cache_set
 from shared.observability.llm_ledger import PURPOSE_NARRATIVE, record_call
 from shared.config.settings import settings
 from shared.llm.budget import budget_allows, record_usage
+from shared.llm.failures import report_api_failure
 from shared.narrative.lang_context import get_request_lang
 from shared.narrative.sanitize import (
     flag_register_violations, normalize_number_format, strip_meta_commentary,
@@ -1935,7 +1936,7 @@ class NarrativeEngine:
                             client, system, user, max_tokens, context_str, cache_key,
                             template, context, axis)
                 except Exception as e:  # noqa: BLE001
-                    logger.error("Claude API error (cerebro): %s. Fallback estático.", e)
+                    report_api_failure(logger, e, label="cerebro")
                     result = self._generate_fallback(context, template)
                     self._set_cache(cache_key, result)
                     return result
@@ -1967,7 +1968,7 @@ class NarrativeEngine:
             return self._result_from_response(response, cache_key, template, axis)
 
         except Exception as e:
-            logger.error("Claude API error: %s. Falling back to static template.", e)
+            report_api_failure(logger, e, label=f"legacy:{template}")
             result = self._generate_fallback(context, template)
             self._set_cache(cache_key, result)
             return result

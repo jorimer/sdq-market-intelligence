@@ -511,6 +511,7 @@ async def get_paypal_diagnostics(db: Session = Depends(get_db),
     """Chequeo de alistamiento del cobro self-serve. Enumera lo que falta con su consecuencia,
     en vez de dejar que se descubra cuando un cliente ya pagó."""
     from shared.billing.fiscal.sequences import list_sequences
+    from shared.billing.plan_sync import missing_plan_cells
     from shared.settings.service import (
         get_fiscal_regime, get_invoice_issuer, paypal_config_masked,
     )
@@ -519,6 +520,7 @@ async def get_paypal_diagnostics(db: Session = Depends(get_db),
     issuer = get_invoice_issuer(db)
     regime = get_fiscal_regime(db)
     usables = [s for s in list_sequences(db, regime=regime) if s["usable"]]
+    faltan_planes = missing_plan_cells(db)
 
     checks = [
         {"key": "credentials", "ok": bool(cfg["configured"]),
@@ -531,9 +533,13 @@ async def get_paypal_diagnostics(db: Session = Depends(get_db),
         {"key": "live", "ok": cfg["env"] == "live",
          "label": "Entorno en vivo (no sandbox)",
          "impact": "En sandbox no se mueve dinero real."},
-        {"key": "plans", "ok": bool(cfg["plans"]),
-         "label": "Billing plans mapeados para las suscripciones",
-         "impact": "Sin plan del (SKU, periodicidad) la suscripción no se puede crear."},
+        # POR CELDA, no ``bool(plans)``: el mapa completo y el mapa a medias se veían
+        # iguales, y la celda que faltaba la encontró un cliente con un 503 en el checkout.
+        {"key": "plans", "ok": not faltan_planes,
+         "label": "Billing plans mapeados para TODA combinación vendible (SKU × periodicidad)",
+         "impact": "Sin plan del (SKU, periodicidad) la suscripción no se puede crear: "
+                   "el cliente recibe un 503 en el checkout.",
+         "missing": faltan_planes},
         {"key": "issuer_rnc", "ok": bool((issuer.get("rnc") or "").strip()),
          "label": "RNC del emisor cargado",
          "impact": "Sin RNC la factura sale como comprobante interno."},
