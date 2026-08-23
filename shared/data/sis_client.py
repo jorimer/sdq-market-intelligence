@@ -87,8 +87,23 @@ class SISClient(FixtureBackedClient):
     the real committed sample; ``live`` mode downloads + parses the CKAN XLSX."""
 
     source = "SIS"
-    # ODbL — Open Data Commons Open Database License (as declared on datos.gob.do).
-    license = "https://opendatacommons.org/licenses/odbl/"
+    # ODbL, y verificado el 2026-08-23 por el camino que importa: no basta con que la
+    # organización del SIS declare `odc-odbl` en datos.gob.do, porque este conector no
+    # llama al CKAN — baja dos archivos de `sis.gob.do/wp-content`. Se comprobó que esas
+    # DOS URL son, carácter por carácter, los recursos XLSX de los datasets «Primas Netas
+    # Cobradas según Ramo, 2020–2025» y «Ramos de Compañías de Seguros, 2018–2025», ambos
+    # `odc-odbl`. El `wp-content` es solo dónde CKAN aloja el recurso; el nombre
+    # `_CKAN_PRIMAS_XLSX` ya lo decía.
+    #
+    # Lo que NO cubre esta verificación: el resto de sis.gob.do. Sus Términos de Uso
+    # reservan la propiedad intelectual y el pie dice «Todos los Derechos Reservados» — no
+    # conceden licencia de reutilización. Por eso `sis_solvency_client` y
+    # `insurance_intel.financials_sync`, que raspan páginas de transparencia y no recursos
+    # del portal, NO heredan esta licencia.
+    license = ("SIS — Open Database License (ODbL) v1.0: los archivos que este conector baja SON "
+        "los recursos CKAN de datasets `odc-odbl` del portal, alojados en sis.gob.do. "
+        "Exige el aviso de atribución; el share-alike alcanza a las bases DERIVADAS y "
+        "no a un informe (§4.5) — https://opendatacommons.org/licenses/odbl/1-0/")
     license_ok = True
     fixture_file = "sis.json"
     live_phase = "F1a (CKAN live)"
