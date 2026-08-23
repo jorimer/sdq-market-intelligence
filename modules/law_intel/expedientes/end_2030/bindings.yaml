@@ -480,7 +480,22 @@ bindings:
       Presupuesto de 2012, comprobado abriendo el PDF— y las tarjetas recientes son acordeones
       que arma el navegador. El archivo real se encuentra por la biblioteca de medios del
       sitio: `GET /wp-json/wp/v2/media?search=ejecucion+2009` devuelve
-      `Informe-de-Ejecucion-Presupuestaria-2009-DIGEPRES.pdf`.
+      `Informe-de-Ejecucion-Presupuestaria-2009-DIGEPRES.pdf`. Con esa via se enumeran 340
+      archivos y aparecen los informes anuales de 2008 a 2025.
+      SEGUNDO PUNTO DE LA SERIE, leido el 2026-08-23 del informe de 2015 (Cuadro No. 34): la
+      linea de Salud devengada da RD$56.052,8 millones y el propio emisor publica su
+      equivalente en PIB, 1,9%. La meta de la ley para 2015 era 2,8%, asi que el indicador
+      esta INCUMPLIDO y por un tercio. Que el emisor publique el %PIB en la misma tabla es
+      importante: la razon no hay que computarla, y eso quita una clase entera de error.
+      POR QUE TODAVIA NO HAY SERIE, y es una correccion de mi propia estimacion: dije que
+      extraerlo era una tarde de trabajo y no lo es. El cuadro existe en todo el periodo pero
+      cambia de forma al menos tres veces — en 2009 va en millones y con tres columnas; en
+      2011 va en unidades de peso, mil veces mas grande, que leido como millones daria una
+      cifra absurda sin que nada avise; en 2015 va numerado por funcion, con diez columnas y
+      guiones blandos en las etiquetas, y ya trae el %PIB. Los libros de ejecucion recientes
+      no exponen el cuadro con ese rotulo. Un extractor honesto necesita un lector por epoca y
+      un guard de UNIDAD, porque el modo de falla no es que se rompa: es que devuelva una
+      serie plausible mil veces corrida.
   - indicador: "2.34"
     serie: "wdi.SH.STA.BASS.ZS"
     fuente: wdi
