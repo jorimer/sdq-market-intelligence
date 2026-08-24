@@ -18,6 +18,7 @@ from shared.auth.dependencies import get_current_user, require_role
 from shared.auth.models import AccessTier, User, UserRole, tier_satisfies
 from shared.database.session import get_db
 from shared.narrative.claude_engine import (NarrativeDegradedError,
+                                           NarrativeRelacionInvertidaError,
                                            NarrativeSinRespaldoError)
 from shared.narrative.lang_context import resolve_request_lang
 from shared.products.access import (
@@ -80,6 +81,25 @@ _NARRATIVE_SIN_RESPALDO_MSG = (
     "respalda en {n} sección(es) ({secciones}). No publicamos un número que no podemos "
     "sostener. Reintente en unos minutos —el texto se regenera— o avísenos si persiste."
 )
+
+
+# Veto por RELACIÓN INVERTIDA: el tercero y el más acotado. La narrativa afirmó que un
+# indicador está por encima de una referencia cuando está por debajo (o al revés), y sostuvo
+# la afirmación después de que se le entregara la lectura correcta ya redactada, dos veces.
+# El caso que lo motiva llegó a un informe entregado: la §7 dijo que la capitalización
+# «supera» al promedio del grupo estando por debajo, contradiciendo a la §2 del mismo PDF.
+_NARRATIVE_RELACION_MSG = (
+    "El informe no se entrega: en {n} sección(es) ({secciones}) el análisis afirma una "
+    "comparación en sentido contrario al que muestran los datos, y la afirmación persistió "
+    "después de corregirla. No publicamos un informe que se contradice a sí mismo. Reintente "
+    "en unos minutos —el texto se regenera— o avísenos si persiste."
+)
+
+
+def _msg_relacion(hallazgos: Dict[str, Any]) -> str:
+    """Mensaje del veto por relación invertida, nombrando las secciones."""
+    return _NARRATIVE_RELACION_MSG.format(
+        n=len(hallazgos), secciones=" · ".join(str(k) for k in hallazgos))
 
 
 def _msg_sin_respaldo(hallazgos: Dict[str, Any]) -> str:
@@ -317,6 +337,8 @@ async def get_product_report(
         raise HTTPException(status_code=503, detail=_NARRATIVE_DEGRADED_MSG)
     except NarrativeSinRespaldoError as e:
         raise HTTPException(status_code=503, detail=_msg_sin_respaldo(e.hallazgos))
+    except NarrativeRelacionInvertidaError as e:
+        raise HTTPException(status_code=503, detail=_msg_relacion(e.hallazgos))
     except AnonymizationError:
         # Invariante del framework violada (un Pulse filtró un nombre): bug, no input.
         raise HTTPException(status_code=500,
@@ -368,6 +390,8 @@ async def get_product_pdf(
         raise HTTPException(status_code=503, detail=_NARRATIVE_DEGRADED_MSG)
     except NarrativeSinRespaldoError as e:
         raise HTTPException(status_code=503, detail=_msg_sin_respaldo(e.hallazgos))
+    except NarrativeRelacionInvertidaError as e:
+        raise HTTPException(status_code=503, detail=_msg_relacion(e.hallazgos))
     except AnonymizationError:
         raise HTTPException(status_code=500,
                             detail="Error de gobernanza al ensamblar el producto.")

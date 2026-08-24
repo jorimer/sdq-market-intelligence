@@ -280,7 +280,12 @@ async def _content_from_snapshot(
     """Núcleo compartido: a partir de un snapshot (real o de muestra), aplica el sensor
     de anonimización Pulse y produce las narrativas vía el motor (con caché). NO renderiza."""
     level = _assert_system_payload(product, tier, snapshot)
-    narratives = await _narratives_cached(product, tier, snapshot, lang, scope)
+    # El acumulador se abre ALREDEDOR de la generación: el motor deposita ahí las relaciones
+    # invertidas que sobrevivieron a la reparación, y la política se decide abajo, donde se
+    # conoce el nivel. Ver `shared/narrative/relaciones_pendientes`.
+    from shared.narrative.relaciones_pendientes import acumulando
+    with acumulando() as relaciones_pendientes:
+        narratives = await _narratives_cached(product, tier, snapshot, lang, scope)
     # GATE DE DEGRADACIÓN: si el motor IA cayó al fallback estático en secciones de ANÁLISIS
     # del nivel, un Deep Dive/Insight —que ES el producto pago completo— saldría hueco
     # ("El análisis ampliado se incorpora en la versión completa del producto"), engañoso y
@@ -329,6 +334,29 @@ async def _content_from_snapshot(
             "NO se entrega" if blocked else "abierto: solo se registra")
         if blocked:
             raise NarrativeSinRespaldoError(sin_respaldo)
+
+    # GATE DE RELACIÓN INVERTIDA — el tercero, y el más acotado de los tres a propósito. Una
+    # relación invertida es REPARABLE: el sistema ya computó la lectura correcta y el motor se
+    # la entrega al modelo para que la copie. Por eso el remedio de primera línea es reparar,
+    # no vetar — frenar quince secciones buenas por una frase corregible no protege al
+    # cliente, le niega un análisis que es correcto casi entero.
+    #
+    # Se llega acá solo si el modelo contradijo esa lectura DOS veces seguidas. En ese punto ya
+    # no es «se equivocó»: es señal de que algo más está roto —quizá el propio guard, como en
+    # el falso positivo del 69%— y publicar sería apostar a que el equivocado es el detector.
+    #
+    # Misma política que sus hermanos: premium FALLA CERRADO, Pulse solo registra.
+    if relaciones_pendientes:
+        from shared.narrative.claude_engine import NarrativeRelacionInvertidaError
+        blocked = level.granularity is not Granularity.system
+        logger.warning(
+            "Reporte %s/%s (scope=%s, período=%s) afirma relaciones que el dato contradice "
+            "en %d sección(es): %s — %s",
+            product.sector_key, tier.value, scope or "", snapshot.period or "",
+            len(relaciones_pendientes), relaciones_pendientes,
+            "NO se entrega" if blocked else "abierto: solo se registra")
+        if blocked:
+            raise NarrativeRelacionInvertidaError(relaciones_pendientes)
     # Glosario automático (audiencia mixta): detecta las siglas/términos técnicos que la
     # narrativa YA REDACTADA usa y anexa su definición. Va ANTES del merge de las secciones
     # estándar (metodología/fuentes no llevan jerga propia del eje). Punto único: lo

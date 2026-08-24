@@ -1,6 +1,6 @@
 # La lectura de una comparación se COMPUTA — y qué hacer cuando aun así sale mal
 
-**Estado:** la causa raíz está implementada en este PR. Quedan dos decisiones (§5).
+**Estado:** CERRADA. Causa raíz, reparación y freno de último recurso, los tres implementados.
 **Bloqueante:** sí — acordado resolverlo ANTES de la próxima generación de informes.
 **Origen:** §7 de un Deep Dive de banca REAL, corte 2026-03-31.
 
@@ -90,40 +90,57 @@ niega un análisis correcto en el 94% de su extensión.
 grave como una cifra inventada» —y lo es, como error— pero de ahí no se sigue que merezca la
 misma consecuencia.
 
-## 5. Lo que queda por decidir
+## 5. Reparar mejor (implementado)
 
-### 5.1 Reparar mejor
+El aviso de corrección le pedía al modelo «restá y mirá el signo» — **volver a derivar** la
+relación que acababa de errar, teniendo el sistema la frase correcta ya computada y sin
+entregársela. Reparar así es pedirle que repita la operación que falla.
 
-Cuando el guard detecta una inversión, el sistema pide una reescritura. Pero el aviso dice:
+Ahora el hallazgo lleva la cláusula adosada:
 
-> «Reescribí esas afirmaciones con la dirección correcta (**restá y mirá el signo** antes de
-> escribir 'por encima' / 'por debajo')»
+```
+patrimonio_activos: se afirma una brecha de 3.70 puntos porcentuales 'por encima' de
+'al promedio de su grupo', pero la dirección servida es 'por debajo'
+  → escribí exactamente: "por debajo del promedio de bancos múltiples en 3.70 puntos porcentuales"
+```
 
-Le pide **volver a derivar** — la operación que acaba de fallar. Teniendo la cláusula correcta
-computada, no se la entrega.
+Y el aviso dice explícitamente: **copiala, no la deduzcas de nuevo.**
 
-**Propuesta:** entregarle la frase hecha para que la copie, y reintentar más de una vez (hoy
-es un solo intento).
+Los reintentos pasan de **uno a dos** (`_MAX_REINTENTOS_GUARD`), con corte apenas el texto
+queda limpio — hay un test de que no se gastan por deporte, porque con trece secciones eso
+sería pagar el doble de modelo sin necesidad. En el último intento se avisa que es el último.
 
-*Evidencia de que reparar funciona*, de los registros de una corrida real: de tres
-reparaciones, dos salieron limpias; la única que falló fue el caso en que **el guard estaba
-equivocado** y el modelo tenía razón en insistir. Muestra chica.
+No se sube más: en el caso real que motivó esto, la única corrección que NO convergió fue la
+vez que **el guard estaba equivocado** (el falso positivo del 69%). Insistir ahí solo quema
+dinero.
 
-### 5.2 ¿Frenar como último recurso?
+## 6. Frenar como último recurso (implementado)
 
-Si tras entregarle la respuesta correcta el modelo la sigue contradiciendo, ya no es «se
-equivocó»: es señal de que algo más está roto —quizás el propio guard, como en el caso del
-`69%`—. Las opciones son frenar, o entregar marcando la sección para revisión humana.
+Se llega al veto solo si el modelo contradice **dos veces** una lectura que se le entregó
+redactada. En ese punto ya no es «se equivocó»: es señal de que algo más está roto —quizá el
+propio guard— y publicar sería apostar a que el equivocado es el detector.
 
-**Medición disponible:** los tres chequeos de relación corridos sobre el informe COMPLETO
-(16 secciones narrativas) marcan **1 sección, y era el defecto real**. Cero falsos positivos
-en las otras quince, que incluyen nueve comparaciones correctas con las mismas
-construcciones. Límite: es un informe, y las referencias se reconstruyeron de su prosa.
+| nivel | cifra sin respaldo | relación invertida |
+|---|---|---|
+| Deep Dive / Insight (premium) | veta | **veta, tras dos reparaciones fallidas** |
+| Pulse (abierto) | registra | registra |
 
-**Obstáculo técnico si se decide frenar:** la pieza que detecta y la que decide publicar son
-distintas y hoy no se comunican — la marca del guard no sobrevive al borde del producto
-(`SectorProduct.narratives()` devuelve `Dict[str, str]`). La vía recomendada es un acumulador
-por generación (`ContextVar`): el motor deposita, el ensamblador drena y decide la política
-(premium veta, Pulse registra). El motor no puede decidir solo: es transversal y no sabe si el
-producto es premium. Hay dos precedentes del mecanismo en el repo (`lang_context`,
-`llm_ledger.attributed_to`).
+**El canal:** un acumulador por generación (`shared/narrative/relaciones_pendientes`). El
+motor **deposita**; el ensamblador **drena** y decide. El motor no puede decidir solo: es
+transversal y no sabe si sirve un premium o un Pulse — vetar desde ahí rompería el Pulse.
+
+Mismo mecanismo que `lang_context` y `llm_ledger.attributed_to`. El riesgo —estado implícito—
+se acota con un `contextmanager` y un test de que **dos generaciones concurrentes no se
+mezclan**: sin eso, un informe podría vetarse por el defecto de otro.
+
+Fuera del `contextmanager`, `registrar()` es no-op: un job de fondo no acumula basura global.
+
+El veto **LISTA** las secciones, como sus hermanos, y la superficie ya lo muestra (503 con
+detalle). El manejador del router no hubo que recordarlo: el test estructural de #915 lo
+exigió solo.
+
+## 7. Lo que NO se hizo, y por qué
+
+No se tocó `GUARD_VERSION`. La lógica de detección no cambió —cambió el aviso de corrección,
+que viaja en el mensaje de usuario, no en el system— y una narrativa cacheada es limpia por
+construcción: el motor nunca propaga a la caché compartida un texto marcado.

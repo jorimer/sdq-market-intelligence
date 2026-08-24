@@ -78,11 +78,12 @@ CORRECTION_NOTICE = (
 # mandaría al modelo a "no inventar cifras", que no es el problema, y probablemente le
 # haría borrar la comparación en vez de corregirle el signo.
 DIRECTION_CORRECTION_NOTICE = (
-    "\n\nCORRECCIÓN OBLIGATORIA: en una versión previa de este análisis una comparación "
-    "quedó INVERTIDA respecto de los datos: {bad}. Las cifras son correctas; lo que está "
-    "mal es el sentido. Reescribí esas afirmaciones con la dirección correcta (restá y "
-    "mirá el signo antes de escribir 'por encima' / 'por debajo'), sin alterar ningún "
-    "número y sin eliminar la comparación."
+    "\n\nCORRECCIÓN OBLIGATORIA: en una versión previa de este análisis una relación quedó "
+    "INVERTIDA respecto de los datos: {bad}. Las cifras son correctas; lo que está mal es el "
+    "sentido. Cada hallazgo de arriba trae LA LECTURA CORRECTA ya redactada: COPIALA. NO "
+    "vuelvas a deducirla, no restes de nuevo, no recalcules el múltiplo — deducirla es "
+    "exactamente lo que salió mal. Reescribí esas afirmaciones con esa lectura, sin alterar "
+    "ningún número y sin eliminar la comparación."
 )
 
 
@@ -1146,7 +1147,8 @@ def deterministic_direction_gap_errors(context: dict, text: str) -> List[str]:
                 continue
             flags.append(
                 f"{ind}: se afirma una brecha de {cifra} {unidad} '{dijo}' de "
-                f"'{cola_txt.strip()}', pero la dirección servida es '{correcta}'")
+                f"'{cola_txt.strip()}', pero la dirección servida es '{correcta}'"
+                + _clausula_a_copiar(context, str(ind)))
     except Exception as e:  # noqa: BLE001 — best-effort; jamás rompe la generación
         logger.warning("Chequeo de dirección por brecha no pudo completarse: %s", e)
         return flags
@@ -1309,6 +1311,27 @@ _TOLERANCIA_MULT = 0.15
 _CIFRAS_DE_FRASE = re.compile(r"-?\d+(?:[.,]\d+)?")
 
 
+def _clausula_a_copiar(context: dict, indicador: str, clave: str = "comparaciones") -> str:
+    """El sufijo `→ escribí: "..."` con la lectura YA REDACTADA de ese indicador.
+
+    El aviso de corrección le pedía al modelo «restá y mirá el signo» — o sea, VOLVER A
+    DERIVAR la relación que acababa de errar, teniendo el sistema la frase correcta ya
+    computada y sin entregársela. Reparar así es pedirle que repita la operación que falla.
+
+    Best-effort: si no encuentra la lectura, devuelve cadena vacía y el hallazgo queda como
+    estaba (el aviso sigue nombrando la dirección correcta).
+    """
+    try:
+        for fila in (context.get(clave) or []):
+            if isinstance(fila, dict) and fila.get("indicador") == indicador:
+                lectura = fila.get("lectura")
+                if isinstance(lectura, str) and lectura.strip():
+                    return f' → escribí exactamente: "{lectura.strip()}"'
+    except Exception:  # noqa: BLE001 — el aviso nunca rompe la generación
+        pass
+    return ""
+
+
 def _razon_index(context: dict) -> List[dict]:
     """Filas de ``razones`` normalizadas para el pareo."""
     out: List[dict] = []
@@ -1405,7 +1428,8 @@ def deterministic_ratio_errors(context: dict, text: str) -> List[str]:
                     float(razon), 1.0):
                 flags.append(
                     f"{fila['ind']}: se afirma '{escrito}' pero la razón servida es "
-                    f"{float(razon):.2f}x")
+                    f"{float(razon):.2f}x"
+                    + _clausula_a_copiar(context, fila["ind"], clave="razones"))
     except Exception as e:  # noqa: BLE001 — best-effort; jamás rompe la generación
         logger.warning("Chequeo de razón no pudo completarse: %s", e)
     return flags
