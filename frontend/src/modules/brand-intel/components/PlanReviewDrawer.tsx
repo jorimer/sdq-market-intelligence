@@ -9,6 +9,7 @@ import {
   type SignalRow,
   type WaveRef,
 } from "../api";
+import { mensajeDeError } from "../../../shared/api/errores";
 
 interface Props {
   slug: string;
@@ -120,9 +121,7 @@ export function PlanReviewDrawer({
       });
       onAdopted();
     } catch (e: unknown) {
-      const detail =
-        (e as { response?: { data?: { detail?: string } } })?.response?.data?.detail;
-      setError(detail ?? "No se pudo adoptar la meta.");
+      setError(mensajeDeError(e, "No se pudo adoptar la meta."));
     } finally {
       setBusy(false);
     }

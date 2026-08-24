@@ -8,6 +8,7 @@ import {
   type BrandClient,
   type EngagementInput,
 } from "../api";
+import { mensajeDeError } from "../../../shared/api/errores";
 
 interface Props {
   onClose: () => void;
@@ -114,9 +115,7 @@ export function NewEngagementDrawer({ onClose, onCreated }: Props) {
       });
       onCreated(created.slug);
     } catch (e: unknown) {
-      const detail =
-        (e as { response?: { data?: { detail?: string } } })?.response?.data?.detail;
-      setError(detail ?? "No se pudo crear el encargo.");
+      setError(mensajeDeError(e, "No se pudo crear el encargo."));
     } finally {
       setBusy(false);
     }

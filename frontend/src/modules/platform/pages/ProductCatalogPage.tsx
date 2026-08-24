@@ -31,6 +31,7 @@ import {
 } from "../api";
 import { checkoutOrder, checkoutSubscription } from "../billingApi";
 import { CheckoutConfirmModal } from "../components/CheckoutConfirmModal";
+import { mensajeDeError } from "../../../shared/api/errores";
 
 /** Correo de contacto interino para el upsell (se reemplaza por el checkout en Fase B). */
 const SALES_EMAIL = "ventas@sdqconsulting.com.do";
@@ -292,9 +293,7 @@ function ProductReportDrawer({ sector, level, periodEnd, onClose, t }: {
       { period: p || periodEnd, ...(s ? { scope: s } : {}) })
       .then((r) => { setReport(r); setStatus("ready"); })
       .catch((e) => {
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const detail = (e as any)?.response?.data?.detail;
-        setErrMsg(typeof detail === "string" ? detail : t("platform.catalog.reportError"));
+        setErrMsg(mensajeDeError(e, t("platform.catalog.reportError")));
         setStatus("error");
       });
   };

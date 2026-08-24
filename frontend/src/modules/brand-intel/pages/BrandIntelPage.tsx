@@ -73,6 +73,7 @@ import { DeleteEngagementDrawer } from "../components/DeleteEngagementDrawer";
 import { ConclusionsPanel } from "../components/ConclusionsPanel";
 import { PlansPanel } from "../components/PlansPanel";
 import { SeriesPanel } from "../components/SeriesPanel";
+import { mensajeDeError } from "../../../shared/api/errores";
 
 type Status = "loading" | "error" | "ready";
 
@@ -705,9 +706,7 @@ export function BrandIntelPage() {
       setJob(await getExtractionStatus(slug, extractionId));
       setForecastMsg(out.nota);
     } catch (e: unknown) {
-      const detail = (e as { response?: { data?: { detail?: string } } })
-        ?.response?.data?.detail;
-      setForecastMsg(detail || "No se pudo detener la lectura.");
+      setForecastMsg(mensajeDeError(e, "No se pudo detener la lectura."));
     } finally {
       setCancelling(false);
     }
