@@ -316,6 +316,44 @@ def _trend_arrow(series: Optional[List[Dict]]) -> str:
     return f"{arrow} {delta:+.0f}"
 
 
+#: Decimales con que se imprime el valor de un indicador, por unidad. Un HHI con cuatro
+#: decimales ("2091.6781") no informa más que "2,092": la precisión sobrante lee como ruido
+#: en un documento de calificación.
+_DECIMALES_POR_UNIDAD = {"%": 2, "índice": 0}
+
+
+def _rotulo_y_valor(clave: str, crudo) -> tuple:
+    """Etiqueta legible y valor CON SU UNIDAD, tomados del registro de indicadores.
+
+    Sin esto la tabla salía con el fallback ``clave.replace("_", " ").title()`` —"Hhi
+    Sectorial", "Pct Cartera A", "Roa", "Cost To Income"— y el valor crudo sin unidad y con
+    todos sus decimales ("49.3813"). Es el MISMO fallback que este archivo ya documenta como
+    "bug real detectado en producción" para los títulos de sección: se corrigió allá y quedó
+    vivo acá, en la tabla que el comité mira primero.
+
+    El registro (`INDICATOR_META`) ya tenía `label` y `unit` para los 20 indicadores; solo
+    faltaba leerlos.
+    """
+    try:
+        from modules.banking_score.scoring.indicator_detail import INDICATOR_META
+        meta = INDICATOR_META.get(clave) or {}
+    except Exception:  # noqa: BLE001 — el informe nunca se cae por el rótulo
+        meta = {}
+    rotulo = str(meta.get("label") or clave.replace("_", " ").title())
+    unidad = meta.get("unit") or ""
+    if crudo is None:
+        return rotulo, "N/D"
+    try:
+        v = float(crudo)
+    except (TypeError, ValueError):
+        return rotulo, str(crudo)
+    dec = _DECIMALES_POR_UNIDAD.get(unidad, 2)
+    texto = f"{v:,.{dec}f}"
+    if unidad == "%":
+        texto += "%"
+    return rotulo, texto
+
+
 def _build_indicators_table(indicators: Dict[str, Dict], styles,
                             percentiles: Optional[Dict] = None,
                             trajectories: Optional[Dict] = None) -> List:
@@ -335,11 +373,8 @@ def _build_indicators_table(indicators: Dict[str, Dict], styles,
     for name, data in indicators.items():
         if not isinstance(data, dict):
             continue
-        row = [
-            name.replace("_", " ").title(),
-            f"{data.get('raw', 'N/A')}",
-            f"{data.get('score', 0):.1f}",
-        ]
+        rotulo, valor = _rotulo_y_valor(name, data.get("raw"))
+        row = [rotulo, valor, f"{data.get('score', 0):.1f}"]
         if has_amplitude:
             sector = (pct_ind.get(name) or {}).get("sector") or {}
             p = sector.get("percentile")

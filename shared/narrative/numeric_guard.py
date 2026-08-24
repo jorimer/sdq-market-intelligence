@@ -28,7 +28,7 @@ logger = logging.getLogger("sdq.narrative.numeric_guard")
 # el CÓDIGO de este módulo —una regla nueva, un umbral distinto— no cambia ningún prompt y
 # pasaría inadvertido: la caché seguiría sirviendo texto que el guard nuevo habría marcado.
 # Es el único bump manual irreducible; por eso vive acá, junto a lo que describe.
-GUARD_VERSION = "6"  # "6": la cita se verifica a SU precisión, no a una fija (2026-08-24)
+GUARD_VERSION = "7"  # "7": la brecha invertida también se dice con VERBO (2026-08-24)
 
 _JUDGE_SYSTEM = (
     "Sos un verificador numérico estricto y preciso. Tu ÚNICA tarea es detectar cifras "
@@ -1019,6 +1019,39 @@ _GAP_CLAIM = re.compile(
 )
 _GAP_MENOR = ("por debajo", "inferior", "debajo d")
 
+# Forma VERBO-PRIMERO: «supera EN 3.70 puntos porcentuales al promedio de su grupo».
+#
+# El patrón de arriba exige el marcador DESPUÉS de la unidad ("3.70 puntos POR DEBAJO"), que
+# es solo una de las dos maneras de decirlo en español. La otra pone el verbo adelante, y por
+# ese hueco salió publicada una inversión real: §7 de un Deep Dive de banca afirmó que la
+# capitalización contable «supera en 3.70 puntos porcentuales al promedio de su grupo» cuando
+# el contexto servía «por debajo … en 3.70 puntos porcentuales» — contradiciendo a la §2 y a
+# la §10 del MISMO documento, que lo decían bien.
+#
+# Dos huecos en el mismo defecto, y los dos del tipo que este repo ya conoce:
+#  1. `supera` y `excede` ya estaban en `_MAYOR` —el vocabulario del detector HERMANO— y
+#     nunca se copiaron acá. Un guard existe en un motor y falta en el otro, dentro del
+#     mismo archivo.
+#  2. El orden verbo-primero no lo contemplaba ningún patrón.
+_GAP_VERBO_MAYOR = r"supera|excede|sobrepasa|aventaja"
+_GAP_VERBO_MENOR = r"es\s+inferior|queda\s+por\s+debajo|se\s+ubica\s+por\s+debajo"
+# La CUÑA entre el verbo y el número se captura porque ahí suele ir la etiqueta: «supera EL
+# PROMEDIO en 7.91 puntos porcentuales» la pone antes, «supera en 25.78 puntos porcentuales EL
+# PROMEDIO DEL SISTEMA» la pone después. La ventana de referencia son las dos juntas.
+_GAP_CLAIM_VERBO = re.compile(
+    r"\b(" + _GAP_VERBO_MAYOR + r"|" + _GAP_VERBO_MENOR + r")\b"
+    r"([^.;:]{0,40}?)\ben\s+(\d+(?:[.,]\d+)?)\s*(" + _GAP_UNIT + r")"
+    r"([^.;:]{0,90})",
+    re.I,
+)
+
+# Palabras que delatan que la cola de la frase nombra una REFERENCIA. Habilitan el pareo por
+# magnitud única cuando el modelo PARAFRASEA la etiqueta ("al promedio de su grupo" por
+# "promedio de bancos múltiples"): sin ellas, cualquier frase con un número y una unidad
+# entraría a competir por una comparación del contexto.
+_REFERENCIA_GENERICA = re.compile(
+    r"\b(promedio|mediana|media|grupo|pares|sistema|panel|sector)\b", re.I)
+
 
 def _norm(s: str) -> str:
     """Minúsculas sin acentos ni espacio redundante — para casar etiqueta contra prosa."""
@@ -1072,8 +1105,15 @@ def deterministic_direction_gap_errors(context: dict, text: str) -> List[str]:
         if not idx:
             return []
         plano = re.sub(r"\s+", " ", text)
-        for m in _GAP_CLAIM.finditer(plano):
-            cifra, unidad, marcador, cola_txt = m.groups()
+        # Las dos formas de enunciar una brecha: "N puntos POR DEBAJO de X" (marcador después
+        # de la unidad) y "SUPERA en N puntos a X" (verbo antes). Se normalizan al mismo
+        # cuádruple para que el resto del chequeo sea uno solo.
+        hallazgos_re = [(m.group(1), m.group(2), m.group(3), m.group(4))
+                        for m in _GAP_CLAIM.finditer(plano)]
+        hallazgos_re += [(m.group(3), m.group(4), m.group(1),
+                          f"{m.group(2)} {m.group(5)}")
+                         for m in _GAP_CLAIM_VERBO.finditer(plano)]
+        for cifra, unidad, marcador, cola_txt in hallazgos_re:
             escala = 0.01 if "asic" in _norm(unidad) else 1.0  # puntos básicos → pp
             derecha = _norm(cola_txt)
             dijo = ("por debajo" if any(k in _norm(marcador) for k in _GAP_MENOR)
@@ -1082,6 +1122,18 @@ def deterministic_direction_gap_errors(context: dict, text: str) -> List[str]:
                 (ind, direccion) for ind, cola, direccion, brecha in idx
                 if cola in derecha and _cited_matches(cifra, brecha / escala)
             ]
+            if not candidatos and _REFERENCIA_GENERICA.search(derecha):
+                # La etiqueta viene PARAFRASEADA ("al promedio de su grupo" por "promedio de
+                # bancos múltiples"), así que el pareo por texto no la encuentra. Si la
+                # MAGNITUD identifica una sola comparación del contexto, el caso sigue siendo
+                # decidible; si identifica varias, se calla — igual que ante el empate de
+                # abajo. Fue el segundo motivo por el que la inversión de §7 pasó entera.
+                por_magnitud = [
+                    (ind, direccion) for ind, _cola, direccion, brecha in idx
+                    if _cited_matches(cifra, brecha / escala)
+                ]
+                if len(por_magnitud) == 1:
+                    candidatos = por_magnitud
             if not candidatos:
                 continue
             # Ambigüedad real (misma magnitud y misma base, direcciones opuestas): el guard
