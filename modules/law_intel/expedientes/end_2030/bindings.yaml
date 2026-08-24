@@ -1569,33 +1569,42 @@ bindings:
       el 4%— y después RETROCEDE a 3,76% en 2023. La ley no se incumplió por inmovilidad sino
       por un avance que se dio vuelta.
   - indicador: "4.2"
-    serie: "social_dev:protected_areas"
-    fuente: wdi
+    serie: "social_dev:protected_area_pct_land"
+    fuente: mhe
     mejor: mayor
-    estado: propuesto
-    origen: estimacion_de_tercero_sobre_dato_del_evaluado
+    periodo_verificado: "2024"
+    estado: verificado
+    verificado_por: oraculo
+    origen: declarado_por_el_evaluado
     productor: >-
-      Banco Mundial sobre el registro de áreas protegidas que declara el propio país a la
-      base mundial de la UICN/PNUMA.
-    nota_comparabilidad: >-
-      ══ ACTUALIZADO 2026-08-21, tras decidir el universo ══ La duda del universo está
-      RESUELTA (ver `nota`); lo que sigue abierto es que este indicador no tiene camino de
-      verificación. El oráculo no lo alcanza —serie desde 2013, línea base de 2009— y la
-      identidad de concepto TAMPOCO aplica, y conviene dejar escrito por qué: la ley dice
-      «áreas protegidas nacionales», sin calificar, y la serie del emisor es «áreas
-      protegidas TERRESTRES». El comprobador de identidad rechaza el término calificado
-      porque «terrestres» no está en el nombre que la ley le puso — y tiene razón: recortar
-      el calificativo para pasar el control sería fabricar la identidad, no comprobarla.
+      ONE — «Áreas Protegidas en República Dominicana, 2007-2024», del catálogo nacional de
+      datos abiertos: superficie por categoría, terrestre y marina. La razón se computa
+      contra el área terrestre del país.
     nota: >-
-      DECISIÓN DEL DUEÑO (2026-08-21) sobre el universo: se mide contra la serie TERRESTRE.
-      La ley no califica —dice «áreas protegidas nacionales»— y la elección cambia el
-      veredicto, así que se declara en vez de resolverse en silencio: terrestre da 26,3% en
-      2025 y CUMPLE la meta plana de 24,4; la marina da 15,3% y no la cumple. El criterio es
-      que la meta se fijó en 24,4 y el registro nacional de áreas protegidas terrestres
-      estaba en ese orden en 2009.
-      La meta de la ley es PLANA: 24,4 en los cuatro cortes. El indicador pide SOSTENER, no
-      crecer, y es de los pocos del expediente con esa forma.
-  # ── Los doce descartes del barrido ──────────────────────────────────────────────────────
+      ══ REABIERTO Y CERRADO 2026-08-24 ══ Estaba en `propuesto` con el motivo «no tiene
+      camino de verificación»: el oráculo no lo alcanzaba —la serie del republicador arranca
+      en 2013 y la línea base es de 2009— y la identidad de concepto no aplicaba porque su
+      serie es «áreas protegidas TERRESTRES» y la ley dice «nacionales» sin calificar.
+      Las dos objeciones caen con la fuente NACIONAL, que llega a 2007.
+      ORÁCULO: la ley fija 24,4% para 2009 y el cuadro de la ONE da 11.684 km² protegidos
+      sobre 48.198 km² de área terrestre — 24,24%, Δ 0,7%.
+      LAS DOS METAS VENCIDAS ESTÁN CUMPLIDAS. La ley pide MANTENER el 24,4%: 2015 da 25,81%
+      y 2020 da 25,05%. En 2024 va en 25,59%. Es de los pocos indicadores del expediente que
+      el país sostuvo, y conviene decirlo con la misma claridad que los incumplidos.
+      QUÉ SE SUMA: los SEIS grupos de categoría del cuadro, no sus diecinueve filas. El
+      cuadro anida subcategorías bajo cada grupo y sumarlas todas cuenta cada superficie dos
+      veces —19.484 km² en vez de 9.742 para 2007—.
+      POR QUÉ TERRESTRE Y NO TERRESTRE MÁS MARINA: el informe de avance del propio Estado
+      dice que el indicador «se actualizó tomando en consideración las desagregaciones de
+      superficie terrestre y superficie marina», lo que deja abierto si la razón incluye lo
+      marino. El oráculo lo decide sin que haya que interpretar: solo terrestre da Δ 0,7% y
+      con lo marino sobre el territorio más la zona económica exclusiva da 18,8%, Δ 22,8%.
+      SALVEDAD DEL EMISOR, declarada: en cinco de los catorce años sus subcategorías no suman
+      su grupo —2012, 2014 y 2015 en la superficie marina; 2021 y 2022 en la terrestre—. No
+      afecta a esta razón, que usa los totales de grupo, y viaja en el conector.
+      Supera al binding anterior sobre `social_dev:protected_areas`, que sigue siendo
+      correcto sobre SU serie: el Banco Mundial publica cobertura TERRESTRE pura desde 2013,
+      y el 12mo Informe confirma que el indicador de la ley considera las dos superficies.
   - indicador: "4.1"
     serie: "social_dev:ghg_per_capita"
     fuente: wdi

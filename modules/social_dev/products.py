@@ -548,6 +548,13 @@ class SocialDevProduct:
             "advanced_hiv_on_art", HEALTH_ENTITY,
             "Portadores de VIH avanzado con antirretrovirales (%)", "inclusion",
             "Cobertura de tratamiento. Serie del propio Estado para su ley. No alimenta el índice."),
+        # Indicador 4.2 de la END. La etiqueta dice TERRESTRE porque el denominador lo es:
+        # llamarlo «área protegida» a secas se leería como sobre todo el territorio.
+        "protected_area_pct_land": (
+            "protected_area_pct_land", HEALTH_ENTITY,
+            "Superficie protegida (% del área terrestre)", "living_standards",
+            "Suma de los seis grupos de categoría del cuadro de la ONE sobre el área "
+            "terrestre del país. No alimenta el índice de desarrollo."),
         "income_gender_ratio": (
             "income_gender_ratio", HEALTH_ENTITY,
             "Razón de ingreso laboral femenino/masculino", "inclusion",

@@ -89,6 +89,7 @@ variable_scopes:
   child_stunting_rate: national
   vertical_hiv_transmission: national
   advanced_hiv_on_art: national
+  protected_area_pct_land: national      # ONE END 4.2, sobre área TERRESTRE
   income_gender_ratio: national          # SISDOM END 2.40, razón F/M de INGRESO
   electricity_subsidy_usd_mm: national   # MEM END 3.30, aporte a las EDE
   unemployment_gender_ratio: national    # BCRD ENCFT, razón F/M, país
