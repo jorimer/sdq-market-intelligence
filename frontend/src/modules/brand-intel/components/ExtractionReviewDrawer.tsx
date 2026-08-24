@@ -10,6 +10,7 @@ import {
   type ExtractionCell,
   type ExtractionDetail,
 } from "../api";
+import { mensajeDeError } from "../../../shared/api/errores";
 
 interface Props {
   slug: string;
@@ -92,9 +93,7 @@ export function ExtractionReviewDrawer({ slug, extractionId, onClose, onConfirme
       }
       onConfirmed();
     } catch (e: unknown) {
-      const detailMsg =
-        (e as { response?: { data?: { detail?: string } } })?.response?.data?.detail;
-      setError(detailMsg ?? "No se pudo confirmar la extracción.");
+      setError(mensajeDeError(e, "No se pudo confirmar la extracción."));
     } finally {
       setBusy(false);
     }

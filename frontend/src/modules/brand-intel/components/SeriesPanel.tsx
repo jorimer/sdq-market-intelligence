@@ -17,6 +17,7 @@ import {
   type SalesIngestReport,
   type SeriesUploadResult,
 } from "../api";
+import { mensajeDeError } from "../../../shared/api/errores";
 
 interface Props {
   slug: string;
@@ -67,9 +68,7 @@ export function SeriesPanel({ slug, onLoaded }: Props) {
       // El servidor devuelve el motivo REAL del rechazo (qué hoja falta, qué hojas hay).
       // Reemplazarlo por «error al subir» es quitarle al usuario lo único que le permite
       // corregir el archivo por su cuenta.
-      const detail = (e as { response?: { data?: { detail?: string } } })
-        ?.response?.data?.detail;
-      setError(detail || "No se pudo cargar la serie.");
+      setError(mensajeDeError(e, "No se pudo cargar la serie."));
     } finally {
       setBusy(null);
     }

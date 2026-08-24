@@ -49,10 +49,10 @@ def entorno(monkeypatch):
     """SMTP configurado y correo capturado en memoria — ningún test manda nada de verdad."""
     monkeypatch.setattr(service, "get_product",
                         lambda key, db=None: _Producto() if key == EJE else None)
-    monkeypatch.setattr(mail, "configurado", lambda: True)
+    monkeypatch.setattr(mail, "configurado", lambda *a, **k: True)
     enviados = []
     monkeypatch.setattr(mail, "enviar",
-                        lambda to, asunto, texto, html=None: (
+                        lambda to, asunto, texto, html=None, db=None: (
                             enviados.append({"to": to, "asunto": asunto, "texto": texto})
                             or True))
     previos = dict(motor._PRODUCTORES)
@@ -162,7 +162,7 @@ def test_SIN_SMTP_no_manda_y_lo_DECLARA(db, entorno, monkeypatch):
     _activar(db)
     _vigilar(db, _user(db))
     _barrer(db, _evento())
-    monkeypatch.setattr(mail, "configurado", lambda: False)
+    monkeypatch.setattr(mail, "configurado", lambda *a, **k: False)
 
     res = digest.enviar_digests(db)
     assert res["enviados"] == 0
@@ -253,7 +253,7 @@ def test_se_reintenta_en_la_corrida_siguiente(db, entorno, monkeypatch):
     digest.enviar_digests(db)
 
     monkeypatch.setattr(mail, "enviar",
-                        lambda to, asunto, texto, html=None: (
+                        lambda to, asunto, texto, html=None, db=None: (
                             entorno.append({"to": to, "asunto": asunto, "texto": texto})
                             or True))
     assert digest.enviar_digests(db)["enviados"] == 1

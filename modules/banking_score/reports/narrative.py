@@ -219,7 +219,81 @@ def _comparaciones_resueltas(all_indicators: Dict, benchmarks: Optional[Dict],
     # La UNIDAD viaja con la comparación: el HHI es un índice de 0 a 10.000, y sin esto su
     # brecha salía enunciada en "puntos porcentuales" — cifra correcta, unidad imposible.
     unidades = {ind: (INDICATOR_META.get(ind) or {}).get("unit") for ind in valores}
-    return comparaciones_vs_referencia(valores, referencias, unidades=unidades)
+    # El SENTIDO DE LA ESCALA viaja con la comparación para que el veredicto —¿esta posición
+    # es fortaleza o debilidad?— se compute acá y no lo tenga que deducir el modelo uniendo
+    # dos hechos que hasta ahora llegaban en lugares distintos del contexto.
+    direcciones = {ind: (INDICATOR_META.get(ind) or {}).get("direction") for ind in valores}
+    return comparaciones_vs_referencia(valores, referencias, unidades=unidades,
+                                       direcciones=direcciones)
+
+
+def _razones_resueltas(all_indicators: Dict, benchmarks: Optional[Dict],
+                       entity_type: Optional[str] = None) -> list:
+    """Razones (cuántas VECES) contra las MISMAS referencias que las comparaciones.
+
+    Hermana de ``_comparaciones_resueltas``: aquélla sirve la dirección y la brecha en
+    puntos, ésta el múltiplo. El modelo derivaba la razón a mano y la erraba — «un ROA de
+    0.39% que triplica el promedio de 1.61%» cuando es 0.24×.
+
+    Las direcciones del registro viajan para que los indicadores de ÓPTIMO INTERMEDIO
+    (`ltd`, `exposicion_re`, `migracion`) no reciban una razón: estar al doble del promedio
+    ahí no es mejor ni peor.
+    """
+    from shared.data.sib_client import INDICATOR_TO_BENCHMARK
+    from shared.narrative.derived import razones_vs_referencia
+    from modules.banking_score.scoring.indicator_detail import INDICATOR_META
+
+    if not isinstance(benchmarks, dict):
+        return []
+    sector = benchmarks.get("sector_averages") or {}
+    peers = benchmarks.get("peer_groups") or {}
+    valores, referencias = {}, {}
+    for ind, bkey in INDICATOR_TO_BENCHMARK.items():
+        blob = all_indicators.get(ind)
+        raw = blob.get("raw") if isinstance(blob, dict) else None
+        if raw is None:
+            continue
+        refs: Dict[str, Optional[float]] = {}
+        if sector.get(bkey) is not None:
+            refs["promedio del sistema"] = sector[bkey]
+        for gname, grp in peers.items():
+            if entity_type and gname != entity_type and gname in _PEER_GROUP_LABEL:
+                continue
+            if isinstance(grp, dict) and grp.get(f"{bkey}_avg") is not None:
+                etiqueta = grp.get("label")
+                refs[f"promedio de {etiqueta}" if etiqueta
+                     else _PEER_GROUP_LABEL.get(gname, f"promedio {gname}")] = grp[f"{bkey}_avg"]
+        if refs:
+            valores[ind] = raw
+            referencias[ind] = refs
+    direcciones = {ind: (INDICATOR_META.get(ind) or {}).get("direction") for ind in valores}
+    return razones_vs_referencia(valores, referencias, direcciones=direcciones)
+
+
+def _factores_hasta_umbral(scoring_result: Dict) -> list:
+    """Cuánto debe multiplicarse cada indicador para alcanzar el umbral de sensibilidad.
+
+    Relación DISTINTA de la razón contra el mercado —"dónde deberías estar" no es "dónde
+    está el mercado"— y por eso viaja aparte. Fundirlas en una cláusula fue el error de §12.
+    Se sirve porque da contexto: cuán lejos está la entidad de la frontera que el modelo
+    reconoce.
+    """
+    from shared.narrative.derived import factores_hasta_umbral
+
+    sens = scoring_result.get("sensibilidades") or {}
+    inds = scoring_result.get("indicators") or {}
+    umbrales, valores = {}, {}
+    for fila in (sens.get("palancas_alza") or []):
+        ind, u = fila.get("indicador"), fila.get("umbral_raw")
+        blob = inds.get(ind) if ind else None
+        raw = blob.get("raw") if isinstance(blob, dict) else None
+        if ind and u is not None and raw is not None:
+            umbrales[ind], valores[ind] = u, raw
+    if not umbrales:
+        return []
+    return factores_hasta_umbral(
+        valores, umbrales,
+        que_es="umbral de sensibilidad (mejorar hasta ahí sube el score)")
 
 
 _SENTIDO = {
@@ -406,6 +480,11 @@ def _build_section_context(
                  if c["indicador"] in ind]
         if comps:
             ctx["comparaciones"] = comps
+        razones = [r for r in _razones_resueltas(
+            all_indicators, benchmarks, scoring_result.get("entity_type"))
+            if r["indicador"] in ind]
+        if razones:
+            ctx["razones"] = razones
         return ctx
 
     # Overview sections (executive summary, comparative, recommendation…) keep the
@@ -482,6 +561,15 @@ def _build_section_context(
                                          scoring_result.get("entity_type"))
         if comps:
             ctx["comparaciones"] = comps
+        razones = _razones_resueltas(all_indicators, benchmarks,
+                                     scoring_result.get("entity_type"))
+        if razones:
+            ctx["razones"] = razones
+    # El factor hasta el umbral no depende de los benchmarks (sale de las sensibilidades),
+    # así que va fuera del bloque: el Deep Dive lo trae aunque el panel no dé referencias.
+    factores = _factores_hasta_umbral(scoring_result)
+    if factores:
+        ctx["factores_hasta_umbral"] = factores
     return ctx
 
 

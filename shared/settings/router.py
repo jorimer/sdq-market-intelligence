@@ -12,6 +12,7 @@ from shared.database.session import get_db
 from shared.settings import service
 from shared.settings.schemas import (
     SettingsIn,
+    SmtpTestOut,
     SettingsOut,
     TestConnectionIn,
     TestConnectionOut,
@@ -61,3 +62,24 @@ async def test_connection(
 ) -> TestConnectionOut:
     """Test connectivity to a provider's API (through the proxy if configured)."""
     return service.test_connection(db, payload)
+
+
+@router.post("/smtp/test", response_model=SmtpTestOut)
+async def test_smtp(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(_admin),
+) -> SmtpTestOut:
+    """Manda un correo de prueba REAL a la casilla del admin que lo pide.
+
+    El destinatario NO se recibe por parámetro a propósito. Un endpoint autenticado que
+    manda correo a la dirección que le pasen es un relay abierto con credenciales ajenas:
+    bastaría una cuenta de admin comprometida para mandar correo firmado con el dominio de
+    la instalación. Se manda a quien está pidiendo la prueba, que además es el único que
+    puede confirmar que llegó.
+    """
+    destino = str(getattr(current_user, "email", "") or "")
+    if not destino:
+        return SmtpTestOut(status="error",
+                           detail="Tu usuario no tiene correo cargado, así que no hay a "
+                                  "dónde mandar la prueba.")
+    return SmtpTestOut(**service.probar_smtp(db, destino))

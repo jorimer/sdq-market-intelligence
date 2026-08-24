@@ -5,6 +5,7 @@ import client from "@/shared/api/client";
 import { PageHead, Card, CardHead, StatTile, LoadingGrid } from "@/shared/ui/primitives";
 import { fmtNum } from "@/shared/lib/format";
 import type { ModelStatus } from "@/types";
+import { mensajeDeError } from "../../../shared/api/errores";
 
 export function ModelPage() {
   const { t } = useTranslation();
@@ -32,7 +33,7 @@ export function ModelPage() {
       setTrainResult({ ok: true, text: data.message || t("banking.mdlTrainOk") });
       fetchStatus();
     } catch (err: any) {
-      setTrainResult({ ok: false, text: err?.response?.data?.detail || t("banking.mdlTrainErr") });
+      setTrainResult({ ok: false, text: mensajeDeError(err, t("banking.mdlTrainErr")) });
     } finally {
       setTraining(false);
     }

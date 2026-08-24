@@ -8,7 +8,7 @@ back to env-based defaults so a fresh deployment still works.
 import logging
 import urllib.parse
 from datetime import datetime, timezone
-from typing import Dict, Optional, Set, Tuple
+from typing import Any, Dict, Optional, Set, Tuple
 
 from sqlalchemy.orm import Session
 
@@ -16,6 +16,7 @@ from shared.config.settings import settings as app_settings
 from shared.settings.crypto import decrypt, encrypt
 from shared.settings.models import AppSetting, SectorApiConfig
 from shared.settings.schemas import (
+    SmtpOut,
     MASK,
     SectorApiIn,
     SectorApiOut,
@@ -363,6 +364,7 @@ def get_settings(db: Session) -> SettingsOut:
         llmDailyBudgetUsd=get_llm_daily_budget(db),
         llmBudgetCounterShared=_contador_de_gasto_compartido(),
         sectorApis=[_to_out(c) for c in apis],
+        smtp=_smtp_out(db),
     )
 
 
@@ -422,6 +424,13 @@ def update_settings(db: Session, payload: SettingsIn) -> SettingsOut:
     if payload.sectorApis is not None:
         for api in payload.sectorApis:
             _upsert_sector_api(db, api)
+    if payload.smtp is not None:
+        m = payload.smtp
+        # MASK significa «no la toques»: la pantalla nunca recibe la contraseña guardada, así
+        # que reenvía el placeholder. Sin este filtro, guardar el remitente borraría la llave.
+        clave = None if (m.password is None or m.password == MASK) else m.password
+        set_smtp_config(db, host=m.host, port=m.port, user=m.user, password=clave,
+                        remitente=m.fromAddress, starttls=m.starttls)
     db.commit()
     return get_settings(db)
 
@@ -1012,3 +1021,154 @@ def set_invoice_issuer(db: Session, *, name: Optional[str] = None, rnc: Optional
         _set_app_setting(db, _INV_ISSUER_EMAIL, email.strip(), is_secret=False)
     db.commit()
     return get_invoice_issuer(db)
+
+
+# ── Correo saliente (SMTP) ────────────────────────────────────────
+# Vive acá y no sólo en el entorno por la misma razón que el techo de gasto: mover el canal
+# de correo por variable de entorno exige un redeploy, y el dueño de la instalación no
+# necesariamente tiene acceso al panel de infraestructura. La contraseña es un SECRETO y va
+# cifrada con Fernet, igual que la llave de Claude — nunca vuelve al cliente en claro.
+_SMTP_HOST = "smtp_host"
+_SMTP_PORT = "smtp_port"
+_SMTP_USER = "smtp_user"
+_SMTP_PASSWORD = "smtp_password"
+_SMTP_FROM = "smtp_from"
+_SMTP_STARTTLS = "smtp_starttls"
+
+
+def _smtp_guardado(db: Session, key: str) -> Optional[str]:
+    """Valor guardado para *key*, o ``None`` si NO hay fila.
+
+    La distinción importa: **si hay fila, manda la fila, aunque esté vacía.** Vaciar el host
+    desde Configuración es la forma de APAGAR el canal, y caer al entorno en ese caso lo
+    resucitaría sin que nadie lo pida. Sólo la ausencia de fila delega en el entorno.
+    """
+    row = _get_app_setting(db, key)
+    if row is None:
+        return None
+    if row.is_secret and row.value:
+        return decrypt(str(row.value))
+    return str(row.value or "")
+
+
+def get_smtp_config(db: Session) -> Dict[str, Any]:
+    """Configuración de correo vigente: la de Configuración si está, si no la del entorno.
+
+    Devuelve la contraseña en claro porque el ÚNICO consumidor es el emisor
+    (``shared/notifications/email``). La superficie HTTP nunca la sirve: ver
+    :func:`get_smtp_public`.
+    """
+    def _v(key: str, env: str) -> str:
+        guardado = _smtp_guardado(db, key)
+        return guardado if guardado is not None else str(env or "")
+
+    puerto_txt = _v(_SMTP_PORT, str(app_settings.SMTP_PORT))
+    try:
+        puerto = int(puerto_txt or 0) or 587
+    except (TypeError, ValueError):
+        # Un puerto ilegible NO se interpreta como "sin correo": se usa el estándar de
+        # STARTTLS y se deja rastro. Confundir "no se entiende" con "no hay" apaga el canal
+        # justo cuando alguien acaba de intentar encenderlo.
+        logger.warning("Puerto SMTP guardado ilegible (%r): se usa 587.", puerto_txt)
+        puerto = 587
+
+    starttls_txt = _smtp_guardado(db, _SMTP_STARTTLS)
+    starttls = (bool(app_settings.SMTP_STARTTLS) if starttls_txt is None
+                else starttls_txt.strip().lower() in ("1", "true", "yes", "on", "si", "sí"))
+
+    return {
+        "host": _v(_SMTP_HOST, app_settings.SMTP_HOST).strip(),
+        "port": puerto,
+        "user": _v(_SMTP_USER, app_settings.SMTP_USER).strip(),
+        "password": _v(_SMTP_PASSWORD, app_settings.SMTP_PASSWORD),
+        "from": _v(_SMTP_FROM, app_settings.SMTP_FROM).strip(),
+        "starttls": starttls,
+    }
+
+
+def get_smtp_public(db: Session) -> Dict[str, Any]:
+    """Forma que SÍ puede cruzar la API: la contraseña sale como booleano, nunca su valor.
+
+    Un campo de contraseña que devuelve su contenido es una filtración con formulario."""
+    cfg = get_smtp_config(db)
+    return {
+        "host": cfg["host"], "port": cfg["port"], "user": cfg["user"],
+        "from": cfg["from"], "starttls": cfg["starttls"],
+        "password_set": bool(cfg["password"]),
+    }
+
+
+def set_smtp_config(db: Session, *, host: Optional[str] = None, port: Optional[int] = None,
+                    user: Optional[str] = None, password: Optional[str] = None,
+                    remitente: Optional[str] = None,
+                    starttls: Optional[bool] = None) -> Dict[str, Any]:
+    """Guarda la configuración de correo (admin). Sólo escribe los campos provistos.
+
+    ``password`` sigue una regla propia: ``None`` significa «no la toques» y ``""`` significa
+    «borrala». Sin esa distinción, cualquier guardado de la pantalla —que nunca recibe la
+    contraseña actual— borraría la llave al reenviar el formulario.
+    """
+    if host is not None:
+        _set_app_setting(db, _SMTP_HOST, host.strip(), is_secret=False)
+    if port is not None:
+        _set_app_setting(db, _SMTP_PORT, str(int(port)), is_secret=False)
+    if user is not None:
+        _set_app_setting(db, _SMTP_USER, user.strip(), is_secret=False)
+    if password is not None:
+        _set_app_setting(db, _SMTP_PASSWORD, password.strip(), is_secret=True)
+    if remitente is not None:
+        _set_app_setting(db, _SMTP_FROM, remitente.strip(), is_secret=False)
+    if starttls is not None:
+        _set_app_setting(db, _SMTP_STARTTLS, "true" if starttls else "false", is_secret=False)
+    db.commit()
+    _invalidar_cache_de_correo()
+    return get_smtp_public(db)
+
+
+def _invalidar_cache_de_correo() -> None:
+    """El emisor memoriza la configuración unos segundos para no consultar la base en cada
+    entrega de un barrido. Sin esta invalidación, encender el correo desde Configuración
+    tardaría ese TTL en surtir efecto — y el botón «enviar prueba» diría que no hay canal
+    justo después de que el admin acaba de configurarlo."""
+    try:
+        from shared.notifications import email as mail
+        mail.invalidar_cache()
+    except Exception:  # noqa: BLE001 — el guardado ya ocurrió; el TTL lo corrige solo
+        logger.warning("No se pudo invalidar la caché de correo", exc_info=True)
+
+
+def _smtp_out(db: Session) -> SmtpOut:
+    """Bloque de correo para la pantalla. ``configurado`` y ``falta`` los computa el EMISOR,
+    no esta función: si la pantalla dedujera por su cuenta que «hay host ⇒ hay canal», el día
+    que el emisor agregue una condición la pantalla seguiría diciendo que sí. Una sola
+    autoridad sobre si el canal existe."""
+    from shared.notifications import email as mail
+
+    pub = get_smtp_public(db)
+    diag = mail.diagnostico(db)
+    return SmtpOut(
+        host=str(pub["host"]), port=int(pub["port"]), user=str(pub["user"]),
+        fromAddress=str(pub["from"]), starttls=bool(pub["starttls"]),
+        passwordSet=bool(pub["password_set"]),
+        configurado=bool(diag["configurado"]), falta=list(diag["falta"]),
+    )
+
+
+def probar_smtp(db: Session, destinatario: str) -> Dict[str, str]:
+    """Manda un correo de prueba REAL y devuelve el motivo si falla.
+
+    Es la única forma honesta de responder «¿quedó bien configurado?». Un endpoint que
+    valide el formulario y responda 200 confirma que el formulario está completo, que es una
+    pregunta distinta —y menos útil— que si el correo sale.
+    """
+    from shared.notifications import email as mail
+
+    ok, motivo = mail.enviar_o_motivo(
+        destinatario,
+        "SDQ·MIP — prueba de correo saliente",
+        "Este es un correo de prueba de SDQ·MIP.\n\n"
+        "Si lo estás leyendo, el canal de correo quedó configurado y las alertas de tus "
+        "vigilancias van a llegar por acá.\n",
+        db=db)
+    return {"status": "success" if ok else "error", "detail": motivo,
+            "destinatario": destinatario}

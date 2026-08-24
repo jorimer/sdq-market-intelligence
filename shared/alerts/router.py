@@ -114,7 +114,7 @@ async def post_subscription(body: _NuevaVigilancia, db: Session = Depends(get_db
             enforce_access(decision)
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN,
                             detail="No tenés acceso a este producto.")
-    return service.serializar(row)
+    return service.serializar(row, db)
 
 
 @router.patch("/subscriptions/{sub_id}", summary="Editar una vigilancia")
@@ -132,7 +132,7 @@ async def patch_subscription(sub_id: str, body: _EditarVigilancia,
             channels=body.channels, digest=body.digest, active=body.active)
     except AlertValidationError as e:
         raise _422(e)
-    return service.serializar(row)
+    return service.serializar(row, db)
 
 
 @router.delete("/subscriptions/{sub_id}", summary="Dejar de vigilar")

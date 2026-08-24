@@ -16,6 +16,7 @@ import {
   SystemReportType,
   ReportItem,
 } from "../api";
+import { mensajeDeError } from "../../../shared/api/errores";
 
 const REPORT_TYPE_VALUES = ["full_rating", "scorecard", "communique"];
 
@@ -57,7 +58,7 @@ export function ReportsPage() {
       setSysMsg({ ok: true, text: t("banking.repMsgOk") });
       loadSystemReports();
     } catch (err: any) {
-      setSysMsg({ ok: false, text: err?.response?.data?.detail || t("banking.repMsgErr") });
+      setSysMsg({ ok: false, text: mensajeDeError(err, t("banking.repMsgErr")) });
     } finally {
       setSysBusy(null);
     }
@@ -85,7 +86,7 @@ export function ReportsPage() {
       setMsg({ ok: true, text: t("banking.repMsgOk") });
       loadReports(bankId);
     } catch (err: any) {
-      setMsg({ ok: false, text: err?.response?.data?.detail || t("banking.repMsgErr") });
+      setMsg({ ok: false, text: mensajeDeError(err, t("banking.repMsgErr")) });
     } finally {
       setGenerating(false);
     }

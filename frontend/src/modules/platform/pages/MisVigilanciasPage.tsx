@@ -10,6 +10,7 @@ import {
   type AlertRulesCatalog,
   type AlertSubscription,
 } from "@/shared/api/alerts";
+import { mensajeDeError } from "../../../shared/api/errores";
 
 /**
  * «Mis vigilancias» — dónde el cliente elige POR DÓNDE y CADA CUÁNTO se entera.
@@ -51,6 +52,9 @@ export function MisVigilanciasPage() {
   // la pantalla ofreciera algo que el backend rechaza, o escondiera algo que ya funciona.
   const disponibles = cat?.canales_disponibles ?? [];
   const sinConfigurar = cat?.canales_no_configurados ?? [];
+  // Un solo canal ⇒ no hay nada que elegir. Se decide una vez acá y no dentro del map,
+  // para que el criterio no se duplique.
+  const unico = disponibles.length <= 1;
 
   async function patch(sub: AlertSubscription, cambio: Parameters<typeof updateAlertSubscription>[1]) {
     setBusy(sub.id); setMsg(null);
@@ -58,9 +62,7 @@ export function MisVigilanciasPage() {
       const nuevo = await updateAlertSubscription(sub.id, cambio);
       setSubs((prev) => prev.map((s) => (s.id === nuevo.id ? nuevo : s)));
     } catch (e) {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const detail = (e as any)?.response?.data?.detail;
-      setMsg(typeof detail === "string" ? detail : tr("alerts.saveError", "No se pudo guardar el cambio."));
+      setMsg(mensajeDeError(e, tr("alerts.saveError", "No se pudo guardar el cambio.")));
     } finally { setBusy(null); }
   }
 
@@ -123,7 +125,8 @@ export function MisVigilanciasPage() {
             <div className="flex flex-wrap items-center gap-2">
               <Chip tone="muted">
                 {sub.subject
-                  ? tr("alerts.subject", "Sujeto: {{s}}").replace("{{s}}", sub.subject)
+                  ? tr("alerts.subject", "Sujeto: {{s}}")
+                      .replace("{{s}}", sub.subject_label || sub.subject)
                   : tr("alerts.wholeAxis", "Todo el eje")}
               </Chip>
               <Chip tone="muted">{sub.tier_requerido}</Chip>
@@ -140,6 +143,22 @@ export function MisVigilanciasPage() {
                 <span className="text-xs text-muted">{tr("alerts.channels", "Canales")}</span>
                 {disponibles.map((canal) => {
                   const Icon = CANAL_ICONO[canal] ?? Inbox;
+                  // Con UN solo canal disponible, el interruptor no tiene ninguna acción
+                  // posible: encenderlo ya está encendido y apagarlo deja la vigilancia
+                  // muda, que el backend rechaza. Se renderiza como estado. Un control
+                  // cuya única respuesta posible es un error rojo no debe existir.
+                  if (unico) {
+                    return (
+                      <span
+                        key={canal}
+                        title={tr("alerts.onlyChannel",
+                          "Es el único canal disponible hoy; por eso no se puede apagar.")}
+                        className="inline-flex items-center gap-1.5 rounded-md bg-soft px-2 py-1 text-xs text-muted"
+                      >
+                        <Icon className="w-3.5 h-3.5" /> {tr(`alerts.channel.${canal}`, canal)}
+                      </span>
+                    );
+                  }
                   return (
                     <button
                       key={canal}

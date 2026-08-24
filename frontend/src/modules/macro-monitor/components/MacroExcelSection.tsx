@@ -12,6 +12,7 @@ import {
   ExcelCatalog,
   ExcelIngestResult,
 } from "../api";
+import { estadoDeError, mensajeDeError } from "../../../shared/api/errores";
 
 const sectorLabel = (t: TFunction, key: string) => t(`datos.macro.sectors.${key}`, { defaultValue: key });
 
@@ -46,11 +47,10 @@ export function MacroExcelSection() {
       const r = await ingestExcel({ key: key || undefined, url: url || undefined, dryRun });
       setResult(r);
     } catch (e: unknown) {
-      const resp = (e as { response?: { status?: number; data?: { detail?: string } } })?.response;
       setError(
-        resp?.status === 403
+        estadoDeError(e) === 403
           ? t("datos.macro.adminRequired")
-          : resp?.data?.detail || t("datos.macro.excel.ingestError"),
+          : mensajeDeError(e, t("datos.macro.excel.ingestError")),
       );
     } finally {
       setBusy(false);
