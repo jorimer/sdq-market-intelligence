@@ -154,11 +154,52 @@ def _lectura(direccion: str, etiqueta: str, brecha: float,
     return f"{direccion} del {etiqueta} en {abs(brecha):.2f} {unidad_brecha}"
 
 
+#: Posición + sentido de la escala → VEREDICTO. La unión que faltaba.
+#:
+#: El contexto servía los dos hechos por separado —"por debajo del promedio en 3.70 pp" en un
+#: lado, "un valor MÁS ALTO es MEJOR" en otro— y dejaba que el modelo los UNIERA. Esa unión es
+#: una derivación, que es exactamente la operación que este módulo entero existe para evitar.
+#:
+#: Huella del defecto en un informe real (Deep Dive de banca, §7 «Análisis Comparativo»): con
+#: patrimonio/activos en 7.41% contra una mediana de grupo de 11.11%, la sección escribió que
+#: «SUPERA en 3.70 puntos porcentuales al promedio de su grupo» y dos líneas después que el
+#: margen de absorción es «estructuralmente MÁS DELGADO que el del par típico». No es un
+#: desliz de una palabra: son DOS uniones distintas del mismo par de hechos, una bien y otra
+#: al revés. Un error de tipeo no se comporta así.
+_VEREDICTO = {
+    ("higher", "por encima"): "favorable", ("higher", "por debajo"): "desfavorable",
+    ("lower", "por encima"): "desfavorable", ("lower", "por debajo"): "favorable",
+}
+_POR_QUE = {"higher": "en este indicador un valor más alto es mejor",
+            "lower": "en este indicador un valor más bajo es mejor"}
+
+
+def _veredicto(direccion_escala: Optional[str], posicion: str) -> tuple:
+    """``(veredicto, por_qué)`` de una posición dada el sentido de la escala.
+
+    ``no_aplica`` en los indicadores de ÓPTIMO INTERMEDIO, y no por no saber: ahí la vara NO
+    es el promedio sino el óptimo, así que estar por encima o por debajo del grupo no tiene
+    lectura de bueno o malo. Esa la da ``posicion_vs_optimo``. Se declara el motivo — un campo
+    ausente se lee como que nadie miró.
+    """
+    if posicion == "en línea":
+        return "en línea", "la brecha no es material"
+    if direccion_escala == "target":
+        return "no_aplica", ("indicador de óptimo intermedio: la vara es el óptimo, no el "
+                             "promedio — leé 'posicion_vs_optimo'")
+    escala = direccion_escala or ""
+    v = _VEREDICTO.get((escala, posicion))
+    if v is None:
+        return "no_aplica", "no se declaró el sentido de la escala de este indicador"
+    return v, _POR_QUE[escala]
+
+
 def comparaciones_vs_referencia(
     valores: Dict[str, Optional[float]],
     referencias: Dict[str, Dict[str, Optional[float]]],
     *,
     unidades: Optional[Dict[str, Optional[str]]] = None,
+    direcciones: Optional[Dict[str, Optional[str]]] = None,
     materialidad_pp: Optional[float] = None,
 ) -> List[Dict[str, Any]]:
     """Dirección y brecha de cada (indicador, referencia), ya resueltas.
@@ -211,6 +252,8 @@ def comparaciones_vs_referencia(
                 direccion = "en línea"
             else:
                 direccion = "por encima" if brecha > 0 else "por debajo"
+            veredicto, por_que = _veredicto(
+                (direcciones or {}).get(indicador), direccion)
             out.append({
                 "indicador": indicador,
                 "valor": round(v, 4),
@@ -219,7 +262,12 @@ def comparaciones_vs_referencia(
                 "direccion": direccion,
                 "brecha_pp": brecha,
                 "unidad_brecha": unidad_brecha,
+                # `lectura` se COPIA literal (así lo pide el prompt), así que el veredicto NO
+                # va adentro: terminaría impreso en el informe. Viaja aparte, es INTERNO — el
+                # modelo lo usa para orientarse y redacta con su propio criterio.
                 "lectura": _lectura(direccion, str(etiqueta), brecha, unidad_brecha),
+                "veredicto": veredicto,
+                "veredicto_por_que": por_que,
             })
     return out
 
