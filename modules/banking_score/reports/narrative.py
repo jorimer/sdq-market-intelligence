@@ -219,7 +219,12 @@ def _comparaciones_resueltas(all_indicators: Dict, benchmarks: Optional[Dict],
     # La UNIDAD viaja con la comparación: el HHI es un índice de 0 a 10.000, y sin esto su
     # brecha salía enunciada en "puntos porcentuales" — cifra correcta, unidad imposible.
     unidades = {ind: (INDICATOR_META.get(ind) or {}).get("unit") for ind in valores}
-    return comparaciones_vs_referencia(valores, referencias, unidades=unidades)
+    # El SENTIDO DE LA ESCALA viaja con la comparación para que el veredicto —¿esta posición
+    # es fortaleza o debilidad?— se compute acá y no lo tenga que deducir el modelo uniendo
+    # dos hechos que hasta ahora llegaban en lugares distintos del contexto.
+    direcciones = {ind: (INDICATOR_META.get(ind) or {}).get("direction") for ind in valores}
+    return comparaciones_vs_referencia(valores, referencias, unidades=unidades,
+                                       direcciones=direcciones)
 
 
 def _razones_resueltas(all_indicators: Dict, benchmarks: Optional[Dict],

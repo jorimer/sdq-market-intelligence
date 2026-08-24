@@ -236,7 +236,18 @@ INDICATOR_SEMANTICS = (
     "te dice si el valor está por encima o por debajo — eso viene resuelto en "
     "'posicion_vs_optimo' y se COPIA. Antes de escribir la glosa, verificá que sea "
     "coherente con el lado en que cayó el valor: describir un ratio alto con las palabras "
-    "de uno bajo es un error de hecho, aunque todas las cifras de la oración sean correctas."
+    "de uno bajo es un error de hecho, aunque todas las cifras de la oración sean correctas. "
+    "VEREDICTO DE CADA COMPARACIÓN: en 'comparaciones', el campo 'veredicto' ya resuelve si "
+    "esa posición es 'favorable' o 'desfavorable' para la entidad, y 'veredicto_por_que' dice "
+    "en qué sentido corre la escala. NO lo deduzcas uniendo la dirección con el sentido —esa "
+    "unión es donde se invierte la lectura: se ha escrito que un indicador 'SUPERA' al "
+    "promedio y dos líneas después que la entidad está peor que sus pares, en el mismo "
+    "párrafo—. El veredicto es INTERNO y ORIENTADOR: te dice de qué lado estás parado para "
+    "que elijas bien las palabras. NO lo transcribas: no escribas 'favorable' ni "
+    "'desfavorable' como etiqueta, ni digas que el sistema clasificó nada. Redactá la lectura "
+    "con tu propio criterio de analista, coherente con ese veredicto. Si dice 'no_aplica' "
+    "—óptimo intermedio— la vara NO es el promedio sino el óptimo: no llames mejor ni peor a "
+    "estar por encima o por debajo del grupo."
 )
 
 # Defensa PRIMARIA contra dos errores de ALCANCE que el dato no sostiene, ambos hallados en

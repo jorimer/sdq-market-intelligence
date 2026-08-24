@@ -1,130 +1,129 @@
-# Propuesta: que una RELACIÓN invertida vete la entrega, como ya la veta una cifra inventada
+# La lectura de una comparación se COMPUTA — y qué hacer cuando aun así sale mal
 
-**Estado:** propuesta · pendiente de decisión del dueño
-**Bloqueante:** sí — acordado hacerlo ANTES de la próxima generación de informes
-**Origen:** §7 de un Deep Dive de banca REAL entregado el 2026-03-31
+**Estado:** la causa raíz está implementada en este PR. Quedan dos decisiones (§5).
+**Bloqueante:** sí — acordado resolverlo ANTES de la próxima generación de informes.
+**Origen:** §7 de un Deep Dive de banca REAL, corte 2026-03-31.
+
+> **Nota de versión.** La primera versión de este documento proponía que una relación
+> invertida VETARA la entrega, por analogía con la cifra inventada. El dueño objetó que no
+> son lo mismo, y tenía razón: eso llevó a encontrar la causa real, que es otra. Se deja
+> constancia porque el razonamiento descartado explica por qué el remedio es éste y no aquél.
 
 ---
 
-## 1. El hecho
+## 1. El caso
 
-El informe afirmó, en su §7 «Análisis Comparativo»:
+En un informe entregado, tres secciones hablaron del mismo indicador —patrimonio sobre
+activos, 7,41% contra una mediana de grupo de 11,11%, segundo desde abajo entre 16 bancos
+múltiples, percentil 5— y una lo dijo al revés:
 
-> «La capitalización contable (7.41% de activos) **supera** en 3.70 puntos porcentuales al
-> promedio de su grupo.»
+| sección | qué dijo | |
+|---|---|---|
+| §2 Solidez | «…**por debajo** del promedio de bancos múltiples en 3.70 puntos porcentuales» | ✓ |
+| §10 Riesgos | «7.41% de sus activos —frente al **11.11%** del promedio del grupo—» | ✓ |
+| **§7 Comparativo** | «La capitalización contable **supera** en 3.70 puntos porcentuales al promedio de su grupo» | ✗ |
 
-El contexto servía «**por debajo** … en 3.70 puntos porcentuales». La §2 y la §10 del **mismo
-documento** lo decían bien. Verificado contra el panel de producción: la mediana de los 17
-bancos múltiples es 11,11% y el sujeto 7,41% — está por debajo.
+No hay lectura de negocio que salve a §7: §2 usa la misma base y da la misma brecha, y el
+mismo párrafo de §7 continúa diciendo que el margen de absorción es «estructuralmente **más
+delgado** que el del par típico» — la lectura correcta, dos líneas después de la incorrecta.
 
-El guard de dirección no lo vio (arreglado en #922). Pero al ir a verificar que el arreglo
-impidiera la reincidencia, apareció lo que esta propuesta viene a cerrar:
+## 2. La causa
 
-> **Aunque el guard lo hubiera visto, el informe habría salido igual.**
+Esto es TODO lo que el modelo recibía sobre ese indicador, en dos lugares distintos del
+contexto:
 
-## 2. Por qué sale igual
+```
+en un lado →  "un valor MÁS ALTO del indicador es MEJOR"
+en otro    →  "por debajo del promedio de bancos múltiples en 3.70 puntos porcentuales"
 
-El gate de entrega del ensamblador (`_content_from_snapshot`) corre **solo** los chequeos de
-CIFRA SIN RESPALDO:
-
-```python
-sin_respaldo = secciones_con_cifra_sin_respaldo(narratives, level.sections, snapshot.payload)
-if sin_respaldo and blocked:
-    raise NarrativeSinRespaldoError(sin_respaldo)
+el veredicto (¿fortaleza o debilidad?) →  no se servía en ninguna parte
 ```
 
-Los chequeos de RELACIÓN —dirección, brecha y razón— viven en el motor y solo disparan **una
-regeneración**. Si la inversión sobrevive a esa regeneración, la marca se guarda en
-`result.guard_unsupported`, se escribe una línea de log… y el texto se entrega.
+Los dos hechos, por separado, y la UNIÓN a cargo del modelo. Esa unión es una **derivación**,
+que es exactamente la operación que la doctrina de este repo dice que el modelo erra y que en
+todos los demás casos —direcciones, aportes, deltas, rangos— ya se sirve resuelta.
 
-Y esa marca **no sobrevive al borde del producto**: los productos devuelven `Dict[str, str]`
-(solo textos), así que para cuando el ensamblador decide, la información ya se perdió.
+Y explica la huella: §7 escribió «supera» y dos líneas después «más delgado». No es un desliz
+de una palabra — son **dos uniones distintas del mismo par de hechos**, una bien y otra al
+revés. Un error de tipeo no se comporta así.
 
-Esto contradice al propio sistema. `DIRECTION_DISCIPLINE`, en el prompt, dice:
+Es la misma familia que el defecto del LTD de BPD (2026-08-13) que documenta
+`_semantica_indicadores`: allí se agregó «en qué sentido corre la escala» y «de qué lado del
+óptimo cayó el valor», y se paró justo antes del veredicto.
 
-> «Una comparación con el sentido invertido es un error de hecho **tan grave como una cifra
-> inventada**, y es peor cuando el propio informe muestra la tabla que la desmiente.»
+## 3. La cura (implementada en este PR)
 
-Si eso es cierto —y el caso de §7 lo confirma: el documento se contradice a sí mismo—, la
-consecuencia debería ser la misma. Hoy una cifra inventada veta y una relación invertida no.
+Cada comparación viaja con su veredicto **computado**:
 
-## 3. Cuánto vetaría de más (medido, no estimado)
+```
+lectura    "por debajo del promedio de bancos múltiples en 3.70 puntos porcentuales"
+veredicto  "desfavorable"
+por_qué    "en este indicador un valor más alto es mejor"
+```
 
-Corrí los tres chequeos de relación sobre el **informe completo** — las 16 secciones
-narrativas, texto extraído del PDF entregado:
+**El veredicto es INTERNO** (decisión del dueño). Orienta al modelo para que no invierta la
+lectura; él redacta con su criterio de analista. Por eso NO va dentro de `lectura` —que el
+prompt manda a copiar literal— o la palabra «desfavorable» terminaría impresa en el informe.
+Hay un test que lo fija, y la directiva del prompt prohíbe transcribirlo.
 
-| | |
-|---|---|
-| Secciones analizadas | 16 |
-| Secciones marcadas | **1** |
-| Hallazgos totales | **1** |
-| ¿Era un defecto real? | **Sí** — §7, confirmada contra el panel |
+**Excepción declarada:** en los indicadores de ÓPTIMO INTERMEDIO (`ltd`, `exposicion_re`,
+`migracion`) el veredicto es `no_aplica`, y no por no saber: ahí la vara **no es el promedio
+sino el óptimo**, así que estar por encima o por debajo del grupo no tiene lectura de bueno o
+malo. Esa la da `posicion_vs_optimo`.
 
-Cero falsos positivos en las otras quince, incluidas nueve frases de comparación correctas
-que usan las mismas construcciones (§1, §2, §3, §5, §11).
+## 4. Por qué el remedio NO es vetar
 
-**Límite declarado de esta medición:** es UN informe, y los valores de referencia los
-reconstruí de la prosa del propio documento (solo `patrimonio_activos` está verificado contra
-el panel). Es indicativo, no una tasa medida de falsos positivos.
+La analogía con la cifra inventada no se sostiene:
 
-## 4. Las opciones
-
-### A · El motor levanta la excepción
-El motor tiene el contexto por sección, así que no hay que plumbear nada.
-**No sirve:** el motor es transversal y **no sabe si el producto es premium o abierto**. Esa
-decisión vive en el ensamblador (`level.granularity`), y el Pulse por doctrina solo registra.
-Vetar desde el motor rompería el Pulse.
-
-### B · Cambiar el contrato `SectorProduct.narratives()`
-Devolver `(textos, marcas)` en vez de `Dict[str, str]`.
-**No sirve:** rompe los diez módulos de sector para resolver un problema de dos.
-
-### C · El producto expone sus contextos (`narrative_contexts()`)
-Método opt-in; el ensamblador, si existe, re-corre los chequeos por sección.
-**Viable**, sigue el patrón de `supports_sample` / `AI_CONTEXT_FILES`. **Costo:** el contexto
-se arma dos veces (CPU, no modelo), y quien no lo implemente no gana el gate — hay que
-LISTAR a los que quedan fuera, o el hueco desaparece en silencio.
-
-### D · Acumulador por generación (RECOMENDADA)
-El motor **deposita** las marcas de relación persistentes en un `ContextVar`; el ensamblador
-las **drena** y decide la política (premium veta, Pulse registra).
-
-- El motor solo **reporta**; la política sigue donde corresponde.
-- No cambia ninguna firma pública ni el contrato de los productos.
-- No duplica trabajo: la marca ya se calcula hoy y se tira.
-- **Dos precedentes en el repo:** `shared/narrative/lang_context.py` usa un `ContextVar`
-  exactamente para no tocar ~13 firmas de endpoint, y `shared/observability/llm_ledger.py`
-  usa `attributed_to` con el mismo mecanismo.
-
-**Riesgo a manejar:** estado implícito. Se acota con un `contextmanager` que abre y cierra el
-acumulador alrededor del ensamblado, y un test de que **dos generaciones concurrentes no se
-mezclan** — `lang_context` ya documenta la copia de contexto de anyio para endpoints sync.
-
-## 5. La política que propongo
-
-| nivel | cifra sin respaldo | relación invertida |
+| | cifra inventada | relación invertida |
 |---|---|---|
-| Deep Dive / Insight (premium, nombrado) | veta (hoy) | **veta** (propuesto) |
-| Pulse (abierto, sistema) | registra (hoy) | registra |
+| ¿tenemos el dato? | **no** | **sí**, los dos números |
+| ¿sabemos qué habría que decir? | no | **sí — está computado** |
+| ¿es reparable? | **no** sin inventar | **sí** |
 
-El veto **LISTA** qué sección y qué relación, igual que el de cifra sin respaldo: un veto mudo
-se lee como que el informe no existía. La superficie ya sabe mostrarlo (503 con detalle, #915).
+Una cifra inventada es irreparable: no hay número que poner, y frenar es la única salida
+honesta. Una relación invertida es reparable, porque la respuesta correcta ya la calculamos.
+Frenar quince secciones buenas para castigar una frase reparable no protege al cliente: le
+niega un análisis correcto en el 94% de su extensión.
 
-## 6. Cómo se verifica
+**Gravedad y remedio no son lo mismo.** El prompt dice que una comparación invertida es «tan
+grave como una cifra inventada» —y lo es, como error— pero de ahí no se sigue que merezca la
+misma consecuencia.
 
-1. **Dientes:** el texto REAL de §7 vetado por el gate, y las otras 15 secciones entregadas.
-2. **Prueba negativa:** que el barrido encontró secciones (un gate que no mira nada pasa en
-   verde).
-3. **Concurrencia:** dos ensamblados en paralelo no se contaminan las marcas.
-4. **El Pulse no se rompe:** una relación invertida en un Pulse registra y entrega.
-5. **Test estructural:** que la nueva excepción tenga manejador en el router — lo cubre
-   automáticamente `test_veto_tiene_manejador` (#915), que lee los `raise` del ensamblador.
-6. **En prod:** regenerar el mismo Deep Dive y ver que ahora entrega §7 corregida — o que
-   veta declarando el motivo.
+## 5. Lo que queda por decidir
 
-## 7. Qué hace falta decidir
+### 5.1 Reparar mejor
 
-1. **¿Se aprueba que las relaciones veten en premium?** (el cambio de política)
-2. **¿Opción D?** (acumulador por generación) o preferís C, que es más explícito y más caro.
-3. **¿Alcance:** las tres relaciones (dirección, brecha, razón) o solo la dirección para
-   empezar?
+Cuando el guard detecta una inversión, el sistema pide una reescritura. Pero el aviso dice:
+
+> «Reescribí esas afirmaciones con la dirección correcta (**restá y mirá el signo** antes de
+> escribir 'por encima' / 'por debajo')»
+
+Le pide **volver a derivar** — la operación que acaba de fallar. Teniendo la cláusula correcta
+computada, no se la entrega.
+
+**Propuesta:** entregarle la frase hecha para que la copie, y reintentar más de una vez (hoy
+es un solo intento).
+
+*Evidencia de que reparar funciona*, de los registros de una corrida real: de tres
+reparaciones, dos salieron limpias; la única que falló fue el caso en que **el guard estaba
+equivocado** y el modelo tenía razón en insistir. Muestra chica.
+
+### 5.2 ¿Frenar como último recurso?
+
+Si tras entregarle la respuesta correcta el modelo la sigue contradiciendo, ya no es «se
+equivocó»: es señal de que algo más está roto —quizás el propio guard, como en el caso del
+`69%`—. Las opciones son frenar, o entregar marcando la sección para revisión humana.
+
+**Medición disponible:** los tres chequeos de relación corridos sobre el informe COMPLETO
+(16 secciones narrativas) marcan **1 sección, y era el defecto real**. Cero falsos positivos
+en las otras quince, que incluyen nueve comparaciones correctas con las mismas
+construcciones. Límite: es un informe, y las referencias se reconstruyeron de su prosa.
+
+**Obstáculo técnico si se decide frenar:** la pieza que detecta y la que decide publicar son
+distintas y hoy no se comunican — la marca del guard no sobrevive al borde del producto
+(`SectorProduct.narratives()` devuelve `Dict[str, str]`). La vía recomendada es un acumulador
+por generación (`ContextVar`): el motor deposita, el ensamblador drena y decide la política
+(premium veta, Pulse registra). El motor no puede decidir solo: es transversal y no sabe si el
+producto es premium. Hay dos precedentes del mecanismo en el repo (`lang_context`,
+`llm_ledger.attributed_to`).
