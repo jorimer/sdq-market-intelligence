@@ -374,15 +374,32 @@ class TestMercadoLaboral:
     """Los tres indicadores salen del MISMO libro del BCRD y no tienen la misma calidad de
     evidencia. La diferencia es el hallazgo, no un detalle de implementación."""
 
-    def test_el_NIVEL_de_desocupacion_no_es_evaluable_contra_su_meta(self):
-        """La base legal es ENFT-2010 (14,3%) y la medición es ENCFT, que arranca en 7,33%.
-        El nivel se parte casi al medio en el momento del cambio de encuesta, no de la
-        política. Publicar «meta superada» sería exactamente la mentira que este módulo
-        existe para no cometer."""
+    def test_el_nivel_de_desocupacion_se_mide_con_la_MISMA_definicion_a_los_dos_lados(self):
+        """══ REESCRITO 2026-08-24, porque la creencia que codificaba era falsa ══
+
+        Este test decía: «la base legal es ENFT-2010 (14,3%) y la medición es ENCFT, que
+        arranca en 7,33%; el nivel se parte casi al medio en el cambio de encuesta». Medido
+        contra la hoja del emisor, **no se parte**: el 7,33% es la tasa ABIERTA y la ley fija
+        la AMPLIADA. La ENCFT ampliada arranca en 14,09%, y contra la base legal de 14,3 la
+        serie da Δ 1,8%. Se estaba comparando una definición contra la otra.
+
+        Lo que queda —y es el invariante de verdad, más fuerte que el anterior— es que el
+        nivel se mida con la MISMA definición a los dos lados. El emisor publica tres tasas
+        para este indicador; atarse a la equivocada es lo que produjo el error.
+        """
         b = cargar_bindings(EXPEDIENTE)["2.37"]
-        assert not b.cuenta, "un nivel no comparable no puede contar como cobertura"
-        nota = (b.nota_comparabilidad or "").upper()
-        assert "ENFT" in nota and "ENCFT" in nota, "la nota nombra las dos encuestas"
+        assert b.serie == "social_dev:broad_unemployment_rate", (
+            f"el 2.37 tiene que medirse con la desocupación AMPLIADA y está en {b.serie}. "
+            f"La abierta se va 63,5% de la línea base: no es la que la ley usó.")
+        assert b.cuenta, "el oráculo cierra con Δ 1,8%: el indicador está medido"
+        # Se lee `nota` y no `nota_comparabilidad`: un binding que promueve no puede llevar
+        # una duda de comparabilidad ABIERTA, así que al cerrarse el texto cambia de campo.
+        # Lo que no cambia es la exigencia — el lector tiene que saber que la serie cruza un
+        # cambio de encuesta, porque comparar 2010 contra 2025 mezcla dos instrumentos.
+        nota = ((b.nota or "") + (b.nota_comparabilidad or "")).upper()
+        assert "ENFT" in nota and "ENCFT" in nota, (
+            "la nota tiene que nombrar las DOS encuestas: la línea base es ENFT y todo lo "
+            "posterior a 2016 es ENCFT")
 
     def test_pero_las_RAZONES_si_son_evaluables(self):
         """Una razón entre dos poblaciones medidas con la misma encuesta es robusta al

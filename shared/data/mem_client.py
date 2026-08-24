@@ -19,16 +19,23 @@ financiero se corrió una fila— y un parser por índice habría seguido devolv
 al lado sin fallar. Si una etiqueta no aparece, esto levanta excepción en vez de servir un
 diccionario incompleto.
 
-**Lo que este módulo NO sirve: el subsidio del Estado (indicador 3.30).** Está en el anexo,
-en la hoja de resultados financieros, y ahí la disciplina se rompe: esa hoja no tiene cabecera
-de años y su fila se mueve entre ediciones (f63 en 2021, f64 en 2024). Leerla por posición
-sería fabricar procedencia. Se declara como brecha y no se adivina.
+**El subsidio del Estado (indicador 3.30) SÍ se sirve, desde 2026-08-24.** Estaba declarado
+acá como brecha porque «esa hoja no tiene cabecera de años». Tenía razón el diagnóstico y
+estaba mal la conclusión: la hoja no tiene años porque sus columnas son MESES —enero a
+diciembre más un acumulado—, y el año no hay que inferirlo, viene del anexo que se abrió.
+Como solo se leen los de diciembre, ese acumulado es el año completo.
+
+Y la fila no se toma por posición, que era el otro miedo. Se toma por etiqueta y se
+comprueba con las cuentas del propio cuadro: el acumulado tiene que ser la suma de los doce
+meses, y el bloque del TOTAL tiene que ser la suma de los bloques de las tres distribuidoras.
+La etiqueta «Aportes del gobierno» aparece cinco veces en el anexo de 2020; la identidad dice
+cuál es la que agrega, sin que haya que saberlo de antemano.
 """
 from __future__ import annotations
 
 import logging
 import re
-from typing import Dict, List, Tuple
+from typing import Dict, List, Sequence, Tuple
 
 import httpx
 
@@ -190,3 +197,123 @@ def series_anuales(anios: List[int], listar=None, bajar=None,
                                 clave, a, previo, v)
                 acumulado[clave][a] = v
     return {c: [(str(a), v) for a, v in sorted(s.items())] for c, s in acumulado.items()}
+
+# ── Indicador 3.30: el aporte del Gobierno a las distribuidoras ────────────────────────────
+
+#: La hoja de resultados financieros. Es otra que la de los índices comerciales.
+HOJA_FINANCIERA = "Anexo Res Financieros"
+
+#: La etiqueta del aporte, EXACTA. En el mismo anexo vive «Aportes del Gobierno para
+#: Inversión», que es otro concepto; la igualdad las separa y un `in` las confundiría.
+FILA_APORTES = "APORTES DEL GOBIERNO"
+
+#: Cuánto pueden fallar las identidades del cuadro para darse por cerradas.
+TOLERANCIA_IDENTIDAD_PCT = 0.5
+
+
+def _norm_texto(t: object) -> str:
+    import unicodedata
+
+    s = "".join(c for c in unicodedata.normalize("NFD", str(t if t is not None else ""))
+                if unicodedata.category(c) != "Mn")
+    return " ".join(s.upper().split())
+
+
+def _rotulo_de(fila: Sequence[object]) -> str:
+    """El rótulo de una fila: su PRIMER texto, no su primera celda.
+
+    El cuadro tiene la etiqueta en la segunda columna y la primera vacía — leer `fila[0]`
+    devolvía vacío para todas y el lector no encontraba ninguna fila. Buscar el primer texto
+    sobrevive a que el emisor agregue o quite una columna de sangría.
+    """
+    for v in fila:
+        if isinstance(v, str) and v.strip():
+            return _norm_texto(v)
+    return ""
+
+
+def _numeros(fila: Sequence[object]) -> List[float]:
+    return [float(v) for v in fila
+            if isinstance(v, (int, float)) and not isinstance(v, bool)]
+
+
+def acumulado_de(fila: Sequence[object]) -> float:
+    """El acumulado del año de una fila mensual, comprobado contra la suma de los meses.
+
+    La última columna numérica es el acumulado. No se toma por ser la última: se toma porque
+    **es la suma de las doce anteriores**, y eso se verifica. Si el emisor agregara una
+    columna al final —una variación, una proyección—, la identidad deja de cerrar y esto
+    levanta en vez de publicar la columna de al lado.
+    """
+    nums = _numeros(fila)
+    if len(nums) < 13:
+        raise MEMUnavailable(
+            f"la fila trae {len(nums)} números y el cuadro tiene doce meses más el "
+            f"acumulado: no hay identidad que comprobar")
+    meses, acumulado = nums[:-1], nums[-1]
+    suma = sum(meses)
+    if not suma or abs(acumulado - suma) / abs(suma) * 100.0 > TOLERANCIA_IDENTIDAD_PCT:
+        raise MEMUnavailable(
+            f"la última columna ({acumulado:,.2f}) no es la suma de los meses "
+            f"({suma:,.2f}): o cambió el cuadro, o no es la fila que se cree")
+    return acumulado
+
+
+def aporte_del_gobierno(filas: Sequence[Sequence[object]]) -> float:
+    """El aporte del Gobierno al TOTAL de las distribuidoras, en millones de US$.
+
+    La etiqueta aparece varias veces —una por distribuidora, una por el total, y alguna en
+    otro bloque del mismo anexo—, así que **cuál es el total lo dice la aritmética**: es la
+    única cuyo acumulado equivale a la suma de otras tres. Comprobado en 2020, donde el total
+    da 578,59 y las tres distribuidoras 22,39 + 15,46 + 21,61 = 59,46 en enero y cierran
+    igual en el año.
+
+    Elegir «la primera» habría funcionado hoy y sería una posición disfrazada de regla.
+    """
+    from itertools import combinations
+
+    candidatos = [acumulado_de(f) for f in filas if _rotulo_de(f) == FILA_APORTES]
+    if not candidatos:
+        raise MEMUnavailable(
+            f"el anexo no trae ninguna fila «{FILA_APORTES}»: o cambió la etiqueta, o se "
+            f"está leyendo la hoja equivocada")
+    totales = []
+    for i, posible in enumerate(candidatos):
+        resto = candidatos[:i] + candidatos[i + 1:]
+        for tres in combinations(resto, 3):
+            suma = sum(tres)
+            if suma and abs(posible - suma) / abs(suma) * 100.0 <= TOLERANCIA_IDENTIDAD_PCT:
+                totales.append(round(posible, 6))
+                break
+    unicos = sorted(set(totales))
+    if len(unicos) == 1:
+        return unicos[0]
+    if not unicos:
+        raise MEMUnavailable(
+            f"ninguna de las {len(candidatos)} filas de aporte equivale a la suma de otras "
+            f"tres: el cuadro dejó de tener el bloque de total sobre las tres distribuidoras")
+    raise MEMUnavailable(
+        f"{len(unicos)} filas cierran la identidad del total {unicos}: es ambiguo y elegir "
+        f"una sería adivinar")
+
+
+def subsidios_anuales(anios: List[int], listar=None,
+                      bajar=None) -> List[Tuple[int, float]]:  # pragma: no cover - red
+    """`[(año, millones de US$)]` del aporte del Gobierno, de los anexos de diciembre."""
+    import pandas as pd
+
+    listar = listar or anexos_de_diciembre
+    bajar = bajar or descargar
+    out: List[Tuple[int, float]] = []
+    for anio, url in sorted(listar(anios).items()):
+        try:
+            df = pd.read_excel(_io(bajar(url)), sheet_name=HOJA_FINANCIERA, header=None)
+            valor = aporte_del_gobierno([list(df.iloc[k]) for k in range(len(df))])
+        except Exception as e:  # noqa: BLE001 — un año ilegible no se lleva a los demás
+            logger.warning("[mem] 3.30 %s: %s", anio, e)
+            continue
+        out.append((anio, round(valor, 3)))
+    if not out:
+        raise MEMUnavailable(
+            "ningún anexo de diciembre dio el aporte del Gobierno; no se degrada a «sin dato»")
+    return out

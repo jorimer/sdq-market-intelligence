@@ -76,6 +76,15 @@ variable_scopes:
   # leyes— deciden con esto si una variable puede medir una meta NACIONAL.
   unemployment_rate: national            # BCRD ENCFT, promedio 4 trimestres, país
   employment_gender_ratio: national      # BCRD ENCFT, razón F/M, país
+  improved_sanitation_access: national
+  public_network_water_access: national
+  broad_unemployment_rate: national
+  child_labour_6_14: national
+  neet_unemployed_15_19: national
+  preschool_net_coverage: national
+  tertiary_net_enrollment: national
+  income_gender_ratio: national          # SISDOM END 2.40, razón F/M de INGRESO
+  electricity_subsidy_usd_mm: national   # MEM END 3.30, aporte a las EDE
   unemployment_gender_ratio: national    # BCRD ENCFT, razón F/M, país
   secondary_coverage_pais: national      # MINERD SIIE, fila TOTAL PAIS
   primary_coverage_pais: national        # MINERD SIIE, fila TOTAL PAIS

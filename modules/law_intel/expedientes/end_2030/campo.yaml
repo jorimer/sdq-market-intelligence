@@ -18,26 +18,42 @@ motivos:
 
   # ══ MOTIVO DEFINITIVO, con evidencia ══════════════════════════════════════════════════
   - indicador: "3.11"
-    estado: fuente_no_procesable
+    estado: magnitud_no_publicada
     detalle: >-
-      El MESCyT es el emisor competente y publica su estadística de educación superior como
-      informe anual en PDF, sin Excel ni CSV. Extraer la serie exigiría leer cuadros de un
-      documento de cientos de páginas por año.
+      ══ RECLASIFICADO 2026-08-24 ══ Estaba como `fuente_no_procesable`, o sea «el emisor
+      publica y el formato no deja extraer». Es incorrecto: el MESCyT NO publica esta
+      magnitud, en ningún formato. La distinción no es de etiqueta — decía «construir la
+      extracción» sobre un cuadro que no existe, y eso manda a alguien a trabajar en nada.
+      El Viceministerio de Evaluación y Acreditación de las IES tiene por función normativa
+      elaborar el catálogo anual de instituciones acreditadas, y ese catálogo no está
+      publicado. El SIDACES sigue siendo una propuesta de 2022, no un registro operativo.
     evidencia: >-
-      `mescyt.gob.do/publicaciones-estadisticas/` sirve los informes anuales 1989-2024 solo en
-      PDF (informe 2023: 434 páginas, 138 cuadros). El tablero de estadísticas no expone datos
-      extraíbles. En el catálogo nacional de datos abiertos el MESCyT publica cinco conjuntos,
-      todos operativos (becas, exequátur, nómina), ninguno con la estadística de acreditación.
-    verificado_el: "2026-08-20"
+      Medido el 2026-08-24 sobre el Informe General de Estadísticas de Educación Superior
+      2024, sus DOS partes, abriendo los PDF: 294 páginas la Parte 1 y 86 la Parte 2. En las
+      380 páginas la raíz «acredit» aparece TRES veces en la Parte 1 y CERO en la Parte 2, y
+      las tres son nombres de cargos y unidades en tablas de personal —«Viceministro de
+      Evaluación y Acreditación», «Dirección de Evaluación y Acreditación»—. Ningún cuadro de
+      datos trata de acreditación.
+      Las acreditadoras tampoco resuelven: ADAAC está muerta —dominio vacío, cesó por falta
+      de recursos, acreditó cinco IES entre 2002 y 2006—, AACSB reporta cero entradas para RD
+      sobre 1.093 escuelas, SACSCOC lista a RD como jurisdicción sin acreditados, ACAP publica
+      su lista como imágenes JPG y ARCU-SUR no aplica porque RD no participa en MERCOSUR.
+      DATO ÚTIL QUE CONVIENE REGISTRAR AUNQUE EL CASO SE CIERRE: los PDF del MESCyT son texto
+      nativo, no imagen escaneada —esta medición se hizo extrayendo su texto—, así que el
+      MESCyT es una fuente BUENA para otros indicadores. Solo que no para éste.
+      NO invertir en extracción: no hay nada que extraer. La ruta real, si el indicador
+      importa, es solicitud formal por el catálogo que la norma obliga a producir.
+    verificado_el: "2026-08-24"
   - indicador: "3.12"
-    estado: fuente_no_procesable
+    estado: magnitud_no_publicada
     detalle: >-
-      Mismo emisor y mismo formato que el 3.11: el conteo de programas acreditados vive en el
-      mismo informe anual en PDF.
+      ══ RECLASIFICADO 2026-08-24 ══ Mismo emisor y mismo hallazgo que el 3.11: el conteo de
+      programas acreditados no está en el informe anual, ni en ningún otro sitio del emisor.
+      No es un problema de formato.
     evidencia: >-
-      Ver la evidencia del indicador 3.11, verificada contra el portal del MESCyT y contra el
-      catálogo nacional de datos abiertos.
-    verificado_el: "2026-08-20"
+      Ver la evidencia del 3.11, medida sobre las 380 páginas de las dos partes del informe
+      2024 del MESCyT.
+    verificado_el: "2026-08-24"
   - indicador: "4.4"
     estado: magnitud_no_publicada
     detalle: >-

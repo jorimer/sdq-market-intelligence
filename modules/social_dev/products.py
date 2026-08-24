@@ -464,6 +464,66 @@ class SocialDevProduct:
             "Gasto en salud del Gobierno Central (% del PIB)", "living_standards",
             "Línea de Salud del cuadro de clasificación funcional de DIGEPRES, monto "
             "devengado, sobre el PIB nominal. No alimenta el índice de desarrollo."),
+        # Indicador 2.40 de la END. El SUJETO va en la etiqueta: es INGRESO, no ocupación
+        # —`employment_gender_ratio` mide otra cosa y las dos son razones F/M—. Y la etiqueta
+        # dice «razón» porque un 0,91 a secas se lee como un porcentaje.
+        # Indicador 3.30 de la END. La etiqueta nombra a las DISTRIBUIDORAS porque el dato
+        # es el aporte a ellas: llamarlo «subsidio eléctrico» a secas lo haría leer como el
+        # subsidio del Gobierno a todo el sector, que es un universo mayor.
+        "electricity_subsidy_usd_mm": (
+            "electricity_subsidy_usd_mm", HEALTH_ENTITY,
+            "Aporte del Gobierno a las distribuidoras eléctricas (millones de US$)",
+            "living_standards",
+            "Anexo del Informe de Desempeño del MEM, edición de diciembre, acumulado del "
+            "año. No alimenta el índice de desarrollo."),
+        # Indicador 2.34 de la END, hoja «END 2.34» de SISDOM.
+        "improved_sanitation_access": (
+            "improved_sanitation_access", HEALTH_ENTITY,
+            "Acceso a servicios sanitarios mejorados (%)", "inclusion",
+            "Término idéntico al de la ley. Serie del propio Estado para su ley; el instrumento "
+            "(ENFT/ENCFT) viaja en la desagregación. No alimenta el índice."),
+        # Indicador 2.35 de la END, hoja «END 2.35» de SISDOM.
+        "public_network_water_access": (
+            "public_network_water_access", HEALTH_ENTITY,
+            "Acceso a agua de la red pública (%)", "inclusion",
+            "RED PÚBLICA dentro o fuera de la vivienda — no «al menos básica», que incluye pozos. Serie del propio Estado para su ley; el instrumento "
+            "(ENFT/ENCFT) viaja en la desagregación. No alimenta el índice."),
+        # Indicador 2.37 de la END, hoja «END 2.37a» de SISDOM.
+        "broad_unemployment_rate": (
+            "broad_unemployment_rate", HEALTH_ENTITY,
+            "Tasa de desocupación ampliada (%)", "inclusion",
+            "AMPLIADA, no abierta: es la que reproduce la línea base de la ley. Serie del propio Estado para su ley; el instrumento "
+            "(ENFT/ENCFT) viaja en la desagregación. No alimenta el índice."),
+        # Indicador 2.47 de la END, hoja «END 2.47» de SISDOM.
+        "child_labour_6_14": (
+            "child_labour_6_14", HEALTH_ENTITY,
+            "Niños de 6 a 14 años que trabajan (%)", "inclusion",
+            "Término y tramo etario idénticos a los de la ley. Serie del propio Estado para su ley; el instrumento "
+            "(ENFT/ENCFT) viaja en la desagregación. No alimenta el índice."),
+        # Indicador 2.48 de la END, hoja «END 2.48» de SISDOM.
+        "neet_unemployed_15_19": (
+            "neet_unemployed_15_19", HEALTH_ENTITY,
+            "Jóvenes de 15 a 19 que no estudian y están desempleados (%)", "inclusion",
+            "Término idéntico al de la ley. Serie del propio Estado para su ley; el instrumento "
+            "(ENFT/ENCFT) viaja en la desagregación. No alimenta el índice."),
+        # Indicador 2.8 de la END, hoja «END 2.8a» de SISDOM.
+        "preschool_net_coverage": (
+            "preschool_net_coverage", HEALTH_ENTITY,
+            "Cobertura neta de nivel inicial (%)", "inclusion",
+            "Tasa neta de cobertura de nivel inicial, de encuestas de hogares. Serie del propio Estado para su ley; el instrumento "
+            "(ENFT/ENCFT) viaja en la desagregación. No alimenta el índice."),
+        # Indicador 3.10 de la END, hoja «END 3.10» de SISDOM.
+        "tertiary_net_enrollment": (
+            "tertiary_net_enrollment", HEALTH_ENTITY,
+            "Matrícula neta de nivel superior, 18-24 años (%)", "inclusion",
+            "Término idéntico al de la ley. Serie del propio Estado para su ley; el instrumento "
+            "(ENFT/ENCFT) viaja en la desagregación. No alimenta el índice."),
+        "income_gender_ratio": (
+            "income_gender_ratio", HEALTH_ENTITY,
+            "Razón de ingreso laboral femenino/masculino", "inclusion",
+            "SISDOM, hoja de la END. La serie cruza un cambio de encuesta en 2016 (ENFT → "
+            "ENCFT) y el instrumento viaja en la desagregación de cada año. No alimenta el "
+            "índice de desarrollo."),
         "fdi_total_usd_mm": (
             "fdi_total_usd_mm", HEALTH_ENTITY,
             "Inversión extranjera directa — país (millones de US$)", "living_standards",

@@ -488,9 +488,13 @@ DOCUMENTOS = {
     2022: "Libro-Presupuesto-Ejecutado-GGN-2022.pdf",
 }
 
-#: Los anios que el emisor NO publica con este cuadro, y que se buscaron uno por uno el
-#: 2026-08-23. Se LISTAN en vez de desaparecer: un hueco callado se lee como que la serie
-#: termina, y aca el hueco cae justo sobre dos metas de la ley (2020 y 2025).
+#: Los anios que DIGEPRES no publica con este cuadro, buscados uno por uno el 2026-08-23.
+#:
+#: ══ 2026-08-24 ══ **Ya NO son huecos del indicador.** La hoja COFOG del Ministerio de
+#: Hacienda (`shared.data.hacienda_cofog`) trae 2008-2025 completo, incluidos 2020 y 2025,
+#: que son metas de la ley. Esta lista pasa a describir lo que le falta a ESTA fuente, que
+#: quedo de contraste — no lo que le falta al 2.33. La distincion importa: leida como antes,
+#: decia que dos metas eran inmedibles y ya no lo son.
 SIN_CUADRO_FUNCIONAL = {
     2020: ("el «Libro de Ejecucion 2020» es un informe narrativo de 53 paginas y el de 516 "
            "es de empresas publicas; el consolidado del SPNF de ese anio no trae la seccion "
