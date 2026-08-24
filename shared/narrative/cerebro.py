@@ -190,6 +190,35 @@ DIRECTION_DISCIPLINE = (
     "bases distintas—; nombra siempre contra CUÁL base comparas."
 )
 
+# Defensa PRIMARIA contra la RAZÓN derivada a mano — la tercera forma de relacionar dos
+# cifras, y la última que seguía sin servirse resuelta. Defecto real (Deep Dive de banca,
+# 2026-03-31, §12): «una rentabilidad sobre activos (0.39%) que TRIPLICA el umbral de alerta
+# respecto al promedio de bancos múltiples (1.61%)». Las dos cifras eran correctas y estaban
+# en el contexto; la razón es 0.24× —el ROA es el número MÁS CHICO de los dos— y la §10 del
+# mismo informe lo decía bien: «una cuarta parte de la velocidad de sus pares». El error tiene
+# dos mitades y la regla ataca las dos: invertir quién multiplica a quién, y FUNDIR en una
+# sola cláusula el umbral ("dónde deberías estar") con el promedio ("dónde está el mercado").
+RATIO_DISCIPLINE = (
+    "RAZONES Y MÚLTIPLOS (regla dura): si el contexto trae 'razones' o "
+    "'factores_hasta_umbral', la razón YA ESTÁ COMPUTADA — cada entrada trae 'lectura' con la "
+    "cláusula redactada ('es una cuarta parte del promedio de bancos múltiples (0.24x su "
+    "nivel)'): USA ESA CLÁUSULA. No dividas dos cifras por tu cuenta ni escribas 'duplica', "
+    "'triplica' o 'N veces' de memoria: ahí es donde se invierte quién multiplica a quién. "
+    "Antes de escribir un múltiplo, comprobá cuál de las dos cifras es la MAYOR: si la de la "
+    "entidad es la menor, la entidad NO multiplica a nada — es una fracción de la otra. "
+    "SON DOS RELACIONES DISTINTAS Y NO SE MEZCLAN EN UNA CLÁUSULA: 'razones' compara contra "
+    "el MERCADO (promedio del sistema, promedio del grupo de pares) y responde dónde está la "
+    "entidad; 'factores_hasta_umbral' compara contra un UMBRAL del modelo y responde cuánto "
+    "le falta para cruzarlo. Nombra siempre contra cuál comparás; fundir ambas produce una "
+    "frase falsa contra las dos. "
+    "Si una entrada trae 'cruza_cero': NO EXISTE razón que publicar, y eso no es un dato que "
+    "falte sino EL hallazgo — la entidad y su referencia están en lados opuestos del cero. "
+    "Decilo así (opera en pérdida mientras el grupo gana) y da la distancia en puntos, que es "
+    "lo que ordena la gravedad. Nunca escribas un múltiplo negativo. "
+    "Si una entrada dice 'no_procede', respetá el motivo: en un indicador de óptimo intermedio "
+    "estar al doble del promedio no es mejor ni peor."
+)
+
 # Defensa PRIMARIA contra el defecto que SOBREVIVE a corregir la dirección numérica: la
 # cifra y la brecha salen bien y la GLOSA sale invertida. BPD 2026-08-13, §5 Liquidez: con
 # un LTD de 92.45% (score 98.62, por encima del óptimo de 80% y por encima de sus pares) el
@@ -1008,6 +1037,9 @@ def build_system(axis: str, audience: Optional[str], mode: str) -> str:
         parts.append(AUDIENCE_FRAMES[axis][resolved])
     parts.append(BARRA_DE_INSIGHT)
     parts.append(DIRECTION_DISCIPLINE)
+    # Va pegada a la de dirección: son la misma familia —relaciones entre dos cifras que el
+    # modelo deriva y erra— y el orden ayuda a que se lean como una sola disciplina.
+    parts.append(RATIO_DISCIPLINE)
     parts.append(INDICATOR_SEMANTICS)
     parts.append(SCOPE_DISCIPLINE)
     if mode in ("detailed", "deep"):
