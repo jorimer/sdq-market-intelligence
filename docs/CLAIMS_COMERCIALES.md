@@ -177,14 +177,13 @@ exactamente cómo empezó lo de abajo.
   CC-BY cubre **su procesamiento**, no el dato de abajo. Hoy solo alimenta el backtest interno
   del IRC, que no se redistribuye — si ese insumo pasa a material de venta, hay que resolverlo
   antes.
-- ⚠️ **CEPALSTAT (CEPAL) — la más estrecha de todas, y NO es Creative Commons.** Sus
-  términos —los que el propio servicio declara en el `termsOfService` de su OpenAPI—
-  conceden bajar y copiar «para su uso personal, sin fines comerciales, sin ningún derecho
-  a revender, redistribuir, o crear otros trabajos a partir de los mismos». Alimenta los
-  indicadores **2.45 y 2.46** de la END. El conector decía «uso público con cita».
-  **Atribuir no alcanza**: no hay cláusula BY que satisfacer, hay un permiso de uso personal.
-  Decisión abierta del dueño — y hay una salida limpia a mano: el dato lo produce la **JCE**
-  y la CEPAL solo lo recoge.
+- ✅ **CEPALSTAT — resuelto por el PRODUCTOR, no por sus términos.** Los términos de la CEPAL
+  son estrechos —uso personal, no comercial, sin reventa ni obra derivada— y siguen siéndolo.
+  Pero gobiernan **su compilación**, no los hechos que compila: los indicadores **2.45 y 2.46**
+  los produce la **JCE**, y una cifra electoral oficial dominicana es información pública cuyo
+  régimen fija el marco nacional, no el portal que la reexpone. **Se publican, atribuyendo a la
+  JCE como productora y a la CEPAL como vía** — la atribución la computa la plataforma.
+  Lo que sigue fuera de alcance: reexportar la compilación de la CEPAL como tal.
 - ⚠️ **UN Comtrade — no es dato libre.** Es propiedad intelectual de Naciones Unidas, cedida
   para **uso interno**; re-diseminar el dato **original** exige permiso escrito de la UNSD, y
   por encima de 100.000 registros una «license to distribute» paga sobre suscripción premium.
@@ -229,13 +228,20 @@ exactamente cómo empezó lo de abajo.
   por carácter, los **recursos CKAN** de los datasets `odc-odbl` «Primas Netas Cobradas según
   Ramo» y «Ramos de Compañías de Seguros»; el `sis.gob.do/wp-content` es sólo dónde el portal
   aloja el recurso. Aviso de atribución sí, share-alike no sobre un informe.
-- ❌ **SIS (transparencia) — no hay licencia de reutilización, y decíamos que sí.** Los estados
-  financieros auditados y los índices de solvencia **no** están entre los cinco datasets ODbL
-  del portal: se raspan de `sis.gob.do/transparencia`, cuyos Términos de Uso reservan la
-  propiedad intelectual («Todos los Derechos Reservados»). **Publicar por mandato de
-  transparencia no es conceder permiso de reúso.** Si hace falta para material comercial, es
-  una decisión del dueño o un pedido formal al SIS. Afecta al ISF y a la solvencia por
-  compañía.
+- ✅ **SIS (transparencia) — información pública dominicana, reutilizable con atribución.** Los
+  estados financieros auditados y los índices de solvencia no están entre los cinco datasets
+  ODbL del portal, pero eso no los deja sin régimen: **Ley 200-04**, **Decreto 103-22**
+  (Política Nacional de Datos Abiertos, obligatoria para el Ejecutivo), **NORTIC A3** —que rige
+  los sub-portales de transparencia— y **Ley 65-00 art. 41** para los actos administrativos. Y
+  una cifra es un hecho: los hechos no son obra protegible. El «Todos los Derechos Reservados»
+  del pie de `sis.gob.do` es plantilla de portal y **no fija el régimen del dato público** —
+  contradice a un decreto que obliga a esa misma institución. Citar la fuente, sí; pedir
+  permiso, no. Vale para el ISF y la solvencia por compañía.
+
+> **Regla general para emisores públicos dominicanos.** La carga se invierte: **se presume
+> reutilizable con atribución**, y lo que hay que declarar es la excepción. Un texto genérico
+> de portal no es una excepción. No confundir con emisores extranjeros —UIT, CEPAL, Parline,
+> EM-DAT, Comtrade—, donde sí rige lo que su licencia diga.
 - ❌ **Nunca** describir una licencia restrictiva en prosa («uso público con cita») en un
   contrato, un deck o un informe. El texto de la licencia es además una entrada de máquina:
   `shared.data_api.manifest.license_restricts_redistribution` decide si el dato se reexporta

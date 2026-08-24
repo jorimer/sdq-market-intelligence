@@ -83,12 +83,14 @@ class SISSolvencyClient(FixtureBackedClient):
     """Índices de Solvencia y Liquidez connector (per insurer)."""
 
     source = "SIS"
-    # «público» era dónde está el archivo, no una licencia. Verificado el 2026-08-23: se
-    # raspa de `sis.gob.do/transparencia`, cuyos Términos de Uso reservan la propiedad
-    # intelectual y no conceden reutilización. Tampoco es uno de los cinco datasets ODbL
-    # que la SIS publica en datos.gob.do.
-    license = ("SIS — índices de solvencia del portal de transparencia (Ley 200-04); el "
-               "sitio RESERVA derechos y no declara licencia de reutilización.")
+    # «público» era dónde está el archivo, no un régimen de uso. Ahora dice cuál es:
+    # información pública dominicana, reutilizable con atribución por el marco que obliga a
+    # la propia institución (ver la regla en `shared/data/licenses.py`). El pie del portal
+    # dice «Todos los Derechos Reservados», pero eso es plantilla de OGTIC y no fija el
+    # régimen del dato público — contradice al Decreto 103-22, que sí obliga a la SIS.
+    license = ("SIS — índices de solvencia y liquidez del portal de transparencia. "
+               "Información pública dominicana: reutilizable con atribución por Ley 200-04, "
+               "Decreto 103-22, NORTIC A3 y Ley 65-00 art. 41.")
     license_ok = True
     fixture_file = "sis_solvency.json"
     live_phase = "solvencia (índices SIS live)"

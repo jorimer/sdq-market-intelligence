@@ -33,6 +33,17 @@ INDICATOR_TO_BENCHMARK: Dict[str, str] = {
     "leverage": "leverage_ratio",
     "cobertura_provisiones": "coverage_ratio",
     "ltd": "ltd",
+    # Diversificación era la única dimensión del score SIN ninguna referencia: su único
+    # indicador no estaba en el mapa, así que su sección del informe llegaba al modelo con el
+    # HHI de la entidad y nada contra qué leerlo — el mismo hueco que en eficiencia terminó
+    # rellenado con un "69%" inventado y vetó un Deep Dive entero en prod.
+    #
+    # Sin constante declarada A PROPÓSITO: la mediana se MIDE del panel del propio corte
+    # (`panel_benchmarks`) o no hay referencia. Inventar un promedio de HHI para la tabla de
+    # constantes sería rellenar la brecha en vez de declararla — y las constantes, además,
+    # son ANUALES contra cortes trimestrales. El otro consumidor del mapa (`compare_to_sector`)
+    # ya salta las claves sin constante, así que la ausencia es segura.
+    "hhi_ingresos": "hhi_ingresos",
 }
 
 DEFAULT_BENCHMARKS: Dict = {
