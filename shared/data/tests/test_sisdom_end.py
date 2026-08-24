@@ -94,11 +94,11 @@ class TestQueFilaEsElPAIS:
 
     def test_sin_total_nacional_LEVANTA(self):
         sin_total = [["x"], [], [], [], [], [], [], ENCABEZADO, ZONA_URBANA]
-        with pytest.raises(SisdomError, match="total nacional"):
+        with pytest.raises(SisdomError, match="ninguna fila nacional"):
             leer_hoja(sin_total)
 
     def test_sin_fila_de_encabezado_LEVANTA(self):
-        with pytest.raises(SisdomError, match="DESAGREGACIONES"):
+        with pytest.raises(SisdomError, match="DESAGREGACI"):
             leer_hoja([["x"], ["Total país", 1.0]])
 
 
@@ -113,7 +113,7 @@ class TestLosTiposMezcladosDelEncabezado:
         """`isinstance(True, int)` es verdadero en Python y colaría un 1,0 como observación."""
         hoja = [["x"], [], [], [], [], [], [], ["Desagregaciones", 2010.0],
                 ["Total país", True]]
-        with pytest.raises(SisdomError, match="ningún año legible"):
+        with pytest.raises(SisdomError, match="ninguna fila nacional"):
             leer_hoja(hoja)
 
 

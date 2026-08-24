@@ -680,7 +680,7 @@ def _sync_sisdom_end(db: Session, set_phase: Callable[[str], None]) -> int:
 
     synced = 0
     fallidos: List[str] = []
-    for indicador, (_hoja, tema, unidad, _por_que) in sorted(INDICADORES.items()):
+    for indicador, fuente in sorted(INDICADORES.items()):
         set_phase(f"SISDOM · indicador {indicador} de la END")
         try:
             obs = fetch(indicador)
@@ -699,9 +699,11 @@ def _sync_sisdom_end(db: Session, set_phase: Callable[[str], None]) -> int:
                 continue
             instrumento = (INSTRUMENTO_CON_ASTERISCO if usa_nueva
                            else INSTRUMENTO_SIN_ASTERISCO)
-            _upsert_indicator(db, theme=tema, entity=HEALTH_ENTITY, period=str(anio),
-                              value=round(valor, 5), source=SOURCE,
-                              disagg=f"nacional · {instrumento}", unit=unidad)
+            _upsert_indicator(db, theme=fuente.tema, entity=HEALTH_ENTITY,
+                              period=str(anio), value=round(valor, 5),
+                              source=SOURCE,
+                              disagg=f"nacional · {instrumento}",
+                              unit=fuente.unidad)
             synced += 1
         db.commit()
     if fallidos:

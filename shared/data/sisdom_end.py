@@ -46,12 +46,17 @@ EDICIONES = {
            "SISDOM-2025.-Indicadores-Area-Especial-END.xlsx"),
 }
 
-#: Cómo se llama la fila del total nacional. Hay DOS rótulos vivos en el mismo libro —«Total
-#: país» en unas hojas y «Total Nacional» en otras— y quedarse con uno deja fuera dos tercios
-#: de las hojas sin que nada avise: la lectura devuelve vacío, que se lee como «no hay dato».
-ROTULOS_NACIONALES = ("TOTAL PAIS", "TOTAL NACIONAL")
+#: Cómo empieza el rótulo de la fila del total nacional. Se compara por PREFIJO porque el
+#: libro usa al menos cinco variantes vivas —«Total país», «Total Nacional», «Nacional»,
+#: «Nacional1» y «Nacional 1 c»—, donde el sufijo es la llamada a una nota al pie. Exigir
+#: igualdad exacta dejaba fuera ocho hojas sin que nada avisara: la lectura devolvía vacío, y
+#: vacío se lee como «el emisor no publica».
+PREFIJOS_NACIONALES = ("TOTAL PAIS", "TOTAL NACIONAL", "NACIONAL")
+ROTULOS_NACIONALES = PREFIJOS_NACIONALES          # nombre anterior, se conserva
 
-#: El rótulo de la columna de desagregaciones, que marca la fila de encabezado.
+#: Cómo empieza el rótulo de la fila de encabezado. También por prefijo: el libro alterna
+#: «Desagregaciones», «Desagregación» y «Desagregaciones1».
+PREFIJO_DESAGREGACION = "DESAGREGACI"
 ROTULO_DESAGREGACION = "DESAGREGACIONES"
 
 #: Qué encuesta produce cada columna. Lo declara la Nota 5 del propio libro: el asterisco es
@@ -121,9 +126,14 @@ def nombre_de_hoja(hojas: Sequence[str], indicador: str) -> Optional[str]:
     return None
 
 
+def es_fila_nacional(rotulo: object) -> bool:
+    r = _norm(rotulo)
+    return any(r.startswith(p) for p in PREFIJOS_NACIONALES)
+
+
 def fila_del_total(primera_columna: Sequence[Any]) -> Optional[int]:
     for i, celda in enumerate(primera_columna):
-        if _norm(celda) in ROTULOS_NACIONALES:
+        if es_fila_nacional(celda):
             return i
     return None
 
@@ -136,44 +146,62 @@ def fila_de_encabezado(filas: Sequence[Sequence[Any]]) -> Optional[int]:
     es más frágil.
     """
     for i, f in enumerate(filas):
-        if f and _norm(f[0]) == ROTULO_DESAGREGACION:
+        if f and _norm(f[0]).startswith(PREFIJO_DESAGREGACION):
             return i
     return None
 
 
 def leer_hoja(filas: Sequence[Sequence[Any]],
-              edicion: Optional[int] = None) -> List[Observacion]:
+              edicion: Optional[int] = None,
+              variante: Optional[str] = None) -> List[Observacion]:
     """La serie nacional de una hoja ya leída como lista de filas.
+
+    **Recorre la hoja en BLOQUES**, no busca un encabezado y una fila. Una hoja puede traer
+    varios encabezados apilados —el 2.25 parte los años en dos, 1981-2000 y 2001-2024, cada
+    uno con su propia fila nacional— y quedarse con el primero pierde media serie sin avisar.
+
+    **Y una hoja puede traer varias filas nacionales**, que son metodologías distintas del
+    mismo indicador: el 2.23 tiene cuatro —SINAVE corregido por subregistro, mortalidad
+    notificada, la serie nueva que integra certificado de defunción con vigilancia e INACIF,
+    y las estimaciones de ENDESA—. Ahí `variante` dice cuál, comparando por prefijo contra el
+    rótulo. Sin `variante` se toman todas y el llamador decide; devolver «la primera» sería
+    elegir una metodología por su posición en la hoja.
 
     Devuelve **todas** las observaciones, incluidas las DOS de 2016. No se elige una: son dos
     mediciones distintas del mismo año, y cuál corresponde depende de contra qué se compare.
-    Decidirlo acá sería decidirlo para todos los llamadores a la vez.
     """
-    k = fila_de_encabezado(filas)
-    if k is None:
-        raise SisdomError(
-            f"la hoja no trae una fila «{ROTULO_DESAGREGACION}»: o cambió el formato del "
-            f"libro, o se está leyendo una hoja que no es de indicador.")
-    encabezado = filas[k]
-
-    i = fila_del_total([f[0] if f else None for f in filas])
-    if i is None:
-        raise SisdomError(
-            f"la hoja no trae fila de total nacional ({' o '.join(ROTULOS_NACIONALES)}). "
-            f"Servir una desagregación como si fuera el país publica otra magnitud.")
-
     out: List[Observacion] = []
-    for c, celda in enumerate(encabezado):
-        a = anio_de(celda)
-        if a is None or c >= len(filas[i]):
+    encabezado: Optional[Sequence[Any]] = None
+    vistos: set = set()
+    for f in filas:
+        rot = _norm(f[0] if f else "")
+        if rot.startswith(PREFIJO_DESAGREGACION):
+            encabezado = f
             continue
-        v = filas[i][c]
-        if not isinstance(v, (int, float)) or isinstance(v, bool):
+        if encabezado is None or not es_fila_nacional(rot):
             continue
-        out.append(Observacion(anio=a, valor=float(v), instrumento=instrumento_de(celda),
-                               edicion=edicion))
+        if variante is not None and not rot.startswith(_norm(variante)):
+            continue
+        vistos.add(str(f[0]).strip())
+        for c, celda in enumerate(encabezado):
+            a = anio_de(celda)
+            if a is None or c >= len(f):
+                continue
+            v = f[c]
+            if not isinstance(v, (int, float)) or isinstance(v, bool) or v != v:
+                continue
+            out.append(Observacion(anio=a, valor=float(v),
+                                   instrumento=instrumento_de(celda), edicion=edicion))
+    if encabezado is None:
+        raise SisdomError(
+            f"la hoja no trae ninguna fila que empiece por «{PREFIJO_DESAGREGACION}»: o "
+            f"cambió el formato del libro, o no es una hoja de indicador.")
     if not out:
-        raise SisdomError("la fila del total nacional no trae ningún año legible")
+        raise SisdomError(
+            "ninguna fila nacional dio dato"
+            + (f" para la variante «{variante}»" if variante else "")
+            + f". Filas nacionales de la hoja: {sorted(vistos) or 'ninguna'}. Servir una "
+              f"desagregación como si fuera el país publica otra magnitud.")
     return out
 
 
@@ -228,7 +256,9 @@ def fetch(indicador: str) -> List[Observacion]:  # pragma: no cover - red + hoja
                 fallos.append(f"{edicion}: sin hoja para el indicador {indicador}")
                 continue
             df = pd.read_excel(libro, sheet_name=hoja, header=None)
-            obs = leer_hoja([list(df.iloc[k]) for k in range(len(df))], edicion=edicion)
+            fuente = INDICADORES.get(indicador)
+            obs = leer_hoja([list(df.iloc[k]) for k in range(len(df))], edicion=edicion,
+                            variante=fuente.variante if fuente else None)
         except Exception as e:  # noqa: BLE001 — una edición caída no se lleva a la otra
             fallos.append(f"{edicion}: {e}")
             continue
@@ -249,39 +279,63 @@ def fetch(indicador: str) -> List[Observacion]:  # pragma: no cover - red + hoja
     return sorted(por_clave.values(), key=lambda o: (o.anio, o.instrumento))
 
 #: Qué indicadores de la END se sirven desde este libro, con la hoja EXACTA y por qué esa.
-#: Varios se desdoblan en la publicación —2.8 en tres, 2.37 en tres— y elegir mal no rompe
-#: nada: publica otra magnitud contra la meta de la ley. El sufijo es parte de la decisión.
-#:
-#: La coincidencia de TÉRMINO es literal en cinco de los siete: la ley y el emisor usan la
-#: misma frase. Y en el 2.35 la línea base legal (86,1) es la cifra de SISDOM (86,1048)
-#: redondeada — el legislador tomó el número de acá.
-INDICADORES = {
-    "2.8": ("END 2.8a", "preschool_net_coverage", "%",
-            "Tasa neta de cobertura de nivel inicial, de ENCUESTAS DE HOGARES. Las otras dos "
-            "hojas miden la neta AJUSTADA (2.8b) y la misma tasa con registros y "
-            "proyecciones (2.8c); la ley fija su base sobre la de hogares."),
-    "2.34": ("END 2.34", "improved_sanitation_access", "%",
-             "Acceso a servicios sanitarios mejorados. Término idéntico al de la ley."),
-    "2.35": ("END 2.35", "public_network_water_access", "%",
-             "Acceso a agua de la RED PÚBLICA dentro o fuera de la vivienda. Término "
-             "idéntico al de la ley, que es lo que separa esta serie de la de agua «al menos "
-             "básica» — esa incluye pozos protegidos y la ley pide red pública."),
-    "2.37": ("END 2.37a", "broad_unemployment_rate", "%",
-             "Tasa de desocupación AMPLIADA. La ley dice «tasa de desocupación» a secas y el "
-             "emisor publica las dos; el oráculo desempata: la ampliada reproduce la línea "
-             "base con Δ 1,8% y la abierta se va 63,5%."),
-    "2.47": ("END 2.47", "child_labour_6_14", "%",
-             "Niños y niñas de 6 a 14 años que trabajan. Término y tramo etario idénticos a "
-             "los de la ley."),
-    "2.48": ("END 2.48", "neet_unemployed_15_19", "%",
-             "Jóvenes de 15 a 19 años que no estudian y están desempleados. Término idéntico "
-             "al de la ley."),
-    "2.40": (" END 2.40", "income_gender_ratio", "razón F/M (1,0 = paridad)",
-             "Ingreso laboral POR HORA de mujeres en jornada completa sobre el de los "
-             "hombres. La hoja se llama con un espacio ADELANTE y buscarla por igualdad "
-             "exacta la pierde. Ojo con su Nota 2, que dice «ingreso base mensual de toda la "
-             "población ocupada»: contradice a la ficha oficial del propio emisor y describe "
-             "otra magnitud. El oráculo la desempata — la ficha reproduce la línea base."),
-    "3.10": ("END 3.10", "tertiary_net_enrollment", "%",
-             "Tasa neta de matrícula de nivel superior, 18 a 24 años. Término idéntico."),
+#: Campos con nombre y no una tupla: son cinco datos por entrada y el quinto —la variante
+#: metodológica— solo aplica a uno, así que posicionalmente se pasa mal.
+@dataclass(frozen=True)
+class Fuente:
+    hoja: str
+    tema: str
+    unidad: str
+    por_que: str
+    #: Cuál fila nacional, cuando la hoja trae varias metodologías del mismo indicador.
+    variante: Optional[str] = None
+
+
+INDICADORES: Dict[str, Fuente] = {
+    "2.8": Fuente("END 2.8a", "preschool_net_coverage", "%",
+                  "Tasa neta de cobertura de nivel inicial, de ENCUESTAS DE HOGARES. Las "
+                  "otras dos hojas miden la neta AJUSTADA (2.8b) y la misma tasa con "
+                  "registros y proyecciones (2.8c); la ley fija su base sobre la de hogares."),
+    "2.24": Fuente("END 2.24", "malaria_mortality_rate", "por 100.000 hab.",
+                   "Mortalidad asociada a malaria. La línea base legal (0,14 en 2010) es la "
+                   "cifra de esta hoja al dígito."),
+    "2.28": Fuente("END 2.28", "child_underweight_rate", "%",
+                   "Desnutrición GLOBAL (peso/edad) en menores de 5. Δ 0,0% contra la base "
+                   "legal. OJO: la serie tiene DOS puntos, 2007 y 2013 — el emisor dejó de "
+                   "medirla y ninguna meta de la ley es evaluable."),
+    "2.29": Fuente("END 2.29", "child_wasting_rate", "%",
+                   "Desnutrición AGUDA (peso/talla). Mismo caso que el 2.28: Δ 0,0% y la "
+                   "serie termina en 2013."),
+    "2.30": Fuente("END 2.30", "child_stunting_rate", "%",
+                   "Desnutrición CRÓNICA (talla/edad). Mismo caso: Δ 0,0% y termina en 2013."),
+    "2.31": Fuente("END 2.31", "vertical_hiv_transmission", "%",
+                   "Hijos de madres VIH positivas que resultan seropositivos. Δ 0,0%."),
+    "2.32": Fuente("END 2.32", "advanced_hiv_on_art", "%",
+                   "Portadores de VIH con infección avanzada que reciben antirretrovirales. "
+                   "Δ 0,0%."),
+    "2.34": Fuente("END 2.34", "improved_sanitation_access", "%",
+                   "Acceso a servicios sanitarios mejorados. Término idéntico al de la ley."),
+    "2.35": Fuente("END 2.35", "public_network_water_access", "%",
+                   "Acceso a agua de la RED PÚBLICA dentro o fuera de la vivienda. Término "
+                   "idéntico al de la ley, que es lo que separa esta serie de la de agua «al "
+                   "menos básica» — esa incluye pozos protegidos y la ley pide red pública."),
+    "2.37": Fuente("END 2.37a", "broad_unemployment_rate", "%",
+                   "Tasa de desocupación AMPLIADA. La ley dice «tasa de desocupación» a secas "
+                   "y el emisor publica las dos; el oráculo desempata: la ampliada reproduce "
+                   "la línea base con Δ 1,8% y la abierta se va 63,5%."),
+    "2.40": Fuente(" END 2.40", "income_gender_ratio", "razón F/M (1,0 = paridad)",
+                   "Ingreso laboral POR HORA de mujeres en jornada completa sobre el de los "
+                   "hombres. La hoja se llama con un espacio ADELANTE y buscarla por igualdad "
+                   "exacta la pierde. Ojo con su Nota 2, que dice «ingreso base mensual de "
+                   "toda la población ocupada»: contradice a la ficha oficial del propio "
+                   "emisor y describe otra magnitud. El oráculo la desempata — la ficha "
+                   "reproduce la línea base."),
+    "2.47": Fuente("END 2.47", "child_labour_6_14", "%",
+                   "Niños y niñas de 6 a 14 años que trabajan. Término y tramo etario "
+                   "idénticos a los de la ley."),
+    "2.48": Fuente("END 2.48", "neet_unemployed_15_19", "%",
+                   "Jóvenes de 15 a 19 años que no estudian y están desempleados. Término "
+                   "idéntico al de la ley."),
+    "3.10": Fuente("END 3.10", "tertiary_net_enrollment", "%",
+                   "Tasa neta de matrícula de nivel superior, 18 a 24 años. Término idéntico."),
 }

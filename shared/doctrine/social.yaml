@@ -83,6 +83,12 @@ variable_scopes:
   neet_unemployed_15_19: national
   preschool_net_coverage: national
   tertiary_net_enrollment: national
+  malaria_mortality_rate: national
+  child_underweight_rate: national
+  child_wasting_rate: national
+  child_stunting_rate: national
+  vertical_hiv_transmission: national
+  advanced_hiv_on_art: national
   income_gender_ratio: national          # SISDOM END 2.40, razón F/M de INGRESO
   electricity_subsidy_usd_mm: national   # MEM END 3.30, aporte a las EDE
   unemployment_gender_ratio: national    # BCRD ENCFT, razón F/M, país
