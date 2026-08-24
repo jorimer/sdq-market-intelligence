@@ -467,11 +467,29 @@ bindings:
       emisor dividió por el PIB de su añada y las cuentas nacionales se rebasaron a 2018.
       Con la añada vieja el 2009 daría ~1,45, que tampoco entra: el 1,4 del legislador cae
       ENTRE las dos.
-      LO QUE FALTA, y es una sola cosa: la segunda añada del DENOMINADOR. El camino
-      `revision_declarada` exige dos añadas y que ninguna reproduzca la base; hoy hay una
-      —la serie base 2018— y la otra es la retropolada base 2007 que el banco central sí
-      publica. Con las dos, el candado del margen ya está holgado: la brecha contra la meta
-      de 2015 es del 37% y la incertidumbre de añada es del 7%, cinco veces menor.
+      ══ REFUTADO 2026-08-24 ══ Escribí acá que faltaba «la segunda añada del DENOMINADOR,
+      la retropolada base 2007 que el banco central sí publica». Se buscó y NO EXISTE como
+      añada distinta. El emisor publica cuatro libros de PIB por gasto —`pib_gasto_2007`,
+      `pib_gasto_retro`, `pib_gasto_retro_2018` y el corriente— y los cuatro dan el MISMO
+      PIB nominal de 2009: 1.736,0 mil millones contra 1.734,7, un 0,08% de diferencia. El
+      2.33 de 2009 sale 1,356-1,357% con todos.
+      El error era de economía, no de datos: un cambio de año base mueve las series a
+      precios CONSTANTES, no los niveles a precios corrientes. El PIB nominal en RD$ es el
+      mismo con cualquier base.
+      QUÉ ES ENTONCES EL 6-8%: la brecha contra el %PIB que publica el emisor es real y
+      sistemática, y sale de que él divide por el PIB PRELIMINAR que había cuando escribió
+      el informe, y esa estimación se revisó al alza después. Reconstruido desde su propia
+      cifra, su denominador queda 7,1% · 8,4% · 6,4% · 7,6% por debajo del de hoy en 2014,
+      2015, 2016 y 2018. Pero las añadas preliminares NO están archivadas, así que no hay
+      una segunda serie que citar — y fabricarla aplicando ese 7% al 2009 sería inventar la
+      añada que el candado pide.
+      CONCLUSIÓN: `revision_declarada` NO está disponible por esta vía. Lo que queda abierto
+      es de CONCEPTO, no de añada: contra la base legal de 1,4 para 2009, el devengado da
+      1,357 (Δ 3,1%) y el presupuesto vigente da 1,389 (Δ 0,8%, que entraría). Elegir el
+      vigente ahora, después de ver que cuadra, sería ajustar el método a la respuesta.
+      EL CAMINO HONESTO es averiguar de dónde sacó el legislador el 1,4: si el anexo técnico
+      de la END lo tomó de un documento PRESUPUESTARIO, el vigente pasa a ser la lectura
+      principista y el oráculo cierra por concepto, no por conveniencia.
       LOS AÑOS QUE FALTAN SON METAS: 2020 y 2025 no tienen cuadro funcional en ningún
       documento del emisor, y el motivo de cada uno está en
       `shared.data.digepres_funcional.SIN_CUADRO_FUNCIONAL`.
