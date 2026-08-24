@@ -443,59 +443,38 @@ bindings:
       «prácticamente sin cambios» sobre dos magnitudes que nunca fueron la misma.
 
   - indicador: "2.33"
-    serie: "wdi.SH.XPD.GHED.GD.ZS"
-    fuente: wdi
+    serie: "social_dev:health_spending_central_gov_pct_gdp"
+    fuente: mhe
     mejor: mayor
-    estado: descartado
-    origen: estimacion_de_tercero_sobre_dato_del_evaluado
-    productor: OMS vía Banco Mundial — gasto público interno en salud, metodología SHA 2011.
-    motivo_descarte: >-
-      Gasto público en salud como % del PIB. La ley fija 1,4 para 2009 y la serie da 2,33 el
-      mismo año, un 66,6% por encima. Se probaron el 2026-08-22 las SIETE variantes de gasto
-      en salud que publica el emisor y ninguna se acerca: la más próxima es el gasto externo
-      sobre el gasto corriente (0,93; Δ 33,3%), que mide otra cosa. El agregado del emisor es
-      el del gobierno general e incluye la seguridad social.
-      También se probó la vía nacional el mismo día: el portal de datos abiertos publica
-      ejecución presupuestaria desde 2016 y la línea base de la ley es de 2009, así que no
-      alcanza el año que habría que reproducir.
-    hipotesis_sin_comprobar: >-
-      CONFIRMADA el 2026-08-23, y por eso lo que queda no es comprobarla sino construir la
-      serie. El 1,4 de la ley ES el gasto del gobierno CENTRAL por clasificacion funcional,
-      no el del gobierno general que republica el organismo internacional.
-      LA EVIDENCIA: el «Informe de Ejecucion Presupuestaria del Gobierno Central 2009» de la
-      oficina de presupuesto, fechado en febrero de 2010, trae en su Cuadro 9 la clasificacion
-      funcional del gasto con la linea de Salud: presupuesto vigente RD$24.090,1 millones y
-      ejecutado RD$23.534,9 millones. Contra el PIB nominal de 2009:
-      vigente 1,389% del PIB, Delta 0,8% contra la base legal de 1,4 — dentro de la
-      tolerancia del oraculo;
-      ejecutado 1,357% del PIB, Delta 3,1% — en la banda de salvedad.
-      La lectura que reproduce la cifra del legislador es la del presupuesto VIGENTE. Conviene
-      decidirlo antes de armar la serie, porque «gasto publico en salud» sugiere lo ejecutado
-      y el oraculo apunta a lo presupuestado; las dos lecturas estan cerca y no son la misma.
-      LO QUE FALTA, y ya no es una hipotesis: una SERIE. Un ano no mide un indicador con metas
-      a 2015, 2020, 2025 y 2030. La oficina de presupuesto publica estos informes por ano
-      —su pagina los lista de 2008 a 2026— y el Cuadro 9 es el mismo en cada uno.
-      COMO SE LLEGA AL ARCHIVO, porque la pagina no lo entrega: el boton «Descargar» de las
-      tarjetas de 2008 a 2011 apunta a documentos equivocados —el de 2009 sirve la Ley de
-      Presupuesto de 2012, comprobado abriendo el PDF— y las tarjetas recientes son acordeones
-      que arma el navegador. El archivo real se encuentra por la biblioteca de medios del
-      sitio: `GET /wp-json/wp/v2/media?search=ejecucion+2009` devuelve
-      `Informe-de-Ejecucion-Presupuestaria-2009-DIGEPRES.pdf`. Con esa via se enumeran 340
-      archivos y aparecen los informes anuales de 2008 a 2025.
-      SEGUNDO PUNTO DE LA SERIE, leido el 2026-08-23 del informe de 2015 (Cuadro No. 34): la
-      linea de Salud devengada da RD$56.052,8 millones y el propio emisor publica su
-      equivalente en PIB, 1,9%. La meta de la ley para 2015 era 2,8%, asi que el indicador
-      esta INCUMPLIDO y por un tercio. Que el emisor publique el %PIB en la misma tabla es
-      importante: la razon no hay que computarla, y eso quita una clase entera de error.
-      POR QUE TODAVIA NO HAY SERIE, y es una correccion de mi propia estimacion: dije que
-      extraerlo era una tarde de trabajo y no lo es. El cuadro existe en todo el periodo pero
-      cambia de forma al menos tres veces — en 2009 va en millones y con tres columnas; en
-      2011 va en unidades de peso, mil veces mas grande, que leido como millones daria una
-      cifra absurda sin que nada avise; en 2015 va numerado por funcion, con diez columnas y
-      guiones blandos en las etiquetas, y ya trae el %PIB. Los libros de ejecucion recientes
-      no exponen el cuadro con ese rotulo. Un extractor honesto necesita un lector por epoca y
-      un guard de UNIDAD, porque el modo de falla no es que se rompa: es que devuelva una
-      serie plausible mil veces corrida.
+    estado: propuesto
+    origen: declarado_por_el_evaluado
+    productor: >-
+      DIGEPRES — línea de Salud del cuadro de clasificación funcional del gasto del Gobierno
+      Central, monto DEVENGADO, dividido por el PIB nominal del banco central.
+    nota_comparabilidad: >-
+      ══ CONSTRUIDA 2026-08-23 ══ La hipótesis se confirmó y la serie existe: trece años,
+      2009-2019 más 2021 y 2022. El agregado que republicaba el organismo internacional es
+      del gobierno GENERAL e incluye la seguridad social — daba 2,33 contra el 1,4 de la ley.
+      2009 1,357 · 2010 1,684 · 2011 1,694 · 2012 1,795 · 2013 1,586 · 2014 1,774 ·
+      2015 1,753 · 2016 1,598 · 2017 1,805 · 2018 1,640 · 2019 1,661 · 2021 2,388 ·
+      2022 1,877.
+      LA META DE 2015 ERA 2,8 Y EL AÑO DIO 1,753. El máximo de los trece años es 2,388 y es
+      el año del COVID; en 2022 ya había vuelto a 1,877.
+      POR QUÉ NO PASA A `verificado`: el oráculo no cierra. La ley fija 1,4 para 2009 y la
+      serie da 1,357 — Δ 3,1% contra una tolerancia de 2,0%. Y hay una explicación medida,
+      no supuesta: en los CUATRO años en que el emisor publica su propio %PIB, nuestro
+      cómputo queda 6,0% · 7,7% · 6,0% · 7,1% por debajo, siempre en el mismo sentido. El
+      emisor dividió por el PIB de su añada y las cuentas nacionales se rebasaron a 2018.
+      Con la añada vieja el 2009 daría ~1,45, que tampoco entra: el 1,4 del legislador cae
+      ENTRE las dos.
+      LO QUE FALTA, y es una sola cosa: la segunda añada del DENOMINADOR. El camino
+      `revision_declarada` exige dos añadas y que ninguna reproduzca la base; hoy hay una
+      —la serie base 2018— y la otra es la retropolada base 2007 que el banco central sí
+      publica. Con las dos, el candado del margen ya está holgado: la brecha contra la meta
+      de 2015 es del 37% y la incertidumbre de añada es del 7%, cinco veces menor.
+      LOS AÑOS QUE FALTAN SON METAS: 2020 y 2025 no tienen cuadro funcional en ningún
+      documento del emisor, y el motivo de cada uno está en
+      `shared.data.digepres_funcional.SIN_CUADRO_FUNCIONAL`.
   - indicador: "2.34"
     serie: "wdi.SH.STA.BASS.ZS"
     fuente: wdi

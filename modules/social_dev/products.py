@@ -454,6 +454,16 @@ class SocialDevProduct:
         # que el eje sectorial ingiere por actividad: son el mismo dato con alcances
         # distintos, y confundirlos publicaría la inversión de un rubro contra la meta del
         # país.
+        # Indicador 2.33 de la END. El SUJETO viaja en la etiqueta: es el gasto del Gobierno
+        # CENTRAL, no el del gobierno general que republica el organismo internacional —ese
+        # incluye la seguridad social y da un 66% más. La razón se computa contra UNA sola
+        # serie de PIB para los trece años; el emisor publica la suya en cuatro de ellos y
+        # queda 6-8% por encima, porque dividió por el PIB de su añada.
+        "health_spending_central_gov_pct_gdp": (
+            "health_spending_central_gov_pct_gdp", HEALTH_ENTITY,
+            "Gasto en salud del Gobierno Central (% del PIB)", "living_standards",
+            "Línea de Salud del cuadro de clasificación funcional de DIGEPRES, monto "
+            "devengado, sobre el PIB nominal. No alimenta el índice de desarrollo."),
         "fdi_total_usd_mm": (
             "fdi_total_usd_mm", HEALTH_ENTITY,
             "Inversión extranjera directa — país (millones de US$)", "living_standards",

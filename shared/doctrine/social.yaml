@@ -113,6 +113,7 @@ variable_scopes:
   regional_unemployment_gap: national     # dispersión ENTRE regiones: el sujeto es el país
   trust_political_parties: national       # encuesta nacional del Latinobarómetro
   fdi_total_usd_mm: national              # suma de las actividades del cuadro del BCRD
+  health_spending_central_gov_pct_gdp: national   # Gobierno Central sobre PIB del país
   poverty_extreme_national: national      # SISDOM 03 3 003a, columna NACIONAL
   poverty_rate_national: national         # idem, línea de pobreza total
   # Cifras de la ZONA rural, no de una demarcación: son del país, desagregadas por zona.
