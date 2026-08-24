@@ -107,6 +107,11 @@ HEALTH_ENTITY = "nacional"
 #: ocupación — `employment_gender_ratio` ya existe y mide otra cosa.
 _TEMA_BRECHA_INGRESO = "income_gender_ratio"
 
+#: Indicador 3.30. El SUJETO va en el nombre: es el aporte a las DISTRIBUIDORAS estatales,
+#: que es el canal principal del subsidio eléctrico pero no necesariamente todo el subsidio
+#: del Gobierno al sector.
+_TEMA_SUBSIDIO_ELECTRICO = "electricity_subsidy_usd_mm"
+
 _WDI_HEALTH_YEARS = 30
 
 # Informalidad nacional (ENCFT del BCRD) → aplicada a todas las regiones, como la salud
@@ -781,11 +786,20 @@ def _sync_mem_electrico(db: Session, set_phase: Callable[[str], None]) -> int:
     indicador estacional: es otro número. El cliente lo hace cumplir y rechaza el anexo que no
     declara un año completo.
     """
-    from shared.data.mem_client import series_anuales
+    from shared.data.mem_client import series_anuales, subsidios_anuales
 
     set_phase("sector eléctrico (MEM · anexo del Informe de Desempeño)")
     series = series_anuales(MEM_INFORMES)
     synced = 0
+    # Indicador 3.30, del MISMO anexo pero de otra hoja. Estaba declarado como brecha —«la
+    # hoja no tiene cabecera de años»— y la conclusión estaba mal: no tiene años porque sus
+    # columnas son MESES, y el año viene del anexo de diciembre que se abrió. La fila se
+    # ubica por su etiqueta y se comprueba con las cuentas del propio cuadro.
+    for anio, valor in subsidios_anuales(MEM_INFORMES):
+        _upsert_indicator(db, theme=_TEMA_SUBSIDIO_ELECTRICO, entity=HEALTH_ENTITY,
+                          period=str(anio), value=float(valor), source=FUENTE_MEM,
+                          disagg="nacional", unit="millones de US$")
+        synced += 1
     for clave, (tema, unidad) in MEM_TEMAS.items():
         for periodo, valor in series.get(clave, []):
             _upsert_indicator(db, theme=tema, entity=HEALTH_ENTITY, period=periodo,

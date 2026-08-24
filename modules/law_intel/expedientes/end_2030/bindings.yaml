@@ -487,6 +487,49 @@ bindings:
       atribuía esa nota a un arrastre desde el vintage 2021 ausente en las hojas hermanas;
       se comprobó y esa parte NO se sostiene — la hoja 2.37a sí tiene Nota 2, distinta, y
       las hojas 2.38, 2.39, 2.41 y 2.42 no existen en el libro.
+  - indicador: "3.30"
+    serie: "social_dev:electricity_subsidy_usd_mm"
+    fuente: mem
+    mejor: menor
+    estado: propuesto
+    origen: declarado_por_el_evaluado
+    productor: >-
+      MEM — anexo del Informe de Desempeño de las Empresas Eléctricas Estatales, hoja de
+      resultados financieros, fila «Aportes del gobierno» del bloque que agrega a las tres
+      distribuidoras. Edición de DICIEMBRE, columna de acumulado del año.
+    nota_comparabilidad: >-
+      ══ MEDIDO 2026-08-24 ══ El indicador estaba como `fuente_no_procesable` con el motivo
+      «la hoja no tiene cabecera de años». El diagnóstico era correcto y la conclusión no:
+      la hoja no tiene años porque sus columnas son MESES —enero a diciembre más el
+      acumulado— y el año no hay que inferirlo, viene del anexo que se abrió. Como solo se
+      leen los de diciembre, ese acumulado ES el año completo.
+      LA SERIE, EN MILLONES DE US$: 2020 578,6 · 2021 740,0 · 2022 1.633,7 · 2023 1.484,1 ·
+      2024 1.554,6 · 2025 1.659,3.
+      DOS METAS VENCIDAS, LAS DOS INCUMPLIDAS POR UN ORDEN DE MAGNITUD.
+      2020: meta 70,0 y observado 578,6 — OCHO VECES la meta.
+      2025: meta 62,5 y observado 1.659,3 — VEINTISÉIS VECES la meta. Y la serie crece: el
+      subsidio de 2025 casi triplica el de 2020.
+      NADA SE LEE POR POSICIÓN, y acá hacía falta: la etiqueta «Aportes del gobierno»
+      aparece CINCO veces en el anexo de 2020 —una por distribuidora, una por el total y
+      otra en un bloque distinto—. Cuál es el total lo dice la aritmética del propio cuadro:
+      es la única cuyo acumulado equivale a la suma de otras tres (217,63 + 148,61 + 212,35
+      = 578,59). Y el acumulado se comprueba contra la suma de los doce meses. Elegir «la
+      primera» habría funcionado hoy y sería una posición disfrazada de regla.
+      POR QUÉ NO PROMUEVE, y no es por la cifra. El anexo XLSX arranca en 2020 —los años
+      2015-2019 solo tienen PDF y antes de 2015 el emisor no publica la sección— así que la
+      línea base de 2008 cae fuera del alcance de la serie. Ese es justo el supuesto de
+      `identidad_de_concepto`, pero el otro candado no cierra: el emisor publica «Aportes
+      del gobierno» y la ley dice «Monto de subsidios del Gobierno». «Aportes» no es
+      «subsidios», y la identidad quedaría colgando de la palabra «gobierno», que es
+      exactamente el parecido de etiqueta que ese camino existe para rechazar.
+      Y LA LÍNEA BASE DE LA LEY ES DUDOSA POR SU CUENTA: nadie reproduce los 530 de 2008. El
+      Banco Mundial (Report 49236-DO, Tabla 4) da para ese año RD$42.723 millones ≈ US$1.240
+      millones, un 134% por encima; el único «530» de ese informe está en su Tabla 3 y es de
+      transferencias corrientes al sector eléctrico de 2009. Familia del 2.47, el 3.14 y el
+      2.33: inconsistencia de la línea base de la Ley 1-12.
+      SALVEDAD DE UNIVERSO: el dato es el aporte a las tres DISTRIBUIDORAS, que es el canal
+      principal del subsidio pero no necesariamente todo lo que el Gobierno transfiere al
+      sector eléctrico.
   - indicador: "2.33"
     serie: "social_dev:health_spending_central_gov_pct_gdp"
     fuente: mhe

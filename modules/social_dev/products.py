@@ -467,6 +467,15 @@ class SocialDevProduct:
         # Indicador 2.40 de la END. El SUJETO va en la etiqueta: es INGRESO, no ocupación
         # —`employment_gender_ratio` mide otra cosa y las dos son razones F/M—. Y la etiqueta
         # dice «razón» porque un 0,91 a secas se lee como un porcentaje.
+        # Indicador 3.30 de la END. La etiqueta nombra a las DISTRIBUIDORAS porque el dato
+        # es el aporte a ellas: llamarlo «subsidio eléctrico» a secas lo haría leer como el
+        # subsidio del Gobierno a todo el sector, que es un universo mayor.
+        "electricity_subsidy_usd_mm": (
+            "electricity_subsidy_usd_mm", HEALTH_ENTITY,
+            "Aporte del Gobierno a las distribuidoras eléctricas (millones de US$)",
+            "living_standards",
+            "Anexo del Informe de Desempeño del MEM, edición de diciembre, acumulado del "
+            "año. No alimenta el índice de desarrollo."),
         "income_gender_ratio": (
             "income_gender_ratio", HEALTH_ENTITY,
             "Razón de ingreso laboral femenino/masculino", "inclusion",
