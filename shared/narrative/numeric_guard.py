@@ -28,7 +28,7 @@ logger = logging.getLogger("sdq.narrative.numeric_guard")
 # el CÓDIGO de este módulo —una regla nueva, un umbral distinto— no cambia ningún prompt y
 # pasaría inadvertido: la caché seguiría sirviendo texto que el guard nuevo habría marcado.
 # Es el único bump manual irreducible; por eso vive acá, junto a lo que describe.
-GUARD_VERSION = "5"  # "5": cifra citada que no está en el contexto, sin forma fija (2026-08-15)
+GUARD_VERSION = "6"  # "6": la cita se verifica a SU precisión, no a una fija (2026-08-24)
 
 _JUDGE_SYSTEM = (
     "Sos un verificador numérico estricto y preciso. Tu ÚNICA tarea es detectar cifras "
