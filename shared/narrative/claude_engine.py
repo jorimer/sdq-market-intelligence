@@ -1444,6 +1444,21 @@ def secciones_con_cifra_sin_respaldo(narratives: dict, sections, context: dict) 
     return out
 
 
+#: Cuántas veces se le pide al modelo que corrija antes de darse por vencido. Era UNA sola.
+#: Con la lectura correcta ya entregada en el aviso (ver `DIRECTION_CORRECTION_NOTICE`), un
+#: segundo intento es barato al lado de publicar una relación invertida o de negar el informe.
+#: No se sube más: en el caso real que motivó esto, la única corrección que NO convergió fue
+#: la vez que el guard estaba equivocado — insistir ahí solo quema dinero.
+_MAX_REINTENTOS_GUARD = 2
+
+#: Se añade en el ÚLTIMO intento. Sin esto, el modelo no tiene forma de saber que ya no hay
+#: más oportunidades y que lo que siga escribiendo es lo que se evalúa.
+ULTIMO_INTENTO_NOTICE = (
+    "\n\nESTE ES EL ÚLTIMO INTENTO: si la afirmación sigue contradiciendo la lectura servida, "
+    "el informe no se entrega. Ante la duda, copiá la cláusula del contexto tal cual está."
+)
+
+
 class NarrativeSinRespaldoError(RuntimeError):
     """La narrativa afirma cifras que el contexto NO sostiene, en secciones de análisis de un
     producto premium.
@@ -1462,6 +1477,32 @@ class NarrativeSinRespaldoError(RuntimeError):
             "La narrativa afirma cifras que el contexto no sostiene en "
             + ", ".join(f"{s} ({len(v)})" for s, v in sorted(self.hallazgos.items()))
             + ". El informe no se entrega con una cifra que no se puede respaldar.")
+
+
+class NarrativeRelacionInvertidaError(RuntimeError):
+    """La narrativa afirma una RELACIÓN que el dato contradice, y sobrevivió a que se le
+    entregara la lectura correcta ya redactada.
+
+    Tercera hermana de `NarrativeSinRespaldoError` y `NarrativeDegradedError`, y la más
+    acotada de las tres A PROPÓSITO. Una relación invertida es REPARABLE —el sistema ya
+    calculó la frase correcta— así que el remedio de primera línea es reparar, no vetar:
+    frenar quince secciones buenas por una frase corregible no protege a nadie.
+
+    Se llega acá solo cuando el modelo contradice una respuesta que se le dio EXPLÍCITAMENTE,
+    dos veces. En ese punto ya no es «se equivocó»: es señal de que algo más está roto —quizá
+    el propio guard, como ocurrió con el falso positivo del 69%— y publicar sin mirar sería
+    apostar a que el equivocado es el detector.
+
+    El caso que la motiva llegó a un informe entregado: la §7 afirmó que la capitalización
+    contable «supera» al promedio de su grupo estando por debajo, contradiciendo a la §2 y a
+    la §10 del MISMO documento.
+    """
+
+    def __init__(self, hallazgos: dict):
+        self.hallazgos = dict(hallazgos)
+        super().__init__(
+            "La narrativa afirma relaciones que el dato contradice en "
+            f"{len(self.hallazgos)} sección(es): {', '.join(self.hallazgos)}.")
 
 
 class NarrativeDegradedError(RuntimeError):
@@ -1796,24 +1837,39 @@ class NarrativeEngine:
         result = _gen(user)
         bad, wrong_dir = _check(result.text)
         if bad or wrong_dir:
-            logger.warning("Guardrail (%s): cifras sin respaldo %s | dirección invertida %s "
-                           "— regenerando una vez", template, bad, wrong_dir)
             try:
-                notice = ""
-                if bad:
-                    notice += CORRECTION_NOTICE.format(bad="; ".join(bad))
+                for intento in range(1, _MAX_REINTENTOS_GUARD + 1):
+                    logger.warning(
+                        "Guardrail (%s): cifras sin respaldo %s | relación invertida %s — "
+                        "regenerando (intento %d de %d)", template, bad, wrong_dir,
+                        intento, _MAX_REINTENTOS_GUARD)
+                    notice = ""
+                    if bad:
+                        notice += CORRECTION_NOTICE.format(bad="; ".join(bad))
+                    if wrong_dir:
+                        notice += DIRECTION_CORRECTION_NOTICE.format(bad="; ".join(wrong_dir))
+                    if intento == _MAX_REINTENTOS_GUARD:
+                        notice += ULTIMO_INTENTO_NOTICE
+                    corrected = _gen(user + notice)
+                    # acumula tokens/costo de TODAS las llamadas (transparencia)
+                    corrected.tokens_used += result.tokens_used
+                    corrected.cost_estimate += result.cost_estimate
+                    bad, wrong_dir = _check(corrected.text)
+                    result = corrected
+                    if not (bad or wrong_dir):
+                        break
+                result.guard_unsupported = bad + wrong_dir
+                if result.guard_unsupported:
+                    logger.warning(
+                        "Guardrail (%s): persisten hallazgos tras %d reintento(s): %s",
+                        template, _MAX_REINTENTOS_GUARD, result.guard_unsupported)
+                # Las relaciones invertidas que SOBREVIVEN a que se les diera la lectura
+                # correcta se depositan para que la superficie decida (premium veta, Pulse
+                # registra). El motor es transversal y no sabe qué nivel se está sirviendo:
+                # solo reporta.
                 if wrong_dir:
-                    notice += DIRECTION_CORRECTION_NOTICE.format(bad="; ".join(wrong_dir))
-                corrected = _gen(user + notice)
-                # acumula tokens/costo de ambas llamadas (transparencia)
-                corrected.tokens_used += result.tokens_used
-                corrected.cost_estimate += result.cost_estimate
-                still_bad, still_dir = _check(corrected.text)
-                corrected.guard_unsupported = still_bad + still_dir
-                if corrected.guard_unsupported:
-                    logger.warning("Guardrail (%s): persisten hallazgos tras regenerar: %s",
-                                   template, corrected.guard_unsupported)
-                result = corrected
+                    from shared.narrative.relaciones_pendientes import registrar
+                    registrar(template, wrong_dir)
             except Exception as e:  # noqa: BLE001 — best-effort; sirve el original marcado
                 logger.error("Regeneración del guardrail falló: %s", e)
                 result.guard_unsupported = bad + wrong_dir
