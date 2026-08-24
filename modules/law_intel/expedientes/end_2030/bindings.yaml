@@ -72,6 +72,8 @@ bindings:
     serie: "social_dev:poverty_rate_national"
     fuente: mhe
     mejor: menor
+    sin_veredicto_por: termino_legal_sin_fuente
+    sin_veredicto_desde: "2026-08-24"
     estado: propuesto
     origen: declarado_por_el_evaluado
     productor: >-
@@ -554,6 +556,8 @@ bindings:
     serie: "social_dev:improved_sanitation_access"
     fuente: mhe
     mejor: mayor
+    sin_veredicto_por: linea_base_no_reproduce
+    sin_veredicto_desde: "2026-08-24"
     estado: propuesto
     origen: declarado_por_el_evaluado
     productor: >-
@@ -576,6 +580,8 @@ bindings:
     serie: "social_dev:child_labour_6_14"
     fuente: mhe
     mejor: menor
+    sin_veredicto_por: linea_base_no_reproduce
+    sin_veredicto_desde: "2026-08-24"
     estado: propuesto
     origen: declarado_por_el_evaluado
     productor: >-
@@ -598,6 +604,8 @@ bindings:
     serie: "social_dev:tertiary_net_enrollment"
     fuente: mhe
     mejor: mayor
+    sin_veredicto_por: linea_base_no_reproduce
+    sin_veredicto_desde: "2026-08-24"
     estado: propuesto
     origen: declarado_por_el_evaluado
     productor: >-
@@ -668,6 +676,8 @@ bindings:
     serie: "social_dev:child_underweight_rate"
     fuente: mhe
     mejor: menor
+    sin_veredicto_por: instrumento_discontinuado
+    sin_veredicto_desde: "2026-08-24"
     estado: propuesto
     origen: declarado_por_el_evaluado
     productor: >-
@@ -689,6 +699,8 @@ bindings:
     serie: "social_dev:child_wasting_rate"
     fuente: mhe
     mejor: menor
+    sin_veredicto_por: instrumento_discontinuado
+    sin_veredicto_desde: "2026-08-24"
     estado: propuesto
     origen: declarado_por_el_evaluado
     productor: >-
@@ -710,6 +722,8 @@ bindings:
     serie: "social_dev:child_stunting_rate"
     fuente: mhe
     mejor: menor
+    sin_veredicto_por: instrumento_discontinuado
+    sin_veredicto_desde: "2026-08-24"
     estado: propuesto
     origen: declarado_por_el_evaluado
     productor: >-
@@ -731,6 +745,8 @@ bindings:
     serie: "social_dev:electricity_subsidy_usd_mm"
     fuente: mem
     mejor: menor
+    sin_veredicto_por: linea_base_no_reproduce
+    sin_veredicto_desde: "2026-08-24"
     estado: propuesto
     origen: declarado_por_el_evaluado
     productor: >-
@@ -774,6 +790,8 @@ bindings:
     serie: "social_dev:health_spending_central_gov_pct_gdp"
     fuente: mhe
     mejor: mayor
+    sin_veredicto_por: linea_base_no_reproduce
+    sin_veredicto_desde: "2026-08-24"
     estado: propuesto
     origen: declarado_por_el_evaluado
     productor: >-
@@ -897,6 +915,8 @@ bindings:
     serie: "social_dev:poverty_extreme_national"
     fuente: mhe
     mejor: menor
+    sin_veredicto_por: termino_legal_sin_fuente
+    sin_veredicto_desde: "2026-08-24"
     estado: propuesto
     origen: declarado_por_el_evaluado
     productor: >-
@@ -1717,6 +1737,8 @@ bindings:
     serie: "social_dev:rural_poverty_total"
     fuente: mhe
     mejor: menor
+    sin_veredicto_por: termino_legal_sin_fuente
+    sin_veredicto_desde: "2026-08-24"
     estado: propuesto
     origen: declarado_por_el_evaluado
     productor: >-

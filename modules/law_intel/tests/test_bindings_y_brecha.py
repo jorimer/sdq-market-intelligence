@@ -619,3 +619,53 @@ def test_ninguna_serie_de_un_binding_que_CUENTA_omite_su_eje():
     assert not sin_eje, (
         f"estos bindings cuentan como cobertura y su serie no declara eje: {sin_eje}. "
         f"El proveedor no la va a encontrar y el indicador saldrá «sin dato» en el informe.")
+
+
+class TestPorQueNoProduceVeredicto:
+    """REGLA: un binding con serie que no promueve tiene que decir POR QUÉ, del vocabulario.
+
+    El estado `propuesto` no distinguía dos cosas que no se parecen: «falta trabajo nuestro»
+    y «el trabajo está hecho y el que no cierra es el instrumento legal». Once indicadores con
+    el hallazgo COMPLETO se leían igual que once pendientes — en el campo salían todos como
+    `candidato_sin_verificar`, o sea «hay una duda abierta», cuando en ocho de ellos la duda
+    estaba resuelta y la respuesta era sobre la ley.
+
+    Un informe que presenta un hallazgo como tarea pendiente regala el hallazgo, y eso lo
+    detectó el dueño leyendo la cifra de cierre, no un test.
+    """
+
+    def test_todo_propuesto_declara_su_motivo(self):
+        from modules.law_intel.bindings import MOTIVOS_SIN_VEREDICTO
+
+        sin = sorted(k for k, b in cargar_bindings(EXPEDIENTE).items()
+                     if b.estado == "propuesto" and not b.sin_veredicto_por)
+        assert not sin, (
+            f"estos bindings están en `propuesto` sin declarar por qué: {sin}. "
+            f"Vocabulario: {sorted(MOTIVOS_SIN_VEREDICTO)}")
+
+    def test_el_motivo_viene_del_vocabulario_CERRADO(self):
+        from modules.law_intel.bindings import MOTIVOS_SIN_VEREDICTO
+
+        usados = {b.sin_veredicto_por for b in cargar_bindings(EXPEDIENTE).values()
+                  if b.sin_veredicto_por}
+        assert usados, "el detector se volvió decorativo: ningún binding declara motivo"
+        assert usados <= set(MOTIVOS_SIN_VEREDICTO), sorted(usados - set(MOTIVOS_SIN_VEREDICTO))
+
+    def test_el_motivo_viaja_con_su_FECHA(self):
+        """«El emisor dejó de medirlo» sin fecha no se puede auditar: nadie sabe si sigue
+        siendo cierto. Va como campo y no en la prosa, que es lo mismo que se exige del
+        período verificado."""
+        import re
+
+        sin_fecha = sorted(k for k, b in cargar_bindings(EXPEDIENTE).items()
+                           if b.sin_veredicto_por
+                           and not re.fullmatch(r"20\d\d-\d\d-\d\d", b.sin_veredicto_desde or ""))
+        assert not sin_fecha, sin_fecha
+
+    def test_los_motivos_sobre_la_LEY_exigen_evidencia_en_el_campo(self):
+        """Son lo más fuerte que este producto afirma —que la línea base de una ley no
+        reproduce contra la serie de su propio Estado—, así que el campo les pide la medición
+        y la fecha igual que a un «no existe la fuente»."""
+        from modules.law_intel.campo import _EXIGEN_EVIDENCIA
+
+        assert {"linea_base_no_reproduce", "termino_legal_sin_fuente"} <= _EXIGEN_EVIDENCIA

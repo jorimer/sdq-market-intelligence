@@ -47,6 +47,11 @@ ESTADOS_DEL_CAMPO = {
                              "del binding"),
     "candidato_sin_verificar": ("hay serie y una duda de comparabilidad abierta; la nota "
                                 "cuelga del binding"),
+    # ── El que no cierra es el instrumento LEGAL, y eso es un hallazgo, no una tarea ──
+    "linea_base_no_reproduce": ("el emisor publica la magnitud con el término de la ley y su "
+                                "serie NO reproduce la línea base que la ley fija"),
+    "termino_legal_sin_fuente": ("la ley nombra la magnitud con un término que ningún emisor "
+                                 "publica, y las lecturas vecinas se probaron sin cerrar"),
     "pendiente_de_derivacion": ("la serie existe y falta definir la derivación, el "
                                 "denominador o la convención de anualización"),
     # ── Nosotros ───────────────────────────────────────────────────────────────────────
@@ -58,6 +63,10 @@ ESTADOS_DEL_CAMPO = {
 _EXIGEN_EVIDENCIA = frozenset({
     "sin_fuente_conocida", "fuente_no_procesable", "magnitud_no_publicada",
     "instrumento_discontinuado",
+    # Estos dos afirman algo sobre la LEY —que su línea base no reproduce, o que su término
+    # no lo publica nadie— y es lo más fuerte que este producto dice. Con más razón exigen la
+    # medición y la fecha: es la diferencia entre un hallazgo y una opinión sobre el legislador.
+    "linea_base_no_reproduce", "termino_legal_sin_fuente",
 })
 
 #: Los que se computan del registro y del binding, sin declaración humana. Declararlos a mano
@@ -132,10 +141,25 @@ def campo(expediente_id: str) -> Dict[str, Casilla]:
                 f"como valor, umbral ni escalar rotulado.")
             continue
         if b is not None:
-            estado = ("candidato_descartado" if b.estado == "descartado"
-                      else "candidato_sin_verificar")
+            # Un binding que DECLARA por qué no produce veredicto no tiene una duda abierta:
+            # tiene la respuesta. Derivar `candidato_sin_verificar` para todos borraba esa
+            # diferencia y hacía que ocho hallazgos se leyeran como ocho tareas pendientes.
+            if b.sin_veredicto_por in ("linea_base_no_reproduce", "termino_legal_sin_fuente"):
+                estado = b.sin_veredicto_por
+            elif b.sin_veredicto_por == "instrumento_discontinuado":
+                estado = "instrumento_discontinuado"
+            elif b.estado == "descartado":
+                estado = "candidato_descartado"
+            else:
+                estado = "candidato_sin_verificar"
             detalle = (b.motivo_descarte if b.estado == "descartado"
-                       else b.nota_comparabilidad) or "sin detalle en el binding"
+                       else (b.nota_comparabilidad or b.nota)) or "sin detalle en el binding"
+            if b.sin_veredicto_por:
+                # La evidencia de estos estados ES la nota del binding, que trae la medición.
+                # Se pasa explícita para que el validador la exija igual que a las declaradas.
+                out[ind.id] = Casilla(ind.id, estado, detalle, detalle,
+                                      b.sin_veredicto_desde)
+                continue
             out[ind.id] = Casilla(ind.id, estado, detalle)
             continue
         # ── declarados ──

@@ -90,8 +90,15 @@ class TestLosCandados:
 
     def test_propuesto_no_exige_los_candados(self):
         """Los candados protegen la COBERTURA. Un candidato que todavía no cuenta puede estar
-        a medio armar sin que eso publique nada."""
-        _validar_uno(_binding(estado="propuesto", declaracion_del_emisor=None, anadas=()))
+        a medio armar sin que eso publique nada.
+
+        Lo que SÍ se le exige —y por eso el fixture lo trae— es declarar por qué no produce
+        veredicto: «propuesto» a secas no distingue una tarea pendiente de un hallazgo sobre
+        el instrumento legal, y esa diferencia decide si el caso va al informe o a la lista
+        de trabajo. Es otra regla y no la de las añadas."""
+        _validar_uno(_binding(estado="propuesto", declaracion_del_emisor=None, anadas=(),
+                              sin_veredicto_por="linea_base_no_reproduce",
+                              sin_veredicto_desde="2026-08-24"))
 
 
 class TestElCuartoCandado:
