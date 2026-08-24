@@ -37,7 +37,7 @@ from modules.banking_score.models.models import (
     Bank, BankingData, BankType, ModelType, RatingResult)
 from modules.banking_score.products import BankingProduct
 from modules.banking_score.reports.narrative import (
-    _SUB_COMPONENT_MAP, _build_section_context)
+    _SUB_COMPONENT_MAP, _SUB_INDICATORS, _build_section_context)
 
 _PERIODO = date(2026, 3, 31)
 _SUJETO = "Banco Múltiple Sujeto"
@@ -151,6 +151,76 @@ def test_la_referencia_tambien_llega_al_insight(panel):
     el Deep Dive dejaría el mismo hueco un nivel más abajo."""
     ctx = _contexto(panel, "eficiencia_rentabilidad", tier=ProductTier.insight)
     assert ctx.get("comparaciones"), "el Insight sigue sin referencia en la dimensión"
+
+
+# ── Cobertura por indicador, no solo por dimensión ─────────────────────
+#
+# Que una dimensión tenga UNA referencia le quita la ceguera total, pero cada indicador sin
+# referencia sigue siendo una cifra suelta que el modelo puede leer contra algo que se
+# imagina. Calidad de Activos tenía 1 de 8. La regla es: o tiene referencia, o la excepción
+# está DECLARADA acá con su motivo.
+
+#: Indicadores que a propósito NO se comparan contra una referencia de panel.
+_SIN_REFERENCIA_A_PROPOSITO = {
+    # No es una métrica observable: es un compuesto que ya vive en la escala 0-100 del score.
+    # Compararlo contra "el promedio del sistema" lo haría sonar como un indicador de balance,
+    # y su posición relativa ya la dan el percentil y la trayectoria del sub-componente.
+    "composite_calidad",
+}
+
+
+def test_todo_indicador_puntuado_tiene_referencia_o_excepcion_declarada():
+    from shared.data.sib_client import INDICATOR_TO_BENCHMARK
+
+    huerfanos = {}
+    for sub, keys in _SUB_INDICATORS.items():
+        faltan = [k for k in keys
+                  if k not in INDICATOR_TO_BENCHMARK and k not in _SIN_REFERENCIA_A_PROPOSITO]
+        if faltan:
+            huerfanos[sub] = faltan
+    assert not huerfanos, (
+        "Estos indicadores llegan al modelo sin nada contra qué compararse. Mapealos en "
+        f"INDICATOR_TO_BENCHMARK o declará acá por qué no corresponde: {huerfanos}")
+
+
+def test_la_excepcion_declarada_no_crece_sin_que_nadie_mire():
+    """Una lista de excepciones que se llena sola vuelve inútil al test de arriba."""
+    assert _SIN_REFERENCIA_A_PROPOSITO == {"composite_calidad"}
+
+
+def test_toda_referencia_se_enuncia_en_una_unidad_CONOCIDA():
+    """Un indicador nuevo con unidad rara ("veces", "días") caería al fallback de porcentaje y
+    su brecha saldría narrada en "puntos porcentuales" — cifra correcta, unidad imposible. En
+    runtime el fallback se conserva (el informe no se cae por esto); acá se veta."""
+    from shared.data.sib_client import INDICATOR_TO_BENCHMARK
+    from shared.narrative.derived import UNIDAD_DE_BRECHA
+    from modules.banking_score.scoring.indicator_detail import INDICATOR_META
+
+    raras = {k: (INDICATOR_META.get(k) or {}).get("unit")
+             for k in INDICATOR_TO_BENCHMARK
+             if k in INDICATOR_META
+             and (INDICATOR_META.get(k) or {}).get("unit") not in UNIDAD_DE_BRECHA}
+    assert not raras, (
+        f"Unidades sin frase de brecha declarada en UNIDAD_DE_BRECHA: {raras}")
+
+
+def test_el_hhi_no_se_narra_en_puntos_porcentuales(panel):
+    """El HHI es un índice de 0 a 10.000. Su brecha no es una diferencia de porcentajes."""
+    ctx = _contexto(panel, "diversificacion")
+    hhi = [c for c in ctx["comparaciones"] if c["indicador"] == "hhi_ingresos"]
+    assert hhi, "el HHI de ingresos perdió su referencia"
+    for c in hhi:
+        assert c["unidad_brecha"] == "puntos del índice", c
+        assert "puntos porcentuales" not in c["lectura"], c["lectura"]
+
+
+def test_calidad_de_activos_deja_de_tener_un_solo_indicador_con_referencia(panel):
+    """El caso que motivó esta tanda: 1 de 8. La sección analiza morosidad, castigos,
+    concentración y migración — con una sola referencia, las otras siete se leen contra lo
+    que el modelo se imagine."""
+    ctx = _contexto(panel, "calidad_activos")
+    con_ref = {c["indicador"] for c in ctx["comparaciones"]}
+    assert len(con_ref) >= 6, f"solo {sorted(con_ref)} tienen referencia"
 
 
 def test_el_caso_de_prod_cost_to_income_queda_respaldado(panel):

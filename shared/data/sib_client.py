@@ -33,17 +33,34 @@ INDICATOR_TO_BENCHMARK: Dict[str, str] = {
     "leverage": "leverage_ratio",
     "cobertura_provisiones": "coverage_ratio",
     "ltd": "ltd",
-    # Diversificación era la única dimensión del score SIN ninguna referencia: su único
-    # indicador no estaba en el mapa, así que su sección del informe llegaba al modelo con el
-    # HHI de la entidad y nada contra qué leerlo — el mismo hueco que en eficiencia terminó
-    # rellenado con un "69%" inventado y vetó un Deep Dive entero en prod.
+    # ── Sin constante declarada, A PROPÓSITO ──────────────────────────────────────────
+    # De acá para abajo, la referencia se MIDE del panel del propio corte (`panel_benchmarks`
+    # computa la mediana de cada clave de este mapa) o no existe. No se agregan a
+    # `DEFAULT_BENCHMARKS`: inventar un promedio para la tabla de constantes sería rellenar la
+    # brecha en vez de declararla — y esas constantes, además, son ANUALES contra cortes
+    # trimestrales, que es el defecto que `panel_benchmarks` vino a cerrar. El otro consumidor
+    # del mapa (`compare_to_sector`) salta las claves sin constante, así que la ausencia es
+    # segura.
     #
-    # Sin constante declarada A PROPÓSITO: la mediana se MIDE del panel del propio corte
-    # (`panel_benchmarks`) o no hay referencia. Inventar un promedio de HHI para la tabla de
-    # constantes sería rellenar la brecha en vez de declararla — y las constantes, además,
-    # son ANUALES contra cortes trimestrales. El otro consumidor del mapa (`compare_to_sector`)
-    # ya salta las claves sin constante, así que la ausencia es segura.
+    # Por qué importan: una dimensión cuyos indicadores no tienen contra qué compararse llega
+    # al modelo como una lista de cifras sueltas, y ese hueco no queda vacío — queda INVENTADO.
+    # Calidad de Activos tenía 1 de 8 indicadores con referencia; Diversificación, 0 de 1.
+    "tier1_ratio": "tier1_ratio",
+    "patrimonio_activos": "patrimonio_activos",
+    "pct_cartera_a": "pct_cartera_a",
+    "concentracion_top10": "concentracion_top10",
+    "castigos_pct": "castigos_pct",
+    "exposicion_re": "exposicion_re",
+    "migracion": "migracion",
+    "liquidez_ajustada": "liquidez_ajustada",
+    # Índices (0-10.000), no porcentajes. Su brecha se enuncia en "puntos del índice": la
+    # unidad viaja con la comparación desde `INDICATOR_META` (ver `_comparaciones_resueltas`).
+    "hhi_sectorial": "hhi_sectorial",
     "hhi_ingresos": "hhi_ingresos",
+    # NO se mapea `composite_calidad`: no es una métrica observable sino un compuesto que ya
+    # vive en la escala 0-100 del score. Compararlo contra "el promedio del sistema" lo haría
+    # sonar como un indicador de balance, y su posición relativa ya la dan el percentil y la
+    # trayectoria del sub-componente. Una referencia de más no es gratis: es una afirmación.
 }
 
 DEFAULT_BENCHMARKS: Dict = {

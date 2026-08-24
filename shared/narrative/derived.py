@@ -112,8 +112,30 @@ def derived_figures(
 # y, sobre todo, no informa nada. "en línea con" es la lectura honesta.
 MATERIALIDAD_PP = 0.1
 
+# La UNIDAD viaja con la brecha. Sin esto, `_lectura` decía siempre "puntos porcentuales" y
+# una comparación de HHI —un ÍNDICE de 0 a 10.000, no un porcentaje— salía narrada como
+# «412,30 puntos porcentuales por encima del promedio del sistema»: una cifra correcta con una
+# unidad imposible. Es la misma familia de defecto que el sujeto que no viaja con el número.
+UNIDAD_DE_BRECHA = {
+    "%": "puntos porcentuales",
+    "índice": "puntos del índice",
+}
+_UNIDAD_POR_DEFECTO = "%"
 
-def _lectura(direccion: str, etiqueta: str, brecha: float) -> str:
+# Piso de RUIDO por unidad, no umbral de significancia. En %, 0.1 pp nace del caso real
+# (16.44 vs 16.5 difieren 0.06 pp: forzar un lado ahí no informa nada). En un índice HHI la
+# escala es otra —los valores viven en cientos o miles— y 0.1 punto es ruido de redondeo; 10
+# puntos es lo primero que se distingue de eso. NO es el umbral antimonopolio de 100 puntos:
+# ése mide si un cambio de concentración es SIGNIFICATIVO, y acá solo se decide si vale
+# afirmar un lado.
+MATERIALIDAD_POR_UNIDAD = {
+    "%": MATERIALIDAD_PP,
+    "índice": 10.0,
+}
+
+
+def _lectura(direccion: str, etiqueta: str, brecha: float,
+             unidad_brecha: str = "puntos porcentuales") -> str:
     """La comparación como CLÁUSULA ya redactada, lista para copiar.
 
     Reincidencia 2026-08-13 (Rating Completo BPD §5): el contexto traía
@@ -127,16 +149,17 @@ def _lectura(direccion: str, etiqueta: str, brecha: float) -> str:
     pero la frase se sirve armada para que copiar sea más fácil que redactar.
     """
     if direccion == "en línea":
-        return (f"en línea con el {etiqueta} (brecha de {brecha:+.2f} puntos "
-                "porcentuales, materialmente nula)")
-    return f"{direccion} del {etiqueta} en {abs(brecha):.2f} puntos porcentuales"
+        return (f"en línea con el {etiqueta} (brecha de {brecha:+.2f} {unidad_brecha}, "
+                "materialmente nula)")
+    return f"{direccion} del {etiqueta} en {abs(brecha):.2f} {unidad_brecha}"
 
 
 def comparaciones_vs_referencia(
     valores: Dict[str, Optional[float]],
     referencias: Dict[str, Dict[str, Optional[float]]],
     *,
-    materialidad_pp: float = MATERIALIDAD_PP,
+    unidades: Optional[Dict[str, Optional[str]]] = None,
+    materialidad_pp: Optional[float] = None,
 ) -> List[Dict[str, Any]]:
     """Dirección y brecha de cada (indicador, referencia), ya resueltas.
 
@@ -147,12 +170,21 @@ def comparaciones_vs_referencia(
             "promedio de pares grandes"): nombrar CONTRA QUÉ se compara es la mitad del
             problema, porque un indicador puede estar bajo el sistema y sobre su grupo de
             pares a la vez.
+        unidades: ``{indicador: unidad}`` (``"%"`` | ``"índice"``). Decide en qué unidad se
+            ENUNCIA la brecha y qué piso de ruido se le aplica. Por defecto ``"%"``, que es
+            lo que asumía el módulo entero cuando solo había porcentajes.
+        materialidad_pp: fuerza un piso de ruido único para todos los indicadores. Sin él,
+            cada uno usa el de SU unidad (``MATERIALIDAD_POR_UNIDAD``).
 
     Returns:
         Lista de ``{indicador, valor, referencia, valor_referencia, direccion, brecha_pp,
-        lectura}`` con ``direccion`` ∈ {"por encima", "por debajo", "en línea"} y ``lectura``
-        la cláusula ya redactada (ver ``_lectura``). Agnóstica de eje: el llamador arma el
-        mapeo indicador→referencias con el vocabulario de su dominio.
+        unidad_brecha, lectura}`` con ``direccion`` ∈ {"por encima", "por debajo", "en línea"}
+        y ``lectura`` la cláusula ya redactada (ver ``_lectura``). Agnóstica de eje: el
+        llamador arma el mapeo indicador→referencias con el vocabulario de su dominio.
+
+        ``brecha_pp`` conserva el nombre aunque la unidad no sea siempre pp: es el campo que
+        leen el chequeo determinista de dirección (``numeric_guard``) y la instrucción del
+        cerebro. La unidad viaja al lado, en ``unidad_brecha``, y ya redactada en ``lectura``.
     """
     out: List[Dict[str, Any]] = []
     for indicador, refs in (referencias or {}).items():
@@ -170,8 +202,12 @@ def comparaciones_vs_referencia(
                 r = float(ref)
             except (TypeError, ValueError):
                 continue
+            unidad = (unidades or {}).get(indicador) or _UNIDAD_POR_DEFECTO
+            unidad_brecha = UNIDAD_DE_BRECHA.get(unidad, UNIDAD_DE_BRECHA[_UNIDAD_POR_DEFECTO])
+            piso = (materialidad_pp if materialidad_pp is not None
+                    else MATERIALIDAD_POR_UNIDAD.get(unidad, MATERIALIDAD_PP))
             brecha = round(v - r, 2)
-            if abs(brecha) < materialidad_pp:
+            if abs(brecha) < piso:
                 direccion = "en línea"
             else:
                 direccion = "por encima" if brecha > 0 else "por debajo"
@@ -182,7 +218,8 @@ def comparaciones_vs_referencia(
                 "valor_referencia": round(r, 4),
                 "direccion": direccion,
                 "brecha_pp": brecha,
-                "lectura": _lectura(direccion, str(etiqueta), brecha),
+                "unidad_brecha": unidad_brecha,
+                "lectura": _lectura(direccion, str(etiqueta), brecha, unidad_brecha),
             })
     return out
 

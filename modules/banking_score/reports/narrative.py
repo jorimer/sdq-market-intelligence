@@ -186,6 +186,7 @@ def _comparaciones_resueltas(all_indicators: Dict, benchmarks: Optional[Dict],
     """
     from shared.data.sib_client import INDICATOR_TO_BENCHMARK
     from shared.narrative.derived import comparaciones_vs_referencia
+    from modules.banking_score.scoring.indicator_detail import INDICATOR_META
 
     if not isinstance(benchmarks, dict):
         return []
@@ -215,7 +216,10 @@ def _comparaciones_resueltas(all_indicators: Dict, benchmarks: Optional[Dict],
         if refs:
             valores[ind] = raw
             referencias[ind] = refs
-    return comparaciones_vs_referencia(valores, referencias)
+    # La UNIDAD viaja con la comparación: el HHI es un índice de 0 a 10.000, y sin esto su
+    # brecha salía enunciada en "puntos porcentuales" — cifra correcta, unidad imposible.
+    unidades = {ind: (INDICATOR_META.get(ind) or {}).get("unit") for ind in valores}
+    return comparaciones_vs_referencia(valores, referencias, unidades=unidades)
 
 
 _SENTIDO = {
