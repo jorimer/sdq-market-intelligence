@@ -247,3 +247,41 @@ def fetch(indicador: str) -> List[Observacion]:  # pragma: no cover - red + hoja
     if fallos:
         logger.warning("[sisdom] %s: %s", indicador, " · ".join(fallos))
     return sorted(por_clave.values(), key=lambda o: (o.anio, o.instrumento))
+
+#: Qué indicadores de la END se sirven desde este libro, con la hoja EXACTA y por qué esa.
+#: Varios se desdoblan en la publicación —2.8 en tres, 2.37 en tres— y elegir mal no rompe
+#: nada: publica otra magnitud contra la meta de la ley. El sufijo es parte de la decisión.
+#:
+#: La coincidencia de TÉRMINO es literal en cinco de los siete: la ley y el emisor usan la
+#: misma frase. Y en el 2.35 la línea base legal (86,1) es la cifra de SISDOM (86,1048)
+#: redondeada — el legislador tomó el número de acá.
+INDICADORES = {
+    "2.8": ("END 2.8a", "preschool_net_coverage", "%",
+            "Tasa neta de cobertura de nivel inicial, de ENCUESTAS DE HOGARES. Las otras dos "
+            "hojas miden la neta AJUSTADA (2.8b) y la misma tasa con registros y "
+            "proyecciones (2.8c); la ley fija su base sobre la de hogares."),
+    "2.34": ("END 2.34", "improved_sanitation_access", "%",
+             "Acceso a servicios sanitarios mejorados. Término idéntico al de la ley."),
+    "2.35": ("END 2.35", "public_network_water_access", "%",
+             "Acceso a agua de la RED PÚBLICA dentro o fuera de la vivienda. Término "
+             "idéntico al de la ley, que es lo que separa esta serie de la de agua «al menos "
+             "básica» — esa incluye pozos protegidos y la ley pide red pública."),
+    "2.37": ("END 2.37a", "broad_unemployment_rate", "%",
+             "Tasa de desocupación AMPLIADA. La ley dice «tasa de desocupación» a secas y el "
+             "emisor publica las dos; el oráculo desempata: la ampliada reproduce la línea "
+             "base con Δ 1,8% y la abierta se va 63,5%."),
+    "2.47": ("END 2.47", "child_labour_6_14", "%",
+             "Niños y niñas de 6 a 14 años que trabajan. Término y tramo etario idénticos a "
+             "los de la ley."),
+    "2.48": ("END 2.48", "neet_unemployed_15_19", "%",
+             "Jóvenes de 15 a 19 años que no estudian y están desempleados. Término idéntico "
+             "al de la ley."),
+    "2.40": (" END 2.40", "income_gender_ratio", "razón F/M (1,0 = paridad)",
+             "Ingreso laboral POR HORA de mujeres en jornada completa sobre el de los "
+             "hombres. La hoja se llama con un espacio ADELANTE y buscarla por igualdad "
+             "exacta la pierde. Ojo con su Nota 2, que dice «ingreso base mensual de toda la "
+             "población ocupada»: contradice a la ficha oficial del propio emisor y describe "
+             "otra magnitud. El oráculo la desempata — la ficha reproduce la línea base."),
+    "3.10": ("END 3.10", "tertiary_net_enrollment", "%",
+             "Tasa neta de matrícula de nivel superior, 18 a 24 años. Término idéntico."),
+}

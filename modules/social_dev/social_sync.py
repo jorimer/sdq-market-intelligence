@@ -650,46 +650,65 @@ def _sync_ied_total(db: Session, set_phase: Callable[[str], None]) -> int:
 
 
 
-def _sync_brecha_ingreso_genero(db: Session, set_phase: Callable[[str], None]) -> int:
-    """Indicador 2.40 de la END: razon del ingreso laboral de mujeres sobre el de hombres.
+def _sync_sisdom_end(db: Session, set_phase: Callable[[str], None]) -> int:
+    """Los indicadores de la END que el propio Estado publica en SISDOM, en UN solo bucle.
 
-    Sale de la hoja del propio Estado para su propia ley —SISDOM, «Indicadores Area Especial
-    END»— y de las DOS ediciones publicadas, porque cubren tramos distintos: la del MEPyD
-    llega a la linea base de 2010 y la de Hacienda trae el anio corriente. Coinciden al
-    digito en los anios que comparten.
+    Sale de la hoja que el evaluado publica para su propia ley —«Indicadores Área Especial
+    END»— y de las DOS ediciones, porque cubren tramos distintos: la del MEPyD llega a las
+    líneas base de 2007-2010 y la de Hacienda trae el año corriente. Coinciden al dígito en
+    los años que comparten.
+
+    **Es una tabla y no ocho funciones a propósito.** Ocho copias de este bucle se
+    desincronizan —una gana un guard, las otras no— y era el defecto que ya apareció en las
+    listas de sub-syncs de este mismo archivo. Qué hoja sirve a qué indicador, y POR QUÉ esa
+    hoja, vive en `shared.data.sisdom_end.INDICADORES`, que es donde se puede leer la
+    decisión: varios indicadores se desdoblan en la publicación —el 2.8 en tres hojas, el
+    2.37 en tres— y elegir mal no rompe nada, publica otra magnitud contra la meta de la ley.
 
     **La serie cruza un cambio de INSTRUMENTO en 2016** y por eso el instrumento viaja en la
-    desagregacion de cada fila. La ENFT se sustituyo por la ENCFT y el emisor marca con
-    asterisco las columnas de la nueva; 2016 tiene DOS mediciones y difieren en 0,99%. Una
-    serie que cruce ese anio sin decir con que encuesta se midio cada tramo se compara contra
-    una linea base de 2010 que es de la otra, y el escalon se lee como cambio del fenomeno.
+    desagregación de cada fila. La ENFT se sustituyó por la ENCFT y el emisor marca con
+    asterisco las columnas de la nueva; 2016 tiene DOS mediciones. Una serie que cruce ese
+    año sin decir con qué encuesta se midió cada tramo se compara contra una línea base que
+    es de la otra, y el escalón se lee como cambio del fenómeno.
 
-    Se persiste la union en el orden del propio emisor —ENFT hasta 2015, ENCFT desde 2016—,
-    que es una CONVENCION declarada y no un empalme: no hay factor publicado y fabricarlo
-    seria inventarlo.
+    Se persiste la unión en el orden del propio emisor —ENFT hasta 2015, ENCFT desde 2016—,
+    que es una CONVENCIÓN declarada y no un empalme: no hay factor publicado y fabricarlo
+    sería inventarlo.
     """
-    from shared.data.sisdom_end import (INSTRUMENTO_CON_ASTERISCO, INSTRUMENTO_SIN_ASTERISCO,
-                                        SOURCE, fetch, serie_de)
+    from shared.data.sisdom_end import (INDICADORES, INSTRUMENTO_CON_ASTERISCO,
+                                        INSTRUMENTO_SIN_ASTERISCO, SOURCE, fetch, serie_de)
 
-    set_phase("brecha de ingreso por genero (indicador 2.40 de la END)")
-    obs = fetch("2.40")            # la excepcion sube a _best_effort
-    enft = serie_de(obs, INSTRUMENTO_SIN_ASTERISCO)
-    encft = serie_de(obs, INSTRUMENTO_CON_ASTERISCO)
     synced = 0
-    for anio in sorted(set(enft) | set(encft)):
-        # Desde 2016 manda la encuesta nueva, que es la que continua. Es la convencion del
-        # emisor y queda escrita acá, que es el unico lugar donde se aplica.
-        usa_nueva = anio >= 2016 and anio in encft
-        valor = encft[anio] if usa_nueva else enft.get(anio)
-        if valor is None:
+    fallidos: List[str] = []
+    for indicador, (_hoja, tema, unidad, _por_que) in sorted(INDICADORES.items()):
+        set_phase(f"SISDOM · indicador {indicador} de la END")
+        try:
+            obs = fetch(indicador)
+        except Exception as e:  # noqa: BLE001 — un indicador ilegible no se lleva a los otros
+            logger.warning("[social] SISDOM %s: %s", indicador, e)
+            fallidos.append(indicador)
             continue
-        instrumento = INSTRUMENTO_CON_ASTERISCO if usa_nueva else INSTRUMENTO_SIN_ASTERISCO
-        _upsert_indicator(db, theme=_TEMA_BRECHA_INGRESO, entity=HEALTH_ENTITY,
-                          period=str(anio), value=round(valor, 5), source=SOURCE,
-                          disagg=f"nacional · {instrumento}", unit="razón F/M (1,0 = paridad)")
-        synced += 1
-    logger.info("[social] 2.40 brecha de ingreso: %d anios (ENFT %d, ENCFT %d)",
-                synced, len(enft), len(encft))
+        enft = serie_de(obs, INSTRUMENTO_SIN_ASTERISCO)
+        encft = serie_de(obs, INSTRUMENTO_CON_ASTERISCO)
+        for anio in sorted(set(enft) | set(encft)):
+            # Desde 2016 manda la encuesta nueva, que es la que continúa. Es la convención
+            # del emisor y queda escrita acá, que es el único lugar donde se aplica.
+            usa_nueva = anio >= 2016 and anio in encft
+            valor = encft[anio] if usa_nueva else enft.get(anio)
+            if valor is None:
+                continue
+            instrumento = (INSTRUMENTO_CON_ASTERISCO if usa_nueva
+                           else INSTRUMENTO_SIN_ASTERISCO)
+            _upsert_indicator(db, theme=tema, entity=HEALTH_ENTITY, period=str(anio),
+                              value=round(valor, 5), source=SOURCE,
+                              disagg=f"nacional · {instrumento}", unit=unidad)
+            synced += 1
+        db.commit()
+    if fallidos:
+        logger.warning("[social] SISDOM: %d indicadores sin serie: %s",
+                       len(fallidos), ", ".join(fallidos))
+    logger.info("[social] SISDOM END: %d filas de %d indicadores",
+                synced, len(INDICADORES) - len(fallidos))
     return synced
 
 
@@ -1209,9 +1228,9 @@ def one_social_sync(db: Session, set_phase: Optional[Callable[[str], None]] = No
     ied_synced = _best_effort(
         "IED total del país (3.23)",
         lambda: _sync_ied_total(db, set_phase), errors)
-    brecha_ingreso_synced = _best_effort(
-        "brecha de ingreso por género (2.40)",
-        lambda: _sync_brecha_ingreso_genero(db, set_phase), errors)
+    sisdom_end_synced = _best_effort(
+        "indicadores de la END en SISDOM (ocho)",
+        lambda: _sync_sisdom_end(db, set_phase), errors)
     salud_synced = _best_effort(
         "cobertura del Seguro Familiar de Salud (2.36)",
         lambda: _sync_cobertura_salud(db, set_phase), errors)
@@ -1278,7 +1297,7 @@ def one_social_sync(db: Session, set_phase: Optional[Callable[[str], None]] = No
         "gei_per_capita_synced": gei_synced,
         "confianza_partidos_synced": partidos_synced,
         "ied_total_synced": ied_synced,
-        "brecha_ingreso_synced": brecha_ingreso_synced,
+        "sisdom_end_synced": sisdom_end_synced,
         "cobertura_salud_synced": salud_synced,
         "participacion_export_synced": export_synced,
         "mem_electrico_synced": mem_synced,

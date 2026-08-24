@@ -39,7 +39,7 @@ SUB_SYNCS_DE_RED = (
     "_sync_cepal_politica", "_sync_ipu_senado", "_sync_exportaciones_per_capita",
     "_sync_llece_niveles", "_sync_razon_exportaciones_importaciones", "_sync_pobreza_rural",
     "_sync_gei_per_capita", "_sync_confianza_partidos", "_sync_ied_total",
-    "_sync_brecha_ingreso_genero",
+    "_sync_sisdom_end",
 "_sync_cobertura_salud",
     "_sync_participacion_exportadora", "_sync_mem_electrico", "_sync_sisdom_income",
     "_sync_minerd_coverage", "_sync_sisdom_schooling", "_sync_wb_findex",
