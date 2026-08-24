@@ -8,6 +8,7 @@ import {
   type SignalRow,
   type WaveRef,
 } from "../api";
+import { mensajeDeError } from "../../../shared/api/errores";
 
 interface Props {
   slug: string;
@@ -94,9 +95,7 @@ export function DecisionDrawer({
       });
       onCreated();
     } catch (e: unknown) {
-      const detail =
-        (e as { response?: { data?: { detail?: string } } })?.response?.data?.detail;
-      setError(detail ?? "No se pudo registrar la decisión.");
+      setError(mensajeDeError(e, "No se pudo registrar la decisión."));
     } finally {
       setBusy(false);
     }

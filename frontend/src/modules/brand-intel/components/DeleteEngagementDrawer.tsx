@@ -3,6 +3,7 @@ import { AlertTriangle, Loader2, Trash2 } from "lucide-react";
 
 import { InsightDrawerShell } from "@/shared/ui/InsightDrawerShell";
 import { deleteEngagement } from "../api";
+import { estadoDeError, mensajeDeError } from "../../../shared/api/errores";
 
 interface Props {
   slug: string;
@@ -40,13 +41,10 @@ export function DeleteEngagementDrawer({
       await deleteEngagement(slug);
       onDeleted();
     } catch (e: unknown) {
-      const detail =
-        (e as { response?: { data?: { detail?: string } } })?.response?.data?.detail;
-      const status = (e as { response?: { status?: number } })?.response?.status;
       setError(
-        status === 403
+        estadoDeError(e) === 403
           ? "Hace falta rol de administrador para eliminar un encargo."
-          : detail ?? "No se pudo eliminar el encargo.",
+          : mensajeDeError(e, "No se pudo eliminar el encargo."),
       );
       setBusy(false);
     }

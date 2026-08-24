@@ -10,6 +10,7 @@ import {
   type StructureProposal,
   type WaveCandidate,
 } from "../api";
+import { mensajeDeError } from "../../../shared/api/errores";
 
 interface Props {
   slug: string;
@@ -84,9 +85,7 @@ export function StructureDrawer({ slug, focalBrand, onClose, onAdopted }: Props)
       setFocal(hit?.name ?? "");
       setPhase("review");
     } catch (e: unknown) {
-      const detail =
-        (e as { response?: { data?: { detail?: string } } })?.response?.data?.detail;
-      setError(detail ?? "No se pudo leer la presentación.");
+      setError(mensajeDeError(e, "No se pudo leer la presentación."));
       setPhase("idle");
     }
   };
@@ -112,9 +111,7 @@ export function StructureDrawer({ slug, focalBrand, onClose, onAdopted }: Props)
       });
       onAdopted();
     } catch (e: unknown) {
-      const detail =
-        (e as { response?: { data?: { detail?: string } } })?.response?.data?.detail;
-      setError(detail ?? "No se pudo guardar la estructura.");
+      setError(mensajeDeError(e, "No se pudo guardar la estructura."));
       setPhase("review");
     }
   };

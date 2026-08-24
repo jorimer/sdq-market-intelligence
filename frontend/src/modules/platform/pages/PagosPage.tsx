@@ -10,6 +10,7 @@ import {
   type PaypalConfig, type CatalogSku, type TaxConfig, type InvoiceIssuer, type PaypalDiagnostics,
   type PlanSyncResult,
 } from "../billingApi";
+import { mensajeDeError } from "../../../shared/api/errores";
 
 const MASK = "••••••••";
 const INTERVAL_LABEL: Record<string, string> = { monthly: "Mensual", annual: "Anual" };
@@ -91,8 +92,7 @@ export function PagosPage() {
       setPlans(res.plans || {});
       setSyncReport(res.results);
     } catch (e) {
-      const detail = (e as { response?: { data?: { detail?: string } } })?.response?.data?.detail;
-      setSyncErr(detail || tr("pagos.plans.syncError", "No se pudieron sincronizar los planes."));
+      setSyncErr(mensajeDeError(e, tr("pagos.plans.syncError", "No se pudieron sincronizar los planes.")));
     } finally {
       setSyncBusy(false);
     }

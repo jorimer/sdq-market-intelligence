@@ -22,6 +22,7 @@ import {
   type WaveRef,
 } from "../api";
 import { PlanReviewDrawer } from "./PlanReviewDrawer";
+import { mensajeDeError } from "../../../shared/api/errores";
 
 const GOAL_TONE: Record<PlanGoal["status"], "warn" | "ok" | "muted"> = {
   propuesta: "warn",
@@ -78,9 +79,7 @@ export function PlansPanel({
       await load();
       await refreshOpen(created.id);
     } catch (e: unknown) {
-      const detail =
-        (e as { response?: { data?: { detail?: string } } })?.response?.data?.detail;
-      setError(detail ?? "No se pudo leer el plan.");
+      setError(mensajeDeError(e, "No se pudo leer el plan."));
     } finally {
       setBusy(false);
       if (fileRef.current) fileRef.current.value = "";

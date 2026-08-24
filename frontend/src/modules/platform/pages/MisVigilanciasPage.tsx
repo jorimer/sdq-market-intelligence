@@ -10,6 +10,7 @@ import {
   type AlertRulesCatalog,
   type AlertSubscription,
 } from "@/shared/api/alerts";
+import { mensajeDeError } from "../../../shared/api/errores";
 
 /**
  * «Mis vigilancias» — dónde el cliente elige POR DÓNDE y CADA CUÁNTO se entera.
@@ -58,9 +59,7 @@ export function MisVigilanciasPage() {
       const nuevo = await updateAlertSubscription(sub.id, cambio);
       setSubs((prev) => prev.map((s) => (s.id === nuevo.id ? nuevo : s)));
     } catch (e) {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const detail = (e as any)?.response?.data?.detail;
-      setMsg(typeof detail === "string" ? detail : tr("alerts.saveError", "No se pudo guardar el cambio."));
+      setMsg(mensajeDeError(e, tr("alerts.saveError", "No se pudo guardar el cambio.")));
     } finally { setBusy(null); }
   }
 

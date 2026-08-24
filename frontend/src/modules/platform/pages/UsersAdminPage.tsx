@@ -16,6 +16,7 @@ import {
   getUserSubscriptions, setSubscription, cancelSubscription,
   type UserEntitlement, type Subscription,
 } from "../api";
+import { mensajeDeError } from "../../../shared/api/errores";
 
 const ROLE_TONE: Record<string, "ok" | "warn" | "muted" | "accent"> = {
   super_admin: "warn", admin: "accent", analyst: "ok", viewer: "muted",
@@ -494,7 +495,6 @@ function UserModal({
   );
 }
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-function errMsg(e: any, fallback: string): string {
-  return e?.response?.data?.detail || fallback;
+function errMsg(e: unknown, fallback: string): string {
+  return mensajeDeError(e, fallback);
 }

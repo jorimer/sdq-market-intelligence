@@ -7,6 +7,7 @@ import {
   watchSubject,
   type AlertSubscription,
 } from "@/shared/api/alerts";
+import { mensajeDeError } from "../../shared/api/errores";
 
 interface Props {
   sectorKey: string;
@@ -61,11 +62,8 @@ export function VigilarButton({ sectorKey, subject }: Props) {
         setSub(await watchSubject(sectorKey, target));
       }
     } catch (e) {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const detail = (e as any)?.response?.data?.detail;
-      // El 402 trae un objeto con el upsell; el 422, la razón en texto.
-      setMsg(typeof detail === "string" ? detail
-        : (detail?.message as string) || t("alerts.watchError"));
+      // El 402 trae un objeto con el upsell; el 422, una lista de validación.
+      setMsg(mensajeDeError(e, t("alerts.watchError")));
     } finally {
       setBusy(false);
     }
