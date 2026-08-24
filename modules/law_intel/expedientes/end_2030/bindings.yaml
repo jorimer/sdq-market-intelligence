@@ -1795,12 +1795,39 @@ bindings:
       coincidencias —minas más electricidad más servicios comunitarios da 2,31%, Δ 3,3%— y
       ninguna significa nada: con trece sumandos siempre hay una combinación cerca de
       cualquier número. Publicar una sería abrir exactamente la puerta que el oráculo cierra.
+      ══ MOTIVO SUSPENDIDO 2026-08-24 · NO CITAR ESTAS CIFRAS ══ Todo lo de arriba queda como
+      registro de lo que se hizo, y NO como veredicto publicable, por dos razones.
+      PRIMERA, y es sobre nosotros: **ninguna de las ocho cifras de este motivo se puede
+      recomputar desde el repositorio**. Salieron de un barrido ad hoc del 2026-08-22 y solo
+      las conclusiones se transcribieron acá; no quedó conector, ni serie persistida, ni
+      script. Un motivo que nadie puede rehacer no es evidencia, es una afirmación — y este
+      expediente lo venía presentando como caso cerrado.
+      SEGUNDA: el 5to Informe declara un universo (banca múltiple sobre producción de bienes
+      y servicios) que se parece al que computamos, y la distancia entre su línea base (2,24)
+      y lo que da ese universo (~11) es de un factor cercano a cuatro. O el cómputo tiene un
+      error de perímetro o de denominador, o la línea base de la ley es inconsistente — que
+      sería la QUINTA de la misma familia, junto al 2.33, el 2.47, el 3.14 y el 3.30. Las dos
+      salidas son publicables; decidir cuál sin recomputar, no.
+      Hasta que el recómputo corra por un camino reproducible, el indicador queda sin motivo
+      citable. Un motivo apoyado en cifras que nadie puede rehacer es peor que un indicador
+      sin veredicto, porque se lee como evidencia y no lo es.
     hipotesis_sin_comprobar: >-
-      Que «producción» nombre un universo mucho más angosto que el crédito bancario: crédito
-      de la banca pública de desarrollo, o crédito a tasa preferencial, o un programa
-      concreto. Lo sugiere que la base de la ley esté por debajo de CADA destino productivo
-      del sistema bancario menos dos. No está comprobado y exige identificar primero qué
-      institución publica ese universo.
+      ══ REFUTADA DOCUMENTALMENTE 2026-08-24 ══ La hipótesis era que «producción» nombrara un
+      universo mucho más angosto que el crédito bancario —banca pública de desarrollo, tasa
+      preferencial, un programa concreto—. NO es eso, y lo dice el propio evaluado. El 5to
+      Informe de Avance de la END (enero 2018), nota al pie 2, p. 35: «la línea de base del
+      indicador que aparece en el artículo 26 de la Ley 1-12 corresponde al crédito de la
+      BANCA MÚLTIPLE A LA PRODUCCIÓN DE BIENES Y SERVICIOS / PIB, pero una medición más
+      apropiada del grado de profundidad financiera de la economía debe abarcar a todo el
+      sector financiero».
+      O sea que el universo declarado por el emisor es ANCHO, no angosto: banca múltiple
+      sobre destinos productivos. Y ahí aparece el problema, que es sobre NOSOTROS: eso se
+      parece mucho a lo que ya computamos y descartamos por dar 11,23%. La banca múltiple es
+      la mayor parte del sistema, así que recortar el perímetro a ella no explica una caída
+      de 11,23% a 2,24%.
+      LO QUE FALTA para volver a cerrar el motivo: recomputar el crédito por destino
+      restringiendo el perímetro a bancos múltiples y verificando la unidad del PIB nominal,
+      por un camino REPRODUCIBLE. Y esa es la otra mitad del hallazgo — ver el motivo.
 
 # ── 2.11 · DESCARTE CON EVIDENCIA ─────────────────────────────────────────────────────────
   - indicador: "2.11"
