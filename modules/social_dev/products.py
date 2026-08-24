@@ -464,6 +464,15 @@ class SocialDevProduct:
             "Gasto en salud del Gobierno Central (% del PIB)", "living_standards",
             "Línea de Salud del cuadro de clasificación funcional de DIGEPRES, monto "
             "devengado, sobre el PIB nominal. No alimenta el índice de desarrollo."),
+        # Indicador 2.40 de la END. El SUJETO va en la etiqueta: es INGRESO, no ocupación
+        # —`employment_gender_ratio` mide otra cosa y las dos son razones F/M—. Y la etiqueta
+        # dice «razón» porque un 0,91 a secas se lee como un porcentaje.
+        "income_gender_ratio": (
+            "income_gender_ratio", HEALTH_ENTITY,
+            "Razón de ingreso laboral femenino/masculino", "inclusion",
+            "SISDOM, hoja de la END. La serie cruza un cambio de encuesta en 2016 (ENFT → "
+            "ENCFT) y el instrumento viaja en la desagregación de cada año. No alimenta el "
+            "índice de desarrollo."),
         "fdi_total_usd_mm": (
             "fdi_total_usd_mm", HEALTH_ENTITY,
             "Inversión extranjera directa — país (millones de US$)", "living_standards",

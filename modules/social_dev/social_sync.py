@@ -103,6 +103,10 @@ WDI_NACIONALES_FUERA_DEL_INDICE = {
 }
 HEALTH_ENTITY = "nacional"
 
+#: Indicador 2.40 de la END. El SUJETO va en el nombre: es una razón de INGRESO, no de
+#: ocupación — `employment_gender_ratio` ya existe y mide otra cosa.
+_TEMA_BRECHA_INGRESO = "income_gender_ratio"
+
 _WDI_HEALTH_YEARS = 30
 
 # Informalidad nacional (ENCFT del BCRD) → aplicada a todas las regiones, como la salud
@@ -641,6 +645,49 @@ def _sync_ied_total(db: Session, set_phase: Callable[[str], None]) -> int:
 
 
 
+def _sync_brecha_ingreso_genero(db: Session, set_phase: Callable[[str], None]) -> int:
+    """Indicador 2.40 de la END: razon del ingreso laboral de mujeres sobre el de hombres.
+
+    Sale de la hoja del propio Estado para su propia ley —SISDOM, «Indicadores Area Especial
+    END»— y de las DOS ediciones publicadas, porque cubren tramos distintos: la del MEPyD
+    llega a la linea base de 2010 y la de Hacienda trae el anio corriente. Coinciden al
+    digito en los anios que comparten.
+
+    **La serie cruza un cambio de INSTRUMENTO en 2016** y por eso el instrumento viaja en la
+    desagregacion de cada fila. La ENFT se sustituyo por la ENCFT y el emisor marca con
+    asterisco las columnas de la nueva; 2016 tiene DOS mediciones y difieren en 0,99%. Una
+    serie que cruce ese anio sin decir con que encuesta se midio cada tramo se compara contra
+    una linea base de 2010 que es de la otra, y el escalon se lee como cambio del fenomeno.
+
+    Se persiste la union en el orden del propio emisor —ENFT hasta 2015, ENCFT desde 2016—,
+    que es una CONVENCION declarada y no un empalme: no hay factor publicado y fabricarlo
+    seria inventarlo.
+    """
+    from shared.data.sisdom_end import (INSTRUMENTO_CON_ASTERISCO, INSTRUMENTO_SIN_ASTERISCO,
+                                        SOURCE, fetch, serie_de)
+
+    set_phase("brecha de ingreso por genero (indicador 2.40 de la END)")
+    obs = fetch("2.40")            # la excepcion sube a _best_effort
+    enft = serie_de(obs, INSTRUMENTO_SIN_ASTERISCO)
+    encft = serie_de(obs, INSTRUMENTO_CON_ASTERISCO)
+    synced = 0
+    for anio in sorted(set(enft) | set(encft)):
+        # Desde 2016 manda la encuesta nueva, que es la que continua. Es la convencion del
+        # emisor y queda escrita acá, que es el unico lugar donde se aplica.
+        usa_nueva = anio >= 2016 and anio in encft
+        valor = encft[anio] if usa_nueva else enft.get(anio)
+        if valor is None:
+            continue
+        instrumento = INSTRUMENTO_CON_ASTERISCO if usa_nueva else INSTRUMENTO_SIN_ASTERISCO
+        _upsert_indicator(db, theme=_TEMA_BRECHA_INGRESO, entity=HEALTH_ENTITY,
+                          period=str(anio), value=round(valor, 5), source=SOURCE,
+                          disagg=f"nacional · {instrumento}", unit="razón F/M (1,0 = paridad)")
+        synced += 1
+    logger.info("[social] 2.40 brecha de ingreso: %d anios (ENFT %d, ENCFT %d)",
+                synced, len(enft), len(encft))
+    return synced
+
+
 def _sync_confianza_partidos(db: Session, set_phase: Callable[[str], None]) -> int:
     """Indicador 1.1 de la END: confianza en los partidos políticos.
 
@@ -1148,6 +1195,9 @@ def one_social_sync(db: Session, set_phase: Optional[Callable[[str], None]] = No
     ied_synced = _best_effort(
         "IED total del país (3.23)",
         lambda: _sync_ied_total(db, set_phase), errors)
+    brecha_ingreso_synced = _best_effort(
+        "brecha de ingreso por género (2.40)",
+        lambda: _sync_brecha_ingreso_genero(db, set_phase), errors)
     salud_synced = _best_effort(
         "cobertura del Seguro Familiar de Salud (2.36)",
         lambda: _sync_cobertura_salud(db, set_phase), errors)
@@ -1214,6 +1264,7 @@ def one_social_sync(db: Session, set_phase: Optional[Callable[[str], None]] = No
         "gei_per_capita_synced": gei_synced,
         "confianza_partidos_synced": partidos_synced,
         "ied_total_synced": ied_synced,
+        "brecha_ingreso_synced": brecha_ingreso_synced,
         "cobertura_salud_synced": salud_synced,
         "participacion_export_synced": export_synced,
         "mem_electrico_synced": mem_synced,

@@ -442,6 +442,51 @@ bindings:
       (1,3 en 2024) queda a un 8,3% de la línea base legal, así que atarlas produciría un
       «prácticamente sin cambios» sobre dos magnitudes que nunca fueron la misma.
 
+  - indicador: "2.40"
+    serie: "social_dev:income_gender_ratio"
+    fuente: mhe
+    mejor: mayor
+    # El período del ÚLTIMO dato, que es lo que alimenta la frescura. No es el año contra el
+    # que corre el oráculo —ése es 2010, la línea base de la ley—: son dos cosas distintas y
+    # poner acá el de la base hunde la frescura del expediente a cero.
+    periodo_verificado: "2025"
+    estado: verificado
+    verificado_por: oraculo
+    origen: declarado_por_el_evaluado
+    productor: >-
+      SISDOM — «Indicadores Área Especial END», hoja « END 2.40», fila del total del país.
+      Elaborado por el VAES a partir del procesamiento de los microdatos de la ENFT y la
+      ENCFT del Banco Central; la edición 2025 la firma el Viceministerio de Economía del
+      Ministerio de Hacienda y Economía.
+    nota_comparabilidad: >-
+      ══ VERIFICADO 2026-08-24, ABRIENDO LA CELDA ══ La ley fija 0,95 para 2010 y la hoja da
+      0,95710 — Δ 0,75%, dentro de la tolerancia del oráculo. La auditoría de fuentes había
+      dejado ese valor marcado como lectura NO verificada; se abrió el libro y se confirmó.
+      LAS TRES METAS VENCIDAS ESTÁN INCUMPLIDAS.
+      2015: 0,90470 contra meta 0,98 — −7,7%. Se mide con la MISMA encuesta que la línea
+      base, así que esa comparación no cruza el quiebre.
+      2020: 0,95242 contra meta 1,0 — −4,8%.
+      2025: 0,88363 contra meta 1,0 — −11,6%, y es el peor año desde 2011.
+      La serie no es monótona: en 2012 llegó a 0,97892, a un punto de la meta de 2015, y
+      después bajó.
+      EL QUIEBRE DE INSTRUMENTO, MEDIDO. La ENFT se sustituyó por la ENCFT y el libro marca
+      con asterisco las columnas de la nueva. 2016 trae DOS mediciones —0,91630 con la vieja
+      y 0,90724 con la nueva— y el escalón es de 0,99%. Las metas de 2020 y 2025 se miden
+      con la encuesta nueva y la línea base con la vieja, así que esas dos comparaciones
+      cruzan el quiebre; el escalón de 0,99% no alcanza para explicar brechas de 4,8% y
+      11,6%, que es lo que hace que el veredicto sobreviva. El instrumento viaja en la
+      desagregación de cada año y no se empalma: el emisor no publica factor y fabricarlo
+      sería inventar la convención.
+      CONTRADICCIÓN EN EL PROPIO LIBRO, que queda escrita para que nadie la redescubra: la
+      ficha metodológica del 2.40 define «ingreso laboral promedio POR HORA de las mujeres
+      que trabajan EN JORNADA COMPLETA», y la Nota 2 de la hoja dice «ingreso base MENSUAL
+      en ocupación principal de toda la población ocupada de 15 años y más, incluye
+      trabajadores no remunerados». Son magnitudes distintas. Se ata igual y por el oráculo:
+      que la hoja reproduzca la línea base de la ley al 0,75% es evidencia de que ES la
+      serie que el legislador usó, cualquiera sea la nota que la describe mal. La auditoría
+      atribuía esa nota a un arrastre desde el vintage 2021 ausente en las hojas hermanas;
+      se comprobó y esa parte NO se sostiene — la hoja 2.37a sí tiene Nota 2, distinta, y
+      las hojas 2.38, 2.39, 2.41 y 2.42 no existen en el libro.
   - indicador: "2.33"
     serie: "social_dev:health_spending_central_gov_pct_gdp"
     fuente: mhe
