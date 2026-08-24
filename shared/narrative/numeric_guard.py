@@ -316,19 +316,20 @@ def _norm_series_map(context: dict) -> Dict[str, List[Dict[str, Any]]]:
 _CLAIM_UNIT = re.compile(r"(\d+(?:[.,]\d+)?)\s*(?:%|por\s+ciento)", re.I)
 
 
-def context_figures(context: Any) -> set:
-    """Todos los números del contexto, en valor absoluto y a un decimal.
+def context_values(context: Any) -> set:
+    """Todos los números del contexto, en valor absoluto y SIN redondear.
 
     Recorre la estructura completa sin conocerla: dicts, listas y también los números
     incrustados en las glosas de texto, que el motor sirve y el modelo puede citar con
-    todo derecho. Guarda el redondeo y la truncación de cada valor.
+    todo derecho.
+
+    Devuelve los valores crudos a propósito: quien compara decide la precisión. Fijarla acá
+    fue lo que produjo el falso positivo — ver ``deterministic_uncited_figures``.
     """
     out: set = set()
 
     def _add(x: float) -> None:
-        a = abs(float(x))
-        out.add(round(a, 1))
-        out.add(math.floor(a * 10) / 10)
+        out.add(abs(float(x)))
 
     def _walk(o: Any) -> None:
         if isinstance(o, bool) or o is None:
@@ -352,8 +353,44 @@ def context_figures(context: Any) -> set:
     return out
 
 
+def context_figures(context: Any) -> set:
+    """Los números del contexto a un decimal (redondeo y truncación).
+
+    Se conserva para ``guard_coverage`` y para quien solo necesite saber SI hay cifras. La
+    verificación de una cita ya no pasa por acá: usa ``context_values`` a la precisión que
+    la cita declara.
+    """
+    out: set = set()
+    for a in context_values(context):
+        out.add(round(a, 1))
+        out.add(math.floor(a * 10) / 10)
+    return out
+
+
+def _decimales(literal: str) -> int:
+    """Decimales que DECLARA la cita: '69' → 0, '69,1' → 1, '69,46' → 2."""
+    normal = literal.replace(",", ".")
+    return len(normal.split(".", 1)[1]) if "." in normal else 0
+
+
 def deterministic_uncited_figures(context: dict, text: str) -> List[str]:
     """Porcentajes y puntos del *text* que no aparecen en el contexto.
+
+    La comparación se hace **a la precisión que declara la cita**: ``69%`` (cero decimales)
+    está respaldado por cualquier valor del contexto que redondee —o trunque— a 69;
+    ``69,1%`` sigue exigiendo el decimal. Es cómo lee un humano una cifra redondeada.
+
+    Antes la comparación era SIEMPRE a un decimal, y eso vetaba citas correctas. El caso que
+    lo destapó (Deep Dive de banca múltiple, Q1-2026): la trayectoria servida traía un
+    cost-to-income de 69,1344% (jun-2024) y 69,4575% (dic-2024) — el guard "veía" 69,1 y 69,4,
+    la narrativa dijo "69%" (=69,0), no matcheó, y el informe se vetó ENTERO: 157 s y ~US$1 de
+    modelo para un error en pantalla. Había un 69 real y citable en el contexto.
+
+    Contrapartida DECLARADA: un entero inventado (80%, 100%) ahora pasa si el contexto tiene
+    algo en su banda de redondeo. Se acepta a sabiendas — este es el filtro mecánico y barato,
+    y nunca fue el único: el juez semántico del motor corre aparte y ve lo que éste no (por eso
+    el motor además se niega a propagar a la caché compartida lo que él marcó). Vetar prosa
+    correcta no es "ser estricto": es negar el producto por un número que sí estaba.
 
     Best-effort y conservador: solo mira cifras con unidad de dato, y ante un contexto sin
     números no marca nada (sin insumo no hay verificación, y fingirla sería el mismo modo
@@ -361,17 +398,23 @@ def deterministic_uncited_figures(context: dict, text: str) -> List[str]:
     """
     flags: List[str] = []
     try:
-        known = context_figures(context)
+        known = context_values(context)
         if not known:
             return []
         seen: set = set()
         for m in _CLAIM_UNIT.finditer(text or ""):
-            raw = m.group(1)
+            literal = m.group(1)
             try:
-                value = round(abs(float(raw.replace(",", "."))), 1)
+                value = abs(float(literal.replace(",", ".")))
             except ValueError:
                 continue
-            if value in known or m.group(0).strip() in seen:
+            dp = _decimales(literal)
+            escala = 10 ** dp
+            # Redondeo Y truncación, las dos formas legítimas de acortar una cifra.
+            respaldada = any(
+                round(x, dp) == value or math.floor(x * escala) / escala == value
+                for x in known)
+            if respaldada or m.group(0).strip() in seen:
                 continue
             seen.add(m.group(0).strip())
             flags.append(f"{m.group(0).strip()}: no aparece en el contexto servido")
