@@ -49,6 +49,27 @@ def test_una_cifra_que_el_contexto_no_sostiene_se_sigue_marcando(cita):
     assert flags, f"'{cita}' debería marcarse: el contexto no la sostiene"
 
 
+def test_una_cita_MAS_precisa_que_el_contexto_ya_no_se_cuela():
+    """La regla corta en las DOS direcciones, y por eso hubo que bumpear `GUARD_VERSION`.
+
+    El código viejo redondeaba la CITA a un decimal antes de comparar: "69,08%" se volvía 69,1
+    y matcheaba un contexto de 69,14 — dejaba pasar una cifra que el contexto no dice. Verificar
+    a la precisión declarada lo cierra. Como el guard nuevo puede marcar texto que el viejo
+    aceptaba, una narrativa YA CACHEADA podría no cumplir la regla nueva: la huella de receta
+    tiene que rotar."""
+    assert deterministic_uncited_figures({"x": 69.14}, "Se ubicó en 69,08% al cierre.")
+
+
+def test_guard_version_declara_la_regla_vigente():
+    """El único bump manual irreducible de la huella de caché: un cambio en la LÓGICA de este
+    módulo no toca ningún prompt y pasaría inadvertido."""
+    from shared.narrative.numeric_guard import GUARD_VERSION
+
+    assert GUARD_VERSION == "6", (
+        "Si cambiaste la lógica del guard, bumpeá GUARD_VERSION y actualizá este test: si no, "
+        "la caché sigue sirviendo texto que la regla nueva evaluaría distinto.")
+
+
 def test_sin_numeros_en_el_contexto_no_se_marca_nada():
     """Sin insumo no hay verificación, y fingirla sería el modo de falla que la regla cierra."""
     assert deterministic_uncited_figures({"texto": "sin cifras"}, "Alcanzó el 42%.") == []
