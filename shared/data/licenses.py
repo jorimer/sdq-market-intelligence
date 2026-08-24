@@ -285,6 +285,13 @@ LICENCIAS: Dict[str, Licencia] = {
               "Mientras no contesten, esos dos puntos son NO CONFIRMADOS: no son una "
               "negativa, pero tampoco se pueden dar por concedidos."),
     ),
+    "DIGEPRES — informe oficial de ejecucion presupuestaria (Ley 423-06)": Licencia(
+        terminos_url=None, verificado_el=None,
+        nota=("El informe se publica en cumplimiento del articulo 59 de la Ley Organica de "
+              "Presupuesto 423-06 — el propio documento lo dice en su introduccion — y su "
+              "sitio no declara terminos de reutilizacion. Que un documento sea de "
+              "publicacion obligatoria no es lo mismo que sea de reutilizacion libre, y esa "
+              "distincion es la deuda: falta leer si el portal fija condiciones.")),
     "CC-BY-3.0 (University of Notre Dame)": Licencia(
         terminos_url=None, verificado_el=None,
         nota=("ND-GAIN se anuncia como «free and open-access» y da una cita sugerida; en "

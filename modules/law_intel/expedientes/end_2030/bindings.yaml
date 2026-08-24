@@ -443,42 +443,38 @@ bindings:
       «prácticamente sin cambios» sobre dos magnitudes que nunca fueron la misma.
 
   - indicador: "2.33"
-    serie: "wdi.SH.XPD.GHED.GD.ZS"
-    fuente: wdi
+    serie: "social_dev:health_spending_central_gov_pct_gdp"
+    fuente: mhe
     mejor: mayor
-    estado: descartado
-    origen: estimacion_de_tercero_sobre_dato_del_evaluado
-    productor: OMS vía Banco Mundial — gasto público interno en salud, metodología SHA 2011.
-    motivo_descarte: >-
-      Gasto público en salud como % del PIB. La ley fija 1,4 para 2009 y la serie da 2,33 el
-      mismo año, un 66,6% por encima. Se probaron el 2026-08-22 las SIETE variantes de gasto
-      en salud que publica el emisor y ninguna se acerca: la más próxima es el gasto externo
-      sobre el gasto corriente (0,93; Δ 33,3%), que mide otra cosa. El agregado del emisor es
-      el del gobierno general e incluye la seguridad social.
-      También se probó la vía nacional el mismo día: el portal de datos abiertos publica
-      ejecución presupuestaria desde 2016 y la línea base de la ley es de 2009, así que no
-      alcanza el año que habría que reproducir.
-    hipotesis_sin_comprobar: >-
-      Que el 1,4 de la ley sea el gasto del gobierno CENTRAL y no el del gobierno general.
-      Sigue siendo la mejor explicacion de la brecha —1,4% del PIB de 2009 son unos RD$23,5
-      mil millones, del orden del presupuesto del ministerio de salud de esos anios— y sigue
-      SIN COMPROBAR, pero ya no por falta de buscar.
-      DONDE SE BUSCO, el 2026-08-22, y que devolvio cada sitio:
-      el organismo internacional de salud publica dos agregados para 2009 y ninguno es 1,4
-      —gasto publico general 2,332% y gasto corriente total 4,767%— y su catalogo no tiene
-      ninguna serie de gobierno CENTRAL;
-      el portal nacional de datos abiertos publica ejecucion presupuestaria desde 2016 y
-      estadisticas de ejecucion de gastos desde 2017, ninguna alcanza 2009;
-      la serie fiscal historica del banco central SI cubre 2000-2013 pero esta clasificada por
-      concepto economico —ingresos, gastos corrientes, de capital— y no trae una linea de
-      salud;
-      el sitio de la oficina de presupuesto no expone informes historicos, solo los del anio
-      en curso.
-      QUE LA CERRARIA: un documento de archivo con la ejecucion presupuestaria de 2009 por
-      clasificacion funcional. Existe —es un informe que ese organismo produjo en su momento—
-      pero no esta en linea. Es trabajo de archivo, no de conexion, y hasta que aparezca la
-      meta de 4,5% para 2025 no se puede medir contra el agregado ancho sin darla por mas
-      cerca de lo que esta.
+    estado: propuesto
+    origen: declarado_por_el_evaluado
+    productor: >-
+      DIGEPRES — línea de Salud del cuadro de clasificación funcional del gasto del Gobierno
+      Central, monto DEVENGADO, dividido por el PIB nominal del banco central.
+    nota_comparabilidad: >-
+      ══ CONSTRUIDA 2026-08-23 ══ La hipótesis se confirmó y la serie existe: trece años,
+      2009-2019 más 2021 y 2022. El agregado que republicaba el organismo internacional es
+      del gobierno GENERAL e incluye la seguridad social — daba 2,33 contra el 1,4 de la ley.
+      2009 1,357 · 2010 1,684 · 2011 1,694 · 2012 1,795 · 2013 1,586 · 2014 1,774 ·
+      2015 1,753 · 2016 1,598 · 2017 1,805 · 2018 1,640 · 2019 1,661 · 2021 2,388 ·
+      2022 1,877.
+      LA META DE 2015 ERA 2,8 Y EL AÑO DIO 1,753. El máximo de los trece años es 2,388 y es
+      el año del COVID; en 2022 ya había vuelto a 1,877.
+      POR QUÉ NO PASA A `verificado`: el oráculo no cierra. La ley fija 1,4 para 2009 y la
+      serie da 1,357 — Δ 3,1% contra una tolerancia de 2,0%. Y hay una explicación medida,
+      no supuesta: en los CUATRO años en que el emisor publica su propio %PIB, nuestro
+      cómputo queda 6,0% · 7,7% · 6,0% · 7,1% por debajo, siempre en el mismo sentido. El
+      emisor dividió por el PIB de su añada y las cuentas nacionales se rebasaron a 2018.
+      Con la añada vieja el 2009 daría ~1,45, que tampoco entra: el 1,4 del legislador cae
+      ENTRE las dos.
+      LO QUE FALTA, y es una sola cosa: la segunda añada del DENOMINADOR. El camino
+      `revision_declarada` exige dos añadas y que ninguna reproduzca la base; hoy hay una
+      —la serie base 2018— y la otra es la retropolada base 2007 que el banco central sí
+      publica. Con las dos, el candado del margen ya está holgado: la brecha contra la meta
+      de 2015 es del 37% y la incertidumbre de añada es del 7%, cinco veces menor.
+      LOS AÑOS QUE FALTAN SON METAS: 2020 y 2025 no tienen cuadro funcional en ningún
+      documento del emisor, y el motivo de cada uno está en
+      `shared.data.digepres_funcional.SIN_CUADRO_FUNCIONAL`.
   - indicador: "2.34"
     serie: "wdi.SH.STA.BASS.ZS"
     fuente: wdi

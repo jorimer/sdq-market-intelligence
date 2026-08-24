@@ -1,4 +1,6 @@
 """Tests for the ONE social connector + sync (Eje 6 Gate A). Offline."""
+from pathlib import Path
+
 import pytest
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
@@ -20,6 +22,33 @@ def db():
     finally:
         s.close()
         Base.metadata.drop_all(bind=engine)
+
+
+#: TODO sub-sync que pega a la red. Los tests que corren `one_social_sync` entero los
+#: sustituyen a los 22, y la lista vive UNA sola vez porque mantenerla tres veces a mano ya
+#: se desincronizo sola: `_sync_ied_total` estaba en un test y faltaba en otro.
+#:
+#: Y no alcanza con la lista: la guarda el test estructural del final de este archivo, que
+#: lee `social_sync.py` con `ast` y exige que todo `_sync_*` este aca o en
+#: `SUB_SYNCS_SIN_RED`. El defecto que lo motivo: `_sync_gasto_salud_funcional` entro sin
+#: estar en ninguna lista, se ejecuto de VERDAD contra el emisor, bajo trece PDF de 30 a 60
+#: MB y los parseo — la corrida paso de 5 minutos a 36 y dos tests cayeron por timeout.
+#: Un test que pega a la red no prueba lo que dice probar, y encima tarda como si lo hiciera.
+SUB_SYNCS_DE_RED = (
+    "_sync_wdi_health", "_sync_bcrd_informality", "_sync_bcrd_mercado_laboral",
+    "_sync_cepal_politica", "_sync_ipu_senado", "_sync_exportaciones_per_capita",
+    "_sync_llece_niveles", "_sync_razon_exportaciones_importaciones", "_sync_pobreza_rural",
+    "_sync_gei_per_capita", "_sync_confianza_partidos", "_sync_ied_total",
+    "_sync_gasto_salud_funcional", "_sync_cobertura_salud",
+    "_sync_participacion_exportadora", "_sync_mem_electrico", "_sync_sisdom_income",
+    "_sync_minerd_coverage", "_sync_sisdom_schooling", "_sync_wb_findex",
+    "_sync_endesa_child_mortality", "_sync_siuben_provincial",
+)
+
+#: Los que NO pegan a la red, y que por eso son justamente lo que estos tests ejercitan de
+#: verdad. Hoy es uno: `_sync_conteos_regionales` computa sobre las filas que las otras
+#: fuentes ya dejaron en la base, asi que sustituirlo seria no probar que el conteo cuadra.
+SUB_SYNCS_SIN_RED = ("_sync_conteos_regionales",)
 
 
 def test_parse_poverty_csv_maps_themes_and_regions():
@@ -55,23 +84,7 @@ def test_sync_persists_and_is_idempotent(db, monkeypatch):
     # Las demás fuentes pegan a la red — se sustituyen. Devuelven un conteo POSITIVO
     # porque hacen de sub-syncs que funcionan: un 0 ahora significa "la fuente no trajo
     # nada" y queda declarado en ``errors``, que es justo lo que este test NO mide.
-    for _fn in ("_sync_wdi_health", "_sync_bcrd_informality", "_sync_bcrd_mercado_laboral",
-                "_sync_cepal_politica",
-                "_sync_ipu_senado",
-                "_sync_exportaciones_per_capita",
-                "_sync_llece_niveles",
-                "_sync_razon_exportaciones_importaciones",
-                "_sync_pobreza_rural",
-                "_sync_gei_per_capita",
-                "_sync_confianza_partidos",
-                "_sync_ied_total",
-                "_sync_cobertura_salud",
-                "_sync_participacion_exportadora",
-                "_sync_mem_electrico",
-                "_sync_sisdom_income",
-                "_sync_minerd_coverage", "_sync_sisdom_schooling", "_sync_wb_findex",
-                "_sync_endesa_child_mortality",
-                "_sync_siuben_provincial"):
+    for _fn in SUB_SYNCS_DE_RED:
         monkeypatch.setattr(f"modules.social_dev.social_sync.{_fn}", lambda db, set_phase, *a: 1)
 
     first = one_social_sync(db)
@@ -107,6 +120,13 @@ def test_una_fuente_caida_queda_declarada_en_errors(db, monkeypatch):
     Las dos causas se distinguen porque se actúan distinto — 'no pudimos llegar' es un
     problema a investigar; 'la fuente no publicó' puede ser legítimo."""
     monkeypatch.setattr(ONEClient, "_fetch_live", ONEClient._fetch_fixture)
+    # PRIMERO se neutraliza todo, y RECIEN DESPUES se arma el escenario. Al reves —que es
+    # como estaba— quedaban quince sub-syncs pegando al emisor de verdad, y entonces este
+    # test afirmaba algo sobre `errors` mientras `errors` dependia de si el portal de un
+    # tercero estaba arriba. Es el defecto que el archivo dice haber cerrado en agosto para
+    # `_sync_ipu_senado`: se cerro en el test de al lado y quedo abierto en este.
+    for _fn in SUB_SYNCS_DE_RED:
+        monkeypatch.setattr(f"modules.social_dev.social_sync.{_fn}", lambda db, sp, *a: 5)
     monkeypatch.setattr("modules.social_dev.social_sync._sync_wdi_health", lambda db, sp, *a: 7)
     monkeypatch.setattr("modules.social_dev.social_sync._sync_sisdom_income", lambda db, sp, *a: 0)
     monkeypatch.setattr("modules.social_dev.social_sync._sync_bcrd_informality", lambda db, sp, *a: 4)
@@ -146,16 +166,7 @@ def test_sin_fallas_no_se_inventan_errores(db, monkeypatch):
     NUESTRO codigo y fallaba por un tercero. Un test que depende de la red no prueba lo que
     dice probar."""
     monkeypatch.setattr(ONEClient, "_fetch_live", ONEClient._fetch_fixture)
-    for fn in ("_sync_wdi_health", "_sync_bcrd_informality", "_sync_sisdom_income",
-               "_sync_minerd_coverage", "_sync_sisdom_schooling", "_sync_wb_findex",
-               "_sync_endesa_child_mortality", "_sync_ipu_senado",
-               "_sync_bcrd_mercado_laboral", "_sync_cepal_politica",
-               "_sync_exportaciones_per_capita", "_sync_llece_niveles",
-               "_sync_razon_exportaciones_importaciones", "_sync_pobreza_rural",
-               "_sync_gei_per_capita", "_sync_confianza_partidos",
-               "_sync_cobertura_salud", "_sync_participacion_exportadora",
-               "_sync_mem_electrico",
-               "_sync_siuben_provincial"):
+    for fn in SUB_SYNCS_DE_RED:
         monkeypatch.setattr(f"modules.social_dev.social_sync.{fn}", lambda db, sp, *a: 3)
     assert one_social_sync(db)["errors"] == []
 
@@ -735,12 +746,20 @@ def test_todo_sub_sync_de_red_esta_sustituido_en_el_test_de_idempotencia():
     #   `_sync_conteos_regionales`    computa sobre las filas que las otras sub-syncs
     #                                 dejaron en la base — es justamente lo que hay que
     #                                 ejercitar de verdad para saber que el conteo cuadra.
-    locales = {"_sync_one_regional", "_sync_conteos_regionales"}
-    fuente = inspect.getsource(test_sync_persists_and_is_idempotent)
-    sin_sustituir = sorted(n for n in definidos - locales if f'"{n}"' not in fuente)
+    # ══ 2026-08-24 ══ Antes leía la lista LITERAL de dentro del test de idempotencia. Eso
+    # lo volvió ciego el día que las tres listas del archivo se unificaron en
+    # `SUB_SYNCS_DE_RED`: el guard seguía verde por no encontrar nada que revisar. Ahora
+    # mira la constante, que es donde la lista vive.
+    sin_sustituir = sorted(definidos - set(SUB_SYNCS_DE_RED) - set(SUB_SYNCS_SIN_RED))
     assert not sin_sustituir, (
-        "estos sub-syncs no están sustituidos en el test de idempotencia y saldrán a la "
-        f"red en CI: {sin_sustituir}"
+        f"estos sub-syncs no están en ninguna lista y saldrán a la red en CI: "
+        f"{sin_sustituir}.\nSi pega a la red va en `SUB_SYNCS_DE_RED`; si no, decilo en "
+        f"`SUB_SYNCS_SIN_RED` y queda escrito por qué."
+    )
+    fantasmas = sorted((set(SUB_SYNCS_DE_RED) | set(SUB_SYNCS_SIN_RED)) - definidos)
+    assert not fantasmas, (
+        f"las listas nombran funciones que ya no existen: {fantasmas}. Un nombre viejo en un "
+        f"`monkeypatch.setattr` no falla: sustituye un atributo que nadie llama."
     )
 
 
@@ -813,3 +832,33 @@ def test_los_conteos_derivados_se_comitean_ANTES_de_las_fases_largas():
     assert any(c > conteos for c in commits), "los conteos necesitan un commit después"
     assert min(c for c in commits if c > conteos) < min(largas), (
         "el commit de los conteos tiene que ocurrir ANTES de las fases largas, no al final")
+
+
+def test_todo_test_que_corre_el_sync_ENTERO_neutraliza_la_lista_completa():
+    """La lista no sirve si un test la usa a medias.
+
+    `test_una_fuente_caida_queda_declarada_en_errors` sustituia SIETE de veintidos y los
+    otros quince pegaban al emisor. No fallaba: afirmaba algo sobre `errors` mientras
+    `errors` dependia de si el portal de un tercero estaba arriba ese dia. Un test asi no
+    prueba lo que dice probar, y el dia que se pone rojo manda a investigar nuestro codigo.
+
+    Se lee ESTE archivo con `ast`: toda funcion que llame a `one_social_sync` tiene que
+    nombrar `SUB_SYNCS_DE_RED`. Sustituir de a uno es legitimo DESPUES, para armar el
+    escenario — lo que no se puede es que sea el unico blindaje.
+    """
+    import ast
+
+    arbol = ast.parse(Path(__file__).read_text(encoding="utf-8"))
+    en_falta = []
+    for n in ast.walk(arbol):
+        if not isinstance(n, ast.FunctionDef) or not n.name.startswith("test_"):
+            continue
+        nombres = {x.id for x in ast.walk(n) if isinstance(x, ast.Name)}
+        llamadas = {x.func.id for x in ast.walk(n)
+                    if isinstance(x, ast.Call) and isinstance(x.func, ast.Name)}
+        if "one_social_sync" in llamadas and "SUB_SYNCS_DE_RED" not in nombres:
+            en_falta.append(n.name)
+    assert not en_falta, (
+        f"estos tests corren el sync entero sin neutralizar la lista completa: {en_falta}. "
+        f"Recorre `SUB_SYNCS_DE_RED` primero y despues sustitui de a uno lo que el escenario "
+        f"necesite; al reves, lo que no nombraste se ejecuta contra el emisor.")
