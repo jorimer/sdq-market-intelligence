@@ -133,11 +133,26 @@ class TestBarrido:
 
 
 def test_le_da_al_modelo_los_hechos_institucionales_que_no_conoce():
-    """En la prueba real nombró tres veces al MEPyD, disuelto en julio de 2025. Sin
-    corregirlo, el tablero se llena de propuestas a un organismo que no existe."""
+    """En la prueba real nombró tres veces al MEPyD, absorbido en julio de 2025.
+
+    ══ PRECISADO 2026-08-24, en dos pasadas ══ Decía solo «DISUELTO», y eso se lee como
+    «desapareció»: así el modelo —o nosotros— descarta las fichas del SISDOM, que son el
+    metaregistro con el que se identifica al emisor de medio centenar de indicadores.
+    Corregirlo a «absorbido por Hacienda» tampoco era exacto. Lo correcto es lo específico:
+    la entidad SÍ se disolvió y sus funciones se REPARTIERON — la fiscal y macroeconómica al
+    MHE, la de planificación y seguimiento al Ministerio de la Presidencia. Por eso el hecho
+    tiene que traer tres mitades: a qué función corresponde cada sucesor, que lo ya publicado
+    se sigue pudiendo citar, y el permiso explícito de decir «no sé» en vez de mandar todo a
+    Hacienda por defecto.
+    """
     from modules.law_intel.agente_fuentes import _SISTEMA
     assert "45-25" in _SISTEMA and "DISUELTO" in _SISTEMA
-    assert "Hacienda y Economía" in _SISTEMA
+    assert "Hacienda y Economía" in _SISTEMA and "Presidencia" in _SISTEMA, (
+        "el reparto de funciones es de DOS ministerios; nombrar solo a Hacienda manda al "
+        "modelo al emisor equivocado para todo lo que es planificación y seguimiento")
+    assert "SIGUEN SIENDO VÁLIDAS" in _SISTEMA, (
+        "sin esto, «fue disuelto» se lee como «lo que publicó no sirve», y lo que publicó es "
+        "el metaregistro del SISDOM")
 
 
 # ── La marca es el ancla de la idempotencia ───────────────────────────────────────────────
