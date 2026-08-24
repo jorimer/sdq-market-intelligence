@@ -4,10 +4,19 @@ Registers the ONE social sync into the shared operation console
 (:mod:`shared.operations`) so it is triggerable / monitorable / schedulable from
 the UI (Gate F).
 """
+import time
 from typing import Dict
 
+from modules.social_dev import digepres_sync
+from modules.social_dev.digepres_sync import run_digepres_salud
 from shared.database.session import SessionLocal
 from shared.operations import Operation, register_operation
+
+#: Cuánto esperamos al worker antes de soltar la mirada. La corrida completa son
+#: trece documentos y ~20 minutos; el margen es holgado porque abandonar temprano no
+#: cancela nada, solo deja de contar la verdad.
+_ESPERA_MAXIMA_SEG = 60 * 60
+_LATIDO_SEG = 5.0
 from shared.validation.frescura import MotorValidacion, registrar_motor
 from shared.validation.control_tamano import ControlDeTamano
 
@@ -108,7 +117,62 @@ def _run_idm_convergent_validity(params, user_id, set_phase) -> Dict:
         db.close()
 
 
+def _run_digepres_salud(params, user_id, set_phase) -> Dict:  # noqa: ARG001
+    """Serie del 2.33, leída en el WORKER y esperada desde acá.
+
+    **Despacha y ESPERA, en vez de despachar y volver.** El console marca «completado»
+    apenas el runner devuelve, así que despachar y volver diría que la serie está lista
+    cuando el worker recién empezó — y esa mentira dura los veinte minutos que tarda. Este
+    hilo no cuesta memoria: los 400 MB de PDF se leen del otro lado, que es todo el punto
+    de la mudanza.
+
+    Sin broker corre en este proceso. Es el camino de desarrollo y de los tests; en
+    producción es el que mató a la API el 2026-08-24, así que queda declarado en el
+    resultado (`via`) en vez de ser indistinguible del bueno.
+    """
+    from shared.config.settings import settings
+
+    force = bool((params or {}).get("force"))
+    if not (settings.USE_CELERY and settings.REDIS_URL):
+        set_phase("leyendo en ESTE proceso (sin broker)")
+        return {**run_digepres_salud(force=force, progreso=set_phase), "via": "proceso_web"}
+
+    from modules.social_dev.tasks import digepres_salud_funcional_task
+
+    tarea = digepres_salud_funcional_task.delay(force=force)
+    set_phase("encolada en el worker")
+    espera, visto = 0.0, None
+    while espera < _ESPERA_MAXIMA_SEG:
+        if tarea.ready():
+            break
+        info = tarea.info if isinstance(tarea.info, dict) else None
+        frase = (info or {}).get("phase")
+        if frase and frase != visto:
+            set_phase(f"worker: {frase}")
+            visto = frase
+        time.sleep(_LATIDO_SEG)
+        espera += _LATIDO_SEG
+    if not tarea.ready():
+        # No se cancela: la tarea sigue y persiste año por año. Lo que se declara es que
+        # DEJAMOS de mirar, que no es lo mismo que que haya fallado.
+        return {"error": f"el worker sigue leyendo después de {_ESPERA_MAXIMA_SEG/60:.0f} "
+                         f"minutos; la serie se completa igual y la próxima corrida "
+                         f"arranca donde ésta quedó"}
+    if tarea.failed():
+        return {"error": f"la tarea del worker falló: {tarea.result}"}
+    return {**(tarea.result or {}), "via": "worker"}
+
+
 def register() -> None:
+    register_operation(Operation(
+        digepres_sync.OPERACION,
+        "Serie de gasto en salud del Gobierno Central (2.33 de la END)",
+        "Lee la línea de Salud del cuadro de clasificación funcional de los informes de "
+        "DIGEPRES y persiste la serie contra el PIB nominal. Corre en el WORKER: son ~400 "
+        "MB de PDF y hasta 980 páginas por documento. Es REANUDABLE — cada año se persiste "
+        "apenas se lee, así que un corte no obliga a volver a bajar todo.",
+        _run_digepres_salud, default_interval_hours=2160,  # anual: el emisor publica 1 vez
+    ))
     register_operation(Operation(
         "one-social-sync", "Sincronizar social (ONE pobreza + WDI salud)",
         "Trae la tasa de pobreza monetaria por las 10 regiones de desarrollo (ONE, "

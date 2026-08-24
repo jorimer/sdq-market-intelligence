@@ -103,11 +103,6 @@ WDI_NACIONALES_FUERA_DEL_INDICE = {
 }
 HEALTH_ENTITY = "nacional"
 
-#: PIB nominal en moneda local: el denominador del 2.33. Es la cifra del banco central
-#: republicada, y se usa UNA sola serie para todos los anios — mezclar anadas de PIB
-#: convierte una revision de cuentas nacionales en un salto de gasto publico.
-_PIB_NOMINAL_LCU = "NY.GDP.MKTP.CN"
-_TEMA_SALUD_FUNCIONAL = "health_spending_central_gov_pct_gdp"
 _WDI_HEALTH_YEARS = 30
 
 # Informalidad nacional (ENCFT del BCRD) → aplicada a todas las regiones, como la salud
@@ -644,58 +639,6 @@ def _sync_ied_total(db: Session, set_phase: Callable[[str], None]) -> int:
     return synced
 
 
-def _sync_gasto_salud_funcional(db: Session, set_phase: Callable[[str], None]) -> int:
-    """Indicador 2.33 de la END: gasto en salud del Gobierno CENTRAL como % del PIB.
-
-    El agregado que republica el organismo internacional es del gobierno GENERAL e incluye la
-    seguridad social: da 2,33% para 2009 contra el 1,4 que fija la ley, un 66,6% por encima.
-    La magnitud del legislador es la linea de Salud del cuadro de clasificacion funcional que
-    publica la oficina de presupuesto, y de ahi sale esta serie.
-
-    **Se computa la razon, nunca se toma la que el emisor publica.** En los cuatro anios en
-    que las dos existen la nuestra queda entre 6,0% y 7,7% por debajo, siempre en el mismo
-    sentido: el emisor dividio por el PIB de su anada y las cuentas nacionales se rebasaron
-    despues a 2018. Mezclarlas convertiria un cambio de denominador en un salto de gasto.
-
-    **Solo baja los anios que faltan.** Cada documento pesa entre 28 y 66 MB, asi que un
-    barrido completo son ~400 MB: corriendo entero en cada sync seria gasto de red por una
-    serie que solo crece una vez al anio.
-    """
-    import httpx
-
-    from shared.data.digepres_funcional import (DOCUMENTOS, SOURCE, leer_informe,
-                                                url_del_documento)
-    from shared.data.wdi_client import fetch_wb_indicator
-
-    set_phase("gasto en salud del Gobierno Central (indicador 2.33 de la END)")
-    filas, _ = fetch_wb_indicator(_PIB_NOMINAL_LCU, ["DOM"], mrv=40)
-    pib = {int(r["date"]): float(r["value"]) for r in filas
-           if isinstance(r, dict) and r.get("value") is not None and r.get("date")}
-    if not pib:
-        raise RuntimeError("sin PIB nominal no hay razon que computar para el 2.33")
-
-    ya = {int(r.period) for r in db.query(SocialIndicator)
-          .filter_by(entity_key=HEALTH_ENTITY, theme=_TEMA_SALUD_FUNCIONAL).all()
-          if str(r.period).isdigit()}
-    synced = 0
-    for anio, nombre in sorted(DOCUMENTOS.items()):
-        if anio in ya or anio not in pib:
-            continue
-        try:
-            with httpx.Client(timeout=900.0, follow_redirects=True,
-                              headers={"User-Agent": "sdq-mip/1.0"}) as c:
-                contenido = c.get(url_del_documento(nombre)).content
-            gasto = leer_informe(contenido, anio, pib[anio])
-        except Exception as e:  # noqa: BLE001 — best-effort por anio: un anio ilegible no
-            # puede tumbar los doce que si se leen, y el motivo queda en el log con su anio.
-            logger.warning("[social] 2.33 %s: %s", anio, e)
-            continue
-        _upsert_indicator(db, theme=_TEMA_SALUD_FUNCIONAL, entity=HEALTH_ENTITY,
-                          period=str(anio), value=round(gasto.pct_pib, 3), source=SOURCE,
-                          disagg="nacional", unit="% del PIB")
-        synced += 1
-    logger.info("[social] 2.33 gasto en salud funcional: %d anios nuevos", synced)
-    return synced
 
 
 def _sync_confianza_partidos(db: Session, set_phase: Callable[[str], None]) -> int:
@@ -1205,9 +1148,6 @@ def one_social_sync(db: Session, set_phase: Optional[Callable[[str], None]] = No
     ied_synced = _best_effort(
         "IED total del país (3.23)",
         lambda: _sync_ied_total(db, set_phase), errors)
-    salud_funcional_synced = _best_effort(
-        "gasto en salud del Gobierno Central (2.33)",
-        lambda: _sync_gasto_salud_funcional(db, set_phase), errors)
     salud_synced = _best_effort(
         "cobertura del Seguro Familiar de Salud (2.36)",
         lambda: _sync_cobertura_salud(db, set_phase), errors)
@@ -1274,7 +1214,6 @@ def one_social_sync(db: Session, set_phase: Optional[Callable[[str], None]] = No
         "gei_per_capita_synced": gei_synced,
         "confianza_partidos_synced": partidos_synced,
         "ied_total_synced": ied_synced,
-        "gasto_salud_funcional_synced": salud_funcional_synced,
         "cobertura_salud_synced": salud_synced,
         "participacion_export_synced": export_synced,
         "mem_electrico_synced": mem_synced,
