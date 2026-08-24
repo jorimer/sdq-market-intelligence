@@ -1847,67 +1847,54 @@ bindings:
 
 # ── 3.24 · DESCARTE CON EVIDENCIA ─────────────────────────────────────────────────────────
   - indicador: "3.24"
-    serie: "wdi.FS.AST.PRVT.GD.ZS"
-    fuente: wdi
+    serie: "bcrd:prestamos_produccion_banca_multiple_pct_pib"
+    fuente: bcrd
     mejor: mayor
     estado: descartado
-    origen: estimacion_de_tercero_sobre_dato_del_evaluado
-    productor: Banco Mundial sobre estadísticas monetarias del BCRD.
+    origen: declarado_por_el_evaluado
+    productor: >-
+      BCRD — Estadísticas Monetarias y Financieras Armonizadas, préstamos por destino,
+      perímetro de BANCOS MÚLTIPLES, que es el que declara el propio evaluado.
     motivo_descarte: >-
-      Ninguno de los tres agregados de crédito del republicador mide «crédito a la
-      producción». Contra la ventana 2005-2010 que la ley promedia, con la base legal en
-      2,24% del PIB: crédito interno al sector privado da 20,68% (Δ 823%), crédito de bancos
-      al sector privado 19,83% (Δ 785%) y crédito interno total 36,88% (Δ 1.546%).
-      LA FUENTE QUE ESTE MOTIVO PEDÍA YA SE PROBÓ, el 2026-08-22, y tampoco cierra. Se trajo
-      el cuadro de préstamos por destino económico del banco central —mensual desde 1996, con
-      trece destinos— y se computó cada destino como stock de diciembre sobre el PIB nominal,
-      convención declarada antes de mirar el resultado y la misma del 2.36. Ningún
-      agrupamiento defendible se acerca: agricultura sola da 4,38%, agricultura más minas más
-      manufactura 4,97%, y los cinco sectores productivos juntos 11,23%. Todos los destinos
-      productivos por separado superan el 2,24% salvo minas (0,15%) y electricidad (0,55%).
-      Y hay un argumento que no depende de elegir bien el agrupamiento: si el universo de la
-      ley fuera cualquier agregado de crédito bancario a la producción, la meta de 8% para
-      2015 ya estaría cumplida en la línea base, lo que vuelve incoherente la trayectoria que
-      la propia ley fija (2,24 en la base y 30 para 2030).
-      NO se eligió por cercanía. Un barrido combinatorio sobre los trece destinos sí encuentra
-      coincidencias —minas más electricidad más servicios comunitarios da 2,31%, Δ 3,3%— y
-      ninguna significa nada: con trece sumandos siempre hay una combinación cerca de
-      cualquier número. Publicar una sería abrir exactamente la puerta que el oráculo cierra.
-      ══ MOTIVO SUSPENDIDO 2026-08-24 · NO CITAR ESTAS CIFRAS ══ Todo lo de arriba queda como
-      registro de lo que se hizo, y NO como veredicto publicable, por dos razones.
-      PRIMERA, y es sobre nosotros: **ninguna de las ocho cifras de este motivo se puede
-      recomputar desde el repositorio**. Salieron de un barrido ad hoc del 2026-08-22 y solo
-      las conclusiones se transcribieron acá; no quedó conector, ni serie persistida, ni
-      script. Un motivo que nadie puede rehacer no es evidencia, es una afirmación — y este
-      expediente lo venía presentando como caso cerrado.
-      SEGUNDA: el 5to Informe declara un universo (banca múltiple sobre producción de bienes
-      y servicios) que se parece al que computamos, y la distancia entre su línea base (2,24)
-      y lo que da ese universo (~11) es de un factor cercano a cuatro. O el cómputo tiene un
-      error de perímetro o de denominador, o la línea base de la ley es inconsistente — que
-      sería la QUINTA de la misma familia, junto al 2.33, el 2.47, el 3.14 y el 3.30. Las dos
-      salidas son publicables; decidir cuál sin recomputar, no.
-      Hasta que el recómputo corra por un camino reproducible, el indicador queda sin motivo
-      citable. Un motivo apoyado en cifras que nadie puede rehacer es peor que un indicador
-      sin veredicto, porque se lee como evidencia y no lo es.
+      ══ RECOMPUTADO 2026-08-24, POR UN CAMINO REPRODUCIBLE ══ El motivo anterior quedó
+      SUSPENDIDO porque ninguna de sus ocho cifras se podía rehacer: salieron de un barrido
+      que no dejó conector ni script. Ahora existe `shared.data.bcrd_prestamos_destino` y
+      cualquiera puede volver a correr esto.
+      EL UNIVERSO YA NO SE SUPONE, LO DECLARA EL EVALUADO. El 5to Informe de Avance de la END
+      (enero 2018, nota al pie 2, p. 35) dice que la línea base del artículo 26 «corresponde
+      al crédito de la BANCA MÚLTIPLE A LA PRODUCCIÓN DE BIENES Y SERVICIOS / PIB».
+      CONVENCIÓN, declarada antes de mirar: stock de diciembre sobre el PIB nominal del año,
+      y la ventana de la ley —«promedio 2005-2010»— promediada COMPLETA.
+      RESULTADO, con el perímetro que el evaluado declara y contra su base de 2,24:
+      producción de bienes Y servicios 8,46% (Δ 277,5%); solo bienes 2,70% (Δ 20,5%).
+      Y NINGÚN DESTINO SUELTO se acerca: el más próximo es adquisición de viviendas con
+      1,60% (Δ 28,6%) —que no es producción— y después manufactura con 1,14% (Δ 48,9%).
+      QUEDA REFUTADA LA HIPÓTESIS DEL ERROR DE PERÍMETRO, que era la sospecha que motivó la
+      suspensión. Restringir de las Otras Sociedades de Depósito consolidadas a la banca
+      múltiple mueve la cifra de 10,32% a 8,46% —un 18%— y la angosta de 3,90% a 2,70%. No
+      es un factor de cuatro. El cómputo anterior no estaba mal de perímetro.
+      Y CAE UN ARGUMENTO NUESTRO, que conviene decir porque sostenía el descarte anterior. El
+      expediente afirmaba que si el universo fuera cualquier agregado de crédito bancario, la
+      meta de 8% para 2015 «ya estaría cumplida en la línea base», lo que volvía incoherente
+      la trayectoria de la ley. Con el perímetro correcto NO se cumple: la lectura angosta da
+      2,70% en la ventana y 4,37% en 2015 contra una meta de 8. El argumento se computaba
+      sobre el perímetro equivocado.
+      DÓNDE QUEDA: la lectura angosta tiene una trayectoria coherente con la ley —2,70 en la
+      ventana, 4,37 en 2015, 4,59 en 2020, 4,79 en 2024— pero no reproduce la línea base, y
+      la lectura que usa el término literal del evaluado se va casi cuatro veces. Sin oráculo
+      no promueve.
+      SI LA LECTURA ANGOSTA FUERA LA CORRECTA, el indicador estaría incumplido por un margen
+      enorme y creciente: 4,59% en 2020 contra una meta de 16, y 4,79% en 2024 contra 25 para
+      2025. Eso no cambia con la incertidumbre de concepto, y es lo publicable de este caso.
+      QUINTA LÍNEA BASE que no reproduce contra ninguna serie del Estado, junto al 2.33, el
+      2.47, el 3.14 y el 3.30.
     hipotesis_sin_comprobar: >-
-      ══ REFUTADA DOCUMENTALMENTE 2026-08-24 ══ La hipótesis era que «producción» nombrara un
-      universo mucho más angosto que el crédito bancario —banca pública de desarrollo, tasa
-      preferencial, un programa concreto—. NO es eso, y lo dice el propio evaluado. El 5to
-      Informe de Avance de la END (enero 2018), nota al pie 2, p. 35: «la línea de base del
-      indicador que aparece en el artículo 26 de la Ley 1-12 corresponde al crédito de la
-      BANCA MÚLTIPLE A LA PRODUCCIÓN DE BIENES Y SERVICIOS / PIB, pero una medición más
-      apropiada del grado de profundidad financiera de la economía debe abarcar a todo el
-      sector financiero».
-      O sea que el universo declarado por el emisor es ANCHO, no angosto: banca múltiple
-      sobre destinos productivos. Y ahí aparece el problema, que es sobre NOSOTROS: eso se
-      parece mucho a lo que ya computamos y descartamos por dar 11,23%. La banca múltiple es
-      la mayor parte del sistema, así que recortar el perímetro a ella no explica una caída
-      de 11,23% a 2,24%.
-      LO QUE FALTA para volver a cerrar el motivo: recomputar el crédito por destino
-      restringiendo el perímetro a bancos múltiples y verificando la unidad del PIB nominal,
-      por un camino REPRODUCIBLE. Y esa es la otra mitad del hallazgo — ver el motivo.
-
-# ── 2.11 · DESCARTE CON EVIDENCIA ─────────────────────────────────────────────────────────
+      La única que queda viva: que el 5to Informe describa la serie REVISADA de 2017 y no la
+      línea base de 2011. El 9no Informe (2022) advierte que «se realizó una revisión de la
+      metodología de cálculo a partir del 2017», así que puede haber dos series bajo el mismo
+      número. Cerrarla exige la ficha metodológica del 3.24 con la lista exacta de destinos
+      que componen «producción de bienes» y el detalle de esa revisión — y ese documento no
+      está publicado, así que la vía es una solicitud formal al emisor.
   - indicador: "2.11"
     serie: "infotep:participantes_ftp"
     fuente: mhe
