@@ -108,11 +108,11 @@ def enviar_digests(db: Session) -> Dict[str, Any]:
     sin su correo. Lo que falla queda pendiente con su ``ultimo_error``, que es lo que hace
     diagnosticable «este cliente no recibe nada».
     """
-    if not mail.configurado():
+    if not mail.configurado(db):
         # No es un error: es un despliegue sin correo. Se declara para que la consola de
         # operaciones pueda decir por qué la cola no baja, en vez de mostrar cero y punto.
         return {"enviados": 0, "usuarios": 0, "pendientes": sum(
-            len(v) for v in _pendientes(db).values()), "smtp": mail.diagnostico()}
+            len(v) for v in _pendientes(db).values()), "smtp": mail.diagnostico(db)}
 
     enviados = 0
     usuarios = 0
@@ -156,7 +156,7 @@ def enviar_digests(db: Session) -> Dict[str, Any]:
         lista = [eventos[str(e.event_id)] for e in vigentes][:MAX_EN_CORREO]
         asunto = (ASUNTO_UNA.format(titulo=lista[0].titulo) if len(vigentes) == 1
                   else ASUNTO_VARIAS.format(n=len(vigentes)))
-        ok = mail.enviar(str(user.email), asunto, _cuerpo(lista, len(vigentes)))
+        ok = mail.enviar(str(user.email), asunto, _cuerpo(lista, len(vigentes)), db=db)
 
         ahora = _ahora()
         for entrega in vigentes:

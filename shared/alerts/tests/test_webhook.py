@@ -218,7 +218,7 @@ def test_el_webhook_sale_YA_y_el_correo_se_encola(db, entorno):
     import shared.notifications.email as mail
     from unittest.mock import patch
 
-    with patch.object(mail, "configurado", lambda: True):
+    with patch.object(mail, "configurado", lambda *a, **k: True):
         service.crear(db, u, sector_key=EJE, channels=["email", "webhook"])
         _barrer(db, _evento())
 

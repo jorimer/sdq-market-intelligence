@@ -21,7 +21,7 @@ def test_sin_host_no_hay_canal():
     """Es la comprobación que decide si `email` se ofrece. Sin host no hay a dónde
     conectarse, y cualquier otra verificación sería teatro."""
     assert mail.configurado() is False
-    assert "SMTP_HOST" in mail.diagnostico()["falta"]
+    assert "servidor de correo (host)" in mail.diagnostico()["falta"]
 
 
 def test_sin_host_enviar_devuelve_False_sin_intentar(monkeypatch):
@@ -38,7 +38,7 @@ def test_con_host_pero_sin_remitente_lo_DECLARA(monkeypatch):
     d = mail.diagnostico()
     assert d["configurado"] is True
     assert d["remitente"] is None
-    assert any("SMTP_FROM" in f for f in d["falta"])
+    assert any("remitente" in f for f in d["falta"])
 
 
 def test_con_host_y_sin_remitente_no_manda(monkeypatch):

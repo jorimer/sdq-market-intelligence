@@ -1864,6 +1864,26 @@
         "pro": "Pro",
         "enterprise": "Enterprise"
       }
+    },
+    "smtp": {
+      "title": "Courrier sortant",
+      "sub": "D'où partent les alertes de surveillance. Sans cela, le canal « e-mail » n'est pas proposé.",
+      "on": "Le canal e-mail est actif.",
+      "off": "Le canal e-mail n'est PAS actif, il n'est donc pas proposé sur les surveillances.",
+      "missing": "Manque :",
+      "host": "Serveur (host)",
+      "port": "Port",
+      "user": "Utilisateur",
+      "password": "Mot de passe ou clé d'API",
+      "passwordSet": "Une clé est enregistrée — laissez vide pour la conserver",
+      "from": "Expéditeur (« De »)",
+      "starttls": "Utiliser STARTTLS (recommandé sur le port 587)",
+      "test": "Envoyer un e-mail de test",
+      "testDisabled": "Configurez et enregistrez le serveur d'abord.",
+      "testOk": "E-mail envoyé à {{to}}. Vérifiez votre boîte.",
+      "testError": "Impossible de tester l'envoi.",
+      "loadError": "Impossible de lire la configuration e-mail.",
+      "saveError": "Impossible d'enregistrer la configuration."
     }
   },
   "ops": {
@@ -2621,8 +2641,9 @@
       "baja": "Faible"
     },
     "unavailable": {
-      "email": "L'alerte par courriel n'est pas configurée sur cette installation ; ce canal n'est pas proposé.",
+      "email": "Le courrier sortant n'est pas encore configuré, ce canal n'est donc pas proposé. Un administrateur l'active dans Configuration → Courrier sortant.",
       "webhook": "Pour recevoir des alertes par webhook, enregistrez un endpoint abonné à « alert.raised » avec votre clé Data API."
-    }
+    },
+    "onlyChannel": "C'est le seul canal disponible aujourd'hui ; il ne peut donc pas être désactivé."
   }
 }

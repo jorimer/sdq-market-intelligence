@@ -65,7 +65,7 @@ def canales_disponibles(db: Optional[Session] = None,
     from shared.notifications.email import configurado
 
     canales = [CANAL_INAPP]
-    if configurado():
+    if configurado(db):
         canales.append(CANAL_EMAIL)
     if db is not None and user_id:
         from shared.alerts.webhook import tiene_canal
@@ -161,6 +161,40 @@ def _validar_sujeto(db: Session, sector_key: str, subject: str) -> None:
             f"'{subject}' no es un sujeto válido de «{nombre}».")
 
 
+def etiqueta_de_sujeto(db: Optional[Session], sector_key: str, subject: str,
+                       memo: Optional[Dict[str, Any]] = None) -> Optional[str]:
+    """Nombre legible del sujeto vigilado, o ``None`` si no se puede resolver.
+
+    Sale de ``scope_options()`` — **la misma superficie que valida el sujeto al crear la
+    vigilancia**, no un segundo catálogo. Un catálogo aparte sería una lista de nombres que
+    se desincroniza de la lista de valores válidos, y entonces la pantalla mostraría un
+    nombre para un sujeto que el backend ya no acepta.
+
+    Por qué existe: el ``value`` de esas opciones es el IDENTIFICADOR (en banca, el UUID del
+    banco) y el nombre viaja aparte, en ``label``. Sin esta resolución la vigilancia se
+    presenta como «Sujeto: aea314c5-876a-…», que no le dice nada a nadie. Es la doctrina del
+    sujeto al revés: acá el número viajaba SIN su nombre.
+
+    ``memo`` evita releer el catálogo de un eje una vez por vigilancia: ``scope_options()``
+    consulta la base, y una lista de 30 vigilancias del mismo eje haría 30 consultas iguales.
+    """
+    if not subject or subject == TODO_EL_EJE or db is None:
+        return None
+    cache = memo if memo is not None else {}
+    if sector_key not in cache:
+        try:
+            cache[sector_key] = sujetos_elegibles(db, sector_key) or []
+        except Exception:  # noqa: BLE001 — un catálogo ilegible degrada al id, no rompe la lista
+            logger.warning("alerts: no se pudo leer el catálogo de sujetos de '%s'",
+                           sector_key, exc_info=True)
+            cache[sector_key] = []
+    for o in cache[sector_key] or []:
+        if str(o.get("value")) == subject:
+            etiqueta = str(o.get("label") or "").strip()
+            return etiqueta or None
+    return None
+
+
 def _validar_vocabularios(rule_codes: Optional[Sequence[str]], min_severity: str,
                           channels: Sequence[str], digest: str,
                           db: Optional[Session] = None,
@@ -205,9 +239,14 @@ def _produce_alertas(sector_key: str) -> bool:
     return sector_key in registered_sectors()
 
 
-def serializar(row: AlertSubscription) -> Dict[str, Any]:
+def serializar(row: AlertSubscription, db: Optional[Session] = None,
+               memo: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
     """Forma pública de una vigilancia. ``subject`` sale como ``null`` cuando es todo el eje
-    — la sentinela de base no se filtra a la API."""
+    — la sentinela de base no se filtra a la API.
+
+    Con ``db``, además resuelve ``subject_label``: el NOMBRE del sujeto. Sin él, la pantalla
+    sólo puede mostrar el identificador que guardamos, que en banca es un UUID.
+    """
     subject = str(row.subject or "")
     entry = CATALOG_BY_KEY.get(str(row.sector_key))
     return {
@@ -215,6 +254,10 @@ def serializar(row: AlertSubscription) -> Dict[str, Any]:
         "sector_key": row.sector_key,
         "sector_label": entry.display_name if entry else row.sector_key,
         "subject": subject or None,
+        # El nombre viaja CON el identificador. `None` cuando es todo el eje o cuando el
+        # producto no lo resuelve: la pantalla cae al id y lo muestra tal cual, que es feo
+        # pero cierto. Inventar un nombre sería peor.
+        "subject_label": etiqueta_de_sujeto(db, str(row.sector_key), subject, memo),
         "rule_codes": list(row.rule_codes) if row.rule_codes else None,
         "min_severity": row.min_severity,
         "channels": list(row.channels or []),
@@ -293,7 +336,8 @@ def listar(db: Session, user_id: str) -> List[Dict[str, Any]]:
             .filter(AlertSubscription.user_id == user_id)
             .order_by(AlertSubscription.created_at.desc(), AlertSubscription.id.desc())
             .all())
-    return [serializar(r) for r in rows]
+    memo: Dict[str, Any] = {}
+    return [serializar(r, db, memo) for r in rows]
 
 
 def obtener(db: Session, user_id: str, sub_id: str) -> Optional[AlertSubscription]:
