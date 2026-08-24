@@ -32,5 +32,6 @@ celery_app.conf.update(
 
 # Import task modules so the worker registers them.
 celery_app.autodiscover_tasks(
-    ["modules.banking_score", "modules.macro_monitor", "modules.brand_intel"]
+    ["modules.banking_score", "modules.macro_monitor", "modules.brand_intel",
+     "modules.social_dev"]
 )
