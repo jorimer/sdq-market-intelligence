@@ -1864,6 +1864,26 @@
         "pro": "Pro",
         "enterprise": "Enterprise"
       }
+    },
+    "smtp": {
+      "title": "Outgoing email",
+      "sub": "Where watchlist alerts are sent from. Without this, the «email» channel is not offered.",
+      "on": "The email channel is active.",
+      "off": "The email channel is NOT active, so it is not offered on watches.",
+      "missing": "Missing:",
+      "host": "Server (host)",
+      "port": "Port",
+      "user": "Username",
+      "password": "Password or API key",
+      "passwordSet": "One is stored — leave empty to keep it",
+      "from": "Sender («From»)",
+      "starttls": "Use STARTTLS (recommended on port 587)",
+      "test": "Send test email",
+      "testDisabled": "Configure and save the server first.",
+      "testOk": "Email sent to {{to}}. Check your inbox.",
+      "testError": "Could not test delivery.",
+      "loadError": "Could not read the email configuration.",
+      "saveError": "Could not save the configuration."
     }
   },
   "ops": {
@@ -2621,8 +2641,9 @@
       "baja": "Low"
     },
     "unavailable": {
-      "email": "Email alerts are not configured in this installation, so that channel is not offered.",
+      "email": "Outgoing email is not configured yet, so that channel is not offered. An administrator enables it in Settings → Outgoing email.",
       "webhook": "To receive alerts by webhook, register an endpoint subscribed to “alert.raised” with your Data API key."
-    }
+    },
+    "onlyChannel": "It is the only channel available today, so it cannot be turned off."
   }
 }
