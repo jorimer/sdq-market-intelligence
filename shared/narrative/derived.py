@@ -430,3 +430,189 @@ def rank_comparable(slug: Optional[str], universo: Dict[str, Any],
                      f"medidas; {universo['n_parciales']} quedan fuera del orden por cobertura "
                      f"parcial y se listan aparte con lo que les falta"),
     }
+
+
+# ── Razones contra referencia (la relación que faltaba servir) ────────────────
+#
+# `comparaciones_vs_referencia` sirve la DIRECCIÓN y la BRECHA en puntos. Faltaba la tercera
+# forma de relacionar dos cifras —cuántas VECES una es la otra— y el modelo la seguía
+# derivando a mano. Defecto real (Deep Dive de banca, 2026-03-31, §12): «una rentabilidad
+# sobre activos (0.39%) que TRIPLICA el umbral de alerta respecto al promedio de bancos
+# múltiples (1.61%)». Las dos cifras eran correctas y estaban servidas; la razón es 0.24×, y
+# la §10 del mismo informe lo decía bien («una cuarta parte de la velocidad de sus pares»).
+#
+# La prosa de razón es frecuente, no marginal: en ese único informe hay cinco afirmaciones de
+# ese tipo. Y ningún chequeo determinista las miraba —«triplica» no tiene dígitos que parear—,
+# así que la única red era el juez semántico, que corrió sobre ese texto y lo dejó pasar.
+
+#: Debajo de este valor absoluto, un denominador vuelve la razón inestable: con una mora de
+#: 0.00% (Citibank, corte 2026-03) o un ROA de 0.06% (Banesco), dividir produce un número que
+#: cambia de orden de magnitud con el último decimal.
+PISO_DENOMINADOR = 0.10
+
+#: Fracciones que un analista SÍ escribe. Se sirven ya redactadas para que copiar sea más
+#: fácil que derivar — es toda la tesis de este módulo.
+_FRACCIONES = [
+    (0.25, "una cuarta parte"), (0.33, "un tercio"), (0.50, "la mitad"),
+    (0.75, "tres cuartas partes"), (2.0, "el doble"), (3.0, "el triple"),
+    (4.0, "el cuádruple"),
+]
+_TOLERANCIA_FRACCION = 0.04
+
+
+def _frase_de_razon(r: float) -> tuple:
+    """``(frase, conector)`` de la razón.
+
+    La tolerancia es RELATIVA a la fracción, no absoluta: con un margen fijo, un 0.29 se
+    redondeaba a «una cuarta parte» —un 16% de error en una frase que suena exacta—. Relativa,
+    0.25 admite ±0.01 y 2.0 admite ±0.08, que es lo que hace correcto llamar «el doble» a un
+    2.05 y no a un 2.4.
+    """
+    for valor, nombre in _FRACCIONES:
+        if abs(r - valor) <= _TOLERANCIA_FRACCION * valor:
+            return nombre, "del"
+    return f"{r:.2f} veces", "el"
+
+
+def _lectura_de_razon(razon: float, etiqueta: str, ambos_neg: bool) -> str:
+    """La razón como CLÁUSULA lista para copiar — misma tesis que ``_lectura`` para la
+    dirección: si copiar es más fácil que derivar, el modelo copia."""
+    frase, conector = _frase_de_razon(razon)
+    if ambos_neg:
+        # Con ambos en pérdida la razón se lee sobre MAGNITUDES y en clave de pérdida: decir
+        # "es el doble" de un número negativo invierte la gravedad al oído.
+        puente = "de lo que pierde el" if conector == "del" else "lo que pierde el"
+        return f"pierde {frase} {puente} {etiqueta} ({razon:.2f}× esa pérdida)"
+    return f"es {frase} {conector} {etiqueta} ({razon:.2f}× su nivel)"
+
+
+def razones_vs_referencia(
+    valores: Dict[str, Optional[float]],
+    referencias: Dict[str, Dict[str, Optional[float]]],
+    *,
+    direcciones: Optional[Dict[str, Optional[str]]] = None,
+) -> List[Dict[str, Any]]:
+    """Cuántas VECES el valor de la entidad es su referencia, con la relación ya resuelta.
+
+    Hermana de ``comparaciones_vs_referencia`` y se sirve junto a ella: la brecha ordena
+    magnitudes, la razón las hace sentir. Tres relaciones posibles, y la que NO es una razón
+    es la más importante:
+
+    ``razon``
+        Ambos valores del mismo signo. Se sirve ``razon_vs_referencia`` y la cláusula.
+        Con ambos negativos la razón se computa sobre magnitudes y se dice en clave de
+        pérdida ("pierde 2.3 veces lo que pierde el grupo").
+
+    ``cruce_de_cero``
+        Signos opuestos. **No se publica razón, y no porque haya que ocultarla: porque la
+        razón informa MAL.** En el corte 2026-03 hay 24 casos reales; dos de ellos: JMMB con
+        ROA −0.26 contra una mediana de +1.52 da −0.17×, y Banco Activo con −13.76 da −9.04×.
+        El hecho es el mismo en los dos —la entidad pierde mientras su grupo gana— y la razón
+        los hace parecer de naturaleza distinta, además de leerse "−0.17×" como una diferencia
+        menor cuando es un cambio de signo. El cruce de cero es EL hallazgo, viaja marcado
+        (``cruza_cero``), y la magnitud la sigue dando la brecha en puntos, que sí ordena
+        (−15.28 pp contra −1.78 pp).
+
+    ``no_procede``
+        Denominador por debajo de ``PISO_DENOMINADOR``, o indicador de ÓPTIMO INTERMEDIO
+        (``direcciones[ind] == "target"``), donde estar al doble del promedio no es mejor ni
+        peor y la lectura correcta ya la da ``posicion_vs_optimo``. Se DECLARA el motivo: un
+        campo ausente se lee como que nadie miró.
+
+    Los nombres de campo llevan su sujeto (``razon_vs_referencia``, no ``razon``) a propósito:
+    el defecto de §12 fue exactamente reatribuir una razón a la referencia equivocada.
+    """
+    out: List[Dict[str, Any]] = []
+    for indicador, refs in (referencias or {}).items():
+        val = (valores or {}).get(indicador)
+        if val is None or not isinstance(refs, dict):
+            continue
+        try:
+            v = float(val)
+        except (TypeError, ValueError):
+            continue
+        es_target = (direcciones or {}).get(indicador) == "target"
+        for etiqueta, ref in refs.items():
+            if ref is None:
+                continue
+            try:
+                r = float(ref)
+            except (TypeError, ValueError):
+                continue
+            fila: Dict[str, Any] = {
+                "indicador": indicador, "valor": round(v, 4),
+                "referencia": etiqueta, "valor_referencia": round(r, 4),
+                "cruza_cero": False,
+            }
+            if es_target:
+                fila.update(relacion="no_procede", lectura=None, motivo=(
+                    "indicador de óptimo intermedio: una razón contra el promedio no dice si "
+                    "mejora o empeora — la lectura válida es la posición vs el óptimo"))
+            elif (v < 0) != (r < 0):
+                gana, pierde = ("la referencia", "la entidad") if v < 0 else ("la entidad", "la referencia")
+                fila.update(
+                    relacion="cruce_de_cero", cruza_cero=True,
+                    brecha=round(v - r, 2),
+                    lectura=(
+                        f"no hay razón que valga: {pierde} está en terreno negativo "
+                        f"({(v if v < 0 else r):.2f}) y {gana} en positivo "
+                        f"({(r if v < 0 else v):.2f}) — es un cambio de SIGNO, no de magnitud; "
+                        f"la distancia es de {abs(v - r):.2f} puntos"),
+                    motivo="signos opuestos: la razón se lee como una diferencia menor")
+            elif abs(r) < PISO_DENOMINADOR:
+                fila.update(relacion="no_procede", lectura=None, motivo=(
+                    f"la referencia ({r:.2f}) está demasiado cerca de cero: la razón cambia de "
+                    "orden de magnitud con el último decimal — usá la brecha en puntos"))
+            else:
+                razon = abs(v) / abs(r)
+                ambos_neg = v < 0 and r < 0
+                fila.update(
+                    relacion="razon",
+                    razon_vs_referencia=round(razon, 2),
+                    factor_para_igualar_referencia=(round(1 / razon, 2) if razon else None),
+                    lectura=_lectura_de_razon(razon, etiqueta, ambos_neg),
+                )
+            out.append(fila)
+    return out
+
+
+def factores_hasta_umbral(
+    valores: Dict[str, Optional[float]],
+    umbrales: Dict[str, Optional[float]],
+    *,
+    que_es: str,
+) -> List[Dict[str, Any]]:
+    """Cuánto debe multiplicarse cada indicador para ALCANZAR su umbral.
+
+    Es una relación DISTINTA de la razón contra una referencia —"dónde deberías estar" no es
+    "dónde está el mercado"— y por eso viaja en su propia lista, con su propio nombre de
+    campo y su propia glosa. Fundirlas en una cláusula fue el error literal de §12: «una
+    rentabilidad sobre activos (0.39%) que triplica el umbral de alerta respecto al promedio
+    de bancos múltiples (1.61%)» mezcla el umbral con el promedio y sale falsa contra los dos.
+
+    Se sirve porque da contexto de mercado —cuán lejos está la entidad de la frontera que el
+    modelo de scoring reconoce—, no para reemplazar la comparación contra pares.
+    """
+    out: List[Dict[str, Any]] = []
+    for indicador, umbral in (umbrales or {}).items():
+        val = (valores or {}).get(indicador)
+        if val is None or umbral is None:
+            continue
+        try:
+            v, u = float(val), float(umbral)
+        except (TypeError, ValueError):
+            continue
+        fila: Dict[str, Any] = {"indicador": indicador, "valor": round(v, 4),
+                                "umbral": round(u, 4), "que_es": que_es}
+        if (v < 0) != (u < 0) or abs(v) < PISO_DENOMINADOR:
+            fila.update(factor_para_alcanzar_umbral=None, lectura=(
+                f"la distancia al umbral ({u:.2f}) es de {abs(u - v):.2f} puntos; no se "
+                "expresa como múltiplo porque el valor actual no lo admite"))
+        else:
+            f = abs(u) / abs(v)
+            fila.update(
+                factor_para_alcanzar_umbral=round(f, 2),
+                lectura=(f"debería multiplicarse por {f:.2f} para alcanzar el {que_es} "
+                         f"({u:.2f}); hoy está en {v:.2f}"))
+        out.append(fila)
+    return out
