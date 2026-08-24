@@ -269,7 +269,14 @@ class TestElRegistroDeDocumentos:
         """La ley fija 1,4% para 2009. Sin ese anio no hay contra que verificar nada."""
         assert 2009 in DOCUMENTOS
 
-    def test_las_metas_de_2020_y_2025_estan_declaradas_como_hueco(self):
-        """No se pueden medir, y eso es un hecho del emisor que el expediente tiene que
-        poder citar — no una ausencia que el lector descubra sumando."""
+    def test_lo_que_le_falta_a_ESTA_fuente_queda_declarado(self):
+        """Ojo con lo que este test afirma, porque afirmaba de mas.
+
+        Decia «2020 y 2025 no se pueden medir». Eso era cierto de DIGEPRES y falso del
+        INDICADOR: la hoja COFOG de Hacienda trae los dos, y son metas de la ley. Lo que se
+        exige acá es que la lista describa el hueco de esta fuente con su motivo — no que el
+        2.33 se quede sin veredicto esos anios."""
         assert 2020 in SIN_CUADRO_FUNCIONAL and 2025 in SIN_CUADRO_FUNCIONAL
+        from shared.data.hacienda_cofog import URL
+
+        assert "COFOG" in URL, "la fuente que SI cubre esos anios tiene que seguir existiendo"

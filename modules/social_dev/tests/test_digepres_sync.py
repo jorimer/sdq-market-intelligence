@@ -1,5 +1,8 @@
 """La serie del 2.33 corre en el worker, año por año, y es reanudable.
 
+La vía principal es la hoja COFOG del Ministerio de Hacienda; los PDF de DIGEPRES quedan
+para los años que la hoja no traiga. Acá se neutralizan las DOS.
+
 El defecto que originó todo esto llegó a producción el 2026-08-24: la lectura de ~400 MB
 de PDF vivía dentro del panel social, o sea dentro del proceso que atiende la API. El
 proceso murió en el séptimo documento —sin traza, que es la firma del sistema matando por
@@ -70,6 +73,14 @@ def _sin_red(monkeypatch, leidos, documentos, falla_en=None):
         def stream(self, *a, **k): return _Resp()
 
     monkeypatch.setattr(digepres_sync.httpx, "Client", _Cli)
+
+    # La hoja COFOG tambien se neutraliza. Sin esto el test pegaba a hacienda.gob.do de
+    # VERDAD y pasaba solo porque la llamada fallaba y el codigo caia al camino de los PDF:
+    # un test verde por un error de red no prueba nada, y el dia que el emisor responda
+    # cambia de comportamiento sin que nadie toque el codigo.
+    import shared.data.hacienda_cofog as hc
+
+    monkeypatch.setattr(hc, "fetch", lambda: [])
 
     def _leer(ruta, anio, pib):
         if falla_en is not None and anio == falla_en:

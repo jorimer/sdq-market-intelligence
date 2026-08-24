@@ -449,50 +449,41 @@ bindings:
     estado: propuesto
     origen: declarado_por_el_evaluado
     productor: >-
-      DIGEPRES — línea de Salud del cuadro de clasificación funcional del gasto del Gobierno
-      Central, monto DEVENGADO, dividido por el PIB nominal del banco central.
+      Ministerio de Hacienda — Clasificación de las Erogaciones por Funciones (COFOG) del
+      Gobierno Central Presupuestario, función 7.0.7 Salud, con el % del PIB que el propio
+      emisor computa. Contraste: cuadro de clasificación funcional de los informes de
+      DIGEPRES, leído aparte.
     nota_comparabilidad: >-
-      ══ CONSTRUIDA 2026-08-23 ══ La hipótesis se confirmó y la serie existe: trece años,
-      2009-2019 más 2021 y 2022. El agregado que republicaba el organismo internacional es
-      del gobierno GENERAL e incluye la seguridad social — daba 2,33 contra el 1,4 de la ley.
-      2009 1,357 · 2010 1,684 · 2011 1,694 · 2012 1,795 · 2013 1,586 · 2014 1,774 ·
-      2015 1,753 · 2016 1,598 · 2017 1,805 · 2018 1,640 · 2019 1,661 · 2021 2,388 ·
-      2022 1,877.
-      LA META DE 2015 ERA 2,8 Y EL AÑO DIO 1,753. El máximo de los trece años es 2,388 y es
-      el año del COVID; en 2022 ya había vuelto a 1,877.
-      POR QUÉ NO PASA A `verificado`: el oráculo no cierra. La ley fija 1,4 para 2009 y la
-      serie da 1,357 — Δ 3,1% contra una tolerancia de 2,0%. Y hay una explicación medida,
-      no supuesta: en los CUATRO años en que el emisor publica su propio %PIB, nuestro
-      cómputo queda 6,0% · 7,7% · 6,0% · 7,1% por debajo, siempre en el mismo sentido. El
-      emisor dividió por el PIB de su añada y las cuentas nacionales se rebasaron a 2018.
-      Con la añada vieja el 2009 daría ~1,45, que tampoco entra: el 1,4 del legislador cae
-      ENTRE las dos.
-      ══ REFUTADO 2026-08-24 ══ Escribí acá que faltaba «la segunda añada del DENOMINADOR,
-      la retropolada base 2007 que el banco central sí publica». Se buscó y NO EXISTE como
-      añada distinta. El emisor publica cuatro libros de PIB por gasto —`pib_gasto_2007`,
-      `pib_gasto_retro`, `pib_gasto_retro_2018` y el corriente— y los cuatro dan el MISMO
-      PIB nominal de 2009: 1.736,0 mil millones contra 1.734,7, un 0,08% de diferencia. El
-      2.33 de 2009 sale 1,356-1,357% con todos.
-      El error era de economía, no de datos: un cambio de año base mueve las series a
-      precios CONSTANTES, no los niveles a precios corrientes. El PIB nominal en RD$ es el
-      mismo con cualquier base.
-      QUÉ ES ENTONCES EL 6-8%: la brecha contra el %PIB que publica el emisor es real y
-      sistemática, y sale de que él divide por el PIB PRELIMINAR que había cuando escribió
-      el informe, y esa estimación se revisó al alza después. Reconstruido desde su propia
-      cifra, su denominador queda 7,1% · 8,4% · 6,4% · 7,6% por debajo del de hoy en 2014,
-      2015, 2016 y 2018. Pero las añadas preliminares NO están archivadas, así que no hay
-      una segunda serie que citar — y fabricarla aplicando ese 7% al 2009 sería inventar la
-      añada que el candado pide.
-      CONCLUSIÓN: `revision_declarada` NO está disponible por esta vía. Lo que queda abierto
-      es de CONCEPTO, no de añada: contra la base legal de 1,4 para 2009, el devengado da
-      1,357 (Δ 3,1%) y el presupuesto vigente da 1,389 (Δ 0,8%, que entraría). Elegir el
-      vigente ahora, después de ver que cuadra, sería ajustar el método a la respuesta.
-      EL CAMINO HONESTO es averiguar de dónde sacó el legislador el 1,4: si el anexo técnico
-      de la END lo tomó de un documento PRESUPUESTARIO, el vigente pasa a ser la lectura
-      principista y el oráculo cierra por concepto, no por conveniencia.
-      LOS AÑOS QUE FALTAN SON METAS: 2020 y 2025 no tienen cuadro funcional en ningún
-      documento del emisor, y el motivo de cada uno está en
-      `shared.data.digepres_funcional.SIN_CUADRO_FUNCIONAL`.
+      ══ MEDIDO 2026-08-24 ══ La serie va de 2008 a 2025 y cubre LAS TRES METAS VENCIDAS.
+      2015: 1,832 contra meta 2,8 — incumplida por 35%.
+      2020: 2,295 contra meta 4,0 — incumplida por 43%.
+      2025: 1,855 contra meta 4,5 — incumplida por 59%.
+      La brecha se ABRE con el tiempo: el máximo de la serie es 2,404 en 2021, el año del
+      COVID, y ya en 2022 había vuelto a 1,882.
+      DOS VÍAS INDEPENDIENTES QUE CIERRAN ENTRE SÍ. La hoja COFOG de Hacienda y el cuadro
+      funcional de los informes de DIGEPRES son dos documentos distintos del mismo Estado, y
+      en nueve de los once años en que las dos existen coinciden dentro del 1,5% (2009 0,2% ·
+      2012 1,4% · 2019 0,6% · 2022 0,3%). Es la comprobación más fuerte que este indicador
+      va a tener, y por eso se conservan las dos.
+      SALVEDADES QUE VIAJAN: los años desde 2021 son PRELIMINARES —el emisor los marca con
+      asterisco— y 2025, que es meta, es uno de ellos. Y el cuadro mide EROGACIÓN, que el
+      archivo define como gasto más inversión bruta en activos no financieros; la ley dice
+      «gasto». Las dos magnitudes coinciden dentro del 1,5% contra DIGEPRES, así que la
+      diferencia no manda sobre el veredicto.
+      POR QUÉ SIGUE EN `propuesto`, Y AHORA EL PROBLEMA NO ES NUESTRO. El oráculo no cierra:
+      la ley fija 1,4 para 2009 y la hoja del emisor da 1,360 — Δ 2,9% contra una tolerancia
+      de 2,0%. Pero el cuadro funcional de DIGEPRES da 1,357 para el mismo año. **Las dos
+      series del Estado coinciden entre sí y las dos quedan ~3% por debajo del número que la
+      ley escribió.** El 1,4 no sale de ninguna de las dos. Dato adicional: 2008 da 1,380,
+      que sí entraría en tolerancia — compatible con que el legislador haya tomado el año
+      anterior, o una estimación preliminar de 2009 que después se revisó.
+      Esto lo pone en la misma familia que el 2.47, el 3.14 y el 3.30: una inconsistencia de
+      la LÍNEA BASE de la Ley 1-12, no una brecha de nuestras fuentes. Promoverlo o no es
+      decisión del dueño; lo que ya no procede es tratarlo como un indicador sin fuente.
+      REFUTADO EL 2026-08-24: la nota anterior decía que faltaba «la segunda añada del PIB,
+      la retropolada base 2007». No existe: los cuatro libros de PIB por gasto del banco
+      central dan el mismo PIB nominal de 2009 (0,08% de diferencia). Un cambio de año base
+      mueve las series a precios CONSTANTES, no los niveles corrientes.
   - indicador: "2.34"
     serie: "wdi.SH.STA.BASS.ZS"
     fuente: wdi

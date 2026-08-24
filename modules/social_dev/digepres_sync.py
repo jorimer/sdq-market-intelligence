@@ -23,7 +23,7 @@ from __future__ import annotations
 import logging
 import os
 import tempfile
-from typing import Callable, Dict, List, Optional
+from typing import Any, Callable, Dict, List, Optional
 
 import httpx
 
@@ -61,7 +61,8 @@ def anios_persistidos(db) -> set:
             if str(r.period).isdigit()}
 
 
-def _upsert(db, anio: int, valor: float, fuente: str) -> None:
+def _upsert(db, anio: int, valor: float, fuente: str,
+            preliminar: bool = False) -> None:
     fila = (db.query(SocialIndicator)
             .filter_by(entity_key=ENTIDAD, theme=TEMA, period=str(anio)).first())
     if fila is None:
@@ -69,7 +70,9 @@ def _upsert(db, anio: int, valor: float, fuente: str) -> None:
         db.add(fila)
     fila.value = valor
     fila.unit = "% del PIB"
-    fila.disaggregation = "nacional"
+    # La marca de PRELIMINAR viaja en la desagregacion porque tiene que llegar a quien
+    # lea la cifra: 2025 es una META de la ley y su valor todavia puede moverse.
+    fila.disaggregation = "nacional · preliminar" if preliminar else "nacional"
     fila.source = fuente
 
 
@@ -81,6 +84,7 @@ def run_digepres_salud(force: bool = False,
     *progreso* recibe una frase por año; el worker la publica y el console la muestra, así
     que una corrida de veinte minutos no se ve como un cuelgue.
     """
+    from shared.data import hacienda_cofog
     from shared.data.digepres_funcional import (DOCUMENTOS, SIN_CUADRO_FUNCIONAL, SOURCE,
                                                 leer_documento, url_del_documento)
     from shared.data.wdi_client import fetch_wb_indicator
@@ -90,16 +94,45 @@ def run_digepres_salud(force: bool = False,
     leidos: List[int] = []
     fallidos: Dict[int, str] = {}
     try:
-        avisar("PIB nominal (denominador de la serie)")
+        # ── VIA PRINCIPAL: la hoja COFOG del Ministerio de Hacienda ──────────────────────
+        # Una sola descarga trae 2008-2025 con el %PIB que el propio emisor computa, e
+        # incluye 2020 y 2025 — dos METAS de la ley que no aparecen en ningun informe de
+        # DIGEPRES. Los PDF quedan de CONTRASTE, no de via principal: son 400 MB para cubrir
+        # menos anios y ninguna cifra que la hoja no traiga.
+        avisar("serie COFOG del Ministerio de Hacienda")
+        de_cofog: Dict[int, Any] = {}
+        try:
+            for g in hacienda_cofog.fetch():
+                de_cofog[g.anio] = g
+        except Exception as e:  # noqa: BLE001 — si la hoja falla, quedan los PDF
+            logger.warning("[2.33] la hoja COFOG fallo, se cae a los PDF: %s", e)
+            fallidos[0] = f"COFOG: {str(e)[:200]}"
+
+        ya_cofog = set() if force else anios_persistidos(db)
+        for anio, g in sorted(de_cofog.items()):
+            if anio in ya_cofog:
+                continue
+            _upsert(db, anio, round(g.pct_pib, 3), hacienda_cofog.SOURCE,
+                    preliminar=g.preliminar)
+            db.commit()
+            leidos.append(anio)
+
+        avisar("PIB nominal (denominador del contraste)")
         filas, _ = fetch_wb_indicator(PIB_NOMINAL_LCU, ["DOM"], mrv=40)
         pib = {int(r["date"]): float(r["value"]) for r in filas
                if isinstance(r, dict) and r.get("value") is not None and r.get("date")}
         if not pib:
             raise RuntimeError("sin PIB nominal no hay razón que computar para el 2.33")
 
+        # `force` alcanza a los dos caminos. Los anios que COFOG acaba de escribir se
+        # excluyen aparte, en `pendientes`: no hay que volver a bajar 60 MB para reconfirmar
+        # lo que la hoja ya cerro en esta misma corrida.
         ya = set() if force else anios_persistidos(db)
+        # Solo los anios que la hoja NO trajo. Hoy son cero, y por eso el contraste con
+        # los PDF se corre a mano y no en cada sync: 400 MB de descarga para reconfirmar lo
+        # que ya cerro contra la hoja es gasto sin hallazgo.
         pendientes = [(a, n) for a, n in sorted(DOCUMENTOS.items())
-                      if a not in ya and a in pib]
+                      if a not in ya and a not in de_cofog and a in pib]
         for k, (anio, nombre) in enumerate(pendientes, 1):
             avisar(f"{anio} ({k} de {len(pendientes)})")
             ruta = None
@@ -129,6 +162,9 @@ def run_digepres_salud(force: bool = False,
             db.commit()
             leidos.append(anio)
         return {
+            "via_principal": hacienda_cofog.SOURCE if de_cofog else "DIGEPRES (PDF)",
+            "anios_de_cofog": sorted(de_cofog),
+            "preliminares": sorted(a for a, g in de_cofog.items() if g.preliminar),
             "anios_nuevos": len(leidos),
             "anios": leidos,
             "fallidos": fallidos,
