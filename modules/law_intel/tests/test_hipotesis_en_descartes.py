@@ -70,11 +70,28 @@ class TestLaLista:
 
     def test_el_3_24_declara_la_suya_y_su_motivo_ya_no_la_cuenta(self):
         """El caso que sobrevivió a que le trajeran su fuente: la hipótesis pasó del relato al
-        campo, y el motivo pasó a decir qué se midió."""
+        campo, y el motivo pasó a decir qué se midió.
+
+        ══ REESCRITO 2026-08-24 ══ Exigía la cadena literal «2026-08-22», o sea la fecha de
+        UNA corrida. Eso ata el test a que nadie vuelva a medir: el día que se recomputó, se
+        puso rojo por haberse hecho el trabajo. La fecha se sigue pidiendo —un motivo sin
+        fechar no se puede auditar— pero por su FORMA.
+
+        Y se agrega lo que este caso enseñó, que es más fuerte que la fecha: el motivo tiene
+        que nombrar el CAMINO con el que se computó. Este motivo estuvo suspendido porque
+        citaba ocho cifras que nadie podía rehacer, y un motivo irreproducible no es
+        evidencia — se lee como caso cerrado y no lo es.
+        """
+        import re
+
         b = cargar_bindings(E)["3.24"]
         assert (b.hipotesis_sin_comprobar or "").strip()
-        assert "2026-08-22" in (b.motivo_descarte or ""), (
+        motivo = b.motivo_descarte or ""
+        assert re.search(r"20\d\d-\d\d-\d\d", motivo), (
             "el motivo tiene que fechar la comprobación que se hizo")
+        assert "bcrd_prestamos_destino" in motivo, (
+            "el motivo tiene que nombrar el módulo con el que se puede REHACER el cómputo; "
+            "sin eso son cifras transcritas y el motivo vuelve a ser una afirmación")
 
     @pytest.mark.parametrize("ind", ["4.1", "3.20"])
     def test_los_dos_que_se_recuperaron_ya_no_son_descartes(self, ind):

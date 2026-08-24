@@ -107,6 +107,10 @@ HEALTH_ENTITY = "nacional"
 #: ocupación — `employment_gender_ratio` ya existe y mide otra cosa.
 _TEMA_BRECHA_INGRESO = "income_gender_ratio"
 
+#: Indicador 4.2. El SUJETO en el nombre: es sobre el área TERRESTRE, no sobre el
+#: territorio con la zona marina — meter lo marino manda la razón a un dígito.
+_TEMA_AREAS_PROTEGIDAS = "protected_area_pct_land"
+
 #: Indicador 3.30. El SUJETO va en el nombre: es el aporte a las DISTRIBUIDORAS estatales,
 #: que es el canal principal del subsidio eléctrico pero no necesariamente todo el subsidio
 #: del Gobierno al sector.
@@ -650,6 +654,38 @@ def _sync_ied_total(db: Session, set_phase: Callable[[str], None]) -> int:
 
 
 
+def _sync_areas_protegidas(db: Session, set_phase: Callable[[str], None]) -> int:
+    """Indicador 4.2 de la END: superficie protegida como % del área del país.
+
+    El emisor publica los km² por categoría —terrestre y marina— y NO la razón, así que la
+    razón se computa acá contra el área terrestre del país, que viene de su propia fuente.
+
+    **UN solo denominador para los catorce años.** El área nacional se revisa de tanto en
+    tanto y usar la de cada año haría que una revisión del denominador se leyera como un
+    cambio en la superficie protegida — la misma lección que dejó el PIB en el 2.33.
+    """
+    from shared.data.one_areas_protegidas import (SOURCE, fetch, fetch_area_terrestre,
+                                                  razon_terrestre)
+
+    set_phase("áreas protegidas (indicador 4.2 de la END)")
+    serie = fetch()                       # la excepción sube a _best_effort
+    area = fetch_area_terrestre()
+    if not area:
+        raise RuntimeError("sin el área terrestre del país no hay razón que computar")
+    synced = 0
+    for s in serie:
+        _upsert_indicator(db, theme=_TEMA_AREAS_PROTEGIDAS, entity=HEALTH_ENTITY,
+                          period=str(s.anio), value=razon_terrestre(s, area), source=SOURCE,
+                          disagg="nacional", unit="% del área terrestre")
+        synced += 1
+    con_desajuste = [s.anio for s in serie if s.desajustes]
+    if con_desajuste:
+        logger.info("[social] 4.2: %d años en que el emisor no cuadra con sus "
+                    "subcategorías: %s", len(con_desajuste), con_desajuste)
+    logger.info("[social] 4.2 áreas protegidas: %d años sobre %.0f km²", synced, area)
+    return synced
+
+
 def _sync_sisdom_end(db: Session, set_phase: Callable[[str], None]) -> int:
     """Los indicadores de la END que el propio Estado publica en SISDOM, en UN solo bucle.
 
@@ -680,7 +716,7 @@ def _sync_sisdom_end(db: Session, set_phase: Callable[[str], None]) -> int:
 
     synced = 0
     fallidos: List[str] = []
-    for indicador, (_hoja, tema, unidad, _por_que) in sorted(INDICADORES.items()):
+    for indicador, fuente in sorted(INDICADORES.items()):
         set_phase(f"SISDOM · indicador {indicador} de la END")
         try:
             obs = fetch(indicador)
@@ -699,9 +735,11 @@ def _sync_sisdom_end(db: Session, set_phase: Callable[[str], None]) -> int:
                 continue
             instrumento = (INSTRUMENTO_CON_ASTERISCO if usa_nueva
                            else INSTRUMENTO_SIN_ASTERISCO)
-            _upsert_indicator(db, theme=tema, entity=HEALTH_ENTITY, period=str(anio),
-                              value=round(valor, 5), source=SOURCE,
-                              disagg=f"nacional · {instrumento}", unit=unidad)
+            _upsert_indicator(db, theme=fuente.tema, entity=HEALTH_ENTITY,
+                              period=str(anio), value=round(valor, 5),
+                              source=SOURCE,
+                              disagg=f"nacional · {instrumento}",
+                              unit=fuente.unidad)
             synced += 1
         db.commit()
     if fallidos:
@@ -1228,6 +1266,9 @@ def one_social_sync(db: Session, set_phase: Optional[Callable[[str], None]] = No
     ied_synced = _best_effort(
         "IED total del país (3.23)",
         lambda: _sync_ied_total(db, set_phase), errors)
+    areas_synced = _best_effort(
+        "áreas protegidas (4.2)",
+        lambda: _sync_areas_protegidas(db, set_phase), errors)
     sisdom_end_synced = _best_effort(
         "indicadores de la END en SISDOM (ocho)",
         lambda: _sync_sisdom_end(db, set_phase), errors)
@@ -1298,6 +1339,7 @@ def one_social_sync(db: Session, set_phase: Optional[Callable[[str], None]] = No
         "confianza_partidos_synced": partidos_synced,
         "ied_total_synced": ied_synced,
         "sisdom_end_synced": sisdom_end_synced,
+        "areas_protegidas_synced": areas_synced,
         "cobertura_salud_synced": salud_synced,
         "participacion_export_synced": export_synced,
         "mem_electrico_synced": mem_synced,

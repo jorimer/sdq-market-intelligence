@@ -518,6 +518,43 @@ class SocialDevProduct:
             "Matrícula neta de nivel superior, 18-24 años (%)", "inclusion",
             "Término idéntico al de la ley. Serie del propio Estado para su ley; el instrumento "
             "(ENFT/ENCFT) viaja en la desagregación. No alimenta el índice."),
+        # Indicador 2.24 de la END, hoja «END 2.24» de SISDOM.
+        "malaria_mortality_rate": (
+            "malaria_mortality_rate", HEALTH_ENTITY,
+            "Mortalidad asociada a malaria (por 100.000 hab.)", "inclusion",
+            "Registro del CENCET. Serie del propio Estado para su ley. No alimenta el índice."),
+        # Indicador 2.28 de la END, hoja «END 2.28» de SISDOM.
+        "child_underweight_rate": (
+            "child_underweight_rate", HEALTH_ENTITY,
+            "Desnutrición global en menores de 5 años (%)", "inclusion",
+            "ENDESA. La serie TERMINA en 2013. Serie del propio Estado para su ley. No alimenta el índice."),
+        # Indicador 2.29 de la END, hoja «END 2.29» de SISDOM.
+        "child_wasting_rate": (
+            "child_wasting_rate", HEALTH_ENTITY,
+            "Desnutrición aguda en menores de 5 años (%)", "inclusion",
+            "ENDESA. La serie TERMINA en 2013. Serie del propio Estado para su ley. No alimenta el índice."),
+        # Indicador 2.30 de la END, hoja «END 2.30» de SISDOM.
+        "child_stunting_rate": (
+            "child_stunting_rate", HEALTH_ENTITY,
+            "Desnutrición crónica en menores de 5 años (%)", "inclusion",
+            "ENDESA. La serie TERMINA en 2013. Serie del propio Estado para su ley. No alimenta el índice."),
+        # Indicador 2.31 de la END, hoja «END 2.31» de SISDOM.
+        "vertical_hiv_transmission": (
+            "vertical_hiv_transmission", HEALTH_ENTITY,
+            "Transmisión vertical del VIH (%)", "inclusion",
+            "Hijos de madres VIH positivas que resultan seropositivos. Serie del propio Estado para su ley. No alimenta el índice."),
+        # Indicador 2.32 de la END, hoja «END 2.32» de SISDOM.
+        "advanced_hiv_on_art": (
+            "advanced_hiv_on_art", HEALTH_ENTITY,
+            "Portadores de VIH avanzado con antirretrovirales (%)", "inclusion",
+            "Cobertura de tratamiento. Serie del propio Estado para su ley. No alimenta el índice."),
+        # Indicador 4.2 de la END. La etiqueta dice TERRESTRE porque el denominador lo es:
+        # llamarlo «área protegida» a secas se leería como sobre todo el territorio.
+        "protected_area_pct_land": (
+            "protected_area_pct_land", HEALTH_ENTITY,
+            "Superficie protegida (% del área terrestre)", "living_standards",
+            "Suma de los seis grupos de categoría del cuadro de la ONE sobre el área "
+            "terrestre del país. No alimenta el índice de desarrollo."),
         "income_gender_ratio": (
             "income_gender_ratio", HEALTH_ENTITY,
             "Razón de ingreso laboral femenino/masculino", "inclusion",
