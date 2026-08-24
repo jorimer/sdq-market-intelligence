@@ -108,6 +108,15 @@ HEALTH_ENTITY = "nacional"
 #: convierte una revision de cuentas nacionales en un salto de gasto publico.
 _PIB_NOMINAL_LCU = "NY.GDP.MKTP.CN"
 _TEMA_SALUD_FUNCIONAL = "health_spending_central_gov_pct_gdp"
+
+#: Cuantos documentos del emisor se leen POR CORRIDA. Es un tope de memoria, no de red.
+#: Medido el 2026-08-24: leer un libro de 31 MB deja un pico de 240 MB con el lector que
+#: libera cada pagina —eran 310 MB sosteniendo los bytes— y el proceso de produccion murio
+#: en el SEPTIMO documento despues de aguantar seis del mismo tamano. O sea que lo que mata
+#: no es un archivo grande: es lo que se acumula entre documentos, porque el asignador no le
+#: devuelve al sistema lo que libera. Con el tope el pico queda acotado y la serie se
+#: completa en varias corridas — el conjunto `ya` hace que cada una siga donde quedo.
+_DOCUMENTOS_POR_CORRIDA = 4
 _WDI_HEALTH_YEARS = 30
 
 # Informalidad nacional (ENCFT del BCRD) → aplicada a todas las regiones, como la salud
@@ -657,13 +666,20 @@ def _sync_gasto_salud_funcional(db: Session, set_phase: Callable[[str], None]) -
     sentido: el emisor dividio por el PIB de su anada y las cuentas nacionales se rebasaron
     despues a 2018. Mezclarlas convertiria un cambio de denominador en un salto de gasto.
 
-    **Solo baja los anios que faltan.** Cada documento pesa entre 28 y 66 MB, asi que un
-    barrido completo son ~400 MB: corriendo entero en cada sync seria gasto de red por una
-    serie que solo crece una vez al anio.
+    **Solo baja los anios que faltan, y persiste cada uno apenas lo lee.** Cada documento
+    pesa entre 28 y 66 MB: el barrido completo son ~400 MB, y correrlo entero en cada sync
+    seria gasto de red por una serie que crece una vez al anio. El commit por anio hace la
+    operacion REANUDABLE — si el proceso se cae en el septimo documento, los seis anteriores
+    quedan y la corrida siguiente arranca en el septimo.
     """
     import httpx
 
-    from shared.data.digepres_funcional import (DOCUMENTOS, SOURCE, leer_informe,
+    import os
+    import tempfile
+
+    import httpx
+
+    from shared.data.digepres_funcional import (DOCUMENTOS, SOURCE, leer_documento,
                                                 url_del_documento)
     from shared.data.wdi_client import fetch_wb_indicator
 
@@ -681,19 +697,43 @@ def _sync_gasto_salud_funcional(db: Session, set_phase: Callable[[str], None]) -
     for anio, nombre in sorted(DOCUMENTOS.items()):
         if anio in ya or anio not in pib:
             continue
+        ruta = None
         try:
             with httpx.Client(timeout=900.0, follow_redirects=True,
                               headers={"User-Agent": "sdq-mip/1.0"}) as c:
-                contenido = c.get(url_del_documento(nombre)).content
-            gasto = leer_informe(contenido, anio, pib[anio])
+                # A DISCO, por trozos. El documento pesa hasta 66 MB y sostenerlo en memoria
+                # mientras el parser trabaja fue lo que mato al proceso en produccion.
+                with tempfile.NamedTemporaryFile(suffix=".pdf", delete=False) as tmp:
+                    ruta = tmp.name
+                    with c.stream("GET", url_del_documento(nombre)) as r:
+                        r.raise_for_status()
+                        for trozo in r.iter_bytes(1 << 20):
+                            tmp.write(trozo)
+            gasto = leer_documento(ruta, anio, pib[anio])
         except Exception as e:  # noqa: BLE001 — best-effort por anio: un anio ilegible no
             # puede tumbar los doce que si se leen, y el motivo queda en el log con su anio.
             logger.warning("[social] 2.33 %s: %s", anio, e)
             continue
+        finally:
+            if ruta and os.path.exists(ruta):
+                os.unlink(ruta)
         _upsert_indicator(db, theme=_TEMA_SALUD_FUNCIONAL, entity=HEALTH_ENTITY,
                           period=str(anio), value=round(gasto.pct_pib, 3), source=SOURCE,
                           disagg="nacional", unit="% del PIB")
+        # COMMIT POR ANIO. El commit del grupo llega al final y el 2026-08-24 el proceso
+        # murio en el septimo documento: los SEIS anios ya leidos se perdieron enteros, y la
+        # corrida siguiente los volvio a bajar. Con esto, lo leido queda, y `ya` hace que la
+        # proxima corrida siga donde esta — la operacion se vuelve reanudable en vez de
+        # todo-o-nada sobre 400 MB de descarga.
+        db.commit()
         synced += 1
+        if synced >= _DOCUMENTOS_POR_CORRIDA:
+            faltan = len(DOCUMENTOS) - len(ya) - synced
+            # El tope se DECLARA. Un recorte silencioso se lee como que la serie termino ahi,
+            # que es justo el error que el registro de huecos vino a evitar.
+            logger.info("[social] 2.33: tope de %d documentos por corrida; faltan %d anios "
+                        "y entran en la proxima", _DOCUMENTOS_POR_CORRIDA, faltan)
+            break
     logger.info("[social] 2.33 gasto en salud funcional: %d anios nuevos", synced)
     return synced
 

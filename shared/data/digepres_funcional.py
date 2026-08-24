@@ -533,39 +533,59 @@ def informes_por_anio() -> Dict[int, str]:  # pragma: no cover - red
     return {anio: url_del_documento(n) for anio, n in sorted(DOCUMENTOS.items())}
 
 
-def leer_informe(contenido: bytes, anio: int,
-                 pib_nominal: Optional[float] = None) -> GastoFuncional:
-    """La linea de Salud del informe de un anio, eligiendo pagina y unidad por su contenido.
+def leer_documento(fuente, anio: int,
+                   pib_nominal: Optional[float] = None) -> GastoFuncional:  # pragma: no cover
+    """La linea de Salud de un documento, eligiendo pagina y unidad por su CONTENIDO.
 
-    Recorre las paginas que traen el rotulo del cuadro y se queda con la PRIMERA que produce
-    una lectura que pasa los guards. No es «probar hasta que salga»: cada intento tiene que
-    pasar la banda de plausibilidad, asi que una pagina de prosa que menciona el rotulo no
-    puede colarse — no tiene fila de Salud, o sus numeros no dan una razon creible.
+    `fuente` es una ruta en disco o un objeto de archivo. **Nunca los bytes.** El libro del
+    emisor pesa entre 28 y 66 MB y tiene hasta 980 paginas: sostener el contenido en memoria
+    mientras el parser arma sus objetos de pagina fue lo que mato al proceso en produccion el
+    2026-08-24 —murio sin traza, que es la firma del sistema matando por memoria— despues de
+    leer bien seis anios. Por eso se abre desde el disco y por eso cada pagina se libera
+    apenas se descarta: el pico queda plano y no depende de cuantos anios lleve la corrida.
 
-    Si ninguna pagina sirve, se levanta con los motivos acumulados. Devolver `None` dejaria al
-    llamador sin saber si el emisor cambio el cuadro o si el anio no existe.
+    Recorre las paginas y se queda con la PRIMERA que produce una lectura que pasa los
+    guards. No es «probar hasta que salga»: cada intento tiene que declarar su universo,
+    declarar su unidad, traer una fila de Salud y cerrar una identidad del cuadro.
+
+    Si ninguna sirve, LEVANTA con los motivos acumulados. Devolver `None` dejaria al llamador
+    sin saber si el emisor cambio el cuadro o si el anio no existe.
     """
-    import io
-
     import pdfplumber
 
     motivos: List[str] = []
-    with pdfplumber.open(io.BytesIO(contenido)) as pdf:
-        for i in paginas_del_cuadro(pdf):
-            pagina = pdf.pages[i]
-            texto = pagina.extract_text() or ""
-            if UNIVERSO not in _norm(texto):
-                motivos.append(f"p{i}: la pagina no declara «{UNIVERSO}»")
-                continue
-            unidad = unidad_de(texto)
-            if unidad is None:
-                motivos.append(f"p{i}: el cuadro no declara su unidad")
-                continue
+    with pdfplumber.open(fuente) as pdf:
+        for i, pagina in enumerate(pdf.pages):
             try:
-                return leer_cuadro(pagina.extract_words(x_tolerance=1.2, y_tolerance=2),
-                                   anio, pib_nominal, unidad)
-            except DigepresError as e:
-                motivos.append(f"p{i}: {e}")
+                texto = _norm(pagina.extract_text() or "")
+                if not any(r in texto for r in ROTULOS_CUADRO):
+                    continue
+                if UNIVERSO not in texto:
+                    motivos.append(f"p{i}: la pagina no declara «{UNIVERSO}»")
+                    continue
+                unidad = unidad_de(texto)
+                if unidad is None:
+                    motivos.append(f"p{i}: el cuadro no declara su unidad")
+                    continue
+                try:
+                    return leer_cuadro(pagina.extract_words(x_tolerance=1.2, y_tolerance=2),
+                                       anio, pib_nominal, unidad)
+                except DigepresError as e:
+                    motivos.append(f"p{i}: {e}")
+            finally:
+                # Sin esto el parser se queda con los objetos de CADA pagina recorrida y un
+                # libro de 900 paginas no entra en la memoria de un contenedor web.
+                pagina.flush_cache()
     raise DigepresError(
         f"{anio}: ninguna pagina con el cuadro funcional dio una lectura valida. "
         + " · ".join(motivos[:6]))
+
+
+def leer_informe(contenido: bytes, anio: int,
+                 pib_nominal: Optional[float] = None) -> GastoFuncional:  # pragma: no cover
+    """Igual que `leer_documento` pero desde bytes. **No usar en un proceso servidor**: es
+    justamente el camino que quedarse con los bytes en memoria hace caro. Existe para sondas
+    y scripts, donde el archivo ya esta en la mano."""
+    import io
+
+    return leer_documento(io.BytesIO(contenido), anio, pib_nominal)
