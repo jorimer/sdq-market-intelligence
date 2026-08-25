@@ -47,11 +47,11 @@ router = APIRouter()
 _PREMIUM_REPORT_TYPES = {"full_rating", "scorecard"}
 # Informes de SISTEMA: no cuelgan de una entidad (``bank_id`` NULL). Describen la
 # metodología (criteria) o el sistema entero (wire/datawatch/sector_outlook).
-_SYSTEM_REPORT_TYPES = {"criteria", "wire", "datawatch", "sector_outlook"}
+_SYSTEM_REPORT_TYPES = {"criteria", "wire", "datawatch", "sector_outlook", "anuario"}
 
 # Boletines de sistema que se NARRAN con IA y cuyo único insumo son las cifras del sector.
 # `criteria` no está: es determinista, se genera del motor y no consume benchmarks.
-_NARRATED_SYSTEM_TYPES = {"wire", "datawatch", "sector_outlook"}
+_NARRATED_SYSTEM_TYPES = {"wire", "datawatch", "sector_outlook", "anuario"}
 
 
 def _attach_pdf(report: Report, file_path: str, narratives: dict,
@@ -125,6 +125,21 @@ async def _generate_system_report(
     # y no en cada endpoint para que el próximo boletín no pueda nacer con el mismo hueco.
     if benchmarks is None and report_type in _NARRATED_SYSTEM_TYPES:
         benchmarks = panel_benchmarks(db, pe)
+    # El ANUARIO trae además los hechos del año, computados del panel (ver `reports/anuario`):
+    # mediana por corte, cambio por tipo, cambios de banda y el universo con sus parciales.
+    anuario_datos = None
+    if report_type == "anuario":
+        if pe is None:
+            raise HTTPException(
+                status_code=400,
+                detail="El anuario requiere un período: indique el cierre del año (YYYY-12-31).")
+        from modules.banking_score.reports.anuario import anuario_del_sistema
+        anuario_datos = anuario_del_sistema(db, pe.year)
+        if anuario_datos is None:
+            raise HTTPException(
+                status_code=422,
+                detail=(f"No hay panel suficiente para el anuario {pe.year}: se necesitan al "
+                        "menos dos cierres trimestrales calificados."))
     try:
         if report_type == "criteria":
             # El documento de criterios es la METODOLOGÍA: determinista, no varía por
@@ -139,10 +154,12 @@ async def _generate_system_report(
             narratives = await generate_report_narratives(
                 report_type=report_type, bank_name=scope_name,
                 scoring_result=scoring_result, period=period, benchmarks=benchmarks,
+                anuario=anuario_datos,
             )
         file_path = await generate_pdf_report(
             report_type=report_type, bank_name=scope_name,
             scoring_result=scoring_result, period=period, narratives=narratives,
+            anuario=anuario_datos,
         )
         _attach_pdf(report, file_path, narratives,
                     model="deterministic" if report_type == "criteria" else None)

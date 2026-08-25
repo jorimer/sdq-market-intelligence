@@ -51,6 +51,7 @@ REPORT_SECTIONS: Dict[str, list] = {
     "wire": ["executive_summary"],
     "criteria": ["risk_assessment"],
     "sector_outlook": ["sector_outlook"],
+    "anuario": ["anuario"],
 }
 
 # Map each section to the NarrativeEngine template name
@@ -68,6 +69,7 @@ _SECTION_TO_TEMPLATE: Dict[str, str] = {
     "soporte_soberano": "banking_support_context",
     "trend_analysis": "trend_analysis",
     "sector_outlook": "sector_outlook",
+    "anuario": "anuario_sistema",
 }
 
 # Plantillas de banking que van por la RUTA CEREBRO (axis="banking"): obtienen la Barra de
@@ -88,7 +90,8 @@ _CEREBRO_TEMPLATES = frozenset({
 # `sector_outlook` se suma tras un PDF entregado TRUNCADO a mitad de oración: su plantilla
 # pide hasta 800 palabras y corría con el presupuesto `standard` (1024 tokens), que en
 # español no alcanza (~1.120). `trend_analysis` ya estaba acá por lo mismo.
-_DEEP_SECTIONS = frozenset({"risk_assessment", "trend_analysis", "sector_outlook"})
+_DEEP_SECTIONS = frozenset({"risk_assessment", "trend_analysis", "sector_outlook",
+                            "anuario"})
 
 
 def _section_mode(section: str, base_mode: str) -> str:
@@ -103,11 +106,12 @@ def _section_mode(section: str, base_mode: str) -> str:
 
 # Boletines cuyo sujeto es el SISTEMA, no una entidad. `criteria` no está: no se narra en
 # absoluto (se genera del motor, ver criteria_doc).
-_SYSTEM_REPORT_TYPES = frozenset({"wire", "datawatch", "sector_outlook"})
+_SYSTEM_REPORT_TYPES = frozenset({"wire", "datawatch", "sector_outlook", "anuario"})
 
 
 def _build_system_context(report_type: str, scope_name: str, period: str,
-                          benchmarks: Optional[Dict]) -> Dict:
+                          benchmarks: Optional[Dict],
+                          anuario: Optional[Dict] = None) -> Dict:
     """Contexto de un boletín de SISTEMA: promedios sectoriales y de grupos de pares.
 
     Deliberadamente NO incluye `overall_score`, `sub_components` ni `indicators`: un reporte
@@ -152,6 +156,13 @@ def _build_system_context(report_type: str, scope_name: str, period: str,
         for k, v in benchmarks.items():
             if k not in ("sector_averages", "peer_groups", "regulatory_limits") and v:
                 ctx.setdefault(k, v)
+    # Los hechos del AÑO, ya computados (ver `reports/anuario`). Van enteros: la mediana por
+    # corte, el cambio por tipo, los cambios de banda y el universo con sus parciales. El
+    # modelo no calcula nada de esto — y el campo `medias_y_medianas_divergen` existe para que
+    # no pueda titular el año con la media cuando ambas dicen lo contrario.
+    if anuario:
+        ctx["anuario"] = anuario
+
     return ctx
 
 
@@ -589,6 +600,7 @@ async def generate_report_narratives(
     scoring_result: Dict,
     period: str,
     benchmarks: Optional[Dict] = None,
+    anuario: Optional[Dict] = None,
 ) -> Dict[str, str]:
     """Generate all narrative sections required for *report_type*.
 
@@ -613,7 +625,14 @@ async def generate_report_narratives(
     is_system = report_type in _SYSTEM_REPORT_TYPES
 
     for section in sections:
-        if is_system and section == "executive_summary":
+        if section == "anuario":
+            # El anuario tiene su propio sujeto —el sistema en un AÑO— y su contexto son los
+            # hechos ya computados. Va antes del caso general de sistema porque no es un
+            # boletín de corte: su unidad es el año.
+            template = "anuario_sistema"
+            context = _build_system_context(report_type, bank_name, period, benchmarks,
+                                            anuario=anuario)
+        elif is_system and section == "executive_summary":
             template = "system_summary"
             context = _build_system_context(report_type, bank_name, period, benchmarks)
         else:

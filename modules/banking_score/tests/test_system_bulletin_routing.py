@@ -92,13 +92,22 @@ def test_todo_boletin_narrado_recibe_benchmarks(monkeypatch):
 
     vistos = {}
 
-    async def _fake_narratives(*, report_type, bank_name, scoring_result, period, benchmarks):
+    async def _fake_narratives(*, report_type, bank_name, scoring_result, period, benchmarks,
+                               **kw):
         vistos[report_type] = benchmarks
         raise RuntimeError("corta acá: sólo interesa qué contexto se pasó")
 
     monkeypatch.setattr(
         "modules.banking_score.reports.narrative.generate_report_narratives",
         _fake_narratives)
+    # El ANUARIO computa los hechos del año del panel ANTES de narrar, y sin panel aborta con
+    # 422 —correcto— pero nunca llegaría a la aserción. Se le da un panel mínimo para que el
+    # boletín siga cubierto por esta regla en vez de quedar exceptuado.
+    monkeypatch.setattr(
+        "modules.banking_score.reports.anuario.anuario_del_sistema",
+        lambda db, anio: {"anio": anio, "cortes": [], "universo": {}, "sistema": {},
+                          "conteo_direccion": {}, "por_tipo": [], "cambios_de_banda": [],
+                          "extremos": {}})
 
     class _Db:
         def add(self, *a): pass
