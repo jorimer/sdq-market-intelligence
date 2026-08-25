@@ -364,16 +364,19 @@ def resumen(veredictos: Sequence[Veredicto]) -> Dict[str, object]:
         # aflojar el guard: es que la relación viaje resuelta. Dejar el hueco es lo que lo
         # llena mal, y acá el hueco eran dos divisiones que el contexto ya tenía servidas
         # como numerador y denominador sueltos.
-        "pct_evaluados_sobre_el_total_de_la_ley": (
+        "pct_con_veredicto_de_cumplimiento_sobre_los_que_la_ley_numera": (
             round(100.0 * len(evaluados) / len(veredictos), 1) if veredictos else None),
-        "pct_sin_veredicto_sobre_el_total_de_la_ley": (
+        "pct_sin_veredicto_de_cumplimiento_sobre_los_que_la_ley_numera": (
             round(100.0 * (len(veredictos) - len(evaluados)) / len(veredictos), 1)
             if veredictos else None),
         "por_veredicto": dict(sorted(conteo.items())),
         "nota": ("El porcentaje de CUMPLIMIENTO se computa sobre los EVALUADOS, no sobre el "
                  "total de la ley: «no cumple» y «no lo medimos» son cosas distintas. Las "
                  "otras dos razones nombran su denominador en la clave; usalas tal cual y no "
-                 "derives ninguna división por tu cuenta."),
+                 "derives ninguna división por tu cuenta. Y ojo: «sin veredicto de "
+                 "cumplimiento» NO es «sin medición» — hay indicadores medidos que no "
+                 "producen veredicto. Las poblaciones están todas en "
+                 "`poblaciones_de_la_ley`."),
     }
 
 

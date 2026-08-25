@@ -25,7 +25,7 @@ class TestNadieEnSilencio:
     def test_el_expediente_real_tiene_el_campo_cerrado(self, r):
         assert r["en_silencio"] == 0
         assert r["campo_cerrado"] is True
-        assert r["con_veredicto"] + r["declarados_sin_veredicto"] == \
+        assert r["medidos"] + r["declarados_sin_veredicto"] == \
             r["total_indicadores_de_la_ley"]
 
     def test_un_indicador_sin_veredicto_y_sin_motivo_LEVANTA(self, monkeypatch):

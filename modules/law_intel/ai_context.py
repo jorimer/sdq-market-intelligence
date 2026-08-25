@@ -21,6 +21,7 @@ from __future__ import annotations
 from typing import Any, Dict, List, Optional
 
 from modules.law_intel.bindings import cargar_bindings, cobertura
+from modules.law_intel.campo import campo as campo_del_expediente
 from modules.law_intel.campo import resumen as resumen_del_campo
 from modules.law_intel.obligaciones import cargar_obligaciones
 from modules.law_intel.obligaciones import resumen as resumen_obligaciones
@@ -56,7 +57,12 @@ def salvedades_obligatorias(expediente_id: str) -> List[Dict[str, str]]:
     envejece en cuanto alguien promueve el siguiente, y el que falte es justo el que se
     publicaría sin salvedad.
     """
-    return [{"indicador": b.indicador, "camino": b.verificado_por,
+    nombres = {i.id: i.nombre for i in cargar(expediente_id).numerados}
+    return [{"indicador": b.indicador,
+             # El nombre viaja con el número también acá: una fila que dice «2.35» y nada más
+             # obliga al redactor a buscarle un rótulo, y el que encuentra es el de al lado.
+             "nombre_del_indicador": nombres.get(b.indicador, ""),
+             "camino": b.verificado_por,
              "termino_del_emisor": b.termino_del_emisor or "",
              "salvedad": (b.nota or "").strip()}
             for b in sorted(cargar_bindings(expediente_id).values(), key=lambda x: x.indicador)
@@ -74,10 +80,38 @@ def atribuciones_obligatorias(expediente_id: str) -> List[Dict[str, str]]:
     exp = cargar(expediente_id)
     exigen = {f["id"]: f for f in (exp.meta.get("fuentes_admitidas") or [])
               if f.get("exige_atribucion")}
-    return [{"indicador": b.indicador, "fuente": b.fuente,
+    nombres = {i.id: i.nombre for i in exp.numerados}
+    return [{"indicador": b.indicador,
+             "nombre_del_indicador": nombres.get(b.indicador, ""),
+             "fuente": b.fuente,
              "atribucion": str(exigen[b.fuente].get("atribucion") or "").strip()}
             for b in sorted(cargar_bindings(expediente_id).values(), key=lambda x: x.indicador)
             if b.cuenta and b.fuente in exigen]
+
+
+def _n(v: Any) -> int:
+    """Un conteo de los resúmenes, como entero. Existe para que el tipo no se pierda: los
+    resúmenes se tipan como `Dict[str, object]` y de ahí no sale aritmética comprobable."""
+    return int(v) if isinstance(v, (int, float)) else 0
+
+
+def _con_nombres(nodo: Any, nombres: Dict[str, str]) -> Any:
+    """Le pega el nombre del indicador a toda fila que lo cite por su número.
+
+    Recorre en vez de tocar cada bloque a mano: el hueco entra siempre por el bloque que
+    alguien agregó después, y acá el hueco se paga publicando un indicador de agua potable
+    como si midiera acceso a antirretrovirales.
+    """
+    if isinstance(nodo, dict):
+        fila = {k: _con_nombres(v, nombres) for k, v in nodo.items()}
+        ident = fila.get("indicador")
+        if isinstance(ident, str) and ident in nombres and not any(
+                "nombre" in k for k in fila):
+            fila["nombre_del_indicador"] = nombres[ident]
+        return fila
+    if isinstance(nodo, list):
+        return [_con_nombres(x, nombres) for x in nodo]
+    return nodo
 
 
 def law_ai_context(expediente_id: str, corte: str,
@@ -86,11 +120,15 @@ def law_ai_context(expediente_id: str, corte: str,
     bs = cargar_bindings(expediente_id)
     numerados = exp.numerados
     veredictos = panel(numerados, bs, series or {}, corte)
-    br = brechas(numerados, bs)
+    motivos_del_campo = {k: c.estado for k, c in campo_del_expediente(
+        expediente_id).items()}
+    br = brechas(numerados, bs, motivos_del_campo)
     obs = cargar_obligaciones(expediente_id)
     recs = recomendaciones(br, obs)
     coh = revisar(expediente_id, {i.id: i for i in exp.indicadores}, corte)
     cob = cobertura(expediente_id)
+    res_semaforo = resumen_semaforo(veredictos)
+    nombres_de_indicador = {i.id: i.nombre for i in numerados}
     # El FIN es la unidad de lectura del informe. Se computa acá —y no en el prompt— porque
     # «la mayoría» de siete contra veintiuno es una relación, y las relaciones se computan.
     fines = por_fin(numerados, veredictos, exp.meta.get("ejes") or {})
@@ -101,7 +139,7 @@ def law_ai_context(expediente_id: str, corte: str,
     pendientes = (panel_pendiente(numerados, bs, series or {}, horizonte)
                   if horizonte and horizonte > corte else [])
 
-    return {
+    ctx: Dict[str, Any] = {
         "instrumento": {
             "titulo": exp.titulo, "norma": exp.norma,
             "vigencia_hasta": exp.meta.get("vigencia_hasta"),
@@ -155,6 +193,42 @@ def law_ai_context(expediente_id: str, corte: str,
                      "«3 de 8 indicadores» y «3 de 13 filas» son la misma realidad y suenan "
                      "distinto."),
         },
+        # ── Las POBLACIONES de la ley, contadas una sola vez. ──
+        # Existe porque el informe generado se contradijo consigo mismo: dijo «veredicto
+        # sobre 44 de esos 90» en una sección y «sobre 46 de esos 90» en otra, y las dos
+        # citaban la plataforma. Son dos poblaciones distintas que además dan 44 y 46
+        # cruzados —los medidos son 46 y los sin medición son 44—, así que el mismo número
+        # significa dos cosas según de dónde se lea.
+        #
+        # Acá viven todas, con su nombre completo y su porcentaje ya computado. Ninguna
+        # sección deriva una división.
+        "poblaciones_de_la_ley": {
+            "indicadores_que_la_ley_numera": len(numerados),
+            "medidos_con_serie_verificada": cob["medidos"],
+            "con_veredicto_de_cumplimiento": _n(res_semaforo["evaluados"]),
+            "medidos_sin_observacion_utilizable": (
+                _n(cob["medidos"]) - _n(res_semaforo["evaluados"])),
+            "sin_medicion_con_motivo_declarado": len(numerados) - _n(cob["medidos"]),
+            "alcanzan_su_meta": _n(res_semaforo["cumplen"]),
+            "nota": (
+                "«Medido» y «con veredicto de cumplimiento» NO son lo mismo: un indicador "
+                "puede tener serie verificada y no tener observación utilizable al corte. Y "
+                "dos poblaciones distintas de esta misma tabla pueden coincidir en el mismo "
+                "número por azar; que dos cifras sean iguales no las vuelve la misma cosa. "
+                "Nombrá siempre cuál estás usando y copiá el valor de acá."),
+        },
+        # ── Cómo se llama cada indicador que la ley numera. ──
+        # El diccionario canónico. Cualquier sección que cite un «2.35» resuelve acá su
+        # nombre en vez de pegarle el más cercano que haya visto: así se publicó «el acceso
+        # a medicamentos antirretrovirales (2.35)» sobre un indicador que mide acceso a agua
+        # de la red pública. Las cifras eran correctas y el sujeto no, que es la forma más
+        # cara de equivocarse en este producto.
+        "nombres_de_los_indicadores_de_la_ley": nombres_de_indicador,
+        "regla_del_nombre_del_indicador": (
+            "Cuando cites un indicador por su número, su nombre sale de "
+            "`nombres_de_los_indicadores_de_la_ley` y de ningún otro lado. No lo deduzcas "
+            "del contexto ni lo recuerdes de otra sección: dos indicadores consecutivos "
+            "miden cosas distintas y el lector verifica el rótulo contra la ley."),
         # ── El FIN de la ley: la pregunta que el lector trae. ──
         # Va ANTES del inventario de indicadores a propósito: quien lee quiere saber si la
         # ley está consiguiendo lo que se propuso, y el conteo por indicador es la evidencia
@@ -166,7 +240,7 @@ def law_ai_context(expediente_id: str, corte: str,
         **(pendiente_publicable(pendientes, horizonte)
            if pendientes and horizonte else {}),
         # ── Veredictos YA COMPUTADOS. El modelo los copia, no los deriva. ──
-        "veredictos_por_indicador_computados": resumen_semaforo(veredictos),
+        "veredictos_por_indicador_computados": res_semaforo,
         "vocabulario_obligatorio": {
             "no_alcanzara": ("Usá esta palabra cuando el veredicto lo diga. NO la traduzcas a "
                              "«avance moderado» ni a ninguna forma que suene a progreso: es "
@@ -220,6 +294,10 @@ def law_ai_context(expediente_id: str, corte: str,
             "Se recomienda la PUBLICACIÓN del dato, nunca la política. No propongas qué "
             "debería hacer el Estado con un indicador; solo qué falta y quién debe producirlo."),
     }
+    # El sujeto viaja con el número, en TODO el contexto y no bloque por bloque: el hueco
+    # entra siempre por el que alguien agregó después. Lo vigila
+    # `test_una_sola_verdad_por_poblacion.py`.
+    return _con_nombres(ctx, nombres_de_indicador)
 
 
 def secciones_sin_dato(ctx: Dict[str, Any]) -> List[str]:
