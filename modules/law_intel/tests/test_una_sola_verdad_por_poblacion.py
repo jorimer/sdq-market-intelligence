@@ -224,3 +224,46 @@ class TestCadaSeccionContestaUNAPregunta:
             else:
                 assert "El panorama YA SE DIO" in texto, (
                     f"«{seccion}» no le prohíbe al modelo recontar el panorama")
+
+
+@pytest.mark.parametrize("eid", EXPEDIENTES)
+class TestElCruceQueElContextoTIENEqueResolver:
+    """Un cruce que el contexto no resuelve es un cruce que el redactor hace a ojo.
+
+    El informe publicó «el único logro con respaldo metodológico independiente es el 2.38».
+    Los únicos indicadores con medición independiente del evaluado son el 1.1 y el 2.17, y
+    NINGUNO está entre los logros. La afirmación verdadera era más fuerte que la publicada:
+    ninguno de los once logros descansa en evidencia independiente.
+
+    El modelo tenía la tabla de veredictos en un bloque y la verificabilidad en otro, y los
+    cruzó mal. Ahora el origen viaja en la misma fila.
+    """
+
+    def test_toda_fila_de_la_tabla_lleva_su_ORIGEN(self, eid):
+        ctx = law_ai_context(eid, "2025", {})
+        filas = ctx["tabla_de_veredictos_por_indicador"]
+        sin_origen = [f["indicador"] for f in filas if "origen_de_la_evidencia" not in f]
+        assert not sin_origen, f"filas sin origen: {sin_origen}"
+
+    def test_el_origen_de_la_fila_COINCIDE_con_la_cadena_de_verificabilidad(self, eid):
+        from modules.law_intel.verificabilidad import publicable as verif
+        ctx = law_ai_context(eid, "2025", {})
+        cadena = {e["sujeto"]: e["origen"] for e in verif(eid)["cadena_por_sujeto"]
+                  if e.get("clase") == "indicador"}
+        for fila in ctx["tabla_de_veredictos_por_indicador"]:
+            esperado = cadena.get(fila["indicador"], "")
+            assert fila["origen_de_la_evidencia"] == esperado, (
+                f"{fila['indicador']}: la tabla dice «{fila['origen_de_la_evidencia']}» y la "
+                f"cadena dice «{esperado}»")
+
+    def test_la_regla_dice_QUE_origen_es_independiente(self, eid):
+        """Sin nombrarlo, «respaldo independiente» se aplica al que suene mejor."""
+        regla = law_ai_context(eid, "2025", {})["regla_de_la_tabla"]
+        assert "instrumento_de_tercero" in regla
+        assert "origen_de_la_evidencia" in regla
+
+    def test_el_contexto_declara_UNA_notacion_numerica(self, eid):
+        """El informe escribió «10.103.5»: punto de miles y punto decimal en el mismo
+        número, que no es ni español ni inglés y desacredita la tabla."""
+        regla = law_ai_context(eid, "2025", {})["regla_de_la_notacion_numerica"]
+        assert "10.103,5" in regla

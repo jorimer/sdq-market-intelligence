@@ -96,6 +96,19 @@ def _n(v: Any) -> int:
     return int(v) if isinstance(v, (int, float)) else 0
 
 
+def _origenes(expediente_id: str) -> Dict[str, str]:
+    """`{indicador: origen}` — de dónde sale la evidencia de cada indicador.
+
+    Va PEGADO a la fila del veredicto en vez de en un bloque aparte: obligar al redactor a
+    cruzar dos bloques es obligarlo a cruzarlos a ojo, y lo cruzó mal.
+    """
+    cadena = verificabilidad_publicable(expediente_id).get("cadena_por_sujeto")
+    if not isinstance(cadena, list):                      # pragma: no cover - defensivo
+        return {}
+    return {str(e.get("sujeto")): str(e.get("origen") or "")
+            for e in cadena if isinstance(e, dict) and e.get("clase") == "indicador"}
+
+
 def _bloque(d: Dict[str, Any], clave: str) -> Dict[str, Any]:
     """Un sub-diccionario de un resumen, tipado. Los resúmenes se declaran como
     `Dict[str, object]` y de ahí no sale un `.get` comprobable."""
@@ -291,12 +304,22 @@ def law_ai_context(expediente_id: str, corte: str,
         # les pedía la lista y se les daba el conteo — y las metas salían reconstruidas de
         # memoria: «2.7 contra una meta de 0.42» cuando la ley fija 0.44.
         "tabla_de_veredictos_por_indicador": tabla_semaforo(
-            veredictos, numerados, exp.meta.get("ejes") or {}),
+            veredictos, numerados, exp.meta.get("ejes") or {}, _origenes(expediente_id)),
         "regla_de_la_tabla": (
             "Toda cifra que atribuyas a un indicador —su meta, su valor observado, su "
             "distancia— sale de `tabla_de_veredictos_por_indicador` y de ningún otro lado. No "
-            "la recuerdes de otra sección ni la deduzcas del nombre del indicador. Y el "
-            "reparto por fin se cuenta sobre esta tabla, no a ojo."),
+            "la recuerdes de otra sección ni la deduzcas del nombre del indicador. El reparto "
+            "por fin se cuenta sobre esta tabla, no a ojo. Y la independencia de la evidencia "
+            "se lee en la columna `origen_de_la_evidencia` de la MISMA fila: solo "
+            "`instrumento_de_tercero` es una medición independiente del evaluado. No cruces "
+            "esta tabla con el bloque de verificabilidad de memoria — así se publicó que «el "
+            "único logro con respaldo independiente es el 2.38» cuando ninguno de los logros "
+            "lo tiene."),
+        "regla_de_la_notacion_numerica": (
+            "Notación española y UNA sola en todo el informe: punto para los miles y coma "
+            "para los decimales —10.103,5 y no «10.103.5» ni «10,103.5»—. El contexto te "
+            "sirve los números en notación de máquina (10103.5); formatearlos es tuyo, y "
+            "mezclar las dos convenciones en un mismo número desacredita la tabla entera."),
         "vocabulario_obligatorio": {
             "no_alcanzara": ("Usá esta palabra cuando el veredicto lo diga. NO la traduzcas a "
                              "«avance moderado» ni a ninguna forma que suene a progreso: es "
