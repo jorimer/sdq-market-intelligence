@@ -731,3 +731,27 @@ class TestUnHallazgoNoSeLeeComoSinMedicion:
         assert c["propuestos_por_motivo"], "la cifra sola se lee como trabajo pendiente"
         assert sum(c["propuestos_por_motivo"].values()) == c["propuestos_sin_verificar"]
         assert "HALLAZGOS" in c["nota"]
+
+
+def test_la_serie_LLEGA_al_semaforo_cuando_el_hallazgo_es_sobre_la_ley():
+    """El guard que faltaba, y sin el cual el veredicto nuevo no se emitía nunca.
+
+    `series_de` traía series solo de los bindings que CUENTAN, con un motivo que era bueno:
+    servirle al semáforo la serie de un propuesto le haría emitir un veredicto sobre una
+    hipótesis. Pero `linea_base_no_reproduce` no es una hipótesis —la serie está medida y
+    comprobada, y lo que no cierra es la línea base de la LEY—, así que negarle la serie
+    dejaba el veredicto `medido_sin_certificar` inalcanzable: el código existía y no corría.
+
+    Los otros dos motivos siguen sin serie, y con razón.
+    """
+    from modules.law_intel.series import series_de
+
+    bs = cargar_bindings(EXPEDIENTE)
+    pedidas = []
+    series_de(bs, lambda s: pedidas.append(s) or [])
+    for ind in ("2.33", "3.30"):
+        assert bs[ind].serie in pedidas, f"{ind}: sin serie, el veredicto nunca se emite"
+    for ind in ("2.28", "2.4"):
+        b = bs[ind]
+        assert not b.cuenta and b.serie not in pedidas, (
+            f"{ind} declara «{b.sin_veredicto_por}» y no debe recibir serie")
