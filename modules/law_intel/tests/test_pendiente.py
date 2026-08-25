@@ -233,6 +233,51 @@ class TestLoQueViajaAlModelo:
         assert r["total_indicadores"] == 2
 
 
+class TestLasRAZONESviajanRESUELTAS:
+    """El guard de cifra sin respaldo vetó un Insight entero por un «48,9%».
+
+    Era 44/90 —los evaluados sobre el total de la ley—: aritmética correcta que el contexto
+    no traía. La cura no es aflojar el guard, es que la relación llegue computada. Dejar el
+    hueco es lo que lo llena mal.
+    """
+
+    def test_el_resumen_de_lo_pendiente_trae_sus_RAZONES(self):
+        ps = ([evaluar(_ind({"2030": 80.0}), _binding(),
+                       [("2020", 40.0), ("2024", 44.0)], "2030")] * 3
+              + [evaluar(_ind({"2030": 80.0}), _binding(),
+                         [("2020", 70.0), ("2024", 85.0)], "2030")])
+        r = resumen(ps)
+        assert r["pct_no_llegan_sobre_las_proyectables"] == 100.0
+        assert r["pct_ya_alcanzadas_sobre_las_que_tienen_meta_al_horizonte"] == 25.0
+        assert r["pct_en_trayectoria_sobre_las_proyectables"] == 0.0
+
+    def test_cada_razon_NOMBRA_su_denominador_en_la_clave(self):
+        """El sujeto viaja con el número: `pct_no_llegan` a secas se reatribuye al
+        denominador más cercano, y acá conviven tres poblaciones distintas."""
+        r = resumen([evaluar(_ind({"2030": 80.0}), _binding(),
+                             [("2020", 40.0), ("2024", 44.0)], "2030")])
+        for clave in (k for k in r if k.startswith("pct_")):
+            assert "_sobre_" in clave, f"«{clave}» no dice sobre qué población se computa"
+
+    def test_sin_universo_la_razon_es_None_y_no_CERO(self):
+        """Cero por ciento y «no hay sobre qué computarlo» son cosas distintas."""
+        r = resumen([])
+        assert r["pct_no_llegan_sobre_las_proyectables"] is None
+        assert r["pct_ya_alcanzadas_sobre_las_que_tienen_meta_al_horizonte"] is None
+
+
+def test_el_semaforo_tambien_entrega_sus_razones_resueltas():
+    from modules.law_intel.scoring.semaforo import Veredicto
+    from modules.law_intel.scoring.semaforo import resumen as resumen_semaforo
+    vs = ([Veredicto(f"a{k}", "alcanzada") for k in range(11)]
+          + [Veredicto(f"b{k}", "no_alcanzada") for k in range(33)]
+          + [Veredicto(f"c{k}", "sin_medicion") for k in range(46)])
+    r = resumen_semaforo(vs)
+    assert r["pct_evaluados_sobre_el_total_de_la_ley"] == 48.9      # 44 de 90
+    assert r["pct_sin_veredicto_sobre_el_total_de_la_ley"] == 51.1
+    assert r["pct_sobre_evaluados"] == 25.0                          # 11 de 44
+
+
 def test_el_panel_recorre_toda_la_ley():
     inds = [_ind({"2030": 80.0}),
             Indicador(id="3.1", eje=3, nombre="Otro", escala="numerica",

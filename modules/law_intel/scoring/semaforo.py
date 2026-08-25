@@ -358,9 +358,22 @@ def resumen(veredictos: Sequence[Veredicto]) -> Dict[str, object]:
         "cumplen": sum(1 for v in evaluados if v.cumple),
         "pct_sobre_evaluados": (round(100.0 * sum(1 for v in evaluados if v.cumple)
                                       / len(evaluados), 1) if evaluados else None),
+        # Las dos razones que el redactor va a necesitar, COMPUTADAS. No estaban, y el
+        # modelo las derivó: escribió «48,9%» —que es 44/90, aritmética correcta— y el guard
+        # de cifra sin respaldo vetó la entrega del Insight, con razón. La cura no es
+        # aflojar el guard: es que la relación viaje resuelta. Dejar el hueco es lo que lo
+        # llena mal, y acá el hueco eran dos divisiones que el contexto ya tenía servidas
+        # como numerador y denominador sueltos.
+        "pct_evaluados_sobre_el_total_de_la_ley": (
+            round(100.0 * len(evaluados) / len(veredictos), 1) if veredictos else None),
+        "pct_sin_veredicto_sobre_el_total_de_la_ley": (
+            round(100.0 * (len(veredictos) - len(evaluados)) / len(veredictos), 1)
+            if veredictos else None),
         "por_veredicto": dict(sorted(conteo.items())),
-        "nota": ("El porcentaje se computa sobre los EVALUADOS, no sobre el total de la ley: "
-                 "«no cumple» y «no lo medimos» son cosas distintas."),
+        "nota": ("El porcentaje de CUMPLIMIENTO se computa sobre los EVALUADOS, no sobre el "
+                 "total de la ley: «no cumple» y «no lo medimos» son cosas distintas. Las "
+                 "otras dos razones nombran su denominador en la clave; usalas tal cual y no "
+                 "derives ninguna división por tu cuenta."),
     }
 
 
