@@ -594,6 +594,80 @@ def _md_to_flowables(text: str, styles) -> List:
     return out
 
 
+def _build_aportes_table(trajectories: Dict, entity_type: Optional[str], styles) -> List:
+    """QUÉ MOVIÓ el score, en la página — no solo en la prosa.
+
+    La descomposición ya viaja al modelo (`derived.aportes_al_cambio`), pero si no se imprime,
+    la afirmación «el deterioro lo impulsó X» le queda al lector como un acto de fe. Es la
+    misma lección que la tabla de trayectoria documenta arriba: si la narrativa razona sobre
+    una cifra, esa cifra tiene que estar en la página.
+
+    Y acá la verificación es especialmente barata: **cada columna SUMA el cambio total**. El
+    lector puede comprobar la atribución con la mesa, que es exactamente lo que no pudo hacer
+    con el informe donde la §1 adjudicó a la eficiencia un semestre en el que la eficiencia
+    había mejorado.
+
+    Se imprimen las ventanas que la serie soporta; con menos de dos cortes, nada.
+    """
+    from shared.narrative.derived import aportes_al_cambio
+    from modules.banking_score.scoring.weights import get_sub_component_weights
+
+    sub = trajectories.get("sub") or {}
+    if not sub:
+        return []
+    ventanas = aportes_al_cambio(sub, get_sub_component_weights(entity_type))
+    if not ventanas:
+        return []
+
+    elements: List = [Paragraph("Qué movió el score", styles["SDQHeading"])]
+    cols = [v["ventana"].replace("el último ", "").capitalize() for v in ventanas]
+    rows = [["Sub-componente"] + cols]
+    for key in SUB_COMPONENT_LABELS:
+        fila = [SUB_COMPONENT_LABELS[key]]
+        visto = False
+        for v in ventanas:
+            ap = next((a for a in v["aportes"] if a["componente"] == key), None)
+            fila.append(f"{ap['aporte_al_cambio']:+.2f}" if ap else "—")
+            visto = visto or ap is not None
+        if visto:
+            rows.append(fila)
+    if len(rows) == 1:
+        return []
+    rows.append([Paragraph("<b>Cambio total</b>", styles["SDQTableCellBold"])]
+                + [Paragraph(f"<b>{v['cambio_total']:+.2f}</b>", styles["SDQTableCellBold"])
+                   for v in ventanas])
+
+    ancho = [2.5 * inch] + [1.15 * inch] * len(cols)
+    elements.append(_branded_table(rows, ancho, styles, font_size=9.5, padding=5))
+    elements.append(Spacer(1, 0.08 * inch))
+    elements.append(Paragraph(
+        "Aporte = variación del score del sub-componente × su peso. Cada columna SUMA el "
+        "cambio total del período, de modo que la atribución es verificable contra esta "
+        "tabla: la dimensión que más se mueve no es necesariamente la que más mueve el "
+        "resultado.", styles["SDQSmall"]))
+    return elements
+
+
+def _build_banda_del_periodo(trajectories: Dict, styles) -> List:
+    """Una línea: en qué banda abrió y cerró la ventana, y si cambió.
+
+    El cambio de banda es el hecho que un comité recuerda del año, y hasta ahora había que
+    deducirlo comparando la portada con la tabla de trayectoria. En 2025, 18 de 86 entidades
+    del panel cambiaron de banda.
+    """
+    overall = trajectories.get("overall") or []
+    if len(overall) < 2:
+        return []
+    ini, fin = overall[0], overall[-1]
+    b0, b1 = ini.get("banda_resiliencia"), fin.get("banda_resiliencia")
+    if not b0 or not b1:
+        return []
+    lapso = f"{ini['period_end'][:7]} → {fin['period_end'][:7]}"
+    texto = (f"Banda de resiliencia en la ventana ({lapso}): <b>{b0}</b> → <b>{b1}</b>"
+             + ("" if b0 == b1 else " — <b>cambió de banda en el período</b>"))
+    return [Paragraph(texto, styles["SDQSmall"]), Spacer(1, 0.12 * inch)]
+
+
 def _build_narrative_sections(narratives: Dict[str, str], styles) -> List:
     elements: List = []
     n = 0
@@ -893,6 +967,13 @@ async def generate_pdf_report(
         traj_els = _build_trajectory_table(trajectories, styles)
         if traj_els:
             body.extend(traj_els)
+            body.extend(_build_banda_del_periodo(trajectories, styles))
+            body.append(Spacer(1, 0.3 * inch))
+        # Qué movió el score: la descomposición que la narrativa ya recibe, ahora también
+        # impresa — sin ella la atribución le queda al lector como acto de fe.
+        ap_els = _build_aportes_table(trajectories, scoring_result.get("entity_type"), styles)
+        if ap_els:
+            body.extend(ap_els)
             body.append(Spacer(1, 0.3 * inch))
 
     # 3b. Pulse — distribución del sistema por banda (opt-in, anonimizado).
