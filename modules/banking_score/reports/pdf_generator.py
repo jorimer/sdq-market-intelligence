@@ -668,6 +668,79 @@ def _build_banda_del_periodo(trajectories: Dict, styles) -> List:
     return [Paragraph(texto, styles["SDQSmall"]), Spacer(1, 0.12 * inch)]
 
 
+def _build_anuario_tables(anuario: Dict, styles) -> List:
+    """Las tablas del ANUARIO: el año del sistema, por tipo y los cambios de banda.
+
+    Todas las cifras vienen computadas (`reports/anuario`). Se imprimen porque un anuario que
+    afirma «la banca múltiple se deterioró» sin la tabla al lado es una opinión: con ella, es
+    una lectura que el lector audita.
+
+    La MEDIANA es el titular y la media va al lado. Cuando divergen —caso real de 2025: la
+    media sube y la mediana baja— la nota lo dice, porque titular con la media estaría
+    técnicamente respaldado y sería falso como lectura.
+    """
+    if not anuario:
+        return []
+    elements: List = []
+    sis = anuario.get("sistema") or {}
+
+    por_corte = sis.get("por_corte") or []
+    if por_corte:
+        elements.append(Paragraph(f"El sistema en {anuario.get('anio', '')}",
+                                  styles["SDQHeading"]))
+        rows = [["Corte", "Mediana", "Media", "n"]]
+        rows += [[c["corte"][:7], f"{c['mediana']:.2f}", f"{c['media']:.2f}", str(c["n"])]
+                 for c in por_corte]
+        elements.append(_branded_table(rows, [1.6 * inch, 1.2 * inch, 1.2 * inch, 0.8 * inch],
+                                       styles, font_size=9.5, padding=5))
+        nota = ("Mediana = la lectura del sistema; la media se muestra al lado por "
+                "transparencia.")
+        if sis.get("medias_y_medianas_divergen"):
+            nota += (" <b>En este período media y mediana se mueven en sentidos opuestos</b>: "
+                     "a la media la levantan unos pocos extremos, así que el año se lee por la "
+                     "mediana.")
+        elements.append(Spacer(1, 0.08 * inch))
+        elements.append(Paragraph(nota, styles["SDQSmall"]))
+        elements.append(Spacer(1, 0.25 * inch))
+
+    tipos = anuario.get("por_tipo") or []
+    if tipos:
+        elements.append(Paragraph("Cambio del año por tipo de entidad", styles["SDQHeading"]))
+        rows = [["Tipo de entidad", "Entidades", "Cambio mediano", "Lectura"]]
+        rows += [[_TIPO_LABEL.get(t["tipo"], t["tipo"]), str(t["n"]),
+                  f"{t['cambio_mediana']:+.2f}", t["direccion"]] for t in tipos]
+        elements.append(_branded_table(rows, [2.1 * inch, 0.9 * inch, 1.3 * inch, 1.1 * inch],
+                                       styles, font_size=9.5, padding=5))
+        elements.append(Spacer(1, 0.25 * inch))
+
+    bandas = anuario.get("cambios_de_banda") or []
+    if bandas:
+        elements.append(Paragraph("Entidades que cambiaron de banda", styles["SDQHeading"]))
+        rows = [["Entidad", "Desde", "Hasta", "Δ Score"]]
+        rows += [[b["entidad"], str(b["desde"]), str(b["hasta"]),
+                  f"{b['cambio_score']:+.2f}"] for b in bandas]
+        elements.append(_branded_table(rows, [2.5 * inch, 1.1 * inch, 1.1 * inch, 0.8 * inch],
+                                       styles, font_size=9, padding=4))
+        elements.append(Spacer(1, 0.25 * inch))
+
+    uni = anuario.get("universo") or {}
+    if uni:
+        # El universo se DECLARA y las parciales se NOMBRAN. Ocultarlas sería peor que
+        # excluirlas: desaparecerían sin aviso.
+        texto = (f"Universo: {uni.get('comparables')} entidades con todos los cortes del año "
+                 f"(de {uni.get('vistas_en_el_anio')} vistas). Los agregados y el orden se "
+                 "computan solo sobre ellas.")
+        parc = uni.get("parciales") or []
+        if parc:
+            detalle = "; ".join(f"{x['entidad']} ({x['cortes_presentes']}/{x['de']})"
+                                for x in parc)
+            texto += (f" Quedan fuera del orden, por año incompleto: {detalle}. No se ocultan: "
+                      "un año parcial no se rankea contra uno completo.")
+        elements.append(Paragraph(texto, styles["SDQSmall"]))
+        elements.append(Spacer(1, 0.2 * inch))
+    return elements
+
+
 def _build_narrative_sections(narratives: Dict[str, str], styles) -> List:
     elements: List = []
     n = 0
@@ -725,6 +798,13 @@ def _build_peer_block(peer_block: Dict, styles) -> List:
     elements.append(table)
     return elements
 
+
+_TIPO_LABEL = {
+    "banca_multiple": "Banca múltiple", "aap": "Asociaciones de ahorros y préstamos",
+    "banco_ahorro_credito": "Bancos de ahorro y crédito",
+    "corporacion_credito": "Corporaciones de crédito", "cambiaria": "Agentes de cambio",
+    "fiduciaria": "Fiduciarias",
+}
 
 _MACRO_DIR_LABEL = {"favorable": "Favorable", "adverso": "Adverso", "neutral": "Neutral"}
 
@@ -890,6 +970,7 @@ async def generate_pdf_report(
     sample: bool = False,
     band_distribution: Optional[Dict[str, int]] = None,
     peer_block: Optional[Dict] = None,
+    anuario: Optional[Dict] = None,
 ) -> str:
     """Generate a branded PDF report and return the file path.
 
@@ -975,6 +1056,11 @@ async def generate_pdf_report(
         if ap_els:
             body.extend(ap_els)
             body.append(Spacer(1, 0.3 * inch))
+
+    # 3a-ter. ANUARIO — las tablas del año del sistema. Van arriba porque son el SUJETO del
+    # documento, no un anexo: el anuario no analiza una entidad, analiza el año.
+    if anuario:
+        body.extend(_build_anuario_tables(anuario, styles))
 
     # 3b. Pulse — distribución del sistema por banda (opt-in, anonimizado).
     if band_distribution:
