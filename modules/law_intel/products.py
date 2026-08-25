@@ -98,6 +98,29 @@ AI_CONTEXT_FILES = ("ai_context.py", "scoring/accionabilidad.py", "scoring/fines
 # profundidad, y no se diferencian por cuántas secciones traen. Un lector que no viene a
 # enmendar la ley (un ministerio, un organismo, la prensa) necesita esa lectura; la anterior
 # —cumplimiento, verificabilidad, brechas— era el índice de una auditoría de redacción.
+#: Qué plantilla usa cada sección. **Una por sección, y no `sector_decision` para todas.**
+#:
+#: El módulo pedía las cinco secciones con la plantilla de cierre accionable —180 palabras,
+#: «NO repitas el panorama ya expuesto»— y el contexto completo en cada una. Salían cinco
+#: resúmenes ejecutivos de 500 palabras con el mismo esqueleto, y «Lo que se logró» no
+#: listaba lo logrado. El reparto de la pregunta ES el producto: cada sección contesta una y
+#: cede las otras.
+_SECTION_TEMPLATES = {
+    "estado_de_la_ley": "ley_estado",
+    "logrado": "ley_logrado",
+    "no_logrado": "ley_no_logrado",
+    "pendiente": "ley_pendiente",
+    "brechas": "ley_brechas",
+    "coherencia_proceso": "ley_coherencia",
+    "verificabilidad": "ley_verificabilidad",
+    "recomendaciones": "ley_recomendaciones",
+}
+
+#: La que se usa cuando una sección no declara la suya. Se nombra en vez de quedar implícita:
+#: una sección nueva que caiga acá va a producir un resumen ejecutivo más, y el test
+#: estructural lo veta antes.
+_TEMPLATE_POR_DEFECTO = "sector_decision"
+
 _SECTION_TITLES = {
     "estado_de_la_ley": "Dónde está la ley frente a lo que se propuso",
     "logrado": "Lo que se logró",
@@ -457,7 +480,8 @@ class LawProduct:
             propio = dict(ctx)
             propio["seccion_pedida"] = _SECTION_TITLES.get(sec, sec)
             pendientes.append((sec, dict(
-                context=propio, template="sector_decision",
+                context=propio,
+                template=_SECTION_TEMPLATES.get(sec, _TEMPLATE_POR_DEFECTO),
                 mode=section_mode(tier, sec, secciones,
                                   deep_section=_SECCION_PROFUNDA),
                 axis="law_intel", audience="cliente / comisión")))

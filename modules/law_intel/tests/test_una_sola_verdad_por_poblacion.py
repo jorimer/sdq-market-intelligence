@@ -178,3 +178,49 @@ def test_toda_razon_de_cumplimiento_viaja_con_su_COMPLEMENTO(eid):
         if f["evaluados_en_este_informe"]:
             assert round(f["pct_alcanzadas_sobre_evaluados"]
                          + f["pct_no_alcanzadas_sobre_evaluados"]) == 100
+
+
+class TestCadaSeccionContestaUNAPregunta:
+    """El informe salían cinco resúmenes ejecutivos apilados, no cinco secciones.
+
+    Las cinco se pedían con `sector_decision` —una plantilla de CIERRE accionable de 180
+    palabras que dice «NO repitas el panorama ya expuesto»— y el contexto completo en cada
+    una. Salían cinco textos de ~500 palabras con el mismo esqueleto SCQA, cada uno
+    recontando el total de indicadores, la cobertura y la tasa de cumplimiento. La sección
+    «Lo que se logró» no listaba lo logrado.
+    """
+
+    def test_TODA_seccion_de_TODO_nivel_tiene_su_propia_plantilla(self):
+        from modules.law_intel.products import _SECTION_TEMPLATES, law_manifest
+        sin_propia = {
+            tier.value: [s for s in nivel.sections if s not in _SECTION_TEMPLATES]
+            for tier, nivel in law_manifest().levels.items()}
+        assert not any(sin_propia.values()), (
+            "secciones que caerían en la plantilla genérica y producirían otro resumen "
+            f"ejecutivo: {sin_propia}")
+
+    def test_las_plantillas_declaradas_EXISTEN_en_el_motor(self):
+        from shared.narrative.claude_engine import THIN_TEMPLATES
+
+        from modules.law_intel.products import _SECTION_TEMPLATES
+        faltan = [v for v in _SECTION_TEMPLATES.values() if v not in THIN_TEMPLATES]
+        assert not faltan, f"plantillas declaradas que el motor no conoce: {faltan}"
+
+    def test_cada_seccion_usa_una_plantilla_DISTINTA(self):
+        """Dos secciones con la misma plantilla son dos veces el mismo texto."""
+        from modules.law_intel.products import _SECTION_TEMPLATES
+        vistas = list(_SECTION_TEMPLATES.values())
+        assert len(vistas) == len(set(vistas))
+
+    def test_solo_la_seccion_de_ESTADO_da_el_panorama(self):
+        """Las demás lo dan por dicho: es lo que las vuelve secciones y no resúmenes."""
+        from shared.narrative.claude_engine import THIN_TEMPLATES
+
+        from modules.law_intel.products import _SECTION_TEMPLATES
+        for seccion, plantilla in _SECTION_TEMPLATES.items():
+            texto = THIN_TEMPLATES[plantilla]
+            if seccion == "estado_de_la_ley":
+                assert "ÚNICA sección que da el panorama" in texto
+            else:
+                assert "El panorama YA SE DIO" in texto, (
+                    f"«{seccion}» no le prohíbe al modelo recontar el panorama")
