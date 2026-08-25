@@ -483,6 +483,24 @@ THIN_TEMPLATES = {
         "posición vs pares si se provee, y un veredicto puntual con qué vigilar. NO repitas el "
         "panorama global del banco ni otros sub-componentes."
     ),
+    "anuario_sistema": (
+        "Escribí la lectura del AÑO del sistema bancario dominicano.\n"
+        "Contexto:\n{context}\n\n"
+        "Máximo 450 palabras. El sujeto es el SISTEMA, no una entidad; podés y debés nombrar "
+        "entidades cuando el dato las nombra.\n\n"
+        "EL ESTADÍSTICO ES LA MEDIANA. Si 'medias_y_medianas_divergen' es verdadero, la media y "
+        "la mediana se mueven en sentidos OPUESTOS y las dos son correctas: titulá con la "
+        "mediana, decí explícitamente que discrepan y por qué (a la media la levantan unos pocos "
+        "extremos). Nunca titules el año con la media.\n\n"
+        "DECLARÁ EL UNIVERSO al menos una vez: cuántas entidades entran al orden y cuántas "
+        "quedan fuera por año incompleto. Las parciales existen y se nombran; no se rankean.\n\n"
+        "'por_tipo' trae el cambio MEDIANO de cada tipo de entidad, ya computado y ordenado: es "
+        "el hallazgo estructural del año y merece el centro. 'extremos' son las COLAS: "
+        "describilos como casos, jamás como el comportamiento del sistema. 'cambios_de_banda' "
+        "son hechos, no opiniones: nombralos con su dirección.\n\n"
+        "No recalcules ninguna cifra: todas vienen resueltas. Si una relación no está servida, "
+        "expresala en palabras sin número."
+    ),
     "sector_outlook": (
         "Explica el FUNDAMENTO del atractivo de inversión (IAI) de este sector.\n"
         "Contexto:\n{context}\n\n"
