@@ -389,7 +389,8 @@ def resumen(veredictos: Sequence[Veredicto]) -> Dict[str, object]:
 
 
 def tabla(veredictos: Sequence[Veredicto], indicadores: Sequence[Indicador],
-          nombres_de_eje: Optional[Dict[int, str]] = None) -> List[Dict[str, Any]]:
+          nombres_de_eje: Optional[Dict[int, str]] = None,
+          origen_de_la_evidencia: Optional[Dict[str, str]] = None) -> List[Dict[str, Any]]:
     """Una fila POR INDICADOR con veredicto: la evidencia que el informe tiene que citar.
 
     **Existe porque el contexto solo llevaba conteos agregados.** A las secciones «Lo que se
@@ -403,11 +404,20 @@ def tabla(veredictos: Sequence[Veredicto], indicadores: Sequence[Indicador],
     respaldado. Comprueba PRESENCIA, no ATRIBUCIÓN — una meta que existe pero pertenece a
     otro indicador pasa el filtro. La única cura es que la fila correcta esté servida.
 
+    **Y cada fila lleva el ORIGEN de su evidencia.** Sin esa columna, la sección de logros
+    tenía que cruzar esta tabla con el bloque de verificabilidad, y lo cruzó mal: escribió
+    «el único logro con respaldo metodológico independiente es el 2.38» cuando los únicos dos
+    indicadores con medición independiente son el 1.1 y el 2.17, y **ninguno está entre los
+    logros**. La afirmación verdadera era más fuerte que la publicada: ninguno de los once
+    logros descansa en evidencia independiente del evaluado. Un cruce que el contexto no
+    resuelve es un cruce que el redactor hace a ojo.
+
     Solo los que producen veredicto de cumplimiento: los demás no tienen meta que citar y
     llenarían la tabla de huecos que el redactor trataría de completar.
     """
     del_indicador = {i.id: i for i in indicadores}
     ejes = nombres_de_eje or {}
+    origenes = origen_de_la_evidencia or {}
     filas: List[Dict[str, Any]] = []
     for v in veredictos:
         if v.cumple is None:
@@ -427,6 +437,7 @@ def tabla(veredictos: Sequence[Veredicto], indicadores: Sequence[Indicador],
             "periodo_observado": v.periodo_observado,
             "distancia_a_la_meta": v.distancia,
             "trayectoria": v.trayectoria,
+            "origen_de_la_evidencia": origenes.get(v.indicador, ""),
             "lectura_ya_redactada": v.motivo or "",
         })
     return filas
