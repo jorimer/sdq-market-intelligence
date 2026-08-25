@@ -55,25 +55,38 @@ def _upsert_series(
     db: Session, records, *, lineage: Lineage, entity_slug: Optional[str]
 ) -> int:
     """Upsert ``Record``\\ s into ``pension_series`` (own existence check — NULL
-    entity_slug isn't deduped by the DB unique index). Returns rows touched."""
+    entity_slug isn't deduped by the DB unique index). Returns rows touched.
+
+    With ``autoflush=False`` (the shared ``SessionLocal``) the existence query can't
+    see rows still pending in the session, so two callers that share a (code, period,
+    slug) key — e.g. the fixture floor and a live channel both carrying 2025-04 — would
+    each add a fresh row: a hard UNIQUE failure for a real slug, or a silent duplicate
+    for NULL slug (NULLs are distinct in the index). We guard both by deduping keys
+    touched in this call and flushing at the end so the next call's query sees them.
+    """
     touched = 0
+    seen: Dict[tuple, PensionSeries] = {}
     for r in records:
-        row = (
-            db.query(PensionSeries)
-            .filter(
-                PensionSeries.series_code == r.series,
-                PensionSeries.period == r.period,
-                PensionSeries.entity_slug.is_(None)
-                if entity_slug is None
-                else PensionSeries.entity_slug == entity_slug,
+        key = (r.series, r.period, entity_slug)
+        row = seen.get(key)
+        if row is None:
+            row = (
+                db.query(PensionSeries)
+                .filter(
+                    PensionSeries.series_code == r.series,
+                    PensionSeries.period == r.period,
+                    PensionSeries.entity_slug.is_(None)
+                    if entity_slug is None
+                    else PensionSeries.entity_slug == entity_slug,
+                )
+                .first()
             )
-            .first()
-        )
         if row is None:
             row = PensionSeries(
                 series_code=r.series, period=r.period, entity_slug=entity_slug,
             )
             db.add(row)
+        seen[key] = row
         row.value = r.value
         row.unit = r.unit
         row.frequency = _frequency_for(r.period)
@@ -83,6 +96,7 @@ def _upsert_series(
         # readiness G1 has a freshness signal — consistent with financials/cartera syncs.
         row.published_at = lineage.published_at or lineage.fetched_at
         touched += 1
+    db.flush()  # make this batch visible to later batches' existence checks (autoflush=False)
     return touched
 
 
