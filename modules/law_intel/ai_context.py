@@ -32,6 +32,9 @@ from modules.law_intel.scoring.brecha import resumen as resumen_brecha
 from modules.law_intel.scoring.coherencia_proceso import revisar
 from modules.law_intel.scoring.fines import por_fin
 from modules.law_intel.scoring.fines import publicable as fines_publicable
+from modules.law_intel.scoring.pendiente import horizonte_de
+from modules.law_intel.scoring.pendiente import panel as panel_pendiente
+from modules.law_intel.scoring.pendiente import publicable as pendiente_publicable
 from modules.law_intel.scoring.semaforo import panel
 from modules.law_intel.scoring.semaforo import resumen as resumen_semaforo
 from modules.law_intel.verificabilidad import publicable as verificabilidad_publicable
@@ -91,6 +94,12 @@ def law_ai_context(expediente_id: str, corte: str,
     # El FIN es la unidad de lectura del informe. Se computa acá —y no en el prompt— porque
     # «la mayoría» de siete contra veintiuno es una relación, y las relaciones se computan.
     fines = por_fin(numerados, veredictos, exp.meta.get("ejes") or {})
+    # Lo PENDIENTE: las metas que aún no vencen, proyectadas al horizonte que declara la
+    # propia ley. Solo si ese horizonte es posterior al corte — una ley ya vencida no tiene
+    # nada por delante, y proyectar hacia atrás sería inventar un plazo.
+    horizonte = horizonte_de(exp.meta)
+    pendientes = (panel_pendiente(numerados, bs, series or {}, horizonte)
+                  if horizonte and horizonte > corte else [])
 
     return {
         "instrumento": {
@@ -151,6 +160,11 @@ def law_ai_context(expediente_id: str, corte: str,
         # ley está consiguiendo lo que se propuso, y el conteo por indicador es la evidencia
         # de esa respuesta, no la respuesta.
         **fines_publicable(fines),
+        # ── Lo que la ley todavía tiene por delante. ──
+        # Una meta que no venció NO se puede incumplir: este bloque trae su propio
+        # vocabulario justamente para que el modelo no arrastre el del corte vencido.
+        **(pendiente_publicable(pendientes, horizonte)
+           if pendientes and horizonte else {}),
         # ── Veredictos YA COMPUTADOS. El modelo los copia, no los deriva. ──
         "veredictos_por_indicador_computados": resumen_semaforo(veredictos),
         "vocabulario_obligatorio": {

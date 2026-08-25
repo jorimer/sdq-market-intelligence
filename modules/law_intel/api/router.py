@@ -46,6 +46,9 @@ from modules.law_intel.scoring.coherencia_proceso import revisar
 from modules.law_intel.scoring.brecha import resumen as resumen_brecha
 from modules.law_intel.scoring.fines import ESTADOS, por_fin
 from modules.law_intel.scoring.fines import publicable as fines_publicable
+from modules.law_intel.scoring.pendiente import horizonte_de
+from modules.law_intel.scoring.pendiente import panel as panel_pendiente
+from modules.law_intel.scoring.pendiente import publicable as pendiente_publicable
 from modules.law_intel.scoring.semaforo import VEREDICTOS, panel
 from modules.law_intel.scoring.semaforo import resumen as resumen_semaforo
 from shared.auth.dependencies import get_current_user, require_role
@@ -244,6 +247,33 @@ def fines_(expediente_id: str,
     fines = por_fin(e.numerados, veredictos, e.meta.get("ejes") or {})
     return {"instrumento": {"id": e.id, "norma": e.norma}, "corte": corte,
             **fines_publicable(fines), "estados": ESTADOS}
+
+
+@router.get("/{expediente_id}/pendiente")
+def pendiente_(expediente_id: str,
+               db: Session = Depends(get_db),
+               _: User = Depends(get_current_user)) -> Dict[str, Any]:
+    """Las metas que TODAVÍA NO vencen, proyectadas al horizonte que declara la ley.
+
+    El horizonte sale de `vigencia_hasta` del expediente y no de un año escrito en el código:
+    la END vence en 2030 y el Decreto 337-24 en 2036.
+
+    **Ningún estado de esta ruta afirma incumplimiento.** Una meta que no venció no se puede
+    incumplir, y lo que se computa es si al ritmo OBSERVADO se llega — que es una
+    extrapolación lineal declarada, no un pronóstico.
+    """
+    e = _expediente(expediente_id)
+    horizonte = horizonte_de(e.meta)
+    if not horizonte:
+        raise HTTPException(status_code=422,
+                            detail=(f"El expediente '{expediente_id}' no declara "
+                                    f"`vigencia_hasta`: sin horizonte no hay proyección que "
+                                    f"computar, y suponerlo sería inventar el plazo."))
+    bs = cargar_bindings(expediente_id)
+    pendientes = panel_pendiente(e.numerados, bs, series_de(bs, proveedor_registro(db)),
+                                 horizonte)
+    return {"instrumento": {"id": e.id, "norma": e.norma},
+            **pendiente_publicable(pendientes, horizonte)}
 
 
 @router.get("/{expediente_id}/campo")

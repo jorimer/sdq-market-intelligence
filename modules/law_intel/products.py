@@ -88,7 +88,8 @@ DISPLAY = "SDQ Evaluación de Leyes"
 # módulo NO vive solo en `ai_context.py` — la mitad de lo que el modelo lee sale de las
 # frases ya redactadas por el motor de scoring.
 AI_CONTEXT_FILES = ("ai_context.py", "scoring/accionabilidad.py", "scoring/fines.py",
-                    "scoring/semaforo.py", "verificabilidad.py")
+                    "scoring/pendiente.py", "scoring/semaforo.py",
+                    "verificabilidad.py")
 
 _SECTION_TITLES = {
     "cumplimiento": "Cumplimiento de las metas",
