@@ -374,6 +374,32 @@ class SocialDevProduct:
         # Indicadores 2.20 y 4.2 de la END. Las dos llevan su salvedad en la nota: el año
         # de la línea base legal NO está en la serie del emisor, así que el contraste con
         # la ley se hace contra el año más cercano y eso se declara antes de medir.
+        # Registro Único de trámites (Ley 167-21). Alcance NACIONAL y período MENSUAL: es
+        # un catálogo vivo, no una estadística anual, y el mes es lo que deja ver si la
+        # cifra se mueve. La clave del porcentaje nombra su denominador porque acá conviven
+        # dos poblaciones —los catalogados y los que declaran— y `pct_con_tiempo` a secas se
+        # reatribuye al que quede más cerca.
+        "tramites_catalogados": (
+            "tramites_catalogados", HEALTH_ENTITY,
+            "Trámites publicados en el catálogo del Estado", "institutional",
+            "Portal Único de Servicios (gob.do). Cuántos procedimientos administrativos "
+            "publica el Estado. La Ley 167-21 (art. 39) obliga a publicarlos TODOS, y su "
+            "art. 40 le pone consecuencia: solo se puede exigir lo registrado. No alimenta "
+            "el índice de desarrollo."),
+        "tramites_con_tiempo_declarado": (
+            "tramites_con_tiempo_declarado", HEALTH_ENTITY,
+            "Trámites que declaran su tiempo de respuesta", "institutional",
+            "Cuántas fichas del catálogo dicen cuánto tarda el trámite. Lo exige la "
+            "Resolución 142-2024 del MAP —NO la Ley 167-21, que no nombra el tiempo de "
+            "respuesta—; la resolución se dicta al amparo del art. 42, que manda al "
+            "ministerio emitir los lineamientos. El dato se extrae de la PROSA de la ficha "
+            "con una gramática anclada: la API no tiene campo para esto."),
+        "tramites_pct_con_tiempo_sobre_los_catalogados": (
+            "tramites_pct_con_tiempo_sobre_los_catalogados", HEALTH_ENTITY,
+            "Trámites que declaran su tiempo, sobre los catalogados (%)", "institutional",
+            "La razón, servida y no derivada. Al 2026-08 son 3 de 710: 0,4%. Una cifra baja "
+            "acá NO dice que los trámites sean lentos — dice que no se sabe cuánto tardan, "
+            "que es otra afirmación y es la que el dato sostiene."),
         "public_education_spending": (
             "public_education_spending", HEALTH_ENTITY,
             "Gasto público en educación (% del PIB)", "education",

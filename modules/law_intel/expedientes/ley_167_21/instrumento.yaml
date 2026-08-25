@@ -1,0 +1,76 @@
+# EXPEDIENTE — Ley 167-21 de Mejora Regulatoria y Simplificación de Trámites
+#
+# El tercer expediente, y el primero de una clase distinta: **una ley de OBLIGACIONES, no de
+# metas.** La END fija 90 indicadores con valores a alcanzar; ésta no fija ninguno. Manda
+# hacer cosas —publicar, registrar, actualizar, consultar— con deudor y con plazo.
+#
+# Eso es exactamente lo que prueba el seam por el otro lado. El motor de veredictos se
+# apoya en metas numéricas; acá casi todo el peso está en `obligaciones.yaml`, y el
+# indicador único que se registra existe para que el instrumento tenga denominador y para
+# declarar, sin rodeos, que la ley NO fijó una cifra contra la cual juzgarse.
+#
+# **La pieza más fuerte de toda la ley es el artículo 40** y no se parece a nada de la END:
+# «Las autoridades administrativas solo podrán exigir procedimientos administrativos,
+# requisitos o pagos por derechos de tramitación que estén registrados en el Registro Único
+# de Mejora Regulatoria.» Es una consecuencia JURÍDICA, no una exhortación: un trámite que no
+# está registrado no es exigible. Los mecanismos de control de la END no tienen nada así —
+# ahí `consecuencia: null` era el hallazgo—.
+#
+# **Distinción de rango que este expediente no puede perder.** La ley obliga a publicar los
+# procedimientos (art. 39) y manda al MAP emitir los lineamientos de incorporación (art. 42).
+# El «tiempo de respuesta» de cada ficha lo exige la Resolución 142-2024 del MAP, dictada al
+# amparo de ese artículo — NO la ley. Atribuirle a la ley una exigencia que puso una
+# resolución es refutable leyendo la ley, y este producto se cae entero si eso pasa.
+
+id: ley-167-21
+titulo: Mejora Regulatoria y Simplificación de Trámites
+norma: Ley 167-21
+promulgada: "2021-08-09"
+
+# Art. 49: la ley entra en vigencia a los 180 días de su publicación (G.O. 11030, 12-ago-2021).
+# Se declara porque casi todos los plazos de las disposiciones transitorias cuelgan de ahí.
+entrada_en_vigencia: "2022-02-05"
+
+# La ley NO declara un horizonte de vigencia: no vence. Se deja en null a propósito — poner
+# una fecha inventada haría que el motor proyectara metas contra un plazo que nadie fijó.
+vigencia_hasta: null
+
+articulos_indicadores: []        # la ley no tiene articulado de indicadores
+
+# La ley no organiza por ejes temáticos. Un único grupo, rotulado por lo que es.
+ejes:
+  1: (sin ejes — la ley no los define)
+indicadores_por_eje: {1: 1}
+
+registro:
+  archivo: indicadores.csv
+  extraido_por: lectura directa del texto de la ley (G.O. 11030 del 12 de agosto de 2021)
+  metas_verificadas_a_mano: 1
+  nota: >-
+    La ley no fija ningún indicador con meta numérica. Se registra UNO —la publicación de
+    los procedimientos en el Registro Único— con escala redactada, porque su meta es
+    universal y está escrita en palabras: el artículo 39 obliga a publicar TODOS los
+    procedimientos, no un porcentaje de ellos. Registrar un 100% sería ponerle a la ley una
+    cifra que no escribió; declararlo redactado es decir lo que hay.
+
+    Y por eso el indicador NO lleva binding. Se ató primero y era un error: el campo computa
+    `meta_no_interpretable` desde la escala, y el binding habría declarado otro motivo para
+    el mismo indicador —dos verdades sobre el mismo hecho, que es el defecto que este módulo
+    persigue—. La serie del catálogo (`social_dev:tramites_catalogados`) se persiste igual y
+    entra por donde corresponde: como EVIDENCIA de la obligación del artículo 39, que es lo
+    que esta ley tiene y la END no —una obligación con consecuencia jurídica—.
+
+fuentes_admitidas:
+  - id: map
+    nombre: Ministerio de Administración Pública (MAP)
+    del_evaluado: true
+    nota: >-
+      Órgano rector de la mejora regulatoria (art. 27) y encargado del Registro Único
+      (art. 37). Es a la vez el obligado a supervisar y el productor del dato con el que se
+      lo juzga.
+  - id: ogtic
+    nombre: Oficina Gubernamental de Tecnologías de la Información y Comunicación (OGTIC)
+    del_evaluado: true
+    nota: >-
+      Dependencia del MAP (art. 35). Opera el Portal Único de Servicios, que es de donde
+      sale la medición del catálogo.

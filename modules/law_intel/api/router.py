@@ -367,6 +367,10 @@ def obligaciones_(expediente_id: str, _: User = Depends(get_current_user)) -> Di
             "estado": o.estado, "consecuencia": o.consecuencia, "plazo": o.plazo,
             "periodicidad": o.periodicidad, "evidencia": o.evidencia,
             "exigible": o.exigible, "produce": o.produce,
+            # La serie que sigue el cumplimiento, cuando existe. Un deber CONTINUO —publicar
+            # los procedimientos, mantenerlos actualizados— no se verifica una vez: se
+            # verifica mirando si la cifra se mueve, y esto dice dónde mirar.
+            "serie_de_seguimiento": o.serie_de_seguimiento,
             "habilita_exigir": o.habilita_exigir,
             "verificacion_pendiente": o.requiere_verificacion_antes_de_publicar,
             # El ALCANCE de verificación viaja: o qué se consulta contra la base normativa, o

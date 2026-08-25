@@ -1,0 +1,169 @@
+# OBLIGACIONES — Ley 167-21. Ver `end_2030/obligaciones.yaml` para la doctrina completa.
+#
+# **Lo que distingue a este expediente del de la END.** Allá `consecuencia: null` era el
+# hallazgo: ningún mecanismo de control tenía efecto jurídico asignado. Acá el artículo 40
+# SÍ le pone consecuencia a la obligación central, y de la clase más fuerte que hay — no una
+# sanción al funcionario, sino la INEXIGIBILIDAD del trámite frente al ciudadano. Eso hay que
+# decirlo, porque cambia qué se puede reclamar y con qué.
+#
+# Recordatorio de la distinción que más importa:
+#   incumplida            hay evidencia de que no se hizo. Exige `evidencia`.
+#   sin_registro_publico  no se encontró registro. NO afirma incumplimiento.
+
+version: "1.0"
+
+obligaciones:
+  - id: art-39-publicar-procedimientos
+    articulo: 39
+    deber: >-
+      Publicar en el Registro Único de Mejora Regulatoria todos los procedimientos
+      administrativos a cargo de cada ente u órgano de la Administración Pública.
+    deudor: {tipo: universo, nombre: Todos los entes y órganos de la Administración Pública}
+    periodicidad: continua
+    plazo: {tipo: desde_vigencia, vence: "2022-02-05"}
+    consecuencia: >-
+      Art. 40: las autoridades solo pueden exigir procedimientos, requisitos o pagos de
+      tramitación que estén registrados. Un procedimiento no publicado NO es exigible al
+      administrado.
+    estado: parcial
+    evidencia: >-
+      El Portal Único de Servicios publica 710 trámites de 91 instituciones (lectura del
+      2026-08-25). No hay forma pública de saber cuántos procedimientos existen en total,
+      así que la cobertura del registro no se puede computar: lo que se mide es lo publicado,
+      no la fracción publicada.
+    produce: [catalogo_de_tramites]
+    serie_de_seguimiento: social_dev:tramites_catalogados
+
+  - id: art-40-inexigibilidad
+    articulo: 40
+    deber: >-
+      No exigir procedimientos, requisitos ni pagos por derechos de tramitación que no estén
+      registrados en el Registro Único de Mejora Regulatoria.
+    deudor: {tipo: universo, nombre: Todas las autoridades administrativas}
+    periodicidad: continua
+    plazo: {tipo: desde_vigencia, vence: "2022-02-05"}
+    consecuencia: >-
+      La propia norma es la consecuencia: el requisito no registrado carece de exigibilidad.
+      Es el único mecanismo de este expediente que se puede oponer en un caso concreto.
+    estado: sin_registro_publico
+    evidencia: >-
+      No se localizó registro público de que la inexigibilidad se haya invocado ni resuelto.
+      NO es una afirmación de incumplimiento: es que no se encontró el registro.
+
+  - id: art-41-mantener-actualizado
+    articulo: 41
+    deber: >-
+      Mantener actualizada la información de los procedimientos administrativos a cargo de
+      cada ente y de sus regulaciones administrativas.
+    deudor: {tipo: universo, nombre: Todos los entes y órganos de la Administración Pública}
+    periodicidad: continua
+    plazo: {tipo: desde_vigencia, vence: "2022-02-05"}
+    consecuencia: null
+    estado: parcial
+    evidencia: >-
+      Las fichas del catálogo traen `updated_at` y se observó movimiento el mismo día de la
+      lectura (2026-08-25). Que se actualicen no dice que estén completas.
+
+  - id: art-42-lineamientos-del-map
+    articulo: 42
+    deber: >-
+      Emitir los lineamientos para la incorporación y vigencia de los procedimientos
+      administrativos al Registro Único de Mejora Regulatoria.
+    deudor: {tipo: organo, nombre: Ministerio de Administración Pública (MAP)}
+    periodicidad: unica
+    plazo: {tipo: sin_plazo_legal, vence: null}
+    consecuencia: null
+    estado: cumplida
+    evidencia: >-
+      Resolución 142-2024 del MAP, del 21 de mayo de 2024: aprueba la guía para la
+      identificación, estandarización y registro de los trámites y servicios públicos, y fija
+      los campos de la ficha —entre ellos el TIEMPO DE RESPUESTA—.
+    produce: [guia_de_registro_de_tramites]
+
+  - id: art-8-agenda-regulatoria
+    articulo: 8
+    deber: >-
+      Presentar y publicar en el Registro Único la agenda o planificación regulatoria, en los
+      primeros diez días hábiles de marzo y de septiembre de cada año.
+    deudor: {tipo: universo, nombre: Todos los entes y órganos de la Administración Pública}
+    periodicidad: semestral
+    plazo: {tipo: fecha_semestral, vence: "03-15,09-15"}
+    consecuencia: null
+    estado: sin_registro_publico
+    evidencia: >-
+      No se verificó institución por institución si presentaron su agenda en los plazos de
+      marzo y septiembre. Es la obligación con FECHA CIERTA más verificable de la ley y
+      queda abierta a propósito: afirmar incumplimiento sin revisarlo sería exactamente lo
+      que este producto no hace.
+
+  - id: art-47-ventanillas-unicas
+    articulo: 47
+    deber: >-
+      Diseñar e incorporar las ventanillas únicas dentro de los ciento ochenta días a partir
+      de la publicación de la ley.
+    deudor: {tipo: universo, nombre: Todos los entes y órganos de la Administración Pública}
+    periodicidad: unica
+    plazo: {tipo: fecha_cierta, vence: "2022-02-05"}
+    consecuencia: null
+    estado: sin_registro_publico
+    evidencia: >-
+      No se localizó un inventario público de ventanillas únicas creadas ni de las que
+      faltan, que es lo que haría verificable esta obligación.
+
+  - id: art-48-reglamento
+    articulo: 48
+    deber: >-
+      Dictar el reglamento de aplicación de la ley dentro de los ciento ochenta días a partir
+      de su publicación.
+    deudor: {tipo: organo, nombre: Presidencia de la República}
+    periodicidad: unica
+    plazo: {tipo: fecha_cierta, vence: "2022-02-05"}
+    consecuencia: null
+    estado: cumplida_tarde
+    evidencia: >-
+      Decreto 486-22 del 24 de agosto de 2022. El plazo del art. 48 vencía el 5 de febrero de
+      2022 (180 días desde la publicación del 9 de agosto de 2021): se dictó unos 200 días
+      después del vencimiento.
+    produce: [reglamento_de_aplicacion]
+
+  - id: art-46-capacitaciones
+    articulo: 46
+    deber: >-
+      Proporcionar capacitaciones técnicas a los entes y órganos, dentro de los ciento
+      ochenta días desde la publicación de la ley y previo a su entrada en vigencia.
+    deudor: {tipo: organo, nombre: Ministerio de Administración Pública (MAP)}
+    periodicidad: unica
+    plazo: {tipo: fecha_cierta, vence: "2022-02-05"}
+    consecuencia: null
+    estado: sin_registro_publico
+    evidencia: >-
+      No se localizó registro público del programa de capacitación ni de su cobertura.
+
+  - id: art-12-informe-tecnico-air
+    articulo: 12
+    deber: >-
+      Evaluar el análisis de impacto regulatorio dentro de quince días hábiles y publicar el
+      informe técnico en el Registro Único de Mejora Regulatoria.
+    deudor: {tipo: organo, nombre: Ministerio de Administración Pública (MAP)}
+    periodicidad: continua
+    plazo: {tipo: dias_habiles, vence: "15"}
+    consecuencia: null
+    estado: sin_registro_publico
+    evidencia: >-
+      Los informes técnicos deben publicarse en el Registro Único; no se localizó el
+      repositorio público que permita contarlos ni medir el plazo de quince días.
+
+  - id: art-44-acr-regulaciones-antiguas
+    articulo: 44
+    deber: >-
+      Realizar el Análisis de Calidad Regulatoria a todas las regulaciones de alcance general
+      con al menos diez años de vigencia, para eliminar o modificar las que ya no cumplan sus
+      objetivos.
+    deudor: {tipo: universo, nombre: Todos los entes y órganos de la Administración Pública}
+    periodicidad: continua
+    plazo: {tipo: desde_vigencia, vence: "2022-02-05"}
+    consecuencia: null
+    estado: sin_registro_publico
+    evidencia: >-
+      No se localizó un inventario público de las regulaciones sometidas a ACR ni de las
+      derogadas o modificadas como resultado.
