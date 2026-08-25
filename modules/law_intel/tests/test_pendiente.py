@@ -76,6 +76,49 @@ class TestElRitmoSeCOMPARAconElPLAZO:
         p = evaluar(ind, _binding(), obs, "2030")
         assert p.ritmo_por_anio == 5.0 and p.desde == "2020"
 
+    def test_el_ritmo_se_ancla_en_la_LINEA_BASE_de_la_ley(self):
+        """El defecto que apareció en producción: 23 de 31 proyecciones medían el ritmo desde
+        antes de que la ley existiera, y una arrancaba en 1946. El tramo que contesta «¿va a
+        llegar?» es el que va de la línea base de la norma a su horizonte."""
+        ind = _ind({"2030": 80.0})              # base_anio=2010
+        obs = [("1970", 0.0), ("2010", 50.0), ("2024", 64.0)]
+        p = evaluar(ind, _binding(), obs, "2030")
+        assert p.desde == "2010", "el ritmo se midió sobre un tramo anterior a la ley"
+        assert p.ritmo_por_anio == 1.0          # 14 puntos en 14 años, no 64 en 54
+        assert p.anclado_en_la_linea_base
+
+    def test_el_ancla_CAMBIA_el_veredicto_y_no_solo_la_cifra(self):
+        """No es cosmético. El mismo indicador llega o no llega según dónde se ancle."""
+        ind = _ind({"2030": 80.0})
+        obs = [("1970", 0.0), ("2010", 50.0), ("2024", 78.0)]
+        # Desde 1970: 78/54 = 1,44 por año. Desde 2010: 28/14 = 2 por año. Faltan 2, quedan 6.
+        assert evaluar(ind, _binding(), obs, "2030").ritmo_por_anio == 2.0
+
+    def test_sin_dos_observaciones_desde_la_base_usa_la_serie_y_lo_DECLARA(self):
+        """Un ritmo anclado antes de la norma contesta otra pregunta. Se usa —es lo único que
+        hay— y el motivo dice que se usó."""
+        ind = _ind({"2030": 80.0})
+        p = evaluar(_ind({"2030": 80.0}), _binding(),
+                    [("1990", 10.0), ("2000", 30.0), ("2011", 44.0)], "2030")
+        assert p.anclado_en_la_linea_base is False
+        assert "desde la línea base de la ley no hay dos observaciones" in p.motivo
+        assert ind.base_anio == 2010
+
+    def test_sin_linea_base_declarada_no_se_inventa_un_ancla(self):
+        from modules.law_intel.registro import Indicador
+        ind = Indicador(id="2.1", eje=2, nombre="Sin base", escala="numerica",
+                        metas={"2030": 80.0})
+        p = evaluar(ind, _binding(), [("1990", 10.0), ("2024", 44.0)], "2030")
+        assert p.desde == "1990" and p.anclado_en_la_linea_base is False
+
+    def test_el_ancla_VIAJA_al_contexto_del_modelo(self):
+        ps = [evaluar(_ind({"2030": 80.0}), _binding(),
+                      [("1970", 0.0), ("2010", 50.0), ("2024", 64.0)], "2030")]
+        fila = publicable(ps, "2030")[
+            "metas_pendientes_al_horizonte_de_la_ley"]["por_indicador"][0]
+        assert fila["ritmo_anclado_en_la_linea_base_de_la_ley"] is True
+        assert fila["ritmo_medido_desde"] == "2010"
+
     def test_dos_observaciones_del_MISMO_anio_no_producen_pendiente(self):
         ind = _ind({"2030": 80.0})
         p = evaluar(ind, _binding(), [("2024", 40.0), ("2024", 44.0)], "2030")
