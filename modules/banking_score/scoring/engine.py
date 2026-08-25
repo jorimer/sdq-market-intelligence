@@ -693,7 +693,8 @@ def run_scoring(data, entity_type=None) -> Dict[str, Any]:
     }
 
 
-def simulate_from_scores(modified_scores: Dict[str, float]) -> Dict[str, Any]:
+def simulate_from_scores(modified_scores: Dict[str, float],
+                         entity_type: Optional[str] = None) -> Dict[str, Any]:
     """Recalculate rating from manually modified indicator scores (0-100).
 
     Used by the iSRM interactive scenario modeler.  Accepts a flat dict of
@@ -721,8 +722,13 @@ def simulate_from_scores(modified_scores: Dict[str, float]) -> Dict[str, Any]:
         vals = [modified_scores.get(k, 0.0) for k in keys if k in modified_scores]
         sub_components[comp] = round(sum(vals) / len(vals), 2) if vals else 0.0
 
+    # Pesos DEL TIPO de entidad. Acá el peso no se muestra: COMPUTA el score que devuelve la
+    # simulación, así que usar la constante base daba un resultado sencillamente equivocado
+    # para las 75 entidades que no son banca múltiple. `run_scoring` siempre lo hizo bien; esta
+    # función nació sin el parámetro y el endpoint —que recibe `bank_id`— nunca lo consultaba.
+    pesos = get_sub_component_weights(entity_type)
     overall = round(
-        sum(sub_components.get(k, 0.0) * w for k, w in SUB_COMPONENT_WEIGHTS.items()), 2
+        sum(sub_components.get(k, 0.0) * w for k, w in pesos.items()), 2
     )
 
     return {

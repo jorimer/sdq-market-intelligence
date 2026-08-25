@@ -20,7 +20,7 @@ from modules.banking_score.scoring.weights import (
     EFICIENCIA_INDICATORS,
     LIQUIDEZ_INDICATORS,
     SOLIDEZ_INDICATORS,
-    SUB_COMPONENT_WEIGHTS,
+    get_sub_component_weights,
 )
 
 _SUB_LABELS = {
@@ -85,6 +85,10 @@ def build_entity_insight(db: Session, bank: Bank) -> Optional[Dict[str, Any]]:
     details = latest.indicator_details or {}
     period_end = latest.period_end
 
+    # Pesos DEL TIPO de entidad, no la constante base (que es la de Banca Múltiple): cinco de
+    # los seis tipos tienen perfil propio, así que el panel mostraba el peso equivocado en 75
+    # de las 92 entidades calificadas. `bank.bank_type` ya estaba a mano.
+    pesos = get_sub_component_weights(bank.bank_type.value if bank.bank_type else None)
     sub_components = []
     for key, label in _SUB_LABELS.items():
         score = subs.get(key)
@@ -92,7 +96,7 @@ def build_entity_insight(db: Session, bank: Bank) -> Optional[Dict[str, Any]]:
             "key": key,
             "label": label,
             "score": score,
-            "weight": SUB_COMPONENT_WEIGHTS.get(key),
+            "weight": pesos.get(key),
             "band": _band(score) if score is not None else None,
             **_driver_drag(details, _SUB_GROUPS[key]),
         })

@@ -664,3 +664,97 @@ def factores_hasta_umbral(
                          f"({u:.2f}); hoy está en {v:.2f}"))
         out.append(fila)
     return out
+
+
+# ── Qué MOVIÓ el score entre dos cortes ───────────────────────────────────────
+#
+# `derived_figures` sirve el aporte de cada componente al NIVEL (score × peso). Faltaba el
+# aporte al CAMBIO —qué explica que el score haya subido o bajado—, y es una relación distinta:
+# la dimensión que más se movió no es necesariamente la que más movió el resultado, porque los
+# pesos difieren.
+#
+# Defecto real en un informe ENTREGADO (Insight de Asociación Bonao, 2025-12-31): la §1 afirmó
+# que el deterioro del segundo semestre estuvo «impulsado precisamente por el colapso de
+# eficiencia». En ese semestre la eficiencia MEJORÓ (+0.96) y aportó +0.12 al score; la caída
+# la causaron solidez (−2.24) y calidad (−1.34), el 97% del total. El colapso de eficiencia
+# había sido en el PRIMER semestre (−8.77).
+#
+# Todas las cifras del informe eran correctas: el contexto servía las cinco series. Lo que el
+# modelo tuvo que hacer —multiplicar cinco deltas por sus pesos y ordenar— es una DERIVACIÓN,
+# y eligió la dimensión del mayor salto crudo del año en vez de la de mayor aporte en la
+# ventana de la que estaba hablando.
+
+#: Ventanas que una narrativa enuncia de verdad, en número de cortes hacia atrás. La etiqueta
+#: viaja con el número: sin nombrar la ventana, «lo que movió el score» no significa nada.
+VENTANAS_DE_CAMBIO = (("el último trimestre", 1), ("el último semestre", 2),
+                      ("el último año", 4))
+
+
+def aportes_al_cambio(
+    trayectoria: Dict[str, List[Dict[str, Any]]],
+    pesos: Dict[str, float],
+    *,
+    ventanas: Any = VENTANAS_DE_CAMBIO,
+    campo_score: str = "score",
+) -> List[Dict[str, Any]]:
+    """Descomposición del cambio del score por componente, para cada ventana.
+
+    Args:
+        trayectoria: ``{componente: [{..., "score": float}, ...]}`` en orden cronológico.
+        pesos: ``{componente: peso}`` — los del TIPO de entidad, no la constante base.
+
+    Returns:
+        Una entrada por ventana con ``cambio_total``, ``aportes`` (ordenados del que más
+        empuja hacia abajo al que más empuja hacia arriba) y ``principal`` ya resuelto, más la
+        ``lectura`` redactada. La suma de los aportes reconstruye ``cambio_total`` — esa
+        identidad es lo que hace verificable la afirmación.
+
+    Solo se emiten las ventanas que la serie SOPORTA: con seis cortes no se habla del último
+    año si el año pide más. Una ventana inventada es peor que una ventana ausente.
+    """
+    out: List[Dict[str, Any]] = []
+    comunes = [c for c in pesos if isinstance(trayectoria.get(c), list) and trayectoria[c]]
+    if not comunes:
+        return out
+    largo = min(len(trayectoria[c]) for c in comunes)
+    for etiqueta, atras in ventanas:
+        if largo < atras + 1:
+            continue
+        aportes: List[Dict[str, Any]] = []
+        for c in comunes:
+            serie = trayectoria[c]
+            crudo_desde = serie[-1 - atras].get(campo_score)
+            crudo_hasta = serie[-1].get(campo_score)
+            if crudo_desde is None or crudo_hasta is None:
+                continue
+            try:
+                delta = round(float(crudo_hasta) - float(crudo_desde), 2)
+            except (TypeError, ValueError):
+                continue
+            aportes.append({
+                "componente": c, "delta_score": delta, "peso": pesos[c],
+                "aporte_al_cambio": round(delta * pesos[c], 2),
+            })
+        if not aportes:
+            continue
+        aportes.sort(key=lambda a: float(a["aporte_al_cambio"]))
+        total = round(sum(float(a["aporte_al_cambio"]) for a in aportes), 2)
+        # El PRINCIPAL es el de mayor aporte en la dirección del cambio: si el score cayó, el
+        # que más lo hundió; si subió, el que más lo empujó. Tomar siempre el mínimo daría, en
+        # un score que sube, "el principal responsable" a quien menos ayudó.
+        principal = aportes[0] if total < 0 else aportes[-1]
+        aporte_principal = float(principal["aporte_al_cambio"])
+        cuota = (abs(aporte_principal) / abs(total) * 100) if total else 0.0
+        out.append({
+            "ventana": etiqueta,
+            "cambio_total": total,
+            "aportes": aportes,
+            "principal": principal["componente"],
+            "cuota_del_principal_pct": round(cuota, 1),
+            "lectura": (
+                f"en {etiqueta} el score {'cayó' if total < 0 else 'subió'} "
+                f"{abs(total):.2f} puntos, y {principal['componente']} explica "
+                f"{cuota:.0f}% de ese movimiento "
+                f"(aporta {aporte_principal:+.2f} puntos)"),
+        })
+    return out
