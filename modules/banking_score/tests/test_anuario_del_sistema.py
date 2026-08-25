@@ -141,3 +141,27 @@ def test_el_anio_se_mide_de_CIERRE_a_CIERRE(con_panel):
     assert r["cortes"][0].startswith("2024-12")
     # +10 contra el cierre anterior, aunque contra marzo sería −30.
     assert r["conteo_direccion"]["mejora"] == 1
+
+
+# ── La ruta ────────────────────────────────────────────────────────────
+
+def test_el_anuario_TIENE_una_ruta_que_lo_genera():
+    """Registrar el tipo no alcanza: sin endpoint, el producto es inalcanzable. Cada boletín
+    de sistema tiene el suyo (`/wire/generate`, `/datawatch/generate`…) y el anuario nació
+    sin uno."""
+    from modules.banking_score.api import router_reports as rr
+
+    rutas = {r.path for r in rr.router.routes}
+    assert any(p.endswith("/anuario/generate") for p in rutas), sorted(rutas)
+
+
+def test_todo_boletin_de_sistema_narrado_tiene_su_ruta():
+    """Regla estructural: el próximo boletín que alguien registre va a tener ruta o va a
+    romper este test."""
+    from modules.banking_score.api import router_reports as rr
+
+    rutas = " ".join(r.path for r in rr.router.routes)
+    faltan = [t for t in sorted(rr._NARRATED_SYSTEM_TYPES)
+              if f"/{t.replace('_', '-')}/generate" not in rutas
+              and f"/{t}/generate" not in rutas]
+    assert not faltan, f"boletines registrados y sin ruta que los genere: {faltan}"
