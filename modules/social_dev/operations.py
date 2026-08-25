@@ -163,6 +163,27 @@ def _run_digepres_salud(params, user_id, set_phase) -> Dict:  # noqa: ARG001
     return {**(tarea.result or {}), "via": "worker"}
 
 
+def _run_tramites(params, user_id, set_phase):
+    """Catálogo de trámites del Estado → serie del Registro Único (Ley 167-21, art. 39)."""
+    from shared.config.settings import settings
+
+    from modules.social_dev.tramites_sync import run_tramites
+
+    # `force` por defecto: la agenda es mensual y el catálogo es un estado vivo. Si hay dos
+    # corridas en el mismo mes, la más reciente es la afirmación más verdadera. Se puede
+    # desactivar por parámetro para una corrida manual que no quiera reescribir.
+    force = bool((params or {}).get("force", True))
+    if not (settings.USE_CELERY and settings.REDIS_URL):
+        set_phase("leyendo en ESTE proceso (sin broker)")
+        return {**run_tramites(force=force, progreso=set_phase), "via": "proceso_web"}
+
+    from modules.social_dev.tasks import tramites_registro_unico_task
+
+    tarea = tramites_registro_unico_task.delay(force=force)
+    set_phase("encolada en el worker")
+    return {"via": "worker", "task_id": tarea.id}
+
+
 def register() -> None:
     register_operation(Operation(
         digepres_sync.OPERACION,
@@ -203,6 +224,21 @@ def register() -> None:
         "temporal (no aplica al IDM); es validez convergente vs una medida "
         "independiente de desarrollo. Recalcula desde los scores persistidos.",
         _run_idm_convergent_validity, default_interval_hours=2160,
+    ))
+    register_operation(Operation(
+        "tramites-registro-unico", "Catálogo de trámites del Estado (Registro Único)",
+        "Lee los ~710 trámites del Portal Único de Servicios (gob.do) y persiste tres "
+        "cifras del mes: cuántos publica el Estado, cuántos declaran su tiempo de "
+        "respuesta y la razón entre las dos. Es la serie que sigue la obligación del "
+        "artículo 39 de la Ley 167-21 —publicar los procedimientos en el Registro Único— "
+        "y el cumplimiento de la Resolución 142-2024 del MAP, que exige el campo de "
+        "tiempo. Al 2026-08: 3 de 710.",
+        _run_tramites,
+        # MENSUAL (~730 h). Sin `anclaje`: el anclaje alinea con el calendario de
+        # publicación de una fuente —un trimestre que cierra y se publica 45 días
+        # después—, y este catálogo no tiene calendario. Es un estado continuo, así que
+        # la cadencia relativa es la correcta y un ancla trimestral lo desfasaría.
+        default_interval_hours=730,
     ))
     register_operation(Operation(
         "one-publications-sync", "Ingerir estudios de la ONE (digest IA)",
