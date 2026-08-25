@@ -367,6 +367,19 @@ async def scores(
     }]
     if asset.note:
         caveats.append({"code": "score_direction", "message": asset.note})
+    # Un índice panel-relativo calculado sobre paneles de distinto tamaño NO es
+    # comparable entre períodos: el mismo número significa cosas distintas según contra
+    # quién se normalizó. Es una trampa peor que un hueco — el hueco se ve.
+    panel_sizes = {o.peer_set_size for o in observations if o.peer_set_size}
+    if len(panel_sizes) > 1:
+        caveats.append({
+            "code": "panel_size_varies",
+            "message": (f"Los períodos servidos se normalizaron contra paneles de distinto "
+                        f"tamaño ({', '.join(str(n) for n in sorted(panel_sizes))} sujetos). "
+                        f"Este índice es panel-relativo: los valores NO son comparables "
+                        f"entre sí a través de esos períodos."),
+        })
+
     gaps = _annual_gaps(periods)
     if gaps:
         caveats.append({
@@ -405,6 +418,7 @@ async def scores(
                 "dimensions": o.dimensions,
                 "model_version": o.model_version,
                 "reason": o.reason,
+                "peer_set_size": o.peer_set_size,
             }
             for o in observations
         ],

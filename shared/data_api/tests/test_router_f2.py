@@ -134,7 +134,8 @@ def test_no_narrative_field_ever_travels(env):
     """La narrativa es el producto de reporte: el payload de scores no tiene campo
     de texto libre más allá de band/reason."""
     body = env["client"].get(f"/api/data/v1/scores/{SECTOR}", headers=env["auth"]).json()
-    allowed = {"subject", "period", "score", "band", "dimensions", "model_version", "reason"}
+    allowed = {"subject", "period", "score", "band", "dimensions", "model_version",
+               "reason", "peer_set_size"}   # todo numérico/metadato: cero texto libre
     for o in body["data"]:
         assert set(o) <= allowed
 
@@ -262,3 +263,41 @@ def test_mixed_cadences_do_not_invent_an_expectation_of_continuity(env):
     )
     body = env["client"].get(f"/api/data/v1/scores/{SECTOR}", headers=env["auth"]).json()
     assert "sparse_trajectory" not in [c["code"] for c in body["caveats"]]
+
+
+# ─── Panel variable: un índice panel-relativo no es comparable entre paneles ──
+
+
+def test_varying_panel_size_is_declared_as_not_comparable(env):
+    """Un score min-max contra el panel DEPENDE de con quién se comparó. Dos períodos
+    con paneles distintos dan números en la misma escala que no significan lo mismo —
+    una trampa peor que un hueco, porque el hueco se ve."""
+    def obs(code, *, subject=None, start=None, end=None, limit=None):
+        return [
+            ScoreObservation(subject="DOM", period="2025-12-31", score=57.8,
+                             peer_set_size=24),
+            ScoreObservation(subject="DOM", period="2024-12-31", score=48.5,
+                             peer_set_size=5),
+        ]
+
+    env["product"].score_observations = obs
+    body = env["client"].get(f"/api/data/v1/scores/{SECTOR}?subject=DOM",
+                             headers=env["auth"]).json()
+    warn = next(c for c in body["caveats"] if c["code"] == "panel_size_varies")
+    assert "5" in warn["message"] and "24" in warn["message"]
+    assert body["data"][1]["peer_set_size"] == 5
+
+
+def test_a_stable_panel_raises_no_comparability_warning(env):
+    def obs(code, *, subject=None, start=None, end=None, limit=None):
+        return [
+            ScoreObservation(subject="DOM", period="2025-12-31", score=57.8,
+                             peer_set_size=24),
+            ScoreObservation(subject="DOM", period="2024-12-31", score=56.7,
+                             peer_set_size=24),
+        ]
+
+    env["product"].score_observations = obs
+    body = env["client"].get(f"/api/data/v1/scores/{SECTOR}?subject=DOM",
+                             headers=env["auth"]).json()
+    assert "panel_size_varies" not in [c["code"] for c in body["caveats"]]
