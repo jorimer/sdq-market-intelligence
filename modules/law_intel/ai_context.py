@@ -30,6 +30,8 @@ from modules.law_intel.scoring.accionabilidad import recomendaciones
 from modules.law_intel.scoring.brecha import brechas
 from modules.law_intel.scoring.brecha import resumen as resumen_brecha
 from modules.law_intel.scoring.coherencia_proceso import revisar
+from modules.law_intel.scoring.fines import por_fin
+from modules.law_intel.scoring.fines import publicable as fines_publicable
 from modules.law_intel.scoring.semaforo import panel
 from modules.law_intel.scoring.semaforo import resumen as resumen_semaforo
 from modules.law_intel.verificabilidad import publicable as verificabilidad_publicable
@@ -86,6 +88,9 @@ def law_ai_context(expediente_id: str, corte: str,
     recs = recomendaciones(br, obs)
     coh = revisar(expediente_id, {i.id: i for i in exp.indicadores}, corte)
     cob = cobertura(expediente_id)
+    # El FIN es la unidad de lectura del informe. Se computa acá —y no en el prompt— porque
+    # «la mayoría» de siete contra veintiuno es una relación, y las relaciones se computan.
+    fines = por_fin(numerados, veredictos, exp.meta.get("ejes") or {})
 
     return {
         "instrumento": {
@@ -141,6 +146,11 @@ def law_ai_context(expediente_id: str, corte: str,
                      "«3 de 8 indicadores» y «3 de 13 filas» son la misma realidad y suenan "
                      "distinto."),
         },
+        # ── El FIN de la ley: la pregunta que el lector trae. ──
+        # Va ANTES del inventario de indicadores a propósito: quien lee quiere saber si la
+        # ley está consiguiendo lo que se propuso, y el conteo por indicador es la evidencia
+        # de esa respuesta, no la respuesta.
+        **fines_publicable(fines),
         # ── Veredictos YA COMPUTADOS. El modelo los copia, no los deriva. ──
         "veredictos_por_indicador_computados": resumen_semaforo(veredictos),
         "vocabulario_obligatorio": {
