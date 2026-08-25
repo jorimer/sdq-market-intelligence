@@ -14,7 +14,15 @@ from sqlalchemy.orm import Session
 from shared.auth.dependencies import get_current_user
 from shared.auth.models import User
 from shared.database.session import get_db
-from shared.narrative.claude_engine import NarrativeDegradedError, degraded_sections
+from shared.narrative.claude_engine import (NarrativeDegradedError,
+                                           NarrativeRelacionInvertidaError,
+                                           NarrativeSinRespaldoError,
+                                           degraded_sections,
+                                           secciones_con_cifra_sin_respaldo)
+from shared.narrative.relaciones_pendientes import acumulando
+from shared.narrative.mensajes_de_veto import (NARRATIVE_DEGRADED_MSG,
+                                               mensaje_relacion,
+                                               mensaje_sin_respaldo)
 from shared.products.filenames import (
     SUJETO_SISTEMA, content_disposition, report_filename,
 )
@@ -37,11 +45,6 @@ router = APIRouter()
 # si el análisis IA se degradó a fallback estático, NO deben marcarse `completed`. Los boletines
 # de sistema (wire/datawatch/sector_outlook/communique/criteria) no se gatean aquí.
 _PREMIUM_REPORT_TYPES = {"full_rating", "scorecard"}
-_NARRATIVE_DEGRADED_MSG = (
-    "El análisis de este informe no está disponible en este momento por un límite temporal "
-    "del servicio de generación. Reintente en unos minutos."
-)
-
 # Informes de SISTEMA: no cuelgan de una entidad (``bank_id`` NULL). Describen la
 # metodología (criteria) o el sistema entero (wire/datawatch/sector_outlook).
 _SYSTEM_REPORT_TYPES = {"criteria", "wire", "datawatch", "sector_outlook"}
@@ -559,13 +562,17 @@ async def generate_report(
         # Benchmarks MEDIDOS del panel en el MISMO corte del informe: comparar un Q1
         # contra una constante ANUAL invertía la conclusión (ver scoring/benchmarks).
         benchmarks = panel_benchmarks(db, pe)
-        narratives = await generate_report_narratives(
-            report_type=report_type,
-            bank_name=bank.name,
-            scoring_result=scoring_result,
-            period=period_end,
-            benchmarks=benchmarks,
-        )
+        # El acumulador se abre alrededor de la generación: el motor deposita ahí las
+        # relaciones invertidas que sobrevivieron a la reparación (ver
+        # `shared/narrative/relaciones_pendientes`), y la política se decide abajo.
+        with acumulando() as relaciones_pendientes:
+            narratives = await generate_report_narratives(
+                report_type=report_type,
+                bank_name=bank.name,
+                scoring_result=scoring_result,
+                period=period_end,
+                benchmarks=benchmarks,
+            )
         # GATE DE DEGRADACIÓN: en un reporte premium (SDQ Rating / deep dive de la entidad)
         # una sola sección de análisis caída a fallback estático produce un PDF hueco. Se
         # detecta ANTES de renderizar (no se desperdicia el render) y se aborta como `error`
@@ -578,6 +585,35 @@ async def generate_report(
                 surface="banking_legacy", sector_key="banking", tier=report_type,
                 sections=degraded, blocked=True, scope=bank.name, period=period_end)
             raise NarrativeDegradedError(degraded)
+
+        # GATE DE CIFRA SIN RESPALDO y GATE DE RELACIÓN INVERTIDA — los dos hermanos del de
+        # arriba, que vivían SOLO en la ruta de productos. Esta ruta emite el mismo documento
+        # de cliente (`full_rating` es el SDQ Rating) y estaba llegando con uno de los tres
+        # gates: es el patrón "un guard existe en un motor y falta en el otro", y esta ruta ya
+        # acumulaba historial por eso mismo.
+        #
+        # Misma política que allá y que el gate de degradación de acá: los tipos PREMIUM
+        # fallan cerrado; los boletines de sistema solo se registran.
+        premium = report_type in _PREMIUM_REPORT_TYPES
+        sin_respaldo = secciones_con_cifra_sin_respaldo(
+            narratives, list(narratives.keys()), scoring_result)
+        if sin_respaldo:
+            logger.warning(
+                "Reporte %s para %s (%s) afirma cifras sin respaldo en %d sección(es): %s — %s",
+                report_type, bank.name, period_end, len(sin_respaldo), sin_respaldo,
+                "NO se entrega" if premium else "boletín de sistema: solo se registra")
+            if premium:
+                raise NarrativeSinRespaldoError(sin_respaldo)
+        if relaciones_pendientes:
+            logger.warning(
+                "Reporte %s para %s (%s) afirma relaciones que el dato contradice en %d "
+                "sección(es): %s — %s",
+                report_type, bank.name, period_end, len(relaciones_pendientes),
+                relaciones_pendientes,
+                "NO se entrega" if premium else "boletín de sistema: solo se registra")
+            if premium:
+                raise NarrativeRelacionInvertidaError(relaciones_pendientes)
+
         file_path = await generate_pdf_report(
             report_type=report_type,
             bank_name=bank.name,
@@ -598,7 +634,21 @@ async def generate_report(
         db.commit()
         logger.warning("Reporte %s premium para %s con %d sección(es) degradada(s): "
                        "no se completa (%s).", report_type, bank.name, len(d.sections), d.sections)
-        raise HTTPException(status_code=503, detail=_NARRATIVE_DEGRADED_MSG)
+        raise HTTPException(status_code=503, detail=NARRATIVE_DEGRADED_MSG)
+    except NarrativeSinRespaldoError as v:
+        # Va ANTES del `except Exception`, que si no se la traga y devuelve 200 con el reporte
+        # marcado `error`: quien pidió el PDF vería un éxito con estado raro en vez del motivo.
+        report.status = ReportStatus.error  # type: ignore[assignment]
+        report.error_message = mensaje_sin_respaldo(v.hallazgos)  # type: ignore[assignment]
+        report.completed_at = None  # type: ignore[assignment]
+        db.commit()
+        raise HTTPException(status_code=503, detail=mensaje_sin_respaldo(v.hallazgos))
+    except NarrativeRelacionInvertidaError as v:
+        report.status = ReportStatus.error  # type: ignore[assignment]
+        report.error_message = mensaje_relacion(v.hallazgos)  # type: ignore[assignment]
+        report.completed_at = None  # type: ignore[assignment]
+        db.commit()
+        raise HTTPException(status_code=503, detail=mensaje_relacion(v.hallazgos))
     except Exception as e:
         logger.error("PDF generation failed: %s", e)
         report.status = ReportStatus.error
