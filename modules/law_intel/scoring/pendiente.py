@@ -243,14 +243,28 @@ def resumen(pendientes: Sequence[Pendiente]) -> Dict[str, object]:
     for p in pendientes:
         conteo[p.estado] = conteo.get(p.estado, 0) + 1
     proyectados = [p for p in pendientes if p.estado in DEPENDEN_DEL_RITMO]
+    con_meta = sum(1 for p in pendientes if p.estado != "sin_meta_al_horizonte")
     return {
         "total_indicadores": len(pendientes),
-        "con_meta_al_horizonte": sum(1 for p in pendientes
-                                     if p.estado != "sin_meta_al_horizonte"),
+        "con_meta_al_horizonte": con_meta,
         "ya_alcanzadas": conteo.get("ya_alcanzada", 0),
         "proyectables": len(proyectados),
         "en_trayectoria": conteo.get("en_trayectoria", 0),
         "no_llegan_al_ritmo_actual": conteo.get("no_llegara_al_ritmo_actual", 0),
+        "sin_proyeccion_posible": sum(1 for p in pendientes
+                                      if p.estado in ("sin_medicion", "no_evaluable",
+                                                      "sin_trayectoria")),
+        # Las razones, resueltas y con su denominador en la clave. Sin ellas el redactor las
+        # deriva, y una división derivada es una cifra que el guard de respaldo no encuentra
+        # en el contexto — vetó un Insight entero por un 48,9% que era 44/90.
+        "pct_ya_alcanzadas_sobre_las_que_tienen_meta_al_horizonte": (
+            round(100.0 * conteo.get("ya_alcanzada", 0) / con_meta, 1) if con_meta else None),
+        "pct_no_llegan_sobre_las_proyectables": (
+            round(100.0 * conteo.get("no_llegara_al_ritmo_actual", 0) / len(proyectados), 1)
+            if proyectados else None),
+        "pct_en_trayectoria_sobre_las_proyectables": (
+            round(100.0 * conteo.get("en_trayectoria", 0) / len(proyectados), 1)
+            if proyectados else None),
         "por_estado": dict(sorted(conteo.items())),
     }
 
