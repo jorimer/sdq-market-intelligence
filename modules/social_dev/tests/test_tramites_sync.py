@@ -132,3 +132,41 @@ def test_los_tres_temas_estan_en_el_REGISTRO_del_producto():
     fuera = SocialDevProduct._FUERA_DEL_INDICE
     for tema in TEMAS:
         assert tema in fuera, f"«{tema}» se persiste y no llega al Data Registry"
+
+
+class TestLaAGENDAmensual:
+    """La operación se auto-agenda al desplegar. Que quede bien declarada importa: una
+    cadencia mal puesta o un parámetro obligatorio la dejan fuera del scheduler sin avisar."""
+
+    def _op(self):
+        import modules.social_dev.operations  # noqa: F401 — registra al importar
+        from shared.operations.service import OPERATIONS
+        return OPERATIONS["tramites-registro-unico"]
+
+    def test_la_operacion_esta_registrada(self):
+        assert self._op().name == "tramites-registro-unico"
+
+    def test_la_cadencia_es_MENSUAL(self):
+        assert self._op().default_interval_hours == 730     # ~30 días
+
+    def test_NO_lleva_anclaje_de_calendario(self):
+        """El anclaje alinea con el calendario de publicación de una fuente —un trimestre
+        que cierra y se publica 45 días después—. Este catálogo es un estado continuo: no
+        tiene calendario, y un ancla trimestral lo desfasaría."""
+        assert self._op().anclaje is None
+
+    def test_se_AUTO_AGENDA_y_no_queda_bajo_demanda(self):
+        """Con `needs_params` o cadencia <= 0 el scheduler la ignora en silencio."""
+        from shared.operations.service import is_on_demand
+        op = self._op()
+        assert not op.needs_params
+        assert is_on_demand(op) is False
+
+    def test_la_descripcion_nombra_la_OBLIGACION_que_sigue(self):
+        """Una operación que no dice para qué existe se apaga el día que estorbe."""
+        d = self._op().description
+        assert "167-21" in d and "142-2024" in d
+
+    def test_la_tarea_del_worker_existe_con_su_nombre(self):
+        from modules.social_dev.tasks import tramites_registro_unico_task
+        assert tramites_registro_unico_task.name == "social.tramites_registro_unico"
