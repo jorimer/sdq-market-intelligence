@@ -21,6 +21,8 @@ from shared.narrative.claude_engine import (NarrativeDegradedError,
                                            NarrativeRelacionInvertidaError,
                                            NarrativeSinRespaldoError)
 from shared.narrative.lang_context import resolve_request_lang
+from shared.narrative.mensajes_de_veto import (NARRATIVE_DEGRADED_MSG,
+                                               mensaje_relacion, mensaje_sin_respaldo)
 from shared.products.access import (
     AccessDecision,
     AccessOutcome,
@@ -56,62 +58,6 @@ from shared.products.subscriptions import (
 from shared.products.tiers import Granularity, ProductTier
 
 router = APIRouter()
-
-# Mensaje de degradación transitoria de la narrativa IA (rate-limit/outage del servicio de
-# análisis o corte de presupuesto). Un producto premium NO se entrega hueco: se responde 503
-# (reintento) en vez de un PDF con relleno. Español, orientado al usuario final.
-_NARRATIVE_DEGRADED_MSG = (
-    "El análisis de este informe no está disponible en este momento por un límite temporal "
-    "del servicio de generación. Reintente en unos minutos."
-)
-
-# Veto por CIFRA SIN RESPALDO: el gemelo del anterior. La narrativa afirmó un número que el
-# dato servido no sostiene y el ensamblador se negó a entregar el informe — correctamente.
-# Lo que faltaba era el manejador: `NarrativeSinRespaldoError` es un `RuntimeError`, no lo
-# atrapaba nadie, y el veto salía como 500 sin cuerpo JSON. El front, que lee `detail`, no
-# encontraba nada y mostraba "No se pudo cargar el producto": el usuario veía una falla de
-# carga donde en realidad hubo una DECISIÓN de no publicar. Verificado en prod (Deep Dive de
-# banca, Q1-2026): 157 s de generación y ~US$1 de modelo para un error genérico.
-#
-# El veto se LISTA —qué secciones y qué cifras— porque un veto mudo se lee como que el
-# informe no existía. Es prosa en CONSTANTE (no incrustada en el `raise`) para que se pueda
-# testear por su texto sin que un corte de línea la haga desaparecer del fuente.
-_NARRATIVE_SIN_RESPALDO_MSG = (
-    "El informe no se entrega: una revisión automática detectó cifras que el dato servido no "
-    "respalda en {n} sección(es) ({secciones}). No publicamos un número que no podemos "
-    "sostener. Reintente en unos minutos —el texto se regenera— o avísenos si persiste."
-)
-
-
-# Veto por RELACIÓN INVERTIDA: el tercero y el más acotado. La narrativa afirmó que un
-# indicador está por encima de una referencia cuando está por debajo (o al revés), y sostuvo
-# la afirmación después de que se le entregara la lectura correcta ya redactada, dos veces.
-# El caso que lo motiva llegó a un informe entregado: la §7 dijo que la capitalización
-# «supera» al promedio del grupo estando por debajo, contradiciendo a la §2 del mismo PDF.
-_NARRATIVE_RELACION_MSG = (
-    "El informe no se entrega: en {n} sección(es) ({secciones}) el análisis afirma una "
-    "comparación en sentido contrario al que muestran los datos, y la afirmación persistió "
-    "después de corregirla. No publicamos un informe que se contradice a sí mismo. Reintente "
-    "en unos minutos —el texto se regenera— o avísenos si persiste."
-)
-
-
-def _msg_relacion(hallazgos: Dict[str, Any]) -> str:
-    """Mensaje del veto por relación invertida, nombrando las secciones."""
-    return _NARRATIVE_RELACION_MSG.format(
-        n=len(hallazgos), secciones=" · ".join(str(k) for k in hallazgos))
-
-
-def _msg_sin_respaldo(hallazgos: Dict[str, Any]) -> str:
-    """Mensaje del veto por cifra sin respaldo, nombrando las secciones y las cifras."""
-    partes = []
-    for seccion, marcas in hallazgos.items():
-        # La marca del guard es "69%: no aparece en el contexto servido"; al usuario le sirve
-        # la CIFRA, no la glosa interna del detector.
-        cifras = [str(m).split(":")[0].strip() for m in (marcas or []) if str(m).strip()]
-        partes.append(f"{seccion}: {', '.join(cifras)}" if cifras else str(seccion))
-    return _NARRATIVE_SIN_RESPALDO_MSG.format(n=len(hallazgos), secciones=" · ".join(partes))
-
 
 def _parse_tier(tier: str) -> ProductTier:
     try:
@@ -334,11 +280,11 @@ async def get_product_report(
             product, access.tier, period=period or "", scope=scope, lang=lang)
     except NarrativeDegradedError:
         # Narrativa IA degradada a fallback estático en un premium: no se sirve hueco.
-        raise HTTPException(status_code=503, detail=_NARRATIVE_DEGRADED_MSG)
+        raise HTTPException(status_code=503, detail=NARRATIVE_DEGRADED_MSG)
     except NarrativeSinRespaldoError as e:
-        raise HTTPException(status_code=503, detail=_msg_sin_respaldo(e.hallazgos))
+        raise HTTPException(status_code=503, detail=mensaje_sin_respaldo(e.hallazgos))
     except NarrativeRelacionInvertidaError as e:
-        raise HTTPException(status_code=503, detail=_msg_relacion(e.hallazgos))
+        raise HTTPException(status_code=503, detail=mensaje_relacion(e.hallazgos))
     except AnonymizationError:
         # Invariante del framework violada (un Pulse filtró un nombre): bug, no input.
         raise HTTPException(status_code=500,
@@ -387,11 +333,11 @@ async def get_product_pdf(
             out=meta)
     except NarrativeDegradedError:
         # Narrativa IA degradada a fallback estático en un premium: no se descarga hueco.
-        raise HTTPException(status_code=503, detail=_NARRATIVE_DEGRADED_MSG)
+        raise HTTPException(status_code=503, detail=NARRATIVE_DEGRADED_MSG)
     except NarrativeSinRespaldoError as e:
-        raise HTTPException(status_code=503, detail=_msg_sin_respaldo(e.hallazgos))
+        raise HTTPException(status_code=503, detail=mensaje_sin_respaldo(e.hallazgos))
     except NarrativeRelacionInvertidaError as e:
-        raise HTTPException(status_code=503, detail=_msg_relacion(e.hallazgos))
+        raise HTTPException(status_code=503, detail=mensaje_relacion(e.hallazgos))
     except AnonymizationError:
         raise HTTPException(status_code=500,
                             detail="Error de gobernanza al ensamblar el producto.")
