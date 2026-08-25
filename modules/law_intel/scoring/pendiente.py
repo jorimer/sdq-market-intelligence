@@ -16,10 +16,14 @@ camino emite: en cuanto hay avance devuelve `no_alcanzara`, sin comparar el ritm
 períodos que quedan. Contra una meta ya vencida da igual. Proyectando a un horizonte abierto
 sería afirmar que nada se va a cumplir sin haberlo calculado nunca.
 
-**El ritmo sale de la serie ENTERA, no de los dos últimos puntos.** Extrapolar cinco años
-desde una diferencia interanual es extrapolar ruido: un rebote de un año decidiría el
-veredicto de una década. Se usa la pendiente media entre la primera y la última observación,
-y las dos puntas viajan al informe para que el lector pueda rehacer la cuenta.
+**El ritmo se ancla en la LÍNEA BASE de la ley, no en el principio de la serie.** Extrapolar
+desde una diferencia interanual sería extrapolar ruido —un rebote de un año decidiría el
+veredicto de una década—, pero promediar la serie entera es peor de otra forma: la primera
+versión de este módulo midió el ritmo de un indicador **desde 1946**, y 23 de 31 proyecciones
+salían ancladas antes de que la ley existiera. La pregunta es si la ley va a llegar a donde
+dijo, y el tramo que la contesta es el que va de su línea base a su horizonte. Cuando después
+de la línea base no quedan dos observaciones se usa la serie entera y **se declara**, porque
+un ritmo anclado antes de la norma responde otra pregunta que la que el informe hace.
 
 **El horizonte lo declara la ley, no este archivo.** Sale de `vigencia_hasta` del expediente.
 La END vence en 2030 y el Decreto 337-24 en 2036: un `2030` escrito acá convertiría al
@@ -81,6 +85,9 @@ class Pendiente:
     ritmo_por_anio: Optional[float] = None
     #: Las dos puntas de las que sale el ritmo, para que el lector rehaga la pendiente.
     desde: Optional[str] = None
+    #: Si el ritmo se pudo anclar en la línea base de la ley. `False` significa que se midió
+    #: sobre un tramo anterior a la norma, y el motivo lo declara.
+    anclado_en_la_linea_base: bool = True
     anios_restantes: Optional[int] = None
     motivo: str = ""
 
@@ -99,13 +106,24 @@ def _se_puede_restar(ind: Indicador) -> bool:
     return ind.admite_delta or ind.escala == "redactada"
 
 
-def _ritmo(obs: Sequence[Observacion], mejor_menor: bool) -> Optional[Tuple[float, str]]:
-    """Avance medio por año hacia la meta, y desde qué período se midió.
+def _ritmo(obs: Sequence[Observacion], mejor_menor: bool,
+           base_anio: Optional[int] = None) -> Optional[Tuple[float, str, bool]]:
+    """Avance medio por año hacia la meta, desde qué período, y si se ancló en la línea base.
 
-    Sobre la serie ENTERA. `None` con menos de dos observaciones o si las dos caen en el
-    mismo año: sin dos puntos separados en el tiempo no hay pendiente que calcular, y
-    fabricarla es la falla que vuelve refutable una proyección.
+    Se recorta a las observaciones desde la línea base de la ley. Si ahí no quedan dos, se
+    usa la serie entera y se devuelve `False` en el tercer elemento para que el motivo lo
+    declare: un ritmo medido desde 1946 no contesta si una ley de 2012 va a llegar a 2030.
+
+    `None` con menos de dos observaciones o si las dos caen en el mismo año: sin dos puntos
+    separados en el tiempo no hay pendiente que calcular, y fabricarla es la falla que vuelve
+    refutable una proyección.
     """
+    anclado = False
+    if base_anio is not None:
+        desde_base = [o for o in obs if str(o[0])[:4].isdigit()
+                      and int(str(o[0])[:4]) >= base_anio]
+        if len(desde_base) >= 2:
+            obs, anclado = desde_base, True
     if len(obs) < 2:
         return None
     (p0, v0), (p1, v1) = obs[0], obs[-1]
@@ -116,7 +134,7 @@ def _ritmo(obs: Sequence[Observacion], mejor_menor: bool) -> Optional[Tuple[floa
     if anios <= 0:
         return None
     avance = (v0 - v1) if mejor_menor else (v1 - v0)
-    return round(avance / anios, _DECIMALES), str(p0)[:4]
+    return round(avance / anios, _DECIMALES), str(p0)[:4], anclado
 
 
 def evaluar(ind: Indicador, binding: Optional[Binding], observaciones: Sequence[Observacion],
@@ -152,7 +170,7 @@ def evaluar(ind: Indicador, binding: Optional[Binding], observaciones: Sequence[
                          motivo=(f"el dato de {p_obs} ya cumple la meta de {horizonte}; lo "
                                  f"pendiente es sostenerlo"))
 
-    ritmo = _ritmo(observaciones, mejor_menor)
+    ritmo = _ritmo(observaciones, mejor_menor, ind.base_anio)
     try:
         restantes = int(horizonte) - int(str(p_obs)[:4])
     except ValueError:
@@ -162,9 +180,10 @@ def evaluar(ind: Indicador, binding: Optional[Binding], observaciones: Sequence[
                          observado=valor, periodo_observado=p_obs, falta=falta,
                          anios_restantes=restantes, motivo=ESTADOS["sin_trayectoria"])
 
-    por_anio, desde = ritmo
+    por_anio, desde, anclado = ritmo
     comun = dict(meta=float(meta), observado=valor, periodo_observado=p_obs, falta=falta,
-                 ritmo_por_anio=por_anio, desde=desde, anios_restantes=restantes)
+                 ritmo_por_anio=por_anio, desde=desde, anios_restantes=restantes,
+                 anclado_en_la_linea_base=anclado)
     if por_anio == 0:
         return Pendiente(ind.id, horizonte, "no_se_mueve", **comun,   # type: ignore[arg-type]
                          motivo=(f"sin variación entre {desde} y {p_obs}; el horizonte de "
@@ -178,6 +197,11 @@ def evaluar(ind: Indicador, binding: Optional[Binding], observaciones: Sequence[
                          motivo=(f"el horizonte {horizonte} no es posterior al último dato "
                                  f"({p_obs}): no hay plazo que proyectar"))
 
+    # Si el ritmo no pudo anclarse en la línea base, el informe tiene que decirlo: un tramo
+    # anterior a la norma responde otra pregunta que la que se está haciendo.
+    salvedad = ("" if anclado else
+                f" (el ritmo se mide desde {desde} porque desde la línea base de la ley no "
+                f"hay dos observaciones)")
     alcanza = por_anio * restantes >= falta
     # Cuántos años PEDIRÍA la meta al ritmo observado. Es la cifra que convierte el veredicto
     # en una decisión: «le faltan 14 años y tiene 5» dice algo que «no llegará» no dice.
@@ -188,7 +212,7 @@ def evaluar(ind: Indicador, binding: Optional[Binding], observaciones: Sequence[
         **comun,                                                      # type: ignore[arg-type]
         motivo=(f"avanza {por_anio:.4g} por año desde {desde}; le faltan {falta:.4g} y "
                 f"quedan {restantes} años, que al ritmo observado son "
-                f"{anios_al_ritmo:.1f} años de recorrido"))
+                f"{anios_al_ritmo:.1f} años de recorrido{salvedad}"))
 
 
 def panel(indicadores: Sequence[Indicador], bindings: Dict[str, Binding],
@@ -241,7 +265,9 @@ def publicable(pendientes: Sequence[Pendiente], horizonte: str) -> Dict[str, obj
                 {"indicador": p.indicador, "estado": p.estado, "meta": p.meta,
                  "observado": p.observado, "periodo_observado": p.periodo_observado,
                  "falta": p.falta, "ritmo_por_anio": p.ritmo_por_anio,
-                 "ritmo_medido_desde": p.desde, "anios_restantes": p.anios_restantes,
+                 "ritmo_medido_desde": p.desde,
+                 "ritmo_anclado_en_la_linea_base_de_la_ley": p.anclado_en_la_linea_base,
+                 "anios_restantes": p.anios_restantes,
                  "lectura_ya_redactada": p.motivo}
                 for p in pendientes if p.estado != "sin_meta_al_horizonte"],
         },
