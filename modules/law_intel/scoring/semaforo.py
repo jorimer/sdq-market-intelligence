@@ -356,8 +356,16 @@ def resumen(veredictos: Sequence[Veredicto]) -> Dict[str, object]:
         "total": len(veredictos),
         "evaluados": len(evaluados),
         "cumplen": sum(1 for v in evaluados if v.cumple),
+        "no_alcanzan": sum(1 for v in evaluados if not v.cumple),
         "pct_sobre_evaluados": (round(100.0 * sum(1 for v in evaluados if v.cumple)
                                       / len(evaluados), 1) if evaluados else None),
+        # El COMPLEMENTO, servido y no derivado. El guard vetó un informe entero por un
+        # «75,0%» que es 100 menos el 25,0 de cumplimiento: correcto y ausente del contexto.
+        # Regla que sale de eso: toda razón que se publique viaja con su complemento, porque
+        # el redactor va a necesitar las dos y la que falte la va a calcular él.
+        "pct_no_alcanzan_sobre_evaluados": (
+            round(100.0 * sum(1 for v in evaluados if not v.cumple) / len(evaluados), 1)
+            if evaluados else None),
         # Las dos razones que el redactor va a necesitar, COMPUTADAS. No estaban, y el
         # modelo las derivó: escribió «48,9%» —que es 44/90, aritmética correcta— y el guard
         # de cifra sin respaldo vetó la entrega del Insight, con razón. La cura no es

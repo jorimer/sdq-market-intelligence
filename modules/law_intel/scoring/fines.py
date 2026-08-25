@@ -104,6 +104,15 @@ class Fin:
         return round(100.0 * self.alcanzadas / self.evaluados_en_este_informe, 1)
 
     @property
+    def pct_no_alcanzadas_sobre_evaluados(self) -> Optional[float]:
+        """El complemento, servido. Toda razón viaja con el suyo: el redactor necesita las
+        dos y la que falte la calcula él — y una división derivada es una cifra que el guard
+        de respaldo no encuentra en el contexto."""
+        if not self.evaluados_en_este_informe:
+            return None
+        return round(100.0 * self.no_alcanzadas / self.evaluados_en_este_informe, 1)
+
+    @property
     def caracterizable(self) -> bool:
         return self.estado != "no_caracterizable"
 
@@ -224,6 +233,7 @@ def publicable(fines: Sequence[Fin]) -> Dict[str, object]:
              "retroceden": f.retroceden, "estancadas": f.estancadas,
              "sin_veredicto": f.sin_veredicto,
              "pct_alcanzadas_sobre_evaluados": f.pct_alcanzadas_sobre_evaluados,
+             "pct_no_alcanzadas_sobre_evaluados": f.pct_no_alcanzadas_sobre_evaluados,
              "estado": f.estado, "motivo_sin_caracterizar": f.motivo_sin_caracterizar,
              "lectura_ya_redactada": f.frase()}
             for f in fines],

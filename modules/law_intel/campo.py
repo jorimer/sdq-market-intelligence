@@ -299,6 +299,11 @@ def resumen(expediente_id: str) -> Dict[str, Any]:
         "campo_cerrado": (len(medidos) + len(casillas)) == len(numerados),
         # La composición, que es lo que impide leer «cerrado» como «resuelto».
         "motivo_resuelto": len(casillas) - len(pendientes),
+        # Y en porcentaje, servido y no derivado: el redactor lo va a querer, y si no está
+        # lo calcula él — momento en que el guard de cifra sin respaldo veta el informe.
+        "pct_por_estado_sobre_los_declarados_sin_veredicto": {
+            k: round(100.0 * v / len(casillas), 1) if casillas else None
+            for k, v in sorted(por_estado.items())},
         "pendientes_de_trabajo_nuestro": {"n": len(pendientes), "ids": sorted(pendientes)},
         "por_estado": dict(sorted(por_estado.items())),
         "estados": ESTADOS_DEL_CAMPO,

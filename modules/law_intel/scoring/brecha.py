@@ -127,6 +127,9 @@ def resumen(brechas_: Sequence[Brecha], total_ley: int) -> Dict[str, object]:
         "por_tipo": dict(sorted(por_tipo.items())),
         # Sin este corte, el informe le imputa al Estado huecos que son nuestros.
         "por_responsable": dict(sorted(por_responsable.items())),
+        "pct_por_responsable_sobre_las_brechas": {
+            k: round(100.0 * v / len(brechas_), 1) if brechas_ else None
+            for k, v in sorted(por_responsable.items())},
         "de_donde_sale_la_atribucion": (
             "Del motivo declarado en el campo del expediente, no de si el binding está "
             "verificado. Un binding propuesto cuya línea base legal no reproduce es un "
