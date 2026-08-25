@@ -619,3 +619,115 @@ def test_ninguna_serie_de_un_binding_que_CUENTA_omite_su_eje():
     assert not sin_eje, (
         f"estos bindings cuentan como cobertura y su serie no declara eje: {sin_eje}. "
         f"El proveedor no la va a encontrar y el indicador saldrá «sin dato» en el informe.")
+
+
+class TestPorQueNoProduceVeredicto:
+    """REGLA: un binding con serie que no promueve tiene que decir POR QUÉ, del vocabulario.
+
+    El estado `propuesto` no distinguía dos cosas que no se parecen: «falta trabajo nuestro»
+    y «el trabajo está hecho y el que no cierra es el instrumento legal». Once indicadores con
+    el hallazgo COMPLETO se leían igual que once pendientes — en el campo salían todos como
+    `candidato_sin_verificar`, o sea «hay una duda abierta», cuando en ocho de ellos la duda
+    estaba resuelta y la respuesta era sobre la ley.
+
+    Un informe que presenta un hallazgo como tarea pendiente regala el hallazgo, y eso lo
+    detectó el dueño leyendo la cifra de cierre, no un test.
+    """
+
+    def test_todo_propuesto_declara_su_motivo(self):
+        from modules.law_intel.bindings import MOTIVOS_SIN_VEREDICTO
+
+        sin = sorted(k for k, b in cargar_bindings(EXPEDIENTE).items()
+                     if b.estado == "propuesto" and not b.sin_veredicto_por)
+        assert not sin, (
+            f"estos bindings están en `propuesto` sin declarar por qué: {sin}. "
+            f"Vocabulario: {sorted(MOTIVOS_SIN_VEREDICTO)}")
+
+    def test_el_motivo_viene_del_vocabulario_CERRADO(self):
+        from modules.law_intel.bindings import MOTIVOS_SIN_VEREDICTO
+
+        usados = {b.sin_veredicto_por for b in cargar_bindings(EXPEDIENTE).values()
+                  if b.sin_veredicto_por}
+        assert usados, "el detector se volvió decorativo: ningún binding declara motivo"
+        assert usados <= set(MOTIVOS_SIN_VEREDICTO), sorted(usados - set(MOTIVOS_SIN_VEREDICTO))
+
+    def test_el_motivo_viaja_con_su_FECHA(self):
+        """«El emisor dejó de medirlo» sin fecha no se puede auditar: nadie sabe si sigue
+        siendo cierto. Va como campo y no en la prosa, que es lo mismo que se exige del
+        período verificado."""
+        import re
+
+        sin_fecha = sorted(k for k, b in cargar_bindings(EXPEDIENTE).items()
+                           if b.sin_veredicto_por
+                           and not re.fullmatch(r"20\d\d-\d\d-\d\d", b.sin_veredicto_desde or ""))
+        assert not sin_fecha, sin_fecha
+
+    def test_los_motivos_sobre_la_LEY_exigen_evidencia_en_el_campo(self):
+        """Son lo más fuerte que este producto afirma —que la línea base de una ley no
+        reproduce contra la serie de su propio Estado—, así que el campo les pide la medición
+        y la fecha igual que a un «no existe la fuente»."""
+        from modules.law_intel.campo import _EXIGEN_EVIDENCIA
+
+        assert {"linea_base_no_reproduce", "termino_legal_sin_fuente"} <= _EXIGEN_EVIDENCIA
+
+
+class TestUnHallazgoNoSeLeeComoSinMedicion:
+    """El 2.33 y el 3.30 salían `sin_medicion` en el semáforo teniendo serie y observaciones.
+
+    «No lo medimos» y «lo medimos, y lo que no cierra es la línea base de la LEY» son cosas
+    distintas, y la segunda es el hallazgo. El 2.33 tiene dieciocho años de serie y el 3.30
+    seis; presentarlos como no medidos regala justamente lo que un evaluador independiente
+    puede decir y el evaluado no.
+    """
+
+    def test_con_serie_y_meta_se_publica_la_DISTANCIA_con_salvedad(self):
+        from modules.law_intel.registro import cargar
+        from modules.law_intel.scoring.semaforo import evaluar
+
+        exp = cargar(EXPEDIENTE)
+        ind = next(i for i in exp.numerados if i.id == "3.30")
+        b = cargar_bindings(EXPEDIENTE)["3.30"]
+        v = evaluar(ind, b, [("2024", 1554.6), ("2025", 1659.319)], corte="2025")
+        assert v.veredicto == "medido_sin_certificar"
+        assert v.observado == 1659.319 and v.meta == 62.5
+        assert v.distancia is not None and v.distancia > 0
+
+    def test_NO_cuenta_como_cumplimiento(self):
+        """Publicar la distancia no es certificar el nivel. Si esto contara como cumplida o
+        como no alcanzada, el veredicto afirmaría una comparabilidad que no se probó."""
+        from modules.law_intel.scoring.semaforo import Veredicto
+
+        assert Veredicto("3.30", "medido_sin_certificar").cumple is None
+
+    def test_sin_observaciones_vuelve_a_sin_medicion(self):
+        """La salvedad no inventa dato: sin observación no hay distancia que publicar."""
+        from modules.law_intel.registro import cargar
+        from modules.law_intel.scoring.semaforo import evaluar
+
+        exp = cargar(EXPEDIENTE)
+        ind = next(i for i in exp.numerados if i.id == "3.30")
+        b = cargar_bindings(EXPEDIENTE)["3.30"]
+        assert evaluar(ind, b, [], corte="2025").veredicto == "sin_medicion"
+
+    def test_los_otros_motivos_NO_publican_distancia(self):
+        """`instrumento_discontinuado` no tiene observación en ningún año de meta —ese ES su
+        motivo— y `termino_legal_sin_fuente` mide otra magnitud que la ley. Publicar su
+        distancia sería compararla contra una meta que no le corresponde."""
+        from modules.law_intel.registro import cargar
+        from modules.law_intel.scoring.semaforo import evaluar
+
+        exp = cargar(EXPEDIENTE)
+        for ind_id in ("2.28", "2.4"):
+            ind = next(i for i in exp.numerados if i.id == ind_id)
+            b = cargar_bindings(EXPEDIENTE)[ind_id]
+            v = evaluar(ind, b, [("2013", 3.8)], corte="2025")
+            assert v.veredicto == "sin_medicion", f"{ind_id} publicó {v.veredicto}"
+            assert b.sin_veredicto_por in (v.motivo or ""), "el motivo declarado tiene que viajar"
+
+    def test_la_cobertura_publica_POR_QUE_no_certifica_cada_uno(self):
+        from modules.law_intel.bindings import cobertura
+
+        c = cobertura(EXPEDIENTE)
+        assert c["propuestos_por_motivo"], "la cifra sola se lee como trabajo pendiente"
+        assert sum(c["propuestos_por_motivo"].values()) == c["propuestos_sin_verificar"]
+        assert "HALLAZGOS" in c["nota"]

@@ -112,14 +112,16 @@ def instrumento_de(celda: object) -> str:
             else INSTRUMENTO_SIN_ASTERISCO)
 
 
-def nombre_de_hoja(hojas: Sequence[str], indicador: str) -> Optional[str]:
-    """La hoja de un indicador, tolerando cómo el emisor la nombra.
+def nombre_de_hoja(hojas: Sequence[str], nombre: str) -> Optional[str]:
+    """La hoja pedida, tolerando cómo el emisor la escribe.
+
+    `nombre` es el rótulo COMPLETO —«END 2.8a»— y no el número del indicador: varios se
+    desdoblan en la publicación y cuál sirve es una decisión declarada en `INDICADORES`.
 
     La del 2.40 se llama `« END 2.40»`, con un espacio ADELANTE. Buscar por igualdad exacta
-    la pierde, y perderla se lee como que el indicador no tiene fuente — que es precisamente
-    el estado en el que estuvo hasta hoy.
+    la pierde, y perderla se lee como que el indicador no tiene fuente.
     """
-    objetivo = _norm(f"END {indicador}")
+    objetivo = _norm(nombre)
     for h in hojas:
         if _norm(h) == objetivo:
             return h
@@ -251,9 +253,16 @@ def fetch(indicador: str) -> List[Observacion]:  # pragma: no cover - red + hoja
                 r = c.get(url)
                 r.raise_for_status()
                 libro = io.BytesIO(r.content)
-            hoja = nombre_de_hoja(pd.ExcelFile(libro).sheet_names, indicador)
+            fuente = INDICADORES.get(indicador)
+            # La hoja DECLARADA manda sobre la deducida del número. No es un detalle: el 2.8
+            # vive en «END 2.8a» y el 2.37 en «END 2.37a», y deducir «END 2.8» del indicador
+            # no encontraba nada — los dos quedaron con CERO observaciones y el semáforo los
+            # dio por «sin dato» estando verificados. Peor sería el caso simétrico: si una
+            # hoja «END 2.8» existiera, se habría leído la variante que el registro rechaza.
+            hoja = nombre_de_hoja(pd.ExcelFile(libro).sheet_names,
+                                  fuente.hoja if fuente else f"END {indicador}")
             if hoja is None:
-                fallos.append(f"{edicion}: sin hoja para el indicador {indicador}")
+                fallos.append(f"{edicion}: sin hoja «{fuente.hoja if fuente else indicador}»")
                 continue
             df = pd.read_excel(libro, sheet_name=hoja, header=None)
             fuente = INDICADORES.get(indicador)

@@ -53,6 +53,27 @@ DIRECCIONES = frozenset({"menor", "mayor"})
 # medimos» sobre una serie que el Estado publica con el nombre exacto que el legislador le
 # puso: castigaría al emisor por revisar bien. Sus cuatro candados y por qué cada uno hace
 # falta están en `modules.law_intel.anadas`.
+# Por qué un binding que TIENE serie no produce veredicto. Vocabulario CERRADO, y existe
+# porque el estado `propuesto` no distingue dos cosas que no se parecen: «falta trabajo
+# nuestro» y «el trabajo está hecho y el que no cierra es el instrumento legal».
+#
+# Sin esta distinción, once indicadores con el hallazgo COMPLETO se leían igual que once
+# pendientes — en el campo salían todos como `candidato_sin_verificar`, o sea «hay una duda
+# abierta», cuando en ocho de ellos la duda estaba resuelta y la respuesta era sobre la ley.
+# Un informe que presenta un hallazgo como tarea pendiente regala el hallazgo.
+MOTIVOS_SIN_VEREDICTO = {
+    "linea_base_no_reproduce": (
+        "el emisor publica la magnitud con el término de la ley, y su serie NO reproduce la "
+        "línea base que la ley fija. La discrepancia es del instrumento legal, no de la "
+        "fuente ni nuestra"),
+    "instrumento_discontinuado": (
+        "la serie identifica bien el indicador y el emisor dejó de producirla antes del "
+        "primer año de meta: no hay observación contra la cual juzgar"),
+    "termino_legal_sin_fuente": (
+        "la ley nombra la magnitud con un término que ningún emisor publica, y las lecturas "
+        "vecinas se probaron y ninguna cierra"),
+}
+
 VERIFICADO_POR = {
     "oraculo": "la serie reproduce la línea base de la ley en el año que la ley fija",
     "identidad_de_concepto": ("el emisor publica la magnitud con el término del legislador, y "
@@ -127,6 +148,14 @@ class Binding:
     # Va como CAMPO y no en la prosa de `nota` porque un dato que hay que parsear de un texto
     # deja de ser un dato.
     periodo_verificado: Optional[str] = None
+    # POR QUÉ no produce veredicto, cuando tiene serie y no promueve. Del vocabulario cerrado
+    # `MOTIVOS_SIN_VEREDICTO`. Es lo que separa «falta trabajo» de «el hallazgo ES éste».
+    sin_veredicto_por: Optional[str] = None
+    # CUÁNDO se estableció ese motivo. Va como campo y no en la prosa de la nota por lo mismo
+    # que `periodo_verificado`: una fecha que hay que parsear de un texto deja de ser un dato,
+    # y el campo la exige para no dejar publicar «el emisor no lo mide» sin decir cuándo se
+    # comprobó.
+    sin_veredicto_desde: Optional[str] = None
     # SERIES YA EVALUADAS Y RECHAZADAS para ESTE indicador, cada una con su motivo.
     #
     # `motivo_descarte` cuelga del indicador, pero un descarte es siempre sobre un CANDIDATO
@@ -353,6 +382,29 @@ def _validar(exp: Expediente, bindings: List[Binding]) -> None:
                 f"{b.indicador}: `verificado_por` desconocido '{b.verificado_por}'; "
                 f"admitidos {sorted(VERIFICADO_POR)}")
 
+        if b.sin_veredicto_por is not None:
+            if b.sin_veredicto_por not in MOTIVOS_SIN_VEREDICTO:
+                raise ExpedienteInvalido(
+                    f"{b.indicador}: `sin_veredicto_por` vale «{b.sin_veredicto_por}» y el "
+                    f"vocabulario es {sorted(MOTIVOS_SIN_VEREDICTO)}. Abrir uno nuevo es "
+                    f"decisión del dueño, no una salida para un caso que no encaja.")
+            if b.cuenta:
+                raise ExpedienteInvalido(
+                    f"{b.indicador}: declara por qué NO produce veredicto y a la vez cuenta "
+                    f"como cobertura. Una de las dos cosas está mal.")
+            if not re.fullmatch(r"20\d\d-\d\d-\d\d", (b.sin_veredicto_desde or "")):
+                raise ExpedienteInvalido(
+                    f"{b.indicador}: declara `sin_veredicto_por` sin `sin_veredicto_desde` "
+                    f"en formato YYYY-MM-DD. Un motivo sobre el mundo sin fecha no se puede "
+                    f"auditar: nadie sabe si sigue siendo cierto.")
+        if b.estado == "propuesto" and not b.sin_veredicto_por:
+            raise ExpedienteInvalido(
+                f"{b.indicador}: está en `propuesto` y no declara `sin_veredicto_por`. "
+                f"«Propuesto» a secas no distingue «falta trabajo nuestro» de «el trabajo "
+                f"está hecho y el que no cierra es el instrumento legal», y esa diferencia "
+                f"es la que decide si el caso va al informe como hallazgo o como tarea. "
+                f"Vocabulario: {sorted(MOTIVOS_SIN_VEREDICTO)}.")
+
         # El camino de identidad de concepto tiene tres candados, y los tres hacen falta.
         # Sin ellos sería la puerta por la que entra «se parece»: exactamente lo que el
         # oráculo existe para cerrar.
@@ -536,6 +588,18 @@ def cobertura(expediente_id: str) -> Dict[str, object]:
         "que_significa_cada_camino": VERIFICADO_POR,
         "pct": round(100.0 * len(verificados) / len(numerados), 1) if numerados else 0.0,
         "propuestos_sin_verificar": len(propuestos),
-        "nota": ("Los bindings propuestos NO cuentan como cobertura: la serie parece medir el "
-                 "indicador y todavía nadie lo comprobó contra la fuente."),
+        # POR QUÉ no certifica cada uno. La cifra sola decía «todavía nadie lo comprobó
+        # contra la fuente», y de los once propuestos eso era falso en ocho: el trabajo está
+        # hecho y el que no cierra es el instrumento legal. Publicar un hallazgo como tarea
+        # pendiente lo regala, y esta es la superficie donde el cliente lee la cobertura.
+        "propuestos_por_motivo": {
+            m: sum(1 for i in propuestos if bs[i.id].sin_veredicto_por == m)
+            for m in sorted(str(x) for x in {bs[i.id].sin_veredicto_por for i in propuestos}
+                            if x is not None)
+        },
+        "que_significa_cada_motivo": MOTIVOS_SIN_VEREDICTO,
+        "nota": ("Los bindings propuestos NO cuentan como cobertura, y el motivo importa: "
+                 "«linea_base_no_reproduce» y «termino_legal_sin_fuente» son HALLAZGOS sobre "
+                 "la ley —el trabajo está hecho y el que no cierra es el instrumento—, no "
+                 "trabajo pendiente. Ver `propuestos_por_motivo`."),
     }

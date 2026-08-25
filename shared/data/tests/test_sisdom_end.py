@@ -6,7 +6,7 @@ con los tipos mezclados que el emisor usa en el mismo encabezado.
 """
 import pytest
 
-from shared.data.sisdom_end import (ANIO_DE_SOLAPAMIENTO, Observacion, SisdomError, anio_de,
+from shared.data.sisdom_end import (INDICADORES, ANIO_DE_SOLAPAMIENTO, Observacion, SisdomError, anio_de,
                                     fila_del_total, fila_de_encabezado, instrumento_de,
                                     leer_hoja, nombre_de_hoja, salto_en_el_solapamiento,
                                     serie_de)
@@ -38,14 +38,18 @@ class TestComoSeLlamaLaHoja:
         perderla se lee como que el indicador no tiene fuente — que es el estado en el que
         estuvo hasta hoy."""
         hojas = ["Índice", "END 2.39a", " END 2.40", "END 2.41a"]
-        assert nombre_de_hoja(hojas, "2.40") == " END 2.40"
+        assert nombre_de_hoja(hojas, " END 2.40") == " END 2.40"
+        # Y el espacio tampoco importa del lado de quien pregunta.
+        assert nombre_de_hoja(hojas, "END 2.40") == " END 2.40"
 
     def test_no_confunde_2_4_con_2_40(self):
-        assert nombre_de_hoja(["END 2.4a", " END 2.40"], "2.4") is None
-        assert nombre_de_hoja(["END 2.4", " END 2.40"], "2.4") == "END 2.4"
+        """La comparación es por IGUALDAD normalizada, no por prefijo: «END 2.4» es prefijo
+        de «END 2.40» y un `startswith` ataría el 2.4 a la serie del 2.40."""
+        assert nombre_de_hoja(["END 2.4a", " END 2.40"], "END 2.4") is None
+        assert nombre_de_hoja(["END 2.4", " END 2.40"], "END 2.4") == "END 2.4"
 
     def test_sin_hoja_devuelve_None(self):
-        assert nombre_de_hoja(["Índice", "END 2.1a"], "2.40") is None
+        assert nombre_de_hoja(["Índice", "END 2.1a"], "END 2.40") is None
 
 
 class TestElInstrumentoVIAJA:
@@ -131,3 +135,40 @@ def test_la_edicion_viaja_con_la_observacion():
     obs = leer_hoja(HOJA, edicion=2024)
     assert all(o.edicion == 2024 for o in obs)
     assert Observacion(anio=2025, valor=0.88, instrumento="ENCFT", edicion=2025).edicion == 2025
+
+
+class TestLaHojaDECLARADAMandaSobreLaDeducida:
+    """El defecto que costó dos indicadores con CERO observaciones.
+
+    `fetch` construía el nombre de la hoja del NÚMERO del indicador —«END 2.8»— e ignoraba
+    el que el registro declara —«END 2.8a»—. Para doce indicadores da igual porque coinciden;
+    para el 2.8 y el 2.37 no existe esa hoja, así que no encontraba nada y los dos quedaron
+    persistidos en cero. El semáforo los dio por «sin dato» estando verificados, que es el
+    modo de falla que este repositorio persigue: no romperse, mentir bajito.
+
+    Y el caso simétrico es peor: si una hoja «END 2.8» llegara a existir, deducirla habría
+    leído la variante que el registro rechaza explícitamente —la neta AJUSTADA— y publicado
+    otra magnitud contra la meta de la ley.
+    """
+
+    def test_los_dos_indicadores_que_se_desdoblan_declaran_hoja_con_SUFIJO(self):
+        assert INDICADORES["2.8"].hoja == "END 2.8a"
+        assert INDICADORES["2.37"].hoja == "END 2.37a"
+
+    def test_deducir_la_hoja_del_numero_NO_encuentra_esas_dos(self):
+        """Es la comprobación con dientes: si esto empezara a encontrarlas, el guard sobra."""
+        hojas = ["END 2.8a", "END 2.37a", " END 2.40"]
+        assert nombre_de_hoja(hojas, "END 2.8") is None
+        assert nombre_de_hoja(hojas, "END 2.37") is None
+
+    def test_con_el_nombre_declarado_las_encuentra(self):
+        hojas = ["END 2.8a", "END 2.37a", " END 2.40"]
+        assert nombre_de_hoja(hojas, INDICADORES["2.8"].hoja) == "END 2.8a"
+        assert nombre_de_hoja(hojas, INDICADORES["2.37"].hoja) == "END 2.37a"
+
+    def test_toda_hoja_del_registro_empieza_por_END_y_su_indicador(self):
+        """Un sufijo declarado es una decisión; un rótulo que ni siquiera nombra al indicador
+        sería un error de tipeo que nadie vería."""
+        for indicador, f in INDICADORES.items():
+            assert f.hoja.strip().upper().startswith(f"END {indicador}".upper()), (
+                f"{indicador}: la hoja declarada «{f.hoja}» no nombra al indicador")
