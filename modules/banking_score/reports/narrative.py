@@ -79,6 +79,12 @@ _CEREBRO_TEMPLATES = frozenset({
     "subcomponent_focus", "banking_summary", "banking_comparative",
     "banking_risk", "banking_recommendation", "banking_operating_env",
     "banking_support_context",
+    # El anuario vive en `THIN_TEMPLATES` (ruta cerebro) y faltaba acá, así que el motor lo
+    # mandaba por la ruta LEGACY —donde esa plantilla no existe— y caía al relleno estático
+    # EN SILENCIO. El primer anuario de producción salió con las tablas correctas y la sección
+    # de análisis diciendo «el análisis cualitativo ampliado se incorpora en la versión
+    # completa del producto». Registrado pero inalcanzable, igual que su endpoint.
+    "anuario_sistema",
 })
 
 # Profundidad POR SECCIÓN (alineada con shared.products.section_mode), para que el deep dive
