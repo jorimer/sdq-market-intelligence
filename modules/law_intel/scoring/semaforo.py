@@ -34,6 +34,9 @@ VEREDICTOS = {
     "estancada": "el indicador no se mueve, y la meta que lo espera sí",
     "sin_dato": "hay binding pero no hay observación utilizable",
     "sin_medicion": "no hay binding verificado que mida este indicador",
+    "medido_sin_certificar": ("hay serie y observación, y la distancia a la meta se computa; "
+                              "lo que NO se certificó es que el nivel sea comparable con la "
+                              "línea base que la ley fija"),
     "no_evaluable": "la meta no está en una escala que admita diferencia",
 }
 
@@ -109,9 +112,29 @@ def evaluar(ind: Indicador, binding: Optional[Binding],
                              motivo=f"la meta es de escala '{ind.escala}': se cumple o no, "
                                     f"no se resta")
     if binding is None or not binding.cuenta:
+        # Un binding que DECLARA por qué no certifica no es lo mismo que no medir. El 2.33
+        # tiene dieciocho años de serie y el 3.30 seis: decir «no lo medimos» sobre ellos
+        # regala el hallazgo — y el hallazgo es que la línea base de la LEY no reproduce
+        # contra la serie de su propio Estado. Se publica la observación y la distancia, con
+        # la salvedad al lado y sin contar como cumplimiento.
+        motivo_declarado = getattr(binding, "sin_veredicto_por", None) if binding else None
+        if motivo_declarado == "linea_base_no_reproduce":
+            p_meta, m = _meta_vigente(ind, corte)
+            obs_utiles = [o for o in observaciones if isinstance(o[1], (int, float))]
+            if m is not None and isinstance(m, (int, float)) and obs_utiles:
+                p_obs, valor = obs_utiles[-1]
+                return Veredicto(
+                    ind.id, "medido_sin_certificar", meta_periodo=p_meta, meta=m,
+                    observado=round(float(valor), _DECIMALES), periodo_observado=p_obs,
+                    distancia=round(float(valor) - float(m), _DECIMALES),
+                    motivo=("la serie mide el indicador con el término de la ley y no "
+                            "reproduce su línea base; la distancia a la meta se publica con "
+                            "esa salvedad y no cuenta como cumplimiento"))
         estado = binding.estado if binding else "sin binding"
+        detalle = f"; motivo declarado: {motivo_declarado}" if motivo_declarado else ""
         return Veredicto(ind.id, "sin_medicion",
-                         motivo=f"binding en estado '{estado}'; no cuenta como medición")
+                         motivo=f"binding en estado '{estado}'; no cuenta como medición"
+                                f"{detalle}")
 
     periodo_meta, meta = _meta_vigente(ind, corte)
     if meta is None:

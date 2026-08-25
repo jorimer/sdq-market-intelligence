@@ -669,3 +669,65 @@ class TestPorQueNoProduceVeredicto:
         from modules.law_intel.campo import _EXIGEN_EVIDENCIA
 
         assert {"linea_base_no_reproduce", "termino_legal_sin_fuente"} <= _EXIGEN_EVIDENCIA
+
+
+class TestUnHallazgoNoSeLeeComoSinMedicion:
+    """El 2.33 y el 3.30 salían `sin_medicion` en el semáforo teniendo serie y observaciones.
+
+    «No lo medimos» y «lo medimos, y lo que no cierra es la línea base de la LEY» son cosas
+    distintas, y la segunda es el hallazgo. El 2.33 tiene dieciocho años de serie y el 3.30
+    seis; presentarlos como no medidos regala justamente lo que un evaluador independiente
+    puede decir y el evaluado no.
+    """
+
+    def test_con_serie_y_meta_se_publica_la_DISTANCIA_con_salvedad(self):
+        from modules.law_intel.registro import cargar
+        from modules.law_intel.scoring.semaforo import evaluar
+
+        exp = cargar(EXPEDIENTE)
+        ind = next(i for i in exp.numerados if i.id == "3.30")
+        b = cargar_bindings(EXPEDIENTE)["3.30"]
+        v = evaluar(ind, b, [("2024", 1554.6), ("2025", 1659.319)], corte="2025")
+        assert v.veredicto == "medido_sin_certificar"
+        assert v.observado == 1659.319 and v.meta == 62.5
+        assert v.distancia is not None and v.distancia > 0
+
+    def test_NO_cuenta_como_cumplimiento(self):
+        """Publicar la distancia no es certificar el nivel. Si esto contara como cumplida o
+        como no alcanzada, el veredicto afirmaría una comparabilidad que no se probó."""
+        from modules.law_intel.scoring.semaforo import Veredicto
+
+        assert Veredicto("3.30", "medido_sin_certificar").cumple is None
+
+    def test_sin_observaciones_vuelve_a_sin_medicion(self):
+        """La salvedad no inventa dato: sin observación no hay distancia que publicar."""
+        from modules.law_intel.registro import cargar
+        from modules.law_intel.scoring.semaforo import evaluar
+
+        exp = cargar(EXPEDIENTE)
+        ind = next(i for i in exp.numerados if i.id == "3.30")
+        b = cargar_bindings(EXPEDIENTE)["3.30"]
+        assert evaluar(ind, b, [], corte="2025").veredicto == "sin_medicion"
+
+    def test_los_otros_motivos_NO_publican_distancia(self):
+        """`instrumento_discontinuado` no tiene observación en ningún año de meta —ese ES su
+        motivo— y `termino_legal_sin_fuente` mide otra magnitud que la ley. Publicar su
+        distancia sería compararla contra una meta que no le corresponde."""
+        from modules.law_intel.registro import cargar
+        from modules.law_intel.scoring.semaforo import evaluar
+
+        exp = cargar(EXPEDIENTE)
+        for ind_id in ("2.28", "2.4"):
+            ind = next(i for i in exp.numerados if i.id == ind_id)
+            b = cargar_bindings(EXPEDIENTE)[ind_id]
+            v = evaluar(ind, b, [("2013", 3.8)], corte="2025")
+            assert v.veredicto == "sin_medicion", f"{ind_id} publicó {v.veredicto}"
+            assert b.sin_veredicto_por in (v.motivo or ""), "el motivo declarado tiene que viajar"
+
+    def test_la_cobertura_publica_POR_QUE_no_certifica_cada_uno(self):
+        from modules.law_intel.bindings import cobertura
+
+        c = cobertura(EXPEDIENTE)
+        assert c["propuestos_por_motivo"], "la cifra sola se lee como trabajo pendiente"
+        assert sum(c["propuestos_por_motivo"].values()) == c["propuestos_sin_verificar"]
+        assert "HALLAZGOS" in c["nota"]

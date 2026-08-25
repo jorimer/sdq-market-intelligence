@@ -588,6 +588,18 @@ def cobertura(expediente_id: str) -> Dict[str, object]:
         "que_significa_cada_camino": VERIFICADO_POR,
         "pct": round(100.0 * len(verificados) / len(numerados), 1) if numerados else 0.0,
         "propuestos_sin_verificar": len(propuestos),
-        "nota": ("Los bindings propuestos NO cuentan como cobertura: la serie parece medir el "
-                 "indicador y todavía nadie lo comprobó contra la fuente."),
+        # POR QUÉ no certifica cada uno. La cifra sola decía «todavía nadie lo comprobó
+        # contra la fuente», y de los once propuestos eso era falso en ocho: el trabajo está
+        # hecho y el que no cierra es el instrumento legal. Publicar un hallazgo como tarea
+        # pendiente lo regala, y esta es la superficie donde el cliente lee la cobertura.
+        "propuestos_por_motivo": {
+            m: sum(1 for i in propuestos if bs[i.id].sin_veredicto_por == m)
+            for m in sorted(str(x) for x in {bs[i.id].sin_veredicto_por for i in propuestos}
+                            if x is not None)
+        },
+        "que_significa_cada_motivo": MOTIVOS_SIN_VEREDICTO,
+        "nota": ("Los bindings propuestos NO cuentan como cobertura, y el motivo importa: "
+                 "«linea_base_no_reproduce» y «termino_legal_sin_fuente» son HALLAZGOS sobre "
+                 "la ley —el trabajo está hecho y el que no cierra es el instrumento—, no "
+                 "trabajo pendiente. Ver `propuestos_por_motivo`."),
     }
