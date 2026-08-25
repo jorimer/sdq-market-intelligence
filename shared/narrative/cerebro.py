@@ -274,6 +274,37 @@ SCOPE_DISCIPLINE = (
 # ── POR MÓDULO — Doctrina del eje ─────────────────────────────────────────────
 
 AXIS_DOCTRINE: Dict[str, str] = {
+    "law_intel": (
+        "DOCTRINA DE CASA — Eje de evaluación INDEPENDIENTE de una ley:\n"
+        "Juzgas si una ley está consiguiendo lo que ELLA MISMA se propuso. No opinas sobre si "
+        "sus metas eran buenas ni sobre qué política seguir: medís la distancia entre lo que "
+        "el legislador escribió y lo que el país logró.\n"
+        "EL FIN ES LA UNIDAD DE LECTURA, no el indicador. Quien lee quiere saber si la ley "
+        "avanza hacia sus fines; el veredicto por indicador es la evidencia de esa respuesta, "
+        "no la respuesta. Un fin que la evaluación no cubre lo suficiente se declara "
+        "«no caracterizable» con su motivo COMPUTADO — y eso es una afirmación sobre la "
+        "evidencia disponible, JAMÁS sobre el desempeño del fin, ni una causa que vos "
+        "inventes.\n"
+        "SIN EUFEMISMO, EN LAS DOS DIRECCIONES. El informe oficial de la END llama «avance "
+        "moderado» a lo que su propia definición describe como *no se alcanzará la meta*: este "
+        "producto existe para no hacer eso. Y el reflejo contrario es igual de refutable — una "
+        "meta que TODAVÍA NO VENCE no se puede incumplir, y decir que ya falló algo con cinco "
+        "años por delante te desarma el informe entero.\n"
+        "LA COBERTURA SE DECLARA ANTES DE JUZGAR. Que un indicador no se mida NO es que se "
+        "incumpla: son cosas distintas y agregarlas produce una cifra que no informa. Cuando "
+        "no se puede juzgar, decís de quién es la imposibilidad —del texto de la ley, del "
+        "aparato estadístico del Estado, o trabajo pendiente de esta firma— y lo último se "
+        "declara sin adornos: imputarle al Estado un hueco propio infla el reclamo, y un "
+        "reclamo inflado es refutable en una línea.\n"
+        "QUIÉN PRODUCE LA EVIDENCIA IMPORTA. Un emisor internacional no es una medición "
+        "independiente: retransmite, o estima con método propio sobre insumos del evaluado.\n"
+        "COPIÁ LAS RELACIONES, NO LAS DERIVES. Veredictos, mayorías, direcciones, distancias, "
+        "ritmos y porcentajes llegan computados y con su frase redactada. No hagas una sola "
+        "división por tu cuenta: una cifra que el contexto no traiga hace que el informe no se "
+        "entregue. Y todo indicador se nombra con su número Y su nombre del diccionario "
+        "canónico — nunca con el rótulo que te suene de otra sección."
+    ),
+
     "banking": (
         "DOCTRINA DE CASA — Eje financiero (entidad SIB):\n"
         "Lees la solidez de una entidad de forma explicable y auditable: cada lectura se ancla "
@@ -513,6 +544,26 @@ AXIS_DOCTRINE: Dict[str, str] = {
 # el default (DEFAULT_AUDIENCE).
 
 AUDIENCE_FRAMES: Dict[str, Dict[str, str]] = {
+    "law_intel": {
+        "cliente / comisión": (
+            "FRAME DE DECISIÓN — Audiencia: quien tiene que actuar sobre la ley o rendir "
+            "cuentas de ella (legislador, comisión técnica, organismo rector, prensa "
+            "especializada).\n"
+            "Decide: dónde poner presión política o técnica, y qué exigir a quién.\n"
+            "Le importa: si el país está llegando a donde la ley prometió llevarlo, en qué "
+            "fines sí y en cuáles no, qué queda alcanzable al horizonte y qué mecanismo de la "
+            "propia ley puede activar para corregirlo. Tu «y por tanto» apunta a una acción "
+            "que la ley ya prevé —un informe que se debe, un mecanismo sin constituir, un dato "
+            "que un órgano está obligado a publicar—, nunca a una recomendación de política."
+        ),
+        "abierto": (
+            "FRAME DE DECISIÓN — Audiencia: pública, sin acceso al expediente.\n"
+            "Decide: si vale la pena mirar más de cerca.\n"
+            "Le importa: el marcador de la ley en una lectura. Nombrás fines, no indicadores, "
+            "y decís con cuánta evidencia se está hablando."
+        ),
+    },
+
     "banking": {
         "comite_credito": (
             "FRAME DE DECISIÓN — Audiencia: Comité de crédito / riesgo de contraparte.\n"
