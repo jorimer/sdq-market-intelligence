@@ -30,6 +30,11 @@ from modules.law_intel.scoring.accionabilidad import recomendaciones
 from modules.law_intel.scoring.brecha import brechas
 from modules.law_intel.scoring.brecha import resumen as resumen_brecha
 from modules.law_intel.scoring.coherencia_proceso import revisar
+from modules.law_intel.scoring.fines import por_fin
+from modules.law_intel.scoring.fines import publicable as fines_publicable
+from modules.law_intel.scoring.pendiente import horizonte_de
+from modules.law_intel.scoring.pendiente import panel as panel_pendiente
+from modules.law_intel.scoring.pendiente import publicable as pendiente_publicable
 from modules.law_intel.scoring.semaforo import panel
 from modules.law_intel.scoring.semaforo import resumen as resumen_semaforo
 from modules.law_intel.verificabilidad import publicable as verificabilidad_publicable
@@ -86,6 +91,15 @@ def law_ai_context(expediente_id: str, corte: str,
     recs = recomendaciones(br, obs)
     coh = revisar(expediente_id, {i.id: i for i in exp.indicadores}, corte)
     cob = cobertura(expediente_id)
+    # El FIN es la unidad de lectura del informe. Se computa acá —y no en el prompt— porque
+    # «la mayoría» de siete contra veintiuno es una relación, y las relaciones se computan.
+    fines = por_fin(numerados, veredictos, exp.meta.get("ejes") or {})
+    # Lo PENDIENTE: las metas que aún no vencen, proyectadas al horizonte que declara la
+    # propia ley. Solo si ese horizonte es posterior al corte — una ley ya vencida no tiene
+    # nada por delante, y proyectar hacia atrás sería inventar un plazo.
+    horizonte = horizonte_de(exp.meta)
+    pendientes = (panel_pendiente(numerados, bs, series or {}, horizonte)
+                  if horizonte and horizonte > corte else [])
 
     return {
         "instrumento": {
@@ -141,6 +155,16 @@ def law_ai_context(expediente_id: str, corte: str,
                      "«3 de 8 indicadores» y «3 de 13 filas» son la misma realidad y suenan "
                      "distinto."),
         },
+        # ── El FIN de la ley: la pregunta que el lector trae. ──
+        # Va ANTES del inventario de indicadores a propósito: quien lee quiere saber si la
+        # ley está consiguiendo lo que se propuso, y el conteo por indicador es la evidencia
+        # de esa respuesta, no la respuesta.
+        **fines_publicable(fines),
+        # ── Lo que la ley todavía tiene por delante. ──
+        # Una meta que no venció NO se puede incumplir: este bloque trae su propio
+        # vocabulario justamente para que el modelo no arrastre el del corte vencido.
+        **(pendiente_publicable(pendientes, horizonte)
+           if pendientes and horizonte else {}),
         # ── Veredictos YA COMPUTADOS. El modelo los copia, no los deriva. ──
         "veredictos_por_indicador_computados": resumen_semaforo(veredictos),
         "vocabulario_obligatorio": {
@@ -202,7 +226,16 @@ def secciones_sin_dato(ctx: Dict[str, Any]) -> List[str]:
     """Qué NO se puede escribir con este contexto. Se declara en vez de rellenarse."""
     faltan = []
     if not ctx["cobertura_indicadores_medidos_sobre_total_de_la_ley"]["medidos"]:
-        faltan.append("cumplimiento")
+        # Las tres secciones del espinazo dependen de que haya algo medido. Con cero
+        # bindings verificados no hay nada que decir de lo logrado ni de lo no logrado, y
+        # escribirlas igual produciría el Deep Dive hueco que este repositorio ya publicó.
+        faltan.extend(["estado_de_la_ley", "logrado", "no_logrado"])
+    # Ojo con lo que NO va acá: «ninguna meta se alcanzó» es una respuesta, no una brecha.
+    # `logrado` se declara sin dato cuando no hay mediciones, nunca cuando hay mediciones y
+    # el resultado es cero — eso último es justamente el hallazgo.
+    pend = ctx.get("metas_pendientes_al_horizonte_de_la_ley") or {}
+    if not (pend.get("por_indicador") or []):
+        faltan.append("pendiente")
     if not ctx["contradicciones_proceso_vs_resultado_computadas"]:
         faltan.append("coherencia_proceso")
     # Sin nada medido ni ninguna obligación con algo que verificar, la sección no tiene

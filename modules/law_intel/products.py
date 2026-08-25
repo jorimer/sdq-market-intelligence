@@ -19,6 +19,7 @@ from typing import Any, Dict, List, Optional
 from sqlalchemy.orm import Session
 
 from modules.law_intel.ai_context import law_ai_context, secciones_sin_dato
+from modules.law_intel.campo import imposibles_por_el_instrumento
 from modules.law_intel.ratificacion import exigir_servible
 from modules.law_intel.ratificacion import publicable as ratificacion_publicable
 from modules.law_intel.registro import RAIZ, cargar, expedientes
@@ -28,6 +29,7 @@ from shared.products import (DataHealth, Granularity, ProductSnapshot, ProductTi
                              SectorProductManifest, TierLevelSpec, ValidationState,
                              register_product)
 from shared.products.render import render_product_pdf
+from shared.registry.signals import COVERAGE_INSTRUMENT
 
 logger = logging.getLogger("sdq.law_intel.products")
 
@@ -87,16 +89,30 @@ DISPLAY = "SDQ Evaluación de Leyes"
 # Declarado para la regla del sujeto y para la huella de la caché: el contexto de este
 # módulo NO vive solo en `ai_context.py` — la mitad de lo que el modelo lee sale de las
 # frases ya redactadas por el motor de scoring.
-AI_CONTEXT_FILES = ("ai_context.py", "scoring/accionabilidad.py", "scoring/semaforo.py",
+AI_CONTEXT_FILES = ("ai_context.py", "scoring/accionabilidad.py", "scoring/fines.py",
+                    "scoring/pendiente.py", "scoring/semaforo.py",
                     "verificabilidad.py")
 
+# El espinazo del informe es el FIN de la ley, no el inventario de indicadores. Los tres
+# niveles recorren las mismas tres preguntas —qué se logró, qué no, qué queda— a distinta
+# profundidad, y no se diferencian por cuántas secciones traen. Un lector que no viene a
+# enmendar la ley (un ministerio, un organismo, la prensa) necesita esa lectura; la anterior
+# —cumplimiento, verificabilidad, brechas— era el índice de una auditoría de redacción.
 _SECTION_TITLES = {
-    "cumplimiento": "Cumplimiento de las metas",
+    "estado_de_la_ley": "Dónde está la ley frente a lo que se propuso",
+    "logrado": "Lo que se logró",
+    "no_logrado": "Lo que no se logró",
+    "pendiente": "Lo que queda por delante",
     "coherencia_proceso": "Proceso declarado contra resultado medido",
     "verificabilidad": "Quién produce la evidencia con la que se juzga",
-    "brechas": "Lo que este informe no puede medir",
+    "brechas": "Qué parte de la ley este informe no puede juzgar",
     "recomendaciones": "Qué se puede exigir, y con qué instrumento",
 }
+
+#: Qué sección lleva la profundidad en el Deep Dive. Se declara en vez de dejar el default
+#: («la primera analítica»), que caería sobre el marcador: el nivel se compra por la lectura
+#: de lo que viene, no por el resumen que ya trae el Insight.
+_SECCION_PROFUNDA = "pendiente"
 _SIN_DATO = ("El informe no puede pronunciarse sobre esta sección con la cobertura actual. "
              "La sección de brechas dice qué falta y a quién le corresponde producirlo.")
 
@@ -104,15 +120,41 @@ _SIN_DATO = ("El informe no puede pronunciarse sobre esta sección con la cobert
 # las cuatro cosas que distinguen a este producto: la cobertura declarada en la primera línea,
 # el veredicto sin eufemismo, la brecha con responsable y la recomendación con base legal.
 _SAMPLE_NARRATIVES = {
-    "cumplimiento": (
-        "Esta evaluación mide 12 de los 30 indicadores que la Ley 000-00 se fijó a sí misma. "
-        "De los 12 medidos, 5 alcanzan su meta al corte de 2025 y 6 no la alcanzarán al ritmo "
-        "actual; 1 retrocede. Los 18 restantes no se miden — que no es lo mismo que decir que "
-        "se incumplen, y la sección de brechas explica por qué.\n\n"
-        "El indicador que más pesa en el juicio es el de recaudación: avanza, pero a un ritmo "
-        "que no llega a la meta de 2025. La ley fija cortes quinquenales y cada uno se juzga "
-        "cuando le toca, así que el veredicto es contra la meta ya vencida y no contra la de "
-        "2035."),
+    "estado_de_la_ley": (
+        "La Ley 000-00 se propuso tres fines y se fijó 30 indicadores para probarlos. Esta "
+        "evaluación mide 12 de esos 30, y con ellos puede caracterizar dos de los tres "
+        "fines.\n\n"
+        "El fin de recaudación no alcanza sus metas en su mayoría: de los 14 compromisos que "
+        "la ley le fija, este informe juzga 8, de los cuales 2 alcanzan su meta y 6 no. El "
+        "fin de simplificación sí las alcanza: 3 de 4 juzgados. El tercero —transparencia— "
+        "no se puede caracterizar: solo 1 de sus 12 metas tiene veredicto, y una no dice "
+        "nada del fin. Eso último es una afirmación sobre la evidencia disponible, no sobre "
+        "el desempeño de ese fin."),
+    "logrado": (
+        "De las 12 metas vencidas que esta evaluación juzga, 5 se alcanzaron. Tres de ellas "
+        "pertenecen al fin de simplificación, y en dos el valor observado supera la meta con "
+        "holgura: la ley pedía reducir a 15 días un trámite que hoy toma 9.\n\n"
+        "El matiz que conviene no perder: alcanzar la meta que la ley fijó no es lo mismo "
+        "que probar que la ley produjo ese resultado. Lo que este informe afirma es que el "
+        "país llegó a donde el instrumento dijo que llegaría, y esa afirmación se comprueba "
+        "contra la serie oficial que se cita al lado de cada cifra."),
+    "no_logrado": (
+        "Siete de las 12 metas vencidas no se alcanzaron, y no todas por la misma razón. "
+        "Cuatro avanzan hacia su objetivo sin llegar a tiempo. Dos se alejan: el indicador "
+        "se mueve en dirección contraria a la meta, y ese es un diagnóstico distinto que "
+        "pide una acción distinta. Una no se mueve — la serie es plana desde 2020, mientras "
+        "la meta que la espera sí avanza con los años.\n\n"
+        "La desviación más grande está en el fin de recaudación, donde el indicador está a "
+        "más del doble de distancia de su meta que cualquier otro del expediente."),
+    "pendiente": (
+        "La ley rige hasta 2035 y fija metas a ese año para 28 de sus 30 indicadores. De los "
+        "12 que esta evaluación mide, 1 ya cumple hoy la meta de 2035 y lo pendiente ahí es "
+        "sostenerlo; 3 llegan al ritmo observado; y 6 no llegan salvo que el ritmo cambie.\n\n"
+        "El caso que más pesa: al ritmo observado desde 2015, ese indicador necesitaría 19 "
+        "años de recorrido y le quedan 10. No es un pronóstico — es una extrapolación lineal "
+        "de lo que ya pasó, y el ritmo es exactamente lo que una decisión de política puede "
+        "cambiar. Los 2 restantes tienen una sola observación: se puede decir a qué distancia "
+        "están, nunca si van a llegar."),
     "coherencia_proceso": (
         "El instrumento de proceso previsto por la ley reporta un cumplimiento formal alto de "
         "sus compromisos. Cuando el indicador que ese instrumento existía para mover no se "
@@ -133,12 +175,15 @@ _SAMPLE_NARRATIVES = {
         "una parte de sus metas. Es que esa parte es justamente la que dejó de estar "
         "disponible, y con ella se fue la única evidencia que no dependía del evaluado."),
     "brechas": (
-        "De los 30 indicadores de la ley, 18 no se miden en este informe. La atribución "
-        "importa: 14 son una brecha de la plataforma —falta conectar o verificar la fuente— y "
-        "4 son del propio instrumento, porque la ley fija esas metas en palabras o como "
-        "umbral y ninguna fuente las vuelve restables.\n\n"
+        "De los 30 indicadores de la ley, 18 no reciben veredicto en este informe, y de qué "
+        "lado está la causa cambia por completo la lectura: 14 son una brecha de la "
+        "plataforma —falta conectar o verificar la fuente— y 4 son del propio instrumento, "
+        "porque la ley fija esas metas en palabras o como umbral y ninguna fuente las vuelve "
+        "restables.\n\n"
         "Se declara la diferencia porque imputarle al Estado un hueco que es nuestro infla el "
-        "reclamo, y un reclamo inflado es refutable."),
+        "reclamo, y un reclamo inflado es refutable. Y se declara acá, junto a los "
+        "resultados, porque el lector tiene derecho a saber sobre qué parte de la ley se está "
+        "pronunciando este informe antes de citarlo."),
     "recomendaciones": (
         "Cerrar la brecha de medición admite dos caminos distintos. El primero es nuestro: "
         "verificar las series candidatas ya identificadas, que habilita medir indicadores sin "
@@ -153,20 +198,27 @@ _SAMPLE_NARRATIVES = {
 def law_manifest() -> SectorProductManifest:
     return SectorProductManifest(
         sector_key=SECTOR_KEY, display_name=DISPLAY, levels={
+            # Pulse: el marcador de la ley por FIN. Sin nombrar indicadores.
             ProductTier.pulse: TierLevelSpec(
                 tier=ProductTier.pulse, granularity=Granularity.system,
-                sections=("cumplimiento",), narrative_templates=("sector_decision",),
+                sections=("estado_de_la_ley",), narrative_templates=("sector_decision",),
                 audience="abierto", cadence="periodic",
                 watermark="Vista abierta · SDQMIP", price_band="abierto"),
+            # Insight: dónde está parado cada compromiso, y qué queda por delante.
             ProductTier.insight: TierLevelSpec(
                 tier=ProductTier.insight, granularity=Granularity.named_entity,
-                sections=("cumplimiento", "verificabilidad", "brechas", "recomendaciones"),
+                sections=("estado_de_la_ley", "logrado", "no_logrado", "pendiente",
+                          "brechas"),
                 narrative_templates=("sector_decision", "sector_positioning"),
                 audience="cliente / comisión", cadence="recurring", price_band="suscripción"),
+            # Deep Dive: lo mismo con profundidad de trayectoria, más de dónde sale la
+            # evidencia y qué se puede exigir. Los defectos del instrumento viven en
+            # `brechas` —como salvedad de cuánto se puede juzgar— y no como tema del informe.
             ProductTier.deep_dive: TierLevelSpec(
                 tier=ProductTier.deep_dive, granularity=Granularity.named_entity,
-                sections=("cumplimiento", "coherencia_proceso", "verificabilidad",
-                          "brechas", "recomendaciones"),
+                sections=("estado_de_la_ley", "logrado", "no_logrado", "pendiente",
+                          "coherencia_proceso", "verificabilidad", "brechas",
+                          "recomendaciones"),
                 narrative_templates=("sector_decision", "sector_positioning"),
                 audience="cliente / comisión", cadence="on_demand", price_band="a medida"),
         })
@@ -233,10 +285,28 @@ class LawProduct:
         if not eids:
             return DataHealth(coverage=0.0, freshness_days=None)
         eid = eids[0]
-        pct = float(cobertura(eid)["pct"])   # type: ignore[arg-type]
+        cob = cobertura(eid)
+        pct = float(cob["pct"])   # type: ignore[arg-type]
+        # La cobertura de este eje responde OTRA pregunta que la de los demás, y el gate
+        # tiene que saberlo. En un índice, `coverage` mide qué fracción de nuestro cableado
+        # tiene dato real. Acá mide cuántas de las metas que la LEY se fijó estamos midiendo
+        # — y 35 de las 90 de la END no las puede medir nadie: la ley las escribió en prosa,
+        # o fija una línea base que no reproduce, o el emisor que eligió dejó de medir. Con
+        # la lectura de índice, el techo real del eje queda bajo el umbral de publicación y
+        # el producto no cruza a Insight nunca: castigado por su propio hallazgo.
+        #
+        # Lo excluido NO se esconde: la cruda sigue viajando en `coverage`, el desglose entra
+        # entero para que el gate escriba su linaje, y la sección de brechas lo LISTA.
+        total = int(cob["total"])          # type: ignore[call-overload]
+        medidas = int(cob["medidos"])      # type: ignore[call-overload]
+        imposibles = imposibles_por_el_instrumento(eid)
+        medible = total - imposibles
         return DataHealth(
             coverage=pct / 100.0, freshness_days=_antiguedad_del_dato(eid), cadence="annual",
             sources=(cargar(eid).norma,),
+            coverage_kind=COVERAGE_INSTRUMENT,
+            coverage_efectiva=(medidas / medible) if medible > 0 else None,
+            universo=total, medidas=medidas, imposibles_por_el_instrumento=imposibles,
             # `detail` NO es decorativo: el readiness lo inserta literalmente en el texto de
             # la brecha, y de ahí lo lee el agente de descubrimiento de fuentes. Vacío, el
             # agente recibía «faltan dimensiones con dato real ()» y sólo podía proponer
@@ -388,7 +458,8 @@ class LawProduct:
             propio["seccion_pedida"] = _SECTION_TITLES.get(sec, sec)
             pendientes.append((sec, dict(
                 context=propio, template="sector_decision",
-                mode=section_mode(tier, sec, secciones),
+                mode=section_mode(tier, sec, secciones,
+                                  deep_section=_SECCION_PROFUNDA),
                 axis="law_intel", audience="cliente / comisión")))
 
         async def _gen(sec: str, kw: Dict[str, Any]):
@@ -471,6 +542,34 @@ class LawProduct:
             ["Medidos por este informe", str(cob.get("medidos", "—"))],
             ["Con serie propuesta sin verificar", str(cob.get("propuestos_sin_verificar", "—"))],
         ]))
+        # Los FINES de la ley, en tabla. Es la lectura que el informe encabeza, y va
+        # computada: «la mayoría» de siete contra veintiuno es una relación, y las relaciones
+        # no se le piden al modelo. Los fines que no se pueden caracterizar salen en la misma
+        # tabla con el motivo — sacarlos se leería como que ese fin no tiene problemas.
+        fines = ctx.get("fines_de_la_ley_computados") or []
+        if fines:
+            tables.append(("Los fines que la ley se propuso", [
+                ["Fin", "Metas que fija", "Con veredicto", "Alcanzadas", "Estado"]] + [
+                [f["nombre"], str(f["indicadores_que_la_ley_le_fija"]),
+                 str(f["evaluados_en_este_informe"]), str(f["alcanzadas"]),
+                 (f["motivo_sin_caracterizar"] or "").capitalize()
+                 if f["estado"] == "no_caracterizable"
+                 else str(f["estado"]).replace("_", " ").capitalize()]
+                for f in fines]))
+
+        # Lo pendiente al horizonte de la ley. El encabezado nombra el año para que la tabla
+        # no se lea como si fueran metas ya vencidas.
+        pend = ctx.get("metas_pendientes_al_horizonte_de_la_ley") or {}
+        if pend.get("resumen"):
+            r = pend["resumen"]
+            tables.append((f"Las metas al {pend.get('horizonte', 'horizonte')} de la ley", [
+                ["Estado al ritmo observado", "Indicadores"],
+                ["Ya alcanzada con el dato de hoy", str(r.get("ya_alcanzadas", 0))],
+                ["Llega antes del horizonte", str(r.get("en_trayectoria", 0))],
+                ["No llega al ritmo observado", str(r.get("no_llegan_al_ritmo_actual", 0))],
+                ["Con meta al horizonte", str(r.get("con_meta_al_horizonte", 0))],
+            ]))
+
         recs = ctx.get("recomendaciones_ya_redactadas") or []
         if recs:
             tables.append(("Qué se puede exigir", [["Clase", "Recomendación", "Desbloquea"]] + [

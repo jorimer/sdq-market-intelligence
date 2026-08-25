@@ -58,6 +58,49 @@ ESTADOS_DEL_CAMPO = {
     "pendiente_de_busqueda": "no se ha buscado fuente todavía",
 }
 
+#: Los motivos cuya causa está en el INSTRUMENTO LEGAL o en el aparato estadístico del
+#: Estado evaluado, no en nuestro trabajo pendiente.
+#:
+#: **Para qué existe esta lista.** El gate de readiness de la plataforma pregunta «¿qué
+#: fracción de tu índice tiene dato real?» — una pregunta sobre nuestro cableado. Aplicada a
+#: una ley, la misma aritmética responde «¿qué fracción de las metas que la ley se fijó son
+#: medibles?», que es una pregunta sobre la LEY. Con la primera lectura, cuanto peor
+#: redactada esté la norma menos «listo» parece nuestro producto: el eje quedaba castigado
+#: por su propio hallazgo de venta, y su techo real caía por debajo del umbral de
+#: publicación. Estos motivos salen del DENOMINADOR de esa cobertura efectiva.
+#:
+#: **Lo que esta lista NO puede volverse.** Una puerta trasera para esconder deuda propia.
+#: Nada de lo que depende de nosotros entra: `pendiente_de_busqueda`, `candidato_descartado`,
+#: `candidato_sin_verificar`, `pendiente_de_derivacion` y `fuente_no_procesable` siguen
+#: pesando en el denominador aunque duelan. `fuente_no_procesable` en particular es tentadora
+#: —el emisor publica en un formato incómodo— y se queda adentro: un formato difícil es
+#: trabajo, no una imposibilidad de la ley.
+#:
+#: Y lo excluido **se LISTA en el informe**, en la sección de brechas. Sacarlo del gate sin
+#: nombrarlo sería exactamente el veto silencioso que esta plataforma persigue.
+IMPOSIBLES_POR_EL_INSTRUMENTO = frozenset({
+    # Lo impide el texto de la ley.
+    "sin_meta_legal", "meta_no_interpretable",
+    "linea_base_no_reproduce", "termino_legal_sin_fuente",
+    # Lo impide el aparato estadístico del Estado evaluado.
+    "instrumento_discontinuado", "sin_fuente_conocida", "magnitud_no_publicada",
+})
+
+#: Los motivos que dependen de NOSOTROS y siguen contando en el denominador del gate.
+#: Se declara explícito, y no como «todo lo demás», para que un motivo nuevo tenga que
+#: clasificarse a mano en vez de caer por defecto del lado que conviene.
+DEPENDEN_DE_NOSOTROS = frozenset({
+    "fuente_no_procesable", "candidato_descartado", "candidato_sin_verificar",
+    "pendiente_de_derivacion", "pendiente_de_busqueda",
+})
+
+
+def imposibles_por_el_instrumento(expediente_id: str) -> int:
+    """Cuántos indicadores de la ley no puede medir NADIE, por defecto del instrumento."""
+    return sum(1 for c in campo(expediente_id).values()
+               if c.estado in IMPOSIBLES_POR_EL_INSTRUMENTO)
+
+
 #: Los que AFIRMAN algo sobre el mundo. Exigen evidencia con fecha, por la misma razón que una
 #: obligación `incumplida` la exige: sin ella, «no existe fuente» es una conjetura publicada.
 _EXIGEN_EVIDENCIA = frozenset({

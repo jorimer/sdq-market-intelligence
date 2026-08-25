@@ -21,9 +21,10 @@ y configurado", y el guard/render efectivos se validan en la producción del rep
 from __future__ import annotations
 
 from dataclasses import asdict
-from typing import Any, Dict, Optional
+from typing import Any, Dict, Optional, Tuple
 
-from shared.products.contract import SectorProduct
+from shared.products.contract import DataHealth, SectorProduct
+from shared.registry.signals import COVERAGE_INSTRUMENT as _COVERAGE_INSTRUMENT
 from shared.products.tiers import ProductTier
 
 GATE_WEIGHTS: Dict[str, float] = {"g1": 0.30, "g2": 0.25, "g3": 0.15, "g4": 0.15, "g5": 0.15}
@@ -56,6 +57,39 @@ def _freshness_factor(freshness_days: Optional[int], cadence: str = "quarterly")
     return _clamp01((stale - freshness_days) / (stale - fresh))
 
 
+#: Cobertura de INSTRUMENTO: `coverage` no dice qué fracción de nuestro índice tiene dato,
+#: sino qué fracción de las metas que el instrumento evaluado se fijó estamos midiendo. La
+#: constante se reexpone desde el registro para que las dos superficies no puedan divergir.
+COVERAGE_INSTRUMENT = _COVERAGE_INSTRUMENT
+
+
+def _cobertura_que_puntua(data: DataHealth) -> Tuple[float, str]:
+    """La cobertura que entra al gate, y el linaje de por qué es ésa.
+
+    Para un índice es la cruda: mide nuestro cableado, y castigarla es correcto. Para un
+    instrumento —una ley— la cruda incluye en el denominador metas que **ningún esfuerzo
+    nuestro puede medir**, porque el impedimento está en el texto legal o en el aparato
+    estadístico del evaluado. Ahí el gate castigaría al producto por el hallazgo que lo hace
+    valioso, y el techo del eje queda bajo el umbral de publicación: no cruza nunca.
+
+    Se usa `coverage_efectiva` solo si el producto la DECLARA junto con su desglose. Sin el
+    desglose no hay linaje que escribir, y una cobertura mejorada sin linaje es exactamente
+    el descuento silencioso que esto no puede volverse. El detalle nombra las dos cifras
+    siempre, para que el número crudo no desaparezca del rastro.
+    """
+    cruda = _clamp01(data.coverage)
+    if getattr(data, "coverage_kind", "") != COVERAGE_INSTRUMENT:
+        return cruda, ""
+    efectiva = getattr(data, "coverage_efectiva", None)
+    imposibles = getattr(data, "imposibles_por_el_instrumento", None)
+    universo = getattr(data, "universo", None)
+    if efectiva is None or not imposibles or not universo:
+        return cruda, ""
+    return _clamp01(efectiva), (
+        f" (sobre lo medible: {data.medidas} de {universo - imposibles}; "
+        f"{imposibles} de {universo} no los puede medir nadie — cruda={cruda:.2f})")
+
+
 def compute_readiness(product: SectorProduct, tier: ProductTier) -> Dict[str, Any]:
     """Readiness (0–1) de ``(product.sector_key, tier)`` con desglose G1-G5 + linaje.
 
@@ -67,8 +101,9 @@ def compute_readiness(product: SectorProduct, tier: ProductTier) -> Dict[str, An
     # G1 · Data — cobertura × frescura de la fuente autoritativa.
     data = product.data_signals()
     cadence = getattr(data, "cadence", "quarterly")
-    g1 = _clamp01(data.coverage) * _freshness_factor(data.freshness_days, cadence)
-    g1_detail = (f"cobertura={data.coverage:.2f} · frescura={data.freshness_days}d "
+    cobertura, linaje = _cobertura_que_puntua(data)
+    g1 = _clamp01(cobertura) * _freshness_factor(data.freshness_days, cadence)
+    g1_detail = (f"cobertura={cobertura:.2f}{linaje} · frescura={data.freshness_days}d "
                  f"({cadence}) · {data.detail or ', '.join(data.sources)}")
 
     # G2 · Motor — señal declarativa: índice explicable operativo (booleano). El
