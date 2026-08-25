@@ -512,6 +512,112 @@ THIN_TEMPLATES = {
         "decilo y quedate en la lectura de dimensiones, sin fabricar una tendencia. Usa SOLO las "
         "cifras del contexto; respeta la dirección del índice."
     ),
+    # ── Evaluación de leyes: una plantilla POR SECCIÓN ──
+    #
+    # Existen porque el módulo usaba `sector_decision` —un cierre accionable de 180 palabras
+    # que dice «NO repitas el panorama ya expuesto»— para las CINCO secciones del informe, con
+    # el contexto completo en cada una. El resultado eran cinco resúmenes ejecutivos de 500
+    # palabras con el mismo esqueleto SCQA, cada uno recontando el total de indicadores, la
+    # cobertura y la tasa de cumplimiento. La sección «Lo que se logró» no listaba lo logrado.
+    #
+    # El reparto es el producto: el lector pregunta qué se logró, qué no y qué queda, y cada
+    # sección contesta UNA de esas y cede las otras.
+    "ley_estado": (
+        "EL MARCADOR DE LA LEY: ¿está consiguiendo lo que se propuso?\n"
+        "Contexto:\n{context}\n\n"
+        "Máximo 320 palabras. Esta es la ÚNICA sección que da el panorama; las que siguen lo "
+        "dan por dicho. Abrí con el veredicto FIN POR FIN copiando `lectura_ya_redactada` de "
+        "`fines_de_la_ley_computados` — es la unidad de lectura del informe, no el inventario "
+        "de indicadores. Un fin `no_caracterizable` se nombra con su motivo computado y NUNCA "
+        "se le atribuye una causa que el contexto no traiga. Después, y en una sola frase, la "
+        "cobertura con sus dos poblaciones (`poblaciones_de_la_ley`). NO listes indicadores "
+        "uno por uno, NO proyectes a futuro y NO enumeres brechas: cada cosa tiene su sección."
+    ),
+    "ley_logrado": (
+        "LO QUE LA LEY SÍ CONSIGUIÓ, y qué tan sólido es.\n"
+        "Contexto:\n{context}\n\n"
+        "Máximo 300 palabras. El panorama YA SE DIO: no repitas el total de indicadores, la "
+        "cobertura ni la tasa global de cumplimiento. Esta sección habla SOLO de las metas "
+        "ALCANZADAS: cuáles son, a qué fin pertenecen y qué evidencia las sostiene. Nombralas "
+        "con su número Y su nombre de `nombres_de_los_indicadores_de_la_ley`. Decí también qué "
+        "tan sólido es cada logro: si la serie que lo mide la produce el propio evaluado, o si "
+        "lleva salvedad de comparabilidad, eso califica el logro y va acá. Si un logro está a "
+        "punto de perderse porque el indicador ya se aleja, decilo. PROHIBIDO dedicar párrafos "
+        "a lo incumplido: tiene su sección y repetirlo deja esta sin contenido propio."
+    ),
+    "ley_no_logrado": (
+        "LO QUE LA LEY NO CONSIGUIÓ, con la distancia y la dirección.\n"
+        "Contexto:\n{context}\n\n"
+        "Máximo 320 palabras. El panorama YA SE DIO: no lo repitas. SOLO las metas vencidas "
+        "que no se alcanzaron. Distinguí tres cosas que no significan lo mismo y que el "
+        "contexto ya separó: las que no llegaron, las que RETROCEDEN —se alejan— y las "
+        "ESTANCADAS, que no se mueven mientras la meta avanza (una serie plana NO «se aleja»). "
+        "Priorizá por magnitud de la distancia y por concentración: si un sector o un bloque "
+        "temático acumula varias, esa es la lectura. Nombrá cada indicador con su número y su "
+        "nombre. NO hables de lo alcanzado ni de las brechas de medición."
+    ),
+    "ley_pendiente": (
+        "LO QUE QUEDA POR DELANTE: ¿va a llegar la ley a su horizonte?\n"
+        "Contexto:\n{context}\n\n"
+        "Máximo 320 palabras. El panorama YA SE DIO: no lo repitas. SOLO las metas que "
+        "TODAVÍA NO VENCEN, desde `metas_pendientes_al_horizonte_de_la_ley`. Una meta que no "
+        "venció NO SE PUEDE INCUMPLIR: nunca escribas «incumple» ni «falló» sobre ella. Lo que "
+        "se afirma es si al ritmo OBSERVADO se llega, y esa frase lleva el supuesto pegado "
+        "porque es una extrapolación de lo que ya pasó, no un pronóstico. Usá los años de "
+        "recorrido que el contexto computa —«le faltan 36 y quedan 6» decide algo; «no "
+        "llegará» es un adjetivo—. Separá las que YA se cumplen y solo hay que sostener. NO "
+        "vuelvas sobre el corte vencido ni sobre las brechas."
+    ),
+    "ley_brechas": (
+        "QUÉ PARTE DE LA LEY ESTE INFORME NO PUEDE JUZGAR, y de quién es esa imposibilidad.\n"
+        "Contexto:\n{context}\n\n"
+        "Máximo 300 palabras. El panorama YA SE DIO: no lo repitas. SOLO lo que no se puede "
+        "juzgar. Lo central es la ATRIBUCIÓN, y viene computada en "
+        "`brechas_de_medicion.por_responsable`: cuánto lo impide el TEXTO de la ley, cuánto el "
+        "aparato estadístico del Estado, y cuánto es trabajo pendiente de esta firma — que se "
+        "declara sin adornos. Cuidado con `no_confundir_estas_poblaciones`: tres cifras "
+        "distintas se dicen con palabras parecidas y solo una es «el instrumento que la ley "
+        "eligió ya no está disponible». NO atribuyas una causa que el contexto no compute, y "
+        "no cierres con recomendaciones de política."
+    ),
+    "ley_coherencia": (
+        "PROCESO DECLARADO CONTRA RESULTADO MEDIDO.\n"
+        "Contexto:\n{context}\n\n"
+        "Máximo 280 palabras. El panorama YA SE DIO: no lo repitas. Esta sección existe para "
+        "un patrón concreto y solo habla de él: un instrumento de proceso que reporta alto "
+        "cumplimiento de SUS COMPROMISOS mientras el indicador que ese instrumento existía "
+        "para mover no se mueve. Copiá `lectura_ya_redactada` de "
+        "`contradicciones_proceso_vs_resultado_computadas`. Las dos lecturas no pueden ser "
+        "ambas satisfactorias, y eso es lo que se dice — sin acusar de mala fe a nadie: el "
+        "hallazgo es que el tablero de proceso puede reportar éxito indefinidamente mientras "
+        "el resultado se deteriora. Si el contexto no trae contradicciones computadas, decilo "
+        "en una frase y no inventes una."
+    ),
+    "ley_verificabilidad": (
+        "QUIÉN PRODUCE LA EVIDENCIA CON LA QUE SE JUZGA, y si es el mismo a quien se juzga.\n"
+        "Contexto:\n{context}\n\n"
+        "Máximo 300 palabras. El panorama YA SE DIO: no lo repitas. Usá "
+        "`verificabilidad_de_la_evidencia_computada`. La distinción que ordena la sección: un "
+        "emisor internacional NO es una medición independiente — retransmite, o estima con "
+        "método propio sobre insumos que produce el evaluado. Citar «lo dice el organismo» "
+        "sobre una cifra que produjo el evaluado le da al informe una independencia que no "
+        "tiene, y un contradictor la desarma en una línea. Decí cuántos indicadores tienen "
+        "medición realmente independiente y cuáles. Y el matiz que más pesa: la ley SÍ eligió "
+        "instrumentos de tercero para una parte de sus metas, y esa es justo la parte que "
+        "dejó de estar disponible. NO recorras indicadores uno por uno."
+    ),
+    "ley_recomendaciones": (
+        "QUÉ SE PUEDE EXIGIR, Y CON QUÉ INSTRUMENTO.\n"
+        "Contexto:\n{context}\n\n"
+        "Máximo 300 palabras. El panorama YA SE DIO: no lo repitas. Copiá las "
+        "`recomendaciones_ya_redactadas`; no inventes ninguna. **Se recomienda la PUBLICACIÓN "
+        "del dato o la ACTIVACIÓN del mecanismo de control, NUNCA la política**: el informe "
+        "señala qué falta y a quién la ley se lo asigna, y no opina sobre qué debería hacer el "
+        "Estado con un indicador. Cada recomendación va con su base legal —el artículo que la "
+        "sostiene—, su deudor y, cuando el contexto lo traiga, cuántos indicadores desbloquea. "
+        "Separá lo que depende de esta firma de lo que hay que exigirle a un tercero: mezclarlo "
+        "infla el reclamo, y un reclamo inflado es refutable."
+    ),
     "sector_decision": (
         "CIERRE ACCIONABLE para la audiencia — conciso y preciso. NO re-describas el índice ni "
         "repitas el panorama ya expuesto (resumen, dimensiones, banda): eso ya se dijo.\n"

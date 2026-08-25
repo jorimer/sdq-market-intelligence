@@ -95,6 +95,13 @@ def _n(v: Any) -> int:
     return int(v) if isinstance(v, (int, float)) else 0
 
 
+def _bloque(d: Dict[str, Any], clave: str) -> Dict[str, Any]:
+    """Un sub-diccionario de un resumen, tipado. Los resúmenes se declaran como
+    `Dict[str, object]` y de ahí no sale un `.get` comprobable."""
+    v = d.get(clave)
+    return v if isinstance(v, dict) else {}
+
+
 def _con_nombres(nodo: Any, nombres: Dict[str, str]) -> Any:
     """Le pega el nombre del indicador a toda fila que lo cite por su número.
 
@@ -216,6 +223,43 @@ def law_ai_context(expediente_id: str, corte: str,
                 "dos poblaciones distintas de esta misma tabla pueden coincidir en el mismo "
                 "número por azar; que dos cifras sean iguales no las vuelve la misma cosa. "
                 "Nombrá siempre cuál estás usando y copiá el valor de acá."),
+        },
+        # ── Tres poblaciones que se dicen con las mismas palabras. ──
+        # El informe generado escribió «8», «14» y «24» para lo que redactó como «los
+        # instrumentos que la propia ley eligió y ya no están disponibles». Las tres cifras
+        # son reales y ninguna significa eso salvo la del medio. Cada una llega acá con su
+        # frase ya escrita, para que el modelo copie en vez de parafrasear.
+        "no_confundir_estas_poblaciones": {
+            "instrumento_de_medicion_discontinuado": {
+                "n": _n(_bloque(resumen_del_campo(expediente_id),
+                                "por_estado").get("instrumento_discontinuado", 0)),
+                "lectura_ya_redactada": (
+                    "indicadores sin veredicto porque el instrumento que los medía dejó de "
+                    "aplicarse"),
+            },
+            "instrumentos_de_tercero_que_la_ley_eligio_y_se_perdieron": {
+                "n": _n(_bloque(verificabilidad_publicable(expediente_id),
+                                "instrumentos_de_tercero_que_la_ley_eligio").get(
+                    "perdidos", 0)),
+                "lectura_ya_redactada": (
+                    "indicadores que la ley previó verificar con un instrumento aplicado por "
+                    "un tercero y que perdieron esa fuente. NO es lo mismo que quedarse sin "
+                    "medición: varios se miden hoy por otra vía, con la independencia "
+                    "perdida"),
+            },
+            "brechas_cuya_causa_esta_en_el_texto_de_la_ley": {
+                "n": _n(_bloque(resumen_brecha(br, len(numerados)),
+                                "por_responsable").get("instrumento", 0)),
+                "lectura_ya_redactada": (
+                    "indicadores que ninguna fuente vuelve medibles por cómo la ley los "
+                    "escribió: metas en prosa, líneas base que no reproducen, términos que "
+                    "nadie publica. NO son instrumentos discontinuados"),
+            },
+            "regla": (
+                "Las tres cifras son distintas y describen poblaciones distintas. Copiá la "
+                "`lectura_ya_redactada` de la que estés usando y no la parafrasees: la frase "
+                "«el instrumento que la ley eligió ya no está disponible» solo describe a la "
+                "segunda."),
         },
         # ── Cómo se llama cada indicador que la ley numera. ──
         # El diccionario canónico. Cualquier sección que cite un «2.35» resuelve acá su
