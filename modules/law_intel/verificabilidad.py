@@ -237,6 +237,12 @@ def publicable(expediente_id: str) -> Dict[str, Any]:
                 for k, v in sorted(_reparto(medidos).items())},
             "pct_con_medicion_independiente_sobre_los_medidos": (
                 round(100.0 * len(indep) / len(medidos), 1) if medidos else None),
+            # El complemento. El Deep Dive se perdió por un «95,7%» —44 de 46— que es esta
+            # cifra al revés: publicar solo una mitad de una razón obliga al modelo a
+            # calcular la otra, y el guard de respaldo no la encuentra.
+            "pct_sin_medicion_independiente_sobre_los_medidos": (
+                round(100.0 * (len(medidos) - len(indep)) / len(medidos), 1)
+                if medidos else None),
         },
         # El contraste emisor↔productor. Sin esta clave el informe puede citar «Banco
         # Mundial» y sonar independiente sin serlo.
