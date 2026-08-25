@@ -219,6 +219,27 @@ RATIO_DISCIPLINE = (
     "estar al doble del promedio no es mejor ni peor."
 )
 
+# Defensa PRIMARIA contra la ATRIBUCIÓN derivada: a qué se debe que el score subiera o
+# bajara. Defecto real (Insight de Asociación Bonao, 2025-12-31, §1): «el deterioro se aceleró
+# en el segundo semestre, impulsado precisamente por el colapso de eficiencia». En ese semestre
+# la eficiencia MEJORÓ (+0.96) y aportó +0.12 al score; la caída la causaron solidez (−2.24) y
+# calidad (−1.34), el 97% del total. El colapso de eficiencia había sido en el PRIMER semestre.
+# Todas las cifras del informe eran correctas: lo derivado —y errado— fue la atribución.
+ATTRIBUTION_DISCIPLINE = (
+    "QUÉ MOVIÓ EL SCORE (regla dura): si el contexto trae 'aportes_al_cambio', la "
+    "descomposición YA ESTÁ HECHA por ventana (último trimestre, semestre, año) — cada entrada "
+    "trae 'principal', 'cuota_del_principal_pct' y una 'lectura' redactada: USALA. No mires las "
+    "series y decidas a ojo cuál dimensión explica el movimiento: la que MÁS SE MOVIÓ no es la "
+    "que más movió el resultado, porque los pesos difieren, y ése es exactamente el error que "
+    "se comete. "
+    "NOMBRÁ LA VENTANA: 'lo que movió el score' sin decir en qué período no significa nada, y "
+    "una dimensión puede hundir el score en un semestre y sostenerlo en el otro. Antes de "
+    "escribir 'impulsado por X', comprobá el SIGNO del aporte de X en ESA ventana: si es "
+    "positivo, X no impulsó la caída — la amortiguó. "
+    "La suma de los aportes reconstruye el cambio total: si tu frase no es coherente con esa "
+    "identidad, está mal."
+)
+
 # Defensa PRIMARIA contra el defecto que SOBREVIVE a corregir la dirección numérica: la
 # cifra y la brecha salen bien y la GLOSA sale invertida. BPD 2026-08-13, §5 Liquidez: con
 # un LTD de 92.45% (score 98.62, por encima del óptimo de 80% y por encima de sus pares) el
@@ -1102,6 +1123,7 @@ def build_system(axis: str, audience: Optional[str], mode: str) -> str:
     # Va pegada a la de dirección: son la misma familia —relaciones entre dos cifras que el
     # modelo deriva y erra— y el orden ayuda a que se lean como una sola disciplina.
     parts.append(RATIO_DISCIPLINE)
+    parts.append(ATTRIBUTION_DISCIPLINE)
     parts.append(INDICATOR_SEMANTICS)
     parts.append(SCOPE_DISCIPLINE)
     if mode in ("detailed", "deep"):
