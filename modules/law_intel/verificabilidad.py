@@ -229,6 +229,14 @@ def publicable(expediente_id: str) -> Dict[str, Any]:
             "con_medicion_independiente_del_evaluado": len(indep),
             "ids_con_medicion_independiente": [e.sujeto for e in indep],
             "reparto_por_origen_sobre_los_medidos": _reparto(medidos),
+            # En porcentaje, servido y no derivado. «37 de 46» y «el 80% de los medidos» son
+            # la misma afirmación, y la segunda es la que el redactor va a escribir: si no
+            # está acá la calcula él, y el guard de cifra sin respaldo veta el informe entero.
+            "pct_por_origen_sobre_los_medidos": {
+                k: round(100.0 * v / len(medidos), 1) if medidos else None
+                for k, v in sorted(_reparto(medidos).items())},
+            "pct_con_medicion_independiente_sobre_los_medidos": (
+                round(100.0 * len(indep) / len(medidos), 1) if medidos else None),
         },
         # El contraste emisor↔productor. Sin esta clave el informe puede citar «Banco
         # Mundial» y sonar independiente sin serlo.

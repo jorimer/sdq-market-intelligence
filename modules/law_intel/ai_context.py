@@ -286,7 +286,11 @@ def law_ai_context(expediente_id: str, corte: str,
             "frase cuántos tienen motivo definitivo y cuántos esperan trabajo de SDQ. La "
             "cifra sola se lee como cobertura y no lo es."),
         # ── Cierre del informe: brecha + recomendación ──
-        "brechas_de_medicion": resumen_brecha(br, len(numerados)),
+        # `por_tipo` se RETIRA del contexto: clasifica por la estructura del binding y no
+        # coincide con la composición del campo, que es la que se cita. Servirla con una
+        # advertencia de que no se use era dejar la contradicción a mano del redactor.
+        "brechas_de_medicion": {k: v for k, v in resumen_brecha(br, len(numerados)).items()
+                                if k not in ("por_tipo", "advertencia_sobre_por_tipo")},
         "recomendaciones_ya_redactadas": [
             {"clase": r.clase, "texto": r.frase(), "desbloquea_indicadores": r.desbloquea}
             for r in recs],

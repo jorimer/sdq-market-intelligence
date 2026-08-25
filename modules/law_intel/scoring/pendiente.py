@@ -277,6 +277,9 @@ def resumen(pendientes: Sequence[Pendiente]) -> Dict[str, object]:
             round(100.0 * conteo.get("en_trayectoria", 0) / len(proyectados), 1)
             if proyectados else None),
         "por_estado": dict(sorted(conteo.items())),
+        "pct_por_estado_sobre_el_total_de_indicadores": {
+            k: round(100.0 * v / len(pendientes), 1) if pendientes else None
+            for k, v in sorted(conteo.items())},
     }
 
 

@@ -171,6 +171,9 @@ def resumen(expediente_id: str) -> Dict[str, Any]:
     return {
         "total": len(obs),
         "por_estado": dict(sorted(por_estado.items())),
+        "pct_por_estado_sobre_las_obligaciones": {
+            k: round(100.0 * v / len(obs), 1) if obs else None
+            for k, v in sorted(por_estado.items())},
         "exigibles": sum(1 for o in obs if o.exigible),
         "sin_deudor_determinado": [o.id for o in obs if o.deudor.get("tipo") == "indeterminado"],
         # El hallazgo central del expediente, contado en vez de afirmado en prosa.

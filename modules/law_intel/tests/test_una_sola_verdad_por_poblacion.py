@@ -125,3 +125,56 @@ def test_ninguna_fila_del_contexto_publica_un_ID_PELADO(eid):
     assert not huerfanas, (
         "filas que citan un indicador sin su nombre —el modelo le pegará el rótulo más "
         f"cercano que tenga: {huerfanas[:6]}")
+
+
+@pytest.mark.parametrize("eid", EXPEDIENTES)
+def test_TODA_particion_del_contexto_publica_sus_PORCENTAJES(eid):
+    """Una partición servida solo como conteos es una división que el modelo va a hacer.
+
+    Dos informes se perdieron así, a treinta segundos de generación cada uno: el primero por
+    un «48,9%» —que es 44/90— y el segundo por un «75,0%», que es el complemento del 25,0 de
+    cumplimiento. Las dos cifras eran aritmética correcta sobre números que el contexto traía
+    sueltos, y el guard de cifra sin respaldo vetó la entrega, con razón.
+
+    La cura no es tapar razones de a una cuando el guard las encuentra: es que toda partición
+    viaje con sus porcentajes. Este test recorre el contexto buscando bloques `por_*` con
+    conteos y exige el `pct_` correspondiente.
+    """
+    ctx = law_ai_context(eid, "2025", {})
+    sin_porcentaje = []
+
+    def recorrer(nodo, ruta=""):
+        if not isinstance(nodo, dict):
+            if isinstance(nodo, list):
+                for x in nodo:
+                    recorrer(x, ruta)
+            return
+        for clave, valor in nodo.items():
+            es_particion = (clave.startswith("por_")
+                            and isinstance(valor, dict)
+                            and valor
+                            and all(isinstance(v, int) for v in valor.values()))
+            if es_particion:
+                hermano = any(k.startswith("pct_") and clave[4:] in k for k in nodo)
+                if not hermano:
+                    sin_porcentaje.append(f"{ruta}.{clave}")
+            recorrer(valor, f"{ruta}.{clave}")
+
+    recorrer(ctx)
+    assert not sin_porcentaje, (
+        "particiones servidas solo como conteos; el redactor va a dividir y el guard va a "
+        f"vetar el informe: {sin_porcentaje}")
+
+
+@pytest.mark.parametrize("eid", EXPEDIENTES)
+def test_toda_razon_de_cumplimiento_viaja_con_su_COMPLEMENTO(eid):
+    """«25% cumple» sin «75% no cumple» es media tabla: la otra mitad la escribe el modelo."""
+    ctx = law_ai_context(eid, "2025", {})
+    v = ctx["veredictos_por_indicador_computados"]
+    assert "pct_sobre_evaluados" in v and "pct_no_alcanzan_sobre_evaluados" in v
+    if v["evaluados"]:
+        assert round(v["pct_sobre_evaluados"] + v["pct_no_alcanzan_sobre_evaluados"]) == 100
+    for f in ctx["fines_de_la_ley_computados"]:
+        if f["evaluados_en_este_informe"]:
+            assert round(f["pct_alcanzadas_sobre_evaluados"]
+                         + f["pct_no_alcanzadas_sobre_evaluados"]) == 100
