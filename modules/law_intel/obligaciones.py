@@ -16,6 +16,8 @@ explícitamente para poder contarlo.
 """
 from __future__ import annotations
 
+import re
+
 from dataclasses import dataclass, field
 from functools import lru_cache
 from typing import Any, Dict, List, Optional
@@ -38,7 +40,18 @@ ACUSATORIOS = frozenset({"incumplida", "cumplida_tarde", "parcial"})
 
 # Un deudor indeterminado vuelve la obligación inexigible por construcción: no hay a quién
 # requerir ni quién incurre en mora. Es un hallazgo sobre el diseño de la ley.
-TIPOS_DEUDOR = frozenset({"organo", "indeterminado"})
+#
+# `universo` NO es lo mismo, y la distinción entró con la Ley 167-21: ahí el deudor está
+# perfectamente determinado —«todos los entes y órganos de la Administración Pública»— pero
+# son cientos. Cambia qué se puede afirmar: de un órgano se dice «incumplió» y se le requiere;
+# de un universo hay que decir cuántos de cuántos, y una afirmación global sin ese conteo es
+# refutable con una sola institución que sí cumplió. Meterlo en `organo` habría hecho que el
+# informe acusara a un singular que no existe.
+TIPOS_DEUDOR = frozenset({"organo", "universo", "indeterminado"})
+
+#: Los tipos de deudor sobre los que NO se puede afirmar incumplimiento sin decir cuántos de
+#: cuántos. Se nombran para que el guard los pueda exigir en vez de confiar en el redactor.
+EXIGEN_CONTEO = frozenset({"universo"})
 
 
 @dataclass(frozen=True)
@@ -53,6 +66,11 @@ class Obligacion:
     plazo: Optional[Dict[str, Any]] = None
     evidencia: Optional[str] = None
     produce: List[str] = field(default_factory=list)
+    #: Código de la serie del Data Registry que sigue el cumplimiento de esta obligación,
+    #: cuando existe. Es el enlace entre una obligación y un dato que se mueve: sin él, el
+    #: cumplimiento de un deber CONTINUO solo se puede afirmar por la evidencia escrita a
+    #: mano, que envejece. La serie no reemplaza la evidencia — la deja comprobar.
+    serie_de_seguimiento: Optional[str] = None
     habilita_exigir: List[str] = field(default_factory=list)
     nota_de_diseño: Optional[str] = None
     #: Qué buscar en la base normativa para comprobar esta obligación, cuando su
@@ -141,6 +159,17 @@ def _validar(obs: List[Obligacion]) -> None:
             raise ExpedienteInvalido(
                 f"{o.id}: `verificacion_congresual` sin `registro_de`. Quién lleva el "
                 f"registro decide si la evidencia es de tercero o del propio obligado.")
+
+        # Un universo no se acusa en bloque. «Los entes incumplieron» sobre cientos de
+        # instituciones se refuta con UNA que sí cumplió, y se lleva puesto el informe. La
+        # evidencia tiene que decir cuántos de cuántos, o el estado no es acusatorio.
+        if (o.afirma_incumplimiento and o.deudor.get("tipo") in EXIGEN_CONTEO
+                and not re.search(r"\d", o.evidencia or "")):
+            raise ExpedienteInvalido(
+                f"{o.id}: el deudor es un UNIVERSO y el estado '{o.estado}' afirma "
+                f"incumplimiento sin ninguna cifra en la evidencia. De un universo hay que "
+                f"decir cuántos de cuántos: una afirmación global se refuta con una sola "
+                f"institución que sí cumplió.")
 
         # El guard central: no se acusa sin evidencia.
         if o.afirma_incumplimiento and not (o.evidencia or "").strip():

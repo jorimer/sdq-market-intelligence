@@ -93,6 +93,13 @@ variable_scopes:
   income_gender_ratio: national          # SISDOM END 2.40, razón F/M de INGRESO
   electricity_subsidy_usd_mm: national   # MEM END 3.30, aporte a las EDE
   unemployment_gender_ratio: national    # BCRD ENCFT, razón F/M, país
+  # Registro Único de trámites (Ley 167-21). NACIONAL, y el alcance no es un formalismo acá:
+  # son conteos del catálogo del Estado entero, no de una institución. Publicarlas como
+  # `per_subject` haría que un consumidor leyera «710 trámites» como el número de UNA
+  # entidad, que es la misma falla que publicó la pobreza de una región como cifra del país.
+  tramites_catalogados: national
+  tramites_con_tiempo_declarado: national
+  tramites_pct_con_tiempo_sobre_los_catalogados: national
   secondary_coverage_pais: national      # MINERD SIIE, fila TOTAL PAIS
   primary_coverage_pais: national        # MINERD SIIE, fila TOTAL PAIS
   schooling_years_pais: national         # SISDOM 05 3 007, fila «Total»
