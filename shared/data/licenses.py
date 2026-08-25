@@ -410,6 +410,22 @@ LICENCIAS: Dict[str, Licencia] = {
               "excepción. Acá no hay excepción — hay una plantilla de portal que "
               "contradice al Decreto 103-22, que obliga a esa misma institución."),
     ),
+    ("gob.do (OGTIC) — catálogo de trámites del Portal Único de Servicios. Información "
+     "pública dominicana: reutilizable con atribución por Ley 200-04, Decreto 103-22 y "
+     "NORTIC A3. `robots.txt` permite el rastreo completo (Allow: /)."): Licencia(
+        terminos_url="https://www.gob.do/politica-de-privacidad-y-condiciones-de-uso",
+        verificado_el="2026-08-25",
+        atribucion=("Fuente: Portal Único de Servicios del Gobierno Dominicano (gob.do), "
+                    "OGTIC. Información pública de la República Dominicana."),
+        nota=("`shared.data.gobdo_tramites`. La API (`gob-do-api.www.gob.do/api`) responde "
+              "sin autenticación y NO declara términos propios; el portal publica una "
+              "política de privacidad y condiciones de uso del sitio, no una licencia del "
+              "dato. `robots.txt` dice `User-agent: * / Allow: /`, o sea que el emisor no "
+              "restringe el rastreo. Se aplica la regla del encabezado de este módulo: para "
+              "un emisor público dominicano se presume reutilizable con atribución y lo que "
+              "se declara es la excepción. Acá no hay excepción — el catálogo de trámites y "
+              "la institución responsable de cada uno son actos de la Administración."),
+    ),
     ("SIS — índices de solvencia y liquidez del portal de transparencia. Información "
      "pública dominicana: reutilizable con atribución por Ley 200-04, Decreto 103-22, "
      "NORTIC A3 y Ley 65-00 art. 41."): Licencia(
