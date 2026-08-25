@@ -19,6 +19,7 @@ from typing import Any, Dict, List, Optional
 from sqlalchemy.orm import Session
 
 from modules.law_intel.ai_context import law_ai_context, secciones_sin_dato
+from modules.law_intel.campo import imposibles_por_el_instrumento
 from modules.law_intel.ratificacion import exigir_servible
 from modules.law_intel.ratificacion import publicable as ratificacion_publicable
 from modules.law_intel.registro import RAIZ, cargar, expedientes
@@ -28,6 +29,7 @@ from shared.products import (DataHealth, Granularity, ProductSnapshot, ProductTi
                              SectorProductManifest, TierLevelSpec, ValidationState,
                              register_product)
 from shared.products.render import render_product_pdf
+from shared.registry.signals import COVERAGE_INSTRUMENT
 
 logger = logging.getLogger("sdq.law_intel.products")
 
@@ -283,10 +285,28 @@ class LawProduct:
         if not eids:
             return DataHealth(coverage=0.0, freshness_days=None)
         eid = eids[0]
-        pct = float(cobertura(eid)["pct"])   # type: ignore[arg-type]
+        cob = cobertura(eid)
+        pct = float(cob["pct"])   # type: ignore[arg-type]
+        # La cobertura de este eje responde OTRA pregunta que la de los demás, y el gate
+        # tiene que saberlo. En un índice, `coverage` mide qué fracción de nuestro cableado
+        # tiene dato real. Acá mide cuántas de las metas que la LEY se fijó estamos midiendo
+        # — y 35 de las 90 de la END no las puede medir nadie: la ley las escribió en prosa,
+        # o fija una línea base que no reproduce, o el emisor que eligió dejó de medir. Con
+        # la lectura de índice, el techo real del eje queda bajo el umbral de publicación y
+        # el producto no cruza a Insight nunca: castigado por su propio hallazgo.
+        #
+        # Lo excluido NO se esconde: la cruda sigue viajando en `coverage`, el desglose entra
+        # entero para que el gate escriba su linaje, y la sección de brechas lo LISTA.
+        total = int(cob["total"])          # type: ignore[call-overload]
+        medidas = int(cob["medidos"])      # type: ignore[call-overload]
+        imposibles = imposibles_por_el_instrumento(eid)
+        medible = total - imposibles
         return DataHealth(
             coverage=pct / 100.0, freshness_days=_antiguedad_del_dato(eid), cadence="annual",
             sources=(cargar(eid).norma,),
+            coverage_kind=COVERAGE_INSTRUMENT,
+            coverage_efectiva=(medidas / medible) if medible > 0 else None,
+            universo=total, medidas=medidas, imposibles_por_el_instrumento=imposibles,
             # `detail` NO es decorativo: el readiness lo inserta literalmente en el texto de
             # la brecha, y de ahí lo lee el agente de descubrimiento de fuentes. Vacío, el
             # agente recibía «faltan dimensiones con dato real ()» y sólo podía proponer

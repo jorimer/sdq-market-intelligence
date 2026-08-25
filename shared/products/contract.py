@@ -39,6 +39,33 @@ class DataHealth:
     # declaran "annual" para no ser falsamente penalizadas como obsoletas.
     cadence: str = "quarterly"            # "monthly" | "quarterly" | "annual"
 
+    # ── Qué PREGUNTA responde `coverage` ──────────────────────────────────────────────
+    # Hasta que entró el eje de evaluación de leyes, todos los ejes respondían la misma:
+    # «¿qué fracción del PESO de mi índice está anclada a dato real?» — una pregunta sobre
+    # NUESTRO cableado, y por eso el gate podía castigarla sin más. El eje de leyes responde
+    # otra: «¿cuántas de las metas que la LEY se fijó estamos midiendo?», que es una pregunta
+    # sobre la ley. Con la primera lectura, cuanto peor redactada esté la norma menos «listo»
+    # parece nuestro producto: el eje quedaba castigado por su propio hallazgo, y su techo
+    # real —48 de 90 indicadores, porque 35 no los puede medir nadie— caía por debajo del
+    # umbral de publicación. El eje no podía cruzar a Insight NUNCA.
+    #
+    # El vocabulario ya existía en `shared/registry/signals.py`, donde el resumen del
+    # registro aprendió a no promediar las dos semánticas. El gate nunca se enteró.
+    coverage_kind: str = "fraccion_real_del_indice"
+
+    # Solo con `coverage_kind` de instrumento: la cobertura sobre lo MEDIBLE, que es la que
+    # puntúa. Excluye del denominador las unidades que ningún esfuerzo nuestro puede medir
+    # porque el impedimento está en el instrumento evaluado.
+    #
+    # Lo excluido NO desaparece: `coverage` sigue reportando la cobertura cruda sobre el
+    # universo entero, las dos viajan al detalle del gate, y el informe LISTA lo excluido.
+    # Un descuento silencioso sería peor que el castigo que vino a corregir.
+    coverage_efectiva: Optional[float] = None
+    # El desglose, para que el linaje del gate se pueda escribir y nadie tenga que creerlo.
+    universo: Optional[int] = None                    # unidades que el instrumento fija
+    medidas: Optional[int] = None                     # las que este producto mide
+    imposibles_por_el_instrumento: Optional[int] = None
+
 
 # Obstáculos por los que un eje NO puede tener backtest de discriminación. Son categorías
 # estructurales —no estados del dato de hoy—, así que no envejecen con una corrida.

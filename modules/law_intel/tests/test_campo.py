@@ -103,3 +103,54 @@ class TestLoComputadoNoSeDeclara:
 def test_un_estado_inventado_no_carga():
     with pytest.raises(ExpedienteInvalido, match="desconocido"):
         _validar({"x": Casilla("x", "ya_veremos", "d")})
+
+class TestQueSeDESCUENTAdelGate:
+    """La lista que saca indicadores del denominador del readiness.
+
+    Es correcta y es peligrosa: mal usada, un eje esconde su propia deuda detrás de «lo
+    impide el instrumento». Estos tests son la cerradura.
+    """
+
+    def test_TODO_motivo_del_campo_esta_clasificado_de_un_lado(self):
+        """Un motivo nuevo tiene que clasificarse a mano. Si cayera por defecto, caería del
+        lado que conviene — y el lado que conviene es el que infla la cobertura."""
+        from modules.law_intel.campo import (DEPENDEN_DE_NOSOTROS, ESTADOS_DEL_CAMPO,
+                                             IMPOSIBLES_POR_EL_INSTRUMENTO)
+        sin_clasificar = (set(ESTADOS_DEL_CAMPO) - IMPOSIBLES_POR_EL_INSTRUMENTO
+                          - DEPENDEN_DE_NOSOTROS)
+        assert not sin_clasificar, (
+            f"motivos sin clasificar para el gate: {sorted(sin_clasificar)}")
+
+    def test_las_dos_listas_son_DISJUNTAS(self):
+        from modules.law_intel.campo import DEPENDEN_DE_NOSOTROS, IMPOSIBLES_POR_EL_INSTRUMENTO
+        assert not (IMPOSIBLES_POR_EL_INSTRUMENTO & DEPENDEN_DE_NOSOTROS)
+
+    def test_NUESTRA_deuda_nunca_sale_del_denominador(self):
+        """Los cinco que dependen de nosotros siguen pesando aunque duelan.
+        `fuente_no_procesable` es la más tentadora —el emisor publica en un formato
+        incómodo— y se queda: un formato difícil es trabajo, no una imposibilidad legal."""
+        from modules.law_intel.campo import IMPOSIBLES_POR_EL_INSTRUMENTO
+        for nuestro in ("pendiente_de_busqueda", "candidato_descartado",
+                        "candidato_sin_verificar", "pendiente_de_derivacion",
+                        "fuente_no_procesable"):
+            assert nuestro not in IMPOSIBLES_POR_EL_INSTRUMENTO
+
+    def test_lo_descontado_SIGUE_declarado_en_el_expediente(self):
+        """Un descuento silencioso se leería como que esos indicadores no existen. Todo lo
+        que sale del denominador tiene su casilla, con estado y motivo."""
+        from modules.law_intel.campo import (IMPOSIBLES_POR_EL_INSTRUMENTO, campo,
+                                             imposibles_por_el_instrumento)
+        casillas = campo("end_2030")
+        descontados = [c for c in casillas.values()
+                       if c.estado in IMPOSIBLES_POR_EL_INSTRUMENTO]
+        assert len(descontados) == imposibles_por_el_instrumento("end_2030")
+        assert all(c.estado and c.detalle for c in descontados)
+        # Y todos cierran la pregunta: nada pendiente sale del denominador.
+        assert all(c.resuelto for c in descontados)
+
+    def test_el_descuento_no_puede_vaciar_el_universo(self):
+        from modules.law_intel.bindings import cobertura
+        from modules.law_intel.campo import imposibles_por_el_instrumento
+        total = cobertura("end_2030")["total"]
+        assert 0 < total - imposibles_por_el_instrumento("end_2030") <= total
+
