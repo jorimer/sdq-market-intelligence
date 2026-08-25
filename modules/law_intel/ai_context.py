@@ -226,7 +226,16 @@ def secciones_sin_dato(ctx: Dict[str, Any]) -> List[str]:
     """Qué NO se puede escribir con este contexto. Se declara en vez de rellenarse."""
     faltan = []
     if not ctx["cobertura_indicadores_medidos_sobre_total_de_la_ley"]["medidos"]:
-        faltan.append("cumplimiento")
+        # Las tres secciones del espinazo dependen de que haya algo medido. Con cero
+        # bindings verificados no hay nada que decir de lo logrado ni de lo no logrado, y
+        # escribirlas igual produciría el Deep Dive hueco que este repositorio ya publicó.
+        faltan.extend(["estado_de_la_ley", "logrado", "no_logrado"])
+    # Ojo con lo que NO va acá: «ninguna meta se alcanzó» es una respuesta, no una brecha.
+    # `logrado` se declara sin dato cuando no hay mediciones, nunca cuando hay mediciones y
+    # el resultado es cero — eso último es justamente el hallazgo.
+    pend = ctx.get("metas_pendientes_al_horizonte_de_la_ley") or {}
+    if not (pend.get("por_indicador") or []):
+        faltan.append("pendiente")
     if not ctx["contradicciones_proceso_vs_resultado_computadas"]:
         faltan.append("coherencia_proceso")
     # Sin nada medido ni ninguna obligación con algo que verificar, la sección no tiene

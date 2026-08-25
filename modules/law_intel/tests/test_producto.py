@@ -71,6 +71,93 @@ class TestContratoDeProducto:
             assert law_manifest().require_level(tier).sections
 
 
+class TestElEspinazoEsElFinDeLaLey:
+    """El informe se organiza por lo que la ley se propuso, no por su inventario.
+
+    La escalera anterior se diferenciaba por CUÁNTAS secciones traía cada nivel, y su
+    vocabulario —cumplimiento, verificabilidad, brechas— era el índice de una auditoría del
+    instrumento. Le sirve a quien quiere enmendar la ley y a nadie más. Los tres niveles
+    recorren ahora las mismas preguntas a distinta profundidad.
+    """
+
+    #: Las tres preguntas del lector. Un nivel nombrado que pierda una deja de contestar.
+    ESPINAZO = ("logrado", "no_logrado", "pendiente")
+
+    def test_los_niveles_NOMBRADOS_recorren_las_tres_preguntas(self):
+        for tier in (ProductTier.insight, ProductTier.deep_dive):
+            secciones = law_manifest().require_level(tier).sections
+            faltan = [s for s in self.ESPINAZO if s not in secciones]
+            assert not faltan, f"{tier.value} no contesta {faltan}"
+
+    def test_el_pulse_trae_el_marcador_y_NADA_de_grano_fino(self):
+        """Es la vista abierta: dice si la ley llega a donde dijo, sin abrir indicadores."""
+        secciones = law_manifest().require_level(ProductTier.pulse).sections
+        assert secciones == ("estado_de_la_ley",)
+
+    def test_la_escalera_AGREGA_secciones_hacia_arriba(self):
+        pulse, insight, deep = (set(law_manifest().require_level(t).sections)
+                                for t in (ProductTier.pulse, ProductTier.insight,
+                                          ProductTier.deep_dive))
+        assert pulse < insight < deep
+
+    def test_lo_que_distingue_al_DEEP_es_la_trayectoria_y_la_exigencia(self):
+        """El Deep no se compra por más resumen: se compra por «¿va a llegar?» y «¿qué se
+        puede exigir?»."""
+        insight = set(law_manifest().require_level(ProductTier.insight).sections)
+        deep = set(law_manifest().require_level(ProductTier.deep_dive).sections)
+        assert {"coherencia_proceso", "verificabilidad", "recomendaciones"} <= deep - insight
+
+    def test_la_PROFUNDIDAD_del_deep_no_cae_sobre_el_marcador(self):
+        """Con el default («la primera analítica») la profundidad habría caído en el resumen
+        que el Insight ya trae, y el nivel de arriba no aportaría nada nuevo."""
+        from shared.products import section_mode
+        from modules.law_intel.products import _SECCION_PROFUNDA
+        secciones = law_manifest().require_level(ProductTier.deep_dive).sections
+        modos = {s: section_mode(ProductTier.deep_dive, s, secciones,
+                                 deep_section=_SECCION_PROFUNDA) for s in secciones}
+        assert modos[_SECCION_PROFUNDA] == "deep"
+        assert modos["estado_de_la_ley"] != "deep"
+
+    def test_el_generador_PASA_la_seccion_profunda_y_no_se_queda_en_el_default(self):
+        """El test de arriba comprueba la constante; éste comprueba que se USA. Sin esto, el
+        día que alguien borre el argumento la profundidad vuelve al marcador en silencio y
+        los dos niveles de arriba se vuelven el mismo producto."""
+        import ast
+        import inspect
+
+        from modules.law_intel import products as mod
+        arbol = ast.parse(inspect.getsource(mod))
+        llamadas = [n for n in ast.walk(arbol)
+                    if isinstance(n, ast.Call) and getattr(n.func, "id", "") == "section_mode"]
+        assert llamadas, "el producto ya no pide el modo de narrativa por sección"
+        for c in llamadas:
+            assert any(k.arg == "deep_section" for k in c.keywords), (
+                "section_mode() sin `deep_section`: la profundidad del Deep Dive caería "
+                "sobre la primera sección, que es el marcador")
+
+    def test_toda_seccion_declarada_tiene_TITULO_y_MUESTRA(self):
+        """Una sección sin título sale rotulada con su clave interna; una sin muestra rompe
+        la descarga de conversión, que es la que se entrega antes de cobrar."""
+        from modules.law_intel.products import _SAMPLE_NARRATIVES, _SECTION_TITLES
+        for tier in (ProductTier.pulse, ProductTier.insight, ProductTier.deep_dive):
+            for sec in law_manifest().require_level(tier).sections:
+                assert sec in _SECTION_TITLES, f"«{sec}» saldría con su clave como título"
+                assert sec in _SAMPLE_NARRATIVES, f"«{sec}» rompe la muestra de {tier.value}"
+
+    def test_la_muestra_de_cada_nivel_se_arma_entera(self):
+        for tier in (ProductTier.pulse, ProductTier.insight, ProductTier.deep_dive):
+            muestra = LawProduct().sample_narratives(tier)
+            assert set(muestra) == set(law_manifest().require_level(tier).sections)
+            assert all(t.strip() for t in muestra.values())
+
+    def test_LOGRADO_no_se_declara_vacia_por_no_haber_logros(self):
+        """«Ninguna meta se alcanzó» es una respuesta, no una brecha. Declararla sin dato la
+        reemplazaría por «el informe no puede pronunciarse», que dice lo contrario."""
+        ctx = law_ai_context(E, "2025")
+        ctx["veredictos_por_indicador_computados"] = {"cumplen": 0, "evaluados": 12}
+        assert "logrado" not in secciones_sin_dato(ctx)
+
+
 class TestHonestidadDelProducto:
     """Estos tests afirman el INVARIANTE, no el estado del día.
 
