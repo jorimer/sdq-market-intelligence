@@ -38,6 +38,7 @@ from modules.law_intel.scoring.pendiente import panel as panel_pendiente
 from modules.law_intel.scoring.pendiente import publicable as pendiente_publicable
 from modules.law_intel.scoring.semaforo import panel
 from modules.law_intel.scoring.semaforo import resumen as resumen_semaforo
+from modules.law_intel.scoring.semaforo import tabla as tabla_semaforo
 from modules.law_intel.verificabilidad import publicable as verificabilidad_publicable
 
 #: Glosa de `estancada` para el modelo. Es la distinción más fácil de perder al redactar:
@@ -285,6 +286,17 @@ def law_ai_context(expediente_id: str, corte: str,
            if pendientes and horizonte else {}),
         # ── Veredictos YA COMPUTADOS. El modelo los copia, no los deriva. ──
         "veredictos_por_indicador_computados": res_semaforo,
+        # La EVIDENCIA, fila por fila. El resumen de arriba dice cuántos; esta dice cuáles,
+        # con su meta y su valor. Sin ella, a las secciones que deben nombrar indicadores se
+        # les pedía la lista y se les daba el conteo — y las metas salían reconstruidas de
+        # memoria: «2.7 contra una meta de 0.42» cuando la ley fija 0.44.
+        "tabla_de_veredictos_por_indicador": tabla_semaforo(
+            veredictos, numerados, exp.meta.get("ejes") or {}),
+        "regla_de_la_tabla": (
+            "Toda cifra que atribuyas a un indicador —su meta, su valor observado, su "
+            "distancia— sale de `tabla_de_veredictos_por_indicador` y de ningún otro lado. No "
+            "la recuerdes de otra sección ni la deduzcas del nombre del indicador. Y el "
+            "reparto por fin se cuenta sobre esta tabla, no a ojo."),
         "vocabulario_obligatorio": {
             "no_alcanzara": ("Usá esta palabra cuando el veredicto lo diga. NO la traduzcas a "
                              "«avance moderado» ni a ninguna forma que suene a progreso: es "
