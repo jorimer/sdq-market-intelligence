@@ -428,6 +428,29 @@ async def generate_wire(
     )
 
 
+# ─── Anuario del sistema ─────────────────────────────────────────
+
+@router.post(
+    "/anuario/generate",
+    summary="Generar el Anuario del sistema",
+    description=("Genera el anuario de un AÑO del sistema bancario: mediana por corte, cambio "
+                 "por tipo de entidad, cambios de banda y universo declarado. El período es el "
+                 "cierre del año (YYYY-12-31); se usa su AÑO."),
+)
+async def generate_anuario(
+    period_end: str = Query(..., description="Cierre del año a resumir (YYYY-12-31)"),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """El anuario necesita su propia ruta: los demás boletines resumen un CORTE y éste resume
+    un AÑO, así que su período se lee como el cierre del ejercicio, no como la fecha del
+    documento. Sin esta ruta el tipo estaba registrado pero era inalcanzable."""
+    return await _generate_system_report(
+        report_type="anuario", scope_name="Sistema Bancario", period=period_end,
+        db=db, current_user=current_user,
+    )
+
+
 # ─── DataWatch ───────────────────────────────────────────────────
 
 @router.post(
