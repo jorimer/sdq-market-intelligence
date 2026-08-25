@@ -95,6 +95,35 @@ DEPENDEN_DE_NOSOTROS = frozenset({
 })
 
 
+#: De quién es la brecha, POR MOTIVO. Es la única autoridad sobre esta pregunta.
+#:
+#: **Por qué vive acá y no en `brecha.py`.** Ese módulo clasificaba por la ESTRUCTURA del
+#: binding —¿existe?, ¿está verificado?— y de ahí salía que 20 indicadores eran deuda de SDQ.
+#: Pero un binding `propuesto` con `linea_base_no_reproduce` no es trabajo pendiente: es el
+#: hallazgo, y el que no cierra es el instrumento. Las dos superficies particionaban los
+#: mismos 44 indicadores y no coincidían —«20 son de SDQ» contra «2 son de SDQ»—, así que el
+#: informe generado citaba una u otra según la sección. Es el mismo defecto que el #927
+#: corrigió en este módulo y que allá siguió vivo: un guard que existe en un motor y falta en
+#: el otro.
+RESPONSABLE_POR_MOTIVO = {
+    # Lo impide el TEXTO de la ley.
+    "sin_meta_legal": "instrumento",
+    "meta_no_interpretable": "instrumento",
+    "linea_base_no_reproduce": "instrumento",
+    "termino_legal_sin_fuente": "instrumento",
+    # Lo impide el APARATO ESTADÍSTICO del Estado evaluado.
+    "instrumento_discontinuado": "estado",
+    "sin_fuente_conocida": "estado",
+    "magnitud_no_publicada": "estado",
+    # Depende de NOSOTROS. Nada se muda de acá para arriba sin que el informe lo diga.
+    "fuente_no_procesable": "sdq",
+    "candidato_descartado": "sdq",
+    "candidato_sin_verificar": "sdq",
+    "pendiente_de_derivacion": "sdq",
+    "pendiente_de_busqueda": "sdq",
+}
+
+
 def imposibles_por_el_instrumento(expediente_id: str) -> int:
     """Cuántos indicadores de la ley no puede medir NADIE, por defecto del instrumento."""
     return sum(1 for c in campo(expediente_id).values()
@@ -247,7 +276,12 @@ def resumen(expediente_id: str) -> Dict[str, Any]:
     _validar(casillas)
 
     numerados = exp.numerados
-    con_veredicto = [i.id for i in numerados if (b := bs.get(i.id)) and b.cuenta]
+    # Son los MEDIDOS —los que tienen serie verificada—, no los que producen veredicto de
+    # cumplimiento. La diferencia no es semántica: 2 de ellos quedan `sin_dato` y el semáforo
+    # los cuenta fuera de sus 44 evaluados. Llamarlos «con_veredicto» puso dos poblaciones
+    # distintas detrás del mismo 46, y el informe generado dijo «veredicto sobre 44 de 90» en
+    # una sección y «sobre 46 de 90» en otra, citando la plataforma las dos veces.
+    medidos = [i.id for i in numerados if (b := bs.get(i.id)) and b.cuenta]
     por_estado: Dict[str, int] = {}
     for c in casillas.values():
         por_estado[c.estado] = por_estado.get(c.estado, 0) + 1
@@ -255,10 +289,14 @@ def resumen(expediente_id: str) -> Dict[str, Any]:
 
     return {
         "total_indicadores_de_la_ley": len(numerados),
-        "con_veredicto": len(con_veredicto),
+        "medidos": len(medidos),
+        "aclaracion_de_poblaciones": (
+            "`medidos` son los indicadores con serie verificada. NO es lo mismo que «con "
+            "veredicto de cumplimiento»: algunos medidos no tienen observación utilizable. "
+            "Esa cifra la da el semáforo en `evaluados`."),
         "declarados_sin_veredicto": len(casillas),
-        "en_silencio": len(numerados) - len(con_veredicto) - len(casillas),
-        "campo_cerrado": (len(con_veredicto) + len(casillas)) == len(numerados),
+        "en_silencio": len(numerados) - len(medidos) - len(casillas),
+        "campo_cerrado": (len(medidos) + len(casillas)) == len(numerados),
         # La composición, que es lo que impide leer «cerrado» como «resuelto».
         "motivo_resuelto": len(casillas) - len(pendientes),
         "pendientes_de_trabajo_nuestro": {"n": len(pendientes), "ids": sorted(pendientes)},

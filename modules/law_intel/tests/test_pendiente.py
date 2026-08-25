@@ -233,6 +233,45 @@ class TestLoQueViajaAlModelo:
         assert r["total_indicadores"] == 2
 
 
+class TestElSUJETOviajaConElNUMERO:
+    """Un informe real publicó «el acceso a medicamentos antirretrovirales (2.35)» sobre un
+    indicador que mide acceso a agua de la red pública.
+
+    La causa: este bloque publicaba el ID sin el nombre, y el modelo le pegó el rótulo más
+    cercano que tenía. Las cifras eran correctas y el sujeto no.
+    """
+
+    @pytest.mark.parametrize("binding,obs,metas,estado", [
+        (None, [], {"2030": 80.0}, "sin_medicion"),
+        ("si", [], {"2025": 50.0}, "sin_meta_al_horizonte"),
+        ("si", [("2024", 40.0)], {"2030": 80.0}, "sin_trayectoria"),
+        ("si", [("2020", 70.0), ("2024", 85.0)], {"2030": 80.0}, "ya_alcanzada"),
+        ("si", [("2020", 40.0), ("2024", 44.0)], {"2030": 80.0},
+         "no_llegara_al_ritmo_actual"),
+        ("si", [("2020", 40.0), ("2024", 60.0)], {"2030": 80.0}, "en_trayectoria"),
+        ("si", [("2020", 60.0), ("2024", 50.0)], {"2030": 80.0}, "se_aleja"),
+        ("si", [("2020", 60.0), ("2024", 60.0)], {"2030": 80.0}, "no_se_mueve"),
+    ])
+    def test_TODA_rama_de_retorno_lleva_el_nombre(self, binding, obs, metas, estado):
+        """El hueco entra siempre por la rama que alguien olvidó — por eso se recorren todas."""
+        p = evaluar(_ind(metas), _binding() if binding else None, obs, "2030")
+        assert p.estado == estado
+        assert p.nombre == "Un indicador", f"la rama «{estado}» perdió el sujeto"
+
+    def test_la_rama_de_escala_no_evaluable_tambien(self):
+        p = evaluar(_ind({"2030": 12.0}, escala="ordinal"), _binding(),
+                    [("2020", 30.0), ("2024", 20.0)], "2030")
+        assert p.estado == "no_evaluable" and p.nombre == "Un indicador"
+
+    def test_el_nombre_viaja_al_contexto_PEGADO_al_numero(self):
+        ps = [evaluar(_ind({"2030": 80.0}), _binding(),
+                      [("2020", 40.0), ("2024", 44.0)], "2030")]
+        fila = publicable(ps, "2030")[
+            "metas_pendientes_al_horizonte_de_la_ley"]["por_indicador"][0]
+        assert fila["indicador"] == "2.1"
+        assert fila["nombre_del_indicador"] == "Un indicador"
+
+
 class TestLasRAZONESviajanRESUELTAS:
     """El guard de cifra sin respaldo vetó un Insight entero por un «48,9%».
 
@@ -273,8 +312,8 @@ def test_el_semaforo_tambien_entrega_sus_razones_resueltas():
           + [Veredicto(f"b{k}", "no_alcanzada") for k in range(33)]
           + [Veredicto(f"c{k}", "sin_medicion") for k in range(46)])
     r = resumen_semaforo(vs)
-    assert r["pct_evaluados_sobre_el_total_de_la_ley"] == 48.9      # 44 de 90
-    assert r["pct_sin_veredicto_sobre_el_total_de_la_ley"] == 51.1
+    assert r["pct_con_veredicto_de_cumplimiento_sobre_los_que_la_ley_numera"] == 48.9      # 44 de 90
+    assert r["pct_sin_veredicto_de_cumplimiento_sobre_los_que_la_ley_numera"] == 51.1
     assert r["pct_sobre_evaluados"] == 25.0                          # 11 de 44
 
 

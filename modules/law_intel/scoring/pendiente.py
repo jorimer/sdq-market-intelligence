@@ -76,6 +76,11 @@ class Pendiente:
     indicador: str
     horizonte: str
     estado: str
+    #: El nombre que la ley le da al indicador. Viaja con el número SIEMPRE: un `2.35` sin
+    #: su nombre hace que el modelo le pegue el más cercano que tenga a mano, y así se
+    #: publicó «el acceso a medicamentos antirretrovirales (2.35)» sobre un indicador que
+    #: mide acceso a agua de la red pública. Las cifras eran correctas y el sujeto no.
+    nombre: str = ""
     meta: Optional[float] = None
     observado: Optional[float] = None
     periodo_observado: Optional[str] = None
@@ -139,10 +144,15 @@ def _ritmo(obs: Sequence[Observacion], mejor_menor: bool,
 
 def evaluar(ind: Indicador, binding: Optional[Binding], observaciones: Sequence[Observacion],
             horizonte: str) -> Pendiente:
-    """El estado de la meta del horizonte para un indicador."""
+    """El estado de la meta del horizonte para un indicador.
+
+    Toda rama de retorno lleva el `nombre` del indicador. No es decoración: es la regla del
+    sujeto, y el hueco entra siempre por la rama que alguien olvidó.
+    """
+    nombre = ind.nombre
     meta = ind.metas.get(horizonte)
     if meta is None:
-        return Pendiente(ind.id, horizonte, "sin_meta_al_horizonte",
+        return Pendiente(ind.id, horizonte, "sin_meta_al_horizonte", nombre=nombre,
                          motivo=f"la ley no le fija meta a {horizonte}")
     if not isinstance(meta, (int, float)) or not _se_puede_restar(ind):
         # Umbrales y escalares rotulados se declaran en vez de interpretarse acá: el semáforo
@@ -153,9 +163,10 @@ def evaluar(ind: Indicador, binding: Optional[Binding], observaciones: Sequence[
         # de 2030, mirar solo el tipo habría hecho que esta superficie proyectara lo que la
         # otra declara imposible de juzgar. Un guard que existe en un motor y falta en el
         # otro es el defecto que este repositorio ya pagó cinco veces en un solo módulo.
-        return Pendiente(ind.id, horizonte, "no_evaluable", motivo=ESTADOS["no_evaluable"])
+        return Pendiente(ind.id, horizonte, "no_evaluable", nombre=nombre,
+                         motivo=ESTADOS["no_evaluable"])
     if binding is None or not binding.cuenta or not observaciones:
-        return Pendiente(ind.id, horizonte, "sin_medicion", meta=float(meta),
+        return Pendiente(ind.id, horizonte, "sin_medicion", meta=float(meta), nombre=nombre,
                          motivo=ESTADOS["sin_medicion"])
 
     mejor_menor = binding.mejor == "menor"
@@ -166,7 +177,7 @@ def evaluar(ind: Indicador, binding: Optional[Binding], observaciones: Sequence[
 
     if cumple:
         return Pendiente(ind.id, horizonte, "ya_alcanzada", meta=float(meta), observado=valor,
-                         periodo_observado=p_obs, falta=falta,
+                         periodo_observado=p_obs, falta=falta, nombre=nombre,
                          motivo=(f"el dato de {p_obs} ya cumple la meta de {horizonte}; lo "
                                  f"pendiente es sostenerlo"))
 
@@ -176,14 +187,14 @@ def evaluar(ind: Indicador, binding: Optional[Binding], observaciones: Sequence[
     except ValueError:
         restantes = None
     if ritmo is None:
-        return Pendiente(ind.id, horizonte, "sin_trayectoria", meta=float(meta),
+        return Pendiente(ind.id, horizonte, "sin_trayectoria", meta=float(meta), nombre=nombre,
                          observado=valor, periodo_observado=p_obs, falta=falta,
                          anios_restantes=restantes, motivo=ESTADOS["sin_trayectoria"])
 
     por_anio, desde, anclado = ritmo
     comun = dict(meta=float(meta), observado=valor, periodo_observado=p_obs, falta=falta,
                  ritmo_por_anio=por_anio, desde=desde, anios_restantes=restantes,
-                 anclado_en_la_linea_base=anclado)
+                 anclado_en_la_linea_base=anclado, nombre=nombre)
     if por_anio == 0:
         return Pendiente(ind.id, horizonte, "no_se_mueve", **comun,   # type: ignore[arg-type]
                          motivo=(f"sin variación entre {desde} y {p_obs}; el horizonte de "
@@ -276,7 +287,8 @@ def publicable(pendientes: Sequence[Pendiente], horizonte: str) -> Dict[str, obj
             "horizonte": horizonte,
             "resumen": resumen(pendientes),
             "por_indicador": [
-                {"indicador": p.indicador, "estado": p.estado, "meta": p.meta,
+                {"indicador": p.indicador, "nombre_del_indicador": p.nombre,
+                 "estado": p.estado, "meta": p.meta,
                  "observado": p.observado, "periodo_observado": p.periodo_observado,
                  "falta": p.falta, "ritmo_por_anio": p.ritmo_por_anio,
                  "ritmo_medido_desde": p.desde,
