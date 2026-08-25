@@ -531,8 +531,18 @@ def _build_section_context(
     # modelo también le sirven — explican por qué una dimensión mueve más que otra.
     try:
         from modules.banking_score.scoring.weights import get_sub_component_weights
-        ctx["pesos_sub_componentes"] = get_sub_component_weights(
-            scoring_result.get("entity_type"))
+        pesos_sub = get_sub_component_weights(scoring_result.get("entity_type"))
+        ctx["pesos_sub_componentes"] = pesos_sub
+        # QUÉ MOVIÓ el score, ya descompuesto. La dimensión que más se movió NO es la que más
+        # movió el resultado —los pesos difieren— y esa cuenta el modelo la hacía a ojo: un
+        # informe entregado atribuyó el deterioro de un semestre al «colapso de eficiencia»
+        # cuando en ese semestre la eficiencia MEJORÓ y aportó a favor. Las cifras estaban
+        # todas bien; la atribución era una derivación.
+        if traj.get("sub"):
+            from shared.narrative.derived import aportes_al_cambio
+            aportes = aportes_al_cambio(traj["sub"], pesos_sub)
+            if aportes:
+                ctx["aportes_al_cambio"] = aportes
     except Exception:  # noqa: BLE001 — el contexto nunca depende de esto
         pass
     if pct.get("overall"):
