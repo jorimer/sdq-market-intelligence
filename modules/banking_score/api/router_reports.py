@@ -44,7 +44,12 @@ router = APIRouter()
 # Reportes de cliente cuyo VALOR es la narrativa (el "SDQ Rating" / deep dive de la entidad):
 # si el análisis IA se degradó a fallback estático, NO deben marcarse `completed`. Los boletines
 # de sistema (wire/datawatch/sector_outlook/communique/criteria) no se gatean aquí.
-_PREMIUM_REPORT_TYPES = {"full_rating", "scorecard"}
+#: Informes que FALLAN CERRADO ante un veto de narrativa (hueca, cifra sin respaldo o relación
+#: invertida). No es la lista de lo que se cobra —no toca precios ni accesos, solo los tres
+#: gates de entrega—: se llamaba `_NO_SE_ENTREGAN_HUECOS` y ese nombre invitaba a leerla como
+#: comercial. El ANUARIO entra porque es el documento más público que la firma produce: uno
+#: hueco daña más que uno no entregado.
+_NO_SE_ENTREGAN_HUECOS = {"full_rating", "scorecard", "anuario"}
 # Informes de SISTEMA: no cuelgan de una entidad (``bank_id`` NULL). Describen la
 # metodología (criteria) o el sistema entero (wire/datawatch/sector_outlook).
 _SYSTEM_REPORT_TYPES = {"criteria", "wire", "datawatch", "sector_outlook", "anuario"}
@@ -619,7 +624,7 @@ async def generate_report(
         # con un mensaje de reintento — nunca `completed`. La causa (outage/429 o presupuesto)
         # es indistinta: el marcador `static_fallback` la cubre por igual.
         degraded = degraded_sections(narratives, list(narratives.keys()))
-        if degraded and report_type in _PREMIUM_REPORT_TYPES:
+        if degraded and report_type in _NO_SE_ENTREGAN_HUECOS:
             from shared.narrative.degradation_events import emit_narrative_degraded
             emit_narrative_degraded(
                 surface="banking_legacy", sector_key="banking", tier=report_type,
@@ -634,7 +639,7 @@ async def generate_report(
         #
         # Misma política que allá y que el gate de degradación de acá: los tipos PREMIUM
         # fallan cerrado; los boletines de sistema solo se registran.
-        premium = report_type in _PREMIUM_REPORT_TYPES
+        premium = report_type in _NO_SE_ENTREGAN_HUECOS
         sin_respaldo = secciones_con_cifra_sin_respaldo(
             narratives, list(narratives.keys()), scoring_result)
         if sin_respaldo:
