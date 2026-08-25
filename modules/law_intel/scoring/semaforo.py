@@ -388,6 +388,50 @@ def resumen(veredictos: Sequence[Veredicto]) -> Dict[str, object]:
     }
 
 
+def tabla(veredictos: Sequence[Veredicto], indicadores: Sequence[Indicador],
+          nombres_de_eje: Optional[Dict[int, str]] = None) -> List[Dict[str, Any]]:
+    """Una fila POR INDICADOR con veredicto: la evidencia que el informe tiene que citar.
+
+    **Existe porque el contexto solo llevaba conteos agregados.** A las secciones «Lo que se
+    logró» y «Lo que no se logró» se les pedía nombrar indicadores con su meta y su valor, y
+    lo único que recibían era «11 alcanzan, 33 no». El modelo reconstruía las cifras de
+    memoria y las erraba: publicó «2.7 alcanza 0.39 contra una meta de 0.42» cuando la ley
+    fija 0.44, y «3.13 91.0% frente a una meta de 70.0%» cuando fija 60.0.
+
+    **Y el guard de cifra sin respaldo no las atrapa.** Con noventa indicadores, casi
+    cualquier número aparece en alguna parte del contexto: el guard lo encuentra y lo da por
+    respaldado. Comprueba PRESENCIA, no ATRIBUCIÓN — una meta que existe pero pertenece a
+    otro indicador pasa el filtro. La única cura es que la fila correcta esté servida.
+
+    Solo los que producen veredicto de cumplimiento: los demás no tienen meta que citar y
+    llenarían la tabla de huecos que el redactor trataría de completar.
+    """
+    del_indicador = {i.id: i for i in indicadores}
+    ejes = nombres_de_eje or {}
+    filas: List[Dict[str, Any]] = []
+    for v in veredictos:
+        if v.cumple is None:
+            continue
+        ind = del_indicador.get(v.indicador)
+        if ind is None:                                   # pragma: no cover - defensivo
+            continue
+        filas.append({
+            "indicador": v.indicador,
+            # El sujeto viaja con el número, también en la tabla.
+            "nombre_del_indicador": ind.nombre,
+            "fin": ejes.get(ind.eje, f"Eje {ind.eje}"),
+            "veredicto": v.veredicto,
+            "meta_que_fija_la_ley": v.meta,
+            "periodo_de_la_meta": v.meta_periodo,
+            "valor_observado": v.observado,
+            "periodo_observado": v.periodo_observado,
+            "distancia_a_la_meta": v.distancia,
+            "trayectoria": v.trayectoria,
+            "lectura_ya_redactada": v.motivo or "",
+        })
+    return filas
+
+
 def direccion_declarada_coincide(ind: Indicador, binding: Binding) -> bool:
     """Se reexpone acá porque el veredicto entero depende de esto y conviene poder afirmarlo
     en el informe, no solo hacerlo cumplir al cargar."""

@@ -152,3 +152,58 @@ def test_la_regla_prohibe_ORDENAR_los_fines_entre_si():
     inds, vs = _caso(2, ["alcanzada"] * 4 + ["no_alcanzada"] * 4)
     pub = publicable(por_fin(inds, vs))
     assert "No ordenes los fines entre sí" in pub["regla_de_la_comparacion_entre_fines"]
+
+
+class TestLaTABLAquesEsLaEvidencia:
+    """A «Lo que se logró» se le pedía nombrar indicadores con su meta, y se le daba «11
+    alcanzan, 33 no». El modelo reconstruía las cifras de memoria y las erraba: publicó
+    «2.7 alcanza 0.39 contra una meta de 0.42» cuando la ley fija 0.44, y «3.13 91.0% frente
+    a una meta de 70.0%» cuando fija 60.0.
+
+    Y el guard de cifra sin respaldo no las atrapa: con noventa indicadores casi cualquier
+    número aparece en algún lado del contexto. El guard comprueba PRESENCIA, no ATRIBUCIÓN.
+    """
+
+    def _panel(self):
+        from modules.law_intel.registro import Indicador
+        from modules.law_intel.scoring.semaforo import Veredicto, tabla
+        inds = [Indicador(id="2.7", eje=2, nombre="Índice de GINI", escala="numerica"),
+                Indicador(id="3.13", eje=3, nombre="Usuarios de internet", escala="numerica"),
+                Indicador(id="1.4", eje=1, nombre="Sin fuente", escala="numerica")]
+        vs = [Veredicto("2.7", "alcanzada", meta_periodo="2025", meta=0.44, observado=0.39),
+              Veredicto("3.13", "alcanzada", meta_periodo="2025", meta=60.0, observado=91.0),
+              Veredicto("1.4", "sin_medicion")]
+        return inds, vs, tabla(vs, inds, {2: "Desarrollo social", 3: "Desarrollo económico"})
+
+    def test_cada_fila_lleva_la_meta_QUE_FIJA_LA_LEY(self):
+        _, _, filas = self._panel()
+        por_id = {f["indicador"]: f for f in filas}
+        assert por_id["2.7"]["meta_que_fija_la_ley"] == 0.44
+        assert por_id["3.13"]["meta_que_fija_la_ley"] == 60.0
+
+    def test_solo_entran_los_que_PRODUCEN_veredicto(self):
+        """Una fila sin meta que citar es un hueco que el redactor va a completar."""
+        _, _, filas = self._panel()
+        assert [f["indicador"] for f in filas] == ["2.7", "3.13"]
+
+    def test_cada_fila_lleva_el_NOMBRE_y_el_FIN(self):
+        _, _, filas = self._panel()
+        assert filas[0]["nombre_del_indicador"] == "Índice de GINI"
+        assert filas[0]["fin"] == "Desarrollo social"
+        assert filas[1]["fin"] == "Desarrollo económico"
+
+    def test_el_reparto_por_fin_se_CUENTA_sobre_la_tabla(self):
+        """El informe dijo «nueve del Eje social, uno del Económico» cuando eran siete y
+        tres. Con la tabla, el reparto se cuenta en vez de estimarse."""
+        import collections
+        _, _, filas = self._panel()
+        alcanzadas = [f for f in filas if f["veredicto"] == "alcanzada"]
+        reparto = collections.Counter(f["fin"] for f in alcanzadas)
+        assert reparto == {"Desarrollo social": 1, "Desarrollo económico": 1}
+
+    def test_un_fin_sin_nombre_declarado_se_rotula_por_lo_que_ES(self):
+        from modules.law_intel.registro import Indicador
+        from modules.law_intel.scoring.semaforo import Veredicto, tabla
+        inds = [Indicador(id="9.1", eje=9, nombre="Otro", escala="numerica")]
+        filas = tabla([Veredicto("9.1", "alcanzada", meta=1.0, observado=2.0)], inds, {})
+        assert filas[0]["fin"] == "Eje 9"
