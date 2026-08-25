@@ -284,12 +284,29 @@ def generate_radar_chart(sub_scores: Dict[str, float], output_path: str) -> str:
 # watermark) los provee el shell de marca compartido (shared.products.render.build_branded_pdf);
 # este módulo solo arma el CUERPO (radar + tablas + narrativa) y la calificación va como headline.
 
-def _build_sub_scores_table(sub_scores: Dict[str, float], styles) -> List:
+def _build_sub_scores_table(sub_scores: Dict[str, float], styles,
+                            entity_type: Optional[str] = None) -> List:
+    """Tabla de sub-componentes con los pesos DEL TIPO DE ENTIDAD.
+
+    Iteraba `SUB_COMPONENT_WEIGHTS` —la constante base, que es la de Banca Múltiple— para
+    TODAS las entidades. Cinco de los seis tipos tienen perfil propio, así que la tabla salía
+    mal en 75 de las 92 entidades calificadas, y contradecía el número de portada del propio
+    informe: en un Insight real de una asociación de ahorros y préstamos (Bonao, 2025-12) la
+    tabla decía 40/30/15/10/5 —que dan un score global de 60.07— mientras la portada mostraba
+    61.24, que es lo que dan los pesos reales de una AAP (38/34/13/10/5). La narrativa, que sí
+    recibe los pesos del tipo, decía 38% y 34%: el texto tenía razón y la tabla mentía.
+
+    El motor de scoring nunca estuvo mal —`run_scoring` usa `get_sub_component_weights`—; el
+    defecto era de las superficies que lo MUESTRAN.
+    """
     elements: List = []
     elements.append(Paragraph("Sub-componentes", styles["SDQHeading"]))
 
+    from modules.banking_score.scoring.weights import get_sub_component_weights
+    pesos = get_sub_component_weights(entity_type)
+
     rows = [["Sub-componente", "Peso", "Score"]]
-    for key, weight in SUB_COMPONENT_WEIGHTS.items():
+    for key, weight in pesos.items():
         score = sub_scores.get(key, 0)
         rows.append([
             SUB_COMPONENT_LABELS.get(key, key),
@@ -857,7 +874,8 @@ async def generate_pdf_report(
 
     # 2. Sub-scores table
     if sub_scores:
-        body.extend(_build_sub_scores_table(sub_scores, styles))
+        body.extend(_build_sub_scores_table(
+            sub_scores, styles, scoring_result.get("entity_type")))
         body.append(Spacer(1, 0.3 * inch))
 
     # Amplitud (Fase 4): trayectoria multi-período + percentil vs el sistema. Vienen en
