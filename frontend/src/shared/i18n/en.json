@@ -1864,7 +1864,8 @@
         "free": "Free",
         "pro": "Pro",
         "enterprise": "Enterprise"
-      }
+      },
+      "cierreAnual": "{{p}} · {{anio}} annual close"
     },
     "smtp": {
       "title": "Outgoing email",

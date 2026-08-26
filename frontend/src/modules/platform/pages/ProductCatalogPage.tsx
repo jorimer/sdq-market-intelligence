@@ -21,6 +21,7 @@ import {
   getProductReport,
   reportAportes,
   getProductScopeOptions,
+  cierreDeAnio,
   getProductPeriods,
   downloadProductReport,
   downloadProductSample,
@@ -407,9 +408,20 @@ function ProductReportDrawer({ sector, level, periodEnd, onClose, t }: {
             onChange={(e) => onPeriodChange(e.target.value)}
             className="field"
           >
-            {periods.map((p) => (
-              <option key={p} value={p}>{p}</option>
-            ))}
+            {periods.map((p) => {
+              // El cierre de diciembre ES la lectura anual de la entidad (ROA/ROE con
+              // ventana de doce meses + la columna del año en «qué movió el score»). Sin
+              // rotularlo, había que saberlo de antemano.
+              const anio = cierreDeAnio(p);
+              return (
+                <option key={p} value={p}>
+                  {anio
+                    ? t("platform.catalog.cierreAnual", { p, anio,
+                        defaultValue: "{{p}} · cierre anual {{anio}}" })
+                    : p}
+                </option>
+              );
+            })}
           </select>
         </div>
       )}

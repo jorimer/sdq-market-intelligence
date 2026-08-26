@@ -165,3 +165,39 @@ def test_todo_boletin_de_sistema_narrado_tiene_su_ruta():
               if f"/{t.replace('_', '-')}/generate" not in rutas
               and f"/{t}/generate" not in rutas]
     assert not faltan, f"boletines registrados y sin ruta que los genere: {faltan}"
+
+
+# ── El año tiene que haber CERRADO ─────────────────────────────────────
+#
+# El defecto que esto cierra era el CAMINO POR DEFECTO de la aplicación. El período del topbar
+# arranca en el corte más reciente; con el panel de producción al 2026-03-31, apretar «Anuario
+# del sistema» sin tocar el selector pedía el anuario 2026. El motor exigía dos cortes y
+# encontraba exactamente dos —la línea base de dic-2025 y marzo—, así que EMITÍA el documento:
+# portada «Anuario», sección «El sistema en 2026», y un «cambio del año» que era diciembre a
+# marzo. Ninguna cifra falsa; un TRIMESTRE con el encabezado de un año.
+
+def test_un_anio_EN_CURSO_no_produce_anuario(con_panel):
+    """Dos cortes alcanzaban, y ése era el problema: el segundo era el primer trimestre."""
+    panel = _panel({"A": [70.0, 71.0, None, None, None],
+                    "B": [60.0, 62.0, None, None, None]})
+    assert con_panel(panel) is None, (
+        "un año sin su corte de diciembre salía titulado como año entero")
+
+
+def test_con_el_cierre_del_anio_SI_se_emite(con_panel):
+    """El contrapeso: sin él, la regla se satisface no emitiendo nunca."""
+    panel = _panel({"A": [70.0, 71.0, 72.0, 73.0, 74.0],
+                    "B": [60.0, 61.0, 62.0, 63.0, 64.0]})
+    out = con_panel(panel)
+    assert out is not None and out["anio"] == 2025
+
+
+def test_el_cierre_puede_faltar_EN_EL_MEDIO_sin_vetar(con_panel):
+    """Lo que se exige es el cierre del AÑO, no que estén los cuatro trimestres.
+
+    Un trimestre ausente en el medio deja un año igualmente resumible cierre a cierre; exigir
+    los cinco cortes sería más estricto de lo que el producto necesita y vetaría años reales.
+    """
+    panel = _panel({"A": [70.0, None, 72.0, None, 74.0],
+                    "B": [60.0, None, 62.0, None, 64.0]})
+    assert con_panel(panel) is not None
