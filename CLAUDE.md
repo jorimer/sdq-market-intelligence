@@ -144,6 +144,13 @@ con `ast` y exige la regla o una excepción declarada. La lección escrita ya fa
 en este repo. Al escribir el glob del test, preguntate **qué queda afuera**. Y antes de escribir
 un guard, buscá si otro módulo ya lo resolvió — suele estar, y suele estar mejor.
 
+**Un test del motor NO es un test de la ruta.** Los guardrails viven en el motor y la ruta se
+queda sin probar: van cinco defectos así. El último no fue de contexto sino de REGISTRO —un
+helper se coló entre el decorador y su función, y `GET .../informe-abierto` devolvió una fecha
+con HTTP 200 mientras los tests de `render()` seguían verdes—. Lo vigila
+`shared/tests/test_toda_ruta_recibe_su_path.py`, que exige que toda función reciba los
+parámetros que su path declara. Cuando el entregable sale por HTTP, **pedilo por HTTP**.
+
 ## Tech Stack
 
 - **Backend**: FastAPI, SQLAlchemy 2.0, Pydantic Settings, Alembic
