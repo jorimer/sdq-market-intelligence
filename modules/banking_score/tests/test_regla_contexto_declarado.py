@@ -22,6 +22,7 @@ receta. Acá se vigila lo del EJE.
 """
 import ast
 import pathlib
+from typing import Dict
 
 RAIZ = pathlib.Path(__file__).resolve().parents[1]
 
@@ -49,7 +50,7 @@ def _declarados() -> set:
 
 def _importados_del_eje() -> dict:
     """`{ruta_relativa: archivo_que_lo_importa}` de cada módulo del eje que un constructor usa."""
-    fuera = {}
+    fuera: Dict[str, str] = {}
     for rel in CONSTRUCTORES:
         f = RAIZ / rel
         if not f.exists():
