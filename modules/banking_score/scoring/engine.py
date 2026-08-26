@@ -14,6 +14,7 @@ from modules.banking_score.scoring.weights import (
     DIVERSIFICACION_INDICATORS,
     EFICIENCIA_INDICATORS,
     LIQUIDEZ_INDICATORS,
+    SOLIDEZ_FAMILIAS,
     SOLIDEZ_INDICATORS,
     SUB_COMPONENT_WEIGHTS,
     get_sub_component_weights,
@@ -627,15 +628,33 @@ def calculate_sub_components(indicators: Dict[str, IndicatorResult]) -> Dict[str
         "diversificacion": DIVERSIFICACION_INDICATORS,
     }
 
+    def _disponibles(keys) -> List[float]:
+        return [indicators[k]["score"] for k in keys
+                if k in indicators and indicators[k].get("available", True)]
+
     def _avg(keys: List[str]) -> Optional[float]:
-        vals = [
-            indicators[k]["score"]
-            for k in keys
-            if k in indicators and indicators[k].get("available", True)
-        ]
+        vals = _disponibles(keys)
         return round(sum(vals) / len(vals), 2) if vals else None
 
-    return {comp: _avg(keys) for comp, keys in groups.items()}
+    def _avg_por_familia(familias) -> Optional[float]:
+        """Promedio de FAMILIAS: un hecho, un voto.
+
+        Tres de los cinco indicadores de Solidez miden capital sobre activos ponderados por
+        riesgo, así que el promedio simple le daba a ese único hecho el 60 % de la dimensión —
+        y cuando la entidad no tiene capital secundario, dos de ellos son el MISMO número.
+        Promediando dentro de cada familia primero, la adecuación de capital pesa lo mismo que
+        la cobertura de provisiones y que el capital sobre activos sin ponderar.
+
+        Una familia sin ningún indicador disponible se OMITE en vez de contar como cero: es la
+        misma regla que ya rige entre sub-componentes —renormalizar sobre lo medido, nunca
+        acreditar dato ausente.
+        """
+        votos = [sum(v) / len(v) for _, keys in familias if (v := _disponibles(keys))]
+        return round(sum(votos) / len(votos), 2) if votos else None
+
+    out = {comp: _avg(keys) for comp, keys in groups.items()}
+    out["solidez"] = _avg_por_familia(SOLIDEZ_FAMILIAS)
+    return out
 
 
 def calculate_deterministic_score(sub_scores: Dict[str, Optional[float]], weights: Dict[str, float] = None) -> float:
