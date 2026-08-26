@@ -17,8 +17,8 @@ from shared.database.session import get_db
 from shared.narrative.claude_engine import (NarrativeDegradedError,
                                            NarrativeRelacionInvertidaError,
                                            NarrativeSinRespaldoError,
-                                           degraded_sections,
-                                           secciones_con_cifra_sin_respaldo)
+                                           degraded_sections)
+from shared.narrative.cifras_pendientes import acumulando as acumulando_cifras
 from shared.narrative.relaciones_pendientes import acumulando
 from shared.narrative.mensajes_de_veto import (NARRATIVE_DEGRADED_MSG,
                                                mensaje_relacion,
@@ -610,7 +610,8 @@ async def generate_report(
         # El acumulador se abre alrededor de la generación: el motor deposita ahí las
         # relaciones invertidas que sobrevivieron a la reparación (ver
         # `shared/narrative/relaciones_pendientes`), y la política se decide abajo.
-        with acumulando() as relaciones_pendientes:
+        with acumulando() as relaciones_pendientes, \
+                acumulando_cifras() as sin_respaldo:
             narratives = await generate_report_narratives(
                 report_type=report_type,
                 bank_name=bank.name,
@@ -639,9 +640,11 @@ async def generate_report(
         #
         # Misma política que allá y que el gate de degradación de acá: los tipos PREMIUM
         # fallan cerrado; los boletines de sistema solo se registran.
+        # El hallazgo lo trae el MOTOR por su canal, no se re-juzga acá. Esta ruta vetaba
+        # contra `scoring_result`, que es aún MÁS pobre que el snapshot de productos: ni
+        # siquiera trae los promedios del sistema, así que cualquier cifra comparada contra
+        # el panel se leía como inventada. Ver `shared/narrative/hallazgos_pendientes`.
         premium = report_type in _NO_SE_ENTREGAN_HUECOS
-        sin_respaldo = secciones_con_cifra_sin_respaldo(
-            narratives, list(narratives.keys()), scoring_result)
         if sin_respaldo:
             logger.warning(
                 "Reporte %s para %s (%s) afirma cifras sin respaldo en %d sección(es): %s — %s",
