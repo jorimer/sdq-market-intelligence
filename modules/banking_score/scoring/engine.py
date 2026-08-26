@@ -207,10 +207,23 @@ def calc_tier1_ratio(d) -> IndicatorResult:
 
 
 def calc_leverage(d) -> IndicatorResult:
-    """Leverage Ratio: capital_tier1 / exposicion_total."""
+    """Capital primario / activos PONDERADOS por riesgo. NO es el ratio de Basilea.
+
+    El nombre `leverage` es heredado y el denominador que sirve el SIB (`exposicion_total`)
+    son los activos y contingentes PONDERADOS por riesgo crediticio y de mercado. El ratio de
+    apalancamiento de Basilea es, por definición, no ponderado — ése es su propósito. Acá esto
+    es un tercer ángulo de la adecuación de capital, y así se rotula (ver `indicator_detail`).
+
+    Consecuencia declarada: cuando el capital primario iguala al patrimonio técnico —una
+    entidad sin capital secundario— este indicador COINCIDE exactamente con `solvencia`.
+    Medido en producción: 9 de 43 entidades calificadas al corte más reciente.
+    """
     raw = _safe_div(d.capital_tier1, d.exposicion_total) * 100
-    # ref = 3%: leverage ratio mínimo de Basilea III. hi = 30.2: percentil 90 del sistema.
-    # El techo anterior (6%) lo alcanzaba el 96%.
+    # ref = 3.0 es HEREDADO del mínimo de apalancamiento de Basilea III y NO aplica a un ratio
+    # ponderado por riesgo; se conserva porque prácticamente todo el panel cae en el tramo
+    # ref→hi, así que mover ref cambiaría scores publicados sin mejorar la discriminación.
+    # hi = 30.2 sí es empírico: percentil 90 del sistema, y es lo que hace que el indicador
+    # separe (score medio 78.4, σ 13.0 — comparable a solvencia y tier1).
     score = _score_tramos(raw, lo=1.8, ref=3.0, hi=30.2)
     return {"raw": round(raw, 4), "score": round(score, 2)}
 

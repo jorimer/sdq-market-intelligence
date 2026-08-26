@@ -415,7 +415,33 @@ def _build_indicators_table(indicators: Dict[str, Dict], styles,
                 "calificadas en el período (p50 = mediana). Tendencia = variación del score "
                 "entre el primer y el último trimestre disponible.", styles["SDQSmall"]))
 
+        # Tres de los cinco indicadores de Solidez —solvencia, solvencia de capital primario
+        # y capital primario/activos ponderados— miden capital sobre activos ponderados por
+        # riesgo. Cuando la entidad no tiene capital secundario, dos de ellos COINCIDEN
+        # exactamente, y un lector razonable los leería como tres evidencias independientes.
+        # Se declara en vez de esconderse: la alternativa —recomponer la dimensión— mueve el
+        # score de todas las entidades y es una decisión de metodología, no una nota al pie.
+        nota = _nota_de_capital_redundante(indicators)
+        if nota:
+            elements.append(Spacer(1, 0.06 * inch))
+            elements.append(Paragraph(nota, styles["SDQSmall"]))
+
     return elements
+
+
+def _nota_de_capital_redundante(indicators: Dict) -> Optional[str]:
+    """La advertencia cuando dos ratios de capital dan el MISMO número, o ninguna."""
+    def _raw(clave):
+        blob = (indicators or {}).get(clave)
+        return blob.get("raw") if isinstance(blob, dict) else None
+
+    sol, lev = _raw("solvencia"), _raw("leverage")
+    if sol is None or lev is None or abs(float(sol) - float(lev)) > 0.005:
+        return None
+    return ("Nota: «Índice de solvencia» y «Capital primario / activos ponderados» coinciden "
+            "en este período porque la entidad no registra capital secundario — comparten "
+            "numerador y denominador. Son el mismo hecho medido dos veces, no dos evidencias "
+            "independientes de solidez.")
 
 
 def _build_trajectory_table(trajectories: Dict, styles) -> List:

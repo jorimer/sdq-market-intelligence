@@ -28,7 +28,7 @@ logger = logging.getLogger("sdq.narrative.numeric_guard")
 # el CÓDIGO de este módulo —una regla nueva, un umbral distinto— no cambia ningún prompt y
 # pasaría inadvertido: la caché seguiría sirviendo texto que el guard nuevo habría marcado.
 # Es el único bump manual irreducible; por eso vive acá, junto a lo que describe.
-GUARD_VERSION = "10"  # "10": los pesos de la rúbrica cuentan como magnitud relacional (2026-08-26)
+GUARD_VERSION = "11"  # "11": un umbral prospectivo no es una cita (2026-08-26)
 
 _JUDGE_SYSTEM = (
     "Sos un verificador numérico estricto y preciso. Tu ÚNICA tarea es detectar cifras "
@@ -523,6 +523,42 @@ def formas_derivadas(clave: str, v: float) -> set:
     return out
 
 
+# ── Umbrales en frases PROSPECTIVAS ──────────────────────────────────────────
+#
+# «si la cobertura CAIGA por debajo de 100 %», «que la morosidad CRUCE 2,5 %», «si SUPERA
+# 95 %». Estas cifras no son citas de un dato: son UMBRALES que definen una condición futura,
+# y por definición el contexto no puede respaldarlas — el dato describe el pasado.
+#
+# El guard las trataba como citas y disparaba el lazo de reparación en cada intento. Medido en
+# producción sobre la Revisión Anual: **16 llamadas al modelo para DOS secciones**, entre
+# regeneraciones y juez semántico. La petición cruzaba el límite del proxy y moría con un 502
+# sin cuerpo, así que el usuario no veía un veto explicado sino «No se pudo cargar el
+# producto». El falso positivo no vetaba: rompía el producto.
+#
+# Es una familia DISTINTA de las tres anteriores. Aquéllas eran una FORMA de un número servido
+# (redondeo, razón en porcentaje, peso en un contenedor); ésta no corresponde a ningún número
+# del contexto y no debería.
+#
+# El disparador se acota a marcas PROSPECTIVAS —subjuntivo y futuro— porque son las que un
+# texto no usa para afirmar un hecho del período: «caiga», «cruce», «supere» describen algo
+# que todavía no pasó. Se exige además que la marca esté CERCA (misma cláusula), para que un
+# «si» al principio del párrafo no exima a todas las cifras que vengan después.
+
+#: Ventana hacia atrás desde la cifra. Una cláusula, no un párrafo.
+_VENTANA_PROSPECTIVA = 90
+
+_PROSPECTIVO = re.compile(
+    r"\b(?:si|cuando|en\s+caso\s+de|mientras|hasta\s+que|de\s+persistir|"
+    r"supere|supera|cruce|caiga|descienda|baje|alcance|llegue|se\s+ubique|"
+    r"acercarse|acerca|presionar[aá]n?|operar[aá]|convergir[aá]|"
+    r"sostenid[ao]s?|riesgo\s+de\s+que|umbral)\b", re.I)
+
+
+def _es_umbral_prospectivo(texto: str, pos: int) -> bool:
+    """¿La cifra en *pos* define una CONDICIÓN futura en vez de citar un dato?"""
+    return bool(_PROSPECTIVO.search(texto[max(0, pos - _VENTANA_PROSPECTIVA):pos]))
+
+
 def deterministic_uncited_figures(context: dict, text: str) -> List[str]:
     """Porcentajes y puntos del *text* que no aparecen en el contexto.
 
@@ -572,6 +608,9 @@ def deterministic_uncited_figures(context: dict, text: str) -> List[str]:
                            for x in candidatos)
 
             if _cubre(known) or _cubre(derivadas) or m.group(0).strip() in seen:
+                continue
+            # Un UMBRAL de una frase prospectiva no es una cita: ver `_es_umbral_prospectivo`.
+            if _es_umbral_prospectivo(text or "", m.start()):
                 continue
             seen.add(m.group(0).strip())
             # La marca dice QUÉ se intentó. Un veto que solo dice «no aparece» se lee como
