@@ -1061,7 +1061,8 @@
       "wire": "Wire",
       "criteria": "Criteria",
       "sector_outlook": "Sector outlook",
-      "anuario": "System yearbook"
+      "anuario": "System yearbook",
+      "revision_anual": "Annual Review"
     },
     "mdlTitle": "ML model",
     "mdlSub": "Explainable complement to the deterministic core (per-variable contributions), not an oracle.",

@@ -35,13 +35,21 @@ PORTADORES = ("router", "app")
 
 #: Lo que no se lee. Los worktrees son copias de trabajo de otras sesiones —con el código
 #: viejo dentro— y un test que las lea falla por un defecto que ya se arregló acá.
+#:
+#: Se comparan contra la ruta RELATIVA a RAIZ, no contra la absoluta. Comparar contra la
+#: absoluta apagaba el barrido ENTERO cuando el propio test corre DENTRO de un worktree: la
+#: ruta del worktree contiene «.claude/worktrees», así que todos los archivos quedaban
+#: excluidos y `_rutas()` devolvía cero. En CI —que corre desde la raíz del repo— pasaba en
+#: verde, y en cualquier worktree la suite quedaba roja. La prueba negativa de abajo es la
+#: que lo destapó, que es justamente para lo que está.
 EXCLUIDOS = (".venv", "/tests/", ".claude/worktrees", "node_modules", "/.git/")
 
 
 def _rutas():
     """`(archivo, línea, nombre, path, argumentos)` de cada ruta declarada en el repo."""
     for f in RAIZ.rglob("*.py"):
-        if any(x in str(f) for x in EXCLUIDOS):
+        rel = "/" + f.relative_to(RAIZ).as_posix()
+        if any(x in rel for x in EXCLUIDOS):
             continue
         try:
             arbol = ast.parse(f.read_text(encoding="utf-8"))
