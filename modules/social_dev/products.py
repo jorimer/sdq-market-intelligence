@@ -397,9 +397,19 @@ class SocialDevProduct:
         "tramites_pct_con_tiempo_sobre_los_catalogados": (
             "tramites_pct_con_tiempo_sobre_los_catalogados", HEALTH_ENTITY,
             "Trámites que declaran su tiempo, sobre los catalogados (%)", "institutional",
-            "La razón, servida y no derivada. Al 2026-08 son 3 de 710: 0,4%. Una cifra baja "
-            "acá NO dice que los trámites sean lentos — dice que no se sabe cuánto tardan, "
-            "que es otra afirmación y es la que el dato sostiene."),
+            "La razón, servida y no derivada. Una cifra baja acá NO dice que los trámites "
+            "sean lentos — dice que no se sabe cuánto tardan, que es otra afirmación y es "
+            "la que el dato sostiene. El valor vigente lo sirve la serie: escribirlo acá lo "
+            "vuelve falso en la próxima corrida sin que nadie se entere."),
+        "tramites_mencionan_cifra_de_tiempo_sin_anclar": (
+            "tramites_mencionan_cifra_de_tiempo_sin_anclar", HEALTH_ENTITY,
+            "Fichas con alguna cifra de tiempo sin anclar al plazo del trámite",
+            "institutional",
+            "El CONTRAFACTUAL del criterio de extracción, y no una medición del plazo de los "
+            "trámites: son multas, vigencias de documentos y condiciones de agenda. Se "
+            "publica para poder decir cuánto más grande sería la cifra que sí se publica si "
+            "se aceptara cualquier número de tiempo de la prosa, computando la razón en vez "
+            "de afirmarla. No alimenta el índice de desarrollo."),
         "public_education_spending": (
             "public_education_spending", HEALTH_ENTITY,
             "Gasto público en educación (% del PIB)", "education",

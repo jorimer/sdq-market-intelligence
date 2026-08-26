@@ -1,0 +1,46 @@
+# LECTURA JURÍDICA — Ley 167-21
+#
+# Qué significan en derecho los artículos que el informe mide. La tabla de obligaciones dice
+# QUÉ manda cada uno; esto dice de qué rango es, de dónde sale lo que exige y qué pasa si no
+# se cumple. Sin esto el lector no tiene cómo saber si el informe mide lo que dice medir.
+#
+# **La nota del 42 es la que sostiene el documento entero.** El «tiempo de respuesta» —la
+# cifra central— lo exige una resolución del MAP, no la ley. Atribuírselo a la ley es
+# refutable leyendo la ley.
+#
+# Cada artículo citado tiene que estar entre las obligaciones del expediente: lo exige
+# `lectura_juridica._validar`, para que el lector pueda seguir la referencia en la tabla.
+
+lectura:
+  - articulo: 39
+    dice: >-
+      Obliga a todos los entes y órganos a cargo de procedimientos administrativos a
+      publicarlos en el Registro Único de Mejora Regulatoria. Es la obligación de la que
+      cuelga todo lo que este documento mide: sin registro publicado no hay nada que
+      contrastar.
+    fuente: "Ley 167-21, art. 39 (G.O. 11030, 12 de agosto de 2021)"
+
+  - articulo: 40
+    dice: >-
+      Le asigna al registro una consecuencia jurídica poco común: las autoridades
+      administrativas solo pueden exigir procedimientos, requisitos o pagos por derechos de
+      tramitación que estén registrados. Un trámite no registrado no es exigible al
+      administrado. No es una exhortación —la mayoría de las obligaciones de esta ley no
+      dicen qué ocurre si no se cumplen—, y por eso lo que falte del catálogo tiene un
+      efecto que va más allá de la transparencia.
+    fuente: "Ley 167-21, art. 40"
+
+  - articulo: 42
+    dice: >-
+      Encomienda al Ministerio de Administración Pública emitir los lineamientos de
+      incorporación al registro. La ley manda publicar el procedimiento; no dice con qué
+      campos. La exigencia de que cada ficha declare su tiempo de respuesta —que es lo que
+      este documento mide— proviene de la norma que el ministerio dictó al amparo de este
+      artículo, y no del texto legal.
+    desarrollada_por: >-
+      la Resolución núm. 142-2024 del MAP, del 21 de mayo de 2024, que aprueba la guía de
+      identificación, estandarización y registro de trámites y servicios públicos y fija los
+      campos de cada ficha: descripción, objetivo, destinatario, base normativa, requisitos,
+      documentos, costo, canales de prestación, pasos a seguir, tiempo de respuesta y
+      vigencia del entregable
+    fuente: "Ley 167-21, art. 42; Resolución MAP núm. 142-2024"

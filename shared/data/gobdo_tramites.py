@@ -12,9 +12,15 @@ aparece, aparece dentro de la PROSA de `info_process` o `info_requirement`, en H
 
     «REGULAR: el tiempo de entrega es de 5 días laborables.»
 
-De los 710 trámites del catálogo, **3 lo declaran**. El 0,4 %. Esa cifra —y no la lista— es
-lo que este módulo existe para medir: hay una obligación con artículo (Ley 167-21, art. 39),
-un campo normado con resolución (142-2024), y un cumplimiento de tres casos.
+De los 710 trámites del catálogo, **22 lo declaran**. El 3,1 %, medido el 2026-08-25. Esa
+cifra —y no la lista— es lo que este módulo existe para medir: hay una obligación con
+artículo (Ley 167-21, art. 39), un campo normado con resolución (142-2024), y un
+cumplimiento de veintidós casos. La cifra vigente la sirve la plataforma; acá queda la
+lectura con su fecha, que es un registro y no una afirmación sobre hoy.
+
+**Y de esos 22, solo 3 NOMBRAN el campo.** Los otros 19 lo dicen en la prosa. La resolución
+exige un campo; una perífrasis lo suple sin cumplirlo, y contar los 22 juntos daría por
+cumplida una obligación que no lo está.
 
 **La gramática es CERRADA y está ANCLADA, y esto no es un detalle de implementación.** Una
 primera versión buscaba «un número seguido de una unidad de tiempo» en la prosa y devolvía
@@ -150,6 +156,29 @@ def _compilar(anclas):
 _PATRON_FUERTE = _compilar(ANCLAS_FUERTES)
 _PATRON_DEBIL = _compilar(ANCLAS_DEBILES)
 
+#: El criterio AMPLIO —cualquier cifra seguida de una unidad de tiempo, sin ancla—, que NO se
+#: publica como medición y se cuenta a propósito.
+#:
+#: Es el contrafactual del criterio estrecho, y existe para que el informe pueda decir cuánto
+#: más grande sería la cifra si se aceptara cualquier número de tiempo de la prosa. Esa
+#: comparación es lo que sostiene el número que sí se publica: sin ella, un lector no tiene
+#: cómo saber si 22 es el resultado de un criterio serio o de un patrón que no encuentra.
+#:
+#: Se MIDE en cada corrida en vez de escribirse en el documento. La primera versión de este
+#: módulo dejó «arroja una proporción cinco veces mayor» redactado a mano; en cuanto el
+#: criterio estrecho pasó de 3 a 22 esa frase quedó falsa y nadie se enteró.
+_PATRON_AMPLIO = re.compile(r"\b" + _NUM + r"\s*(?:\(\d+\)\s*)?" + _UNI + r"\b", re.IGNORECASE)
+
+
+def menciona_cifra_de_tiempo(prosa: str) -> bool:
+    """Si la prosa trae ALGUNA cifra de tiempo, esté o no anclada al plazo del trámite.
+
+    Lo que cuenta acá son multas —«seis meses, con un monto de CIEN MIL PESOS»—, vigencias de
+    documentos y condiciones de agenda. No es el tiempo del trámite y no se publica como tal:
+    se cuenta para poder decir de cuánto se está prescindiendo.
+    """
+    return bool(_PATRON_AMPLIO.search(prosa))
+
 
 class TramitesError(RuntimeError):
     """No se pudo leer el catálogo. NUNCA se degrada a «no hay trámites»."""
@@ -200,6 +229,9 @@ class Tramite:
     visitas: int
     actualizado: Optional[str]
     tiempo: Optional[Tiempo] = None
+    #: Si la ficha trae alguna cifra de tiempo SIN anclar. No es una medición —se descarta
+    #: para publicar—; se guarda para poder medir cuánto se descarta.
+    menciona_cifra_de_tiempo: bool = False
 
 
 def _norm(t: object) -> str:
@@ -248,8 +280,8 @@ def _valor_de(texto: str) -> Optional[float]:
 def tiempo_declarado(prosa: str) -> Optional[Tiempo]:
     """El tiempo de respuesta que la ficha declara, o `None`.
 
-    `None` es la respuesta correcta y frecuente: 707 de los 710 trámites del catálogo no lo
-    declaran. No se busca un sustituto ni se estima: la ausencia ES la medición.
+    `None` es la respuesta correcta y frecuente: 688 de los 710 trámites del catálogo no lo
+    declaran (2026-08-25). No se busca un sustituto ni se estima: la ausencia ES la medición.
     """
     # Primero las FUERTES sobre todo el texto: una ficha que nombra el campo y además
     # menciona otro plazo en una condición de agenda tiene que devolver el que nombra el
@@ -307,6 +339,8 @@ def tramite_de(fila: Dict[str, Any], detalle: Optional[Dict[str, Any]] = None) -
         visitas=int(fila.get("visited") or 0),
         actualizado=(str(fila.get("updated_at")) if fila.get("updated_at") else None),
         tiempo=tiempo_declarado(prosa) if detalle is not None else None,
+        menciona_cifra_de_tiempo=(menciona_cifra_de_tiempo(prosa) if detalle is not None
+                                  else False),
     )
 
 
@@ -333,6 +367,12 @@ def resumen(tramites: Sequence[Tramite]) -> Dict[str, Any]:
         "lo_dicen_en_perifrasis": sum(1 for t in con if t.tiempo
                                       and t.tiempo.como_lo_dice == "perifrasis"),
         "no_declaran_su_tiempo_de_respuesta": total - len(con),
+        # El contrafactual del criterio estrecho: cuántos traerían una cifra si se aceptara
+        # cualquier número de tiempo de la prosa. NO es una medición del plazo de los
+        # trámites — es la medida de lo que el criterio descarta, y va con su nombre para que
+        # nadie la lea como lo otro.
+        "mencionan_alguna_cifra_de_tiempo_sin_anclar": sum(
+            1 for t in tramites if t.menciona_cifra_de_tiempo),
         "pct_declaran_sobre_los_del_catalogo": (
             round(100.0 * len(con) / total, 1) if total else None),
         "pct_no_declaran_sobre_los_del_catalogo": (
