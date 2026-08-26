@@ -12,6 +12,7 @@ import logging
 from typing import Any, Callable, Dict, List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi.responses import FileResponse
 from sqlalchemy.orm import Session
 
 from modules.law_intel.agente_fuentes import MAX_POR_CORRIDA, barrer
@@ -274,6 +275,41 @@ def pendiente_(expediente_id: str,
                                  horizonte)
     return {"instrumento": {"id": e.id, "norma": e.norma},
             **pendiente_publicable(pendientes, horizonte)}
+
+
+@router.get("/{expediente_id}/informe-abierto",
+            summary="Informe ABIERTO de una ley (PDF o Word) — se comparte sin destinatario")
+def _hoy() -> str:
+    import datetime as _d
+    return _d.date.today().isoformat()
+
+
+def informe_abierto_(expediente_id: str,
+                     fmt: str = Query("pdf", pattern="^(pdf|docx)$"),
+                     db: Session = Depends(get_db),
+                     _: User = Depends(get_current_user)) -> FileResponse:
+    """El tercer entregable del producto, y el único que se comparte.
+
+    Dice qué ordena la norma, qué se mide de ella y de dónde sale cada cifra. **No publica
+    el veredicto de cumplimiento**: ese análisis se prepara por encargo y va en el dictamen.
+
+    Casi todo se computa del expediente y del registro, así que no consume generación de IA
+    y dos descargas del mismo día dan lo mismo salvo que el dato haya cambiado.
+    """
+    e = _expediente(expediente_id)
+    from modules.law_intel.informe_abierto import render
+
+    ruta = render(expediente_id, db=db, fmt=fmt)
+    # El nombre sale del constructor único del repo, con la NORMA como sujeto. Sin eso, dos
+    # leyes distintas producían el mismo archivo —`law_sdq_evaluacion_de_leyes_<sello>`— y la
+    # segunda descarga pisaba a la primera: el sujeto es lo que las distingue.
+    from shared.products.filenames import report_filename
+    nombre = report_filename(naturaleza="Informe-Abierto", sector_key="law",
+                             sujeto=e.norma, periodo=_hoy(), fmt=fmt)
+    return FileResponse(
+        path=ruta, filename=nombre,
+        media_type=("application/pdf" if fmt == "pdf" else
+                    "application/vnd.openxmlformats-officedocument.wordprocessingml.document"))
 
 
 @router.get("/{expediente_id}/campo")
