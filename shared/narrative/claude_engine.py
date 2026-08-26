@@ -501,6 +501,27 @@ THIN_TEMPLATES = {
         "No recalcules ninguna cifra: todas vienen resueltas. Si una relación no está servida, "
         "expresala en palabras sin número."
     ),
+    "revision_anual": (
+        "Escribí la REVISIÓN ANUAL de esta entidad financiera dominicana.\n"
+        "Contexto:\n{context}\n\n"
+        "Máximo 450 palabras. El sujeto es UNA entidad y el período es UN AÑO CALENDARIO.\n\n"
+        "EL SCORE DEL AÑO ES EL DEL CIERRE. No existe un score anual promediado y no debés "
+        "insinuar que exista: 'regla_del_score' lo declara y esa regla no se negocia.\n\n"
+        "EL CAMINO IMPORTA TANTO COMO EL CIERRE. Si 'camino.valle_intermedio' es verdadero, el "
+        "peor momento del año NO fue diciembre: la entidad cayó y se recuperó, y una lectura "
+        "que solo compare apertura contra cierre estaría contando un año que no ocurrió. "
+        "Decilo explícitamente y nombrá el trimestre del valle.\n\n"
+        "'balance' trae apertura CONTRA cierre de cada indicador. Son STOCKS: su valor de "
+        "diciembre no dice nada del año, lo que dice algo es contra qué nivel arrancó. Elegí "
+        "los pocos que MOVIERON la calificación en vez de recorrerlos todos.\n\n"
+        "'posicion' es el percentil al abrir y al cerrar: responde si mejoró contra sí misma o "
+        "contra el mercado, que son cosas distintas. Si la entidad subió y su percentil bajó, "
+        "el mercado subió más — decilo así.\n\n"
+        "'cortes_faltantes' se DECLARA si no está vacío: las anclas del camino son de lo que se "
+        "vio, no del año entero.\n\n"
+        "No recalcules ninguna cifra: todas vienen resueltas. Si una relación no está servida, "
+        "expresala en palabras sin número."
+    ),
     "sector_outlook": (
         "Explica el FUNDAMENTO del atractivo de inversión (IAI) de este sector.\n"
         "Contexto:\n{context}\n\n"

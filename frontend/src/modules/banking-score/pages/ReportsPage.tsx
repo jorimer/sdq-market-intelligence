@@ -20,7 +20,13 @@ import {
 } from "../api";
 import { mensajeDeError } from "../../../shared/api/errores";
 
-const REPORT_TYPE_VALUES = ["full_rating", "scorecard", "communique"];
+// Los informes de ENTIDAD que se ofrecen. `revision_anual` mide un AÑO CALENDARIO y no un
+// corte: el backend lee el AÑO del período y exige que haya cerrado (sin diciembre es un
+// tramo, no un año). Lo vigila `test_regla_informe_de_entidad_pedible_desde_la_ui.py`.
+const REPORT_TYPE_VALUES = ["full_rating", "scorecard", "communique", "revision_anual"];
+
+/** Informes de entidad cuya unidad es el AÑO: el selector muestra cuál va a resumir. */
+const REPORT_TYPE_ES_ANUAL: Record<string, boolean> = { revision_anual: true };
 
 const STATUS_TONE: Record<string, "ok" | "warn" | "alert" | "muted"> = {
   completed: "ok",
@@ -114,9 +120,17 @@ export function ReportsPage() {
           <div className="w-48">
             <label className="block text-xs font-medium text-muted mb-1">{t("banking.repTypeLabel")}</label>
             <select value={reportType} onChange={(e) => setReportType(e.target.value)} className="field">
-              {REPORT_TYPE_VALUES.map((value) => (
-                <option key={value} value={value}>{t(`banking.repType.${value}`, value)}</option>
-              ))}
+              {REPORT_TYPE_VALUES.map((value) => {
+                // Un informe ANUAL descarta el trimestre del selector de período: se muestra
+                // el año que va a resumir para que la relación se vea antes de generarlo.
+                const anio = REPORT_TYPE_ES_ANUAL[value] ? anioDelInforme(periodEnd) : null;
+                const etiqueta = t(`banking.repType.${value}`, value);
+                return (
+                  <option key={value} value={value}>
+                    {anio ? `${etiqueta} · ${anio}` : etiqueta}
+                  </option>
+                );
+              })}
             </select>
           </div>
           <button onClick={generate} disabled={!bankId || generating || blocked} className="btn btn-primary">

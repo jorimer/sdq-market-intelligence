@@ -65,6 +65,7 @@ REPORT_TYPE_LABELS = {
     "criteria": "Criterios de Calificación",
     "sector_outlook": "Perspectiva Sectorial",
     "anuario": "Anuario",
+    "revision_anual": "Revisión Anual",
 }
 
 # Nivel comercial (metadato de portada/header) → etiqueta ES. Sin este mapeo, el valor
@@ -96,6 +97,7 @@ NARRATIVE_SECTION_TITLES = {
     "trend_analysis": "Análisis de Tendencias",
     "sector_outlook": "Perspectiva Sectorial",
     "anuario": "Anuario",
+    "revision_anual": "Revisión Anual",
     "system_overview": "Panorama del Sistema",
     "scenario_analysis": "Análisis de Escenarios",
     "limitations": "Limitaciones",
@@ -670,6 +672,81 @@ def _build_banda_del_periodo(trajectories: Dict, styles) -> List:
     return [Paragraph(texto, styles["SDQSmall"]), Spacer(1, 0.12 * inch)]
 
 
+def _build_revision_anual_tables(rev: Dict, styles) -> List:
+    """Las tablas del AÑO de una entidad: el camino, las bandas y el balance apertura/cierre.
+
+    Se imprimen porque son el hecho que la foto de diciembre NO da. Dos entidades con el mismo
+    score de cierre —una estable, otra que cayó y se recuperó— tienen el mismo informe al
+    corte y años distintos; la tabla del camino es lo que las separa.
+
+    El balance lleva la APERTURA al lado del cierre a propósito: solvencia, apalancamiento y
+    liquidez son STOCKS, y su valor de diciembre no dice nada del año sin el nivel del que
+    partió. Es el dato que hasta ahora no existía en ningún informe.
+    """
+    if not rev:
+        return []
+    elements: List = []
+
+    serie = rev.get("serie") or []
+    if serie:
+        elements.append(Paragraph(f"El año {rev.get('anio', '')}", styles["SDQHeading"]))
+        rows = [["Corte", "Score", "Banda"]]
+        rows += [[str(p.get("corte", ""))[:7],
+                  f"{p['score']:.2f}" if isinstance(p.get("score"), (int, float)) else "—",
+                  str(p.get("banda") or "—")] for p in serie]
+        elements.append(_branded_table(rows, [1.4 * inch, 1.1 * inch, 2.3 * inch],
+                                       styles, font_size=9.5, padding=5))
+        ap, ci = rev.get("apertura") or {}, rev.get("cierre") or {}
+        nota = (f"Apertura {ap.get('score', '—')} → cierre {ci.get('score', '—')} "
+                f"({rev.get('cambio_score', 0):+.2f} puntos). "
+                "El score del año es el DEL CIERRE: no se promedian los trimestres.")
+        cam = rev.get("camino") or {}
+        if cam.get("lectura"):
+            nota += " " + str(cam["lectura"]) + "."
+        elements.append(Spacer(1, 0.08 * inch))
+        elements.append(Paragraph(nota, styles["SDQSmall"]))
+        elements.append(Spacer(1, 0.25 * inch))
+
+    cambios = rev.get("cambios_de_banda") or []
+    if cambios:
+        elements.append(Paragraph("Cambios de banda durante el año", styles["SDQHeading"]))
+        rows = [["Corte", "Desde", "Hasta"]]
+        rows += [[str(c.get("corte", ""))[:7], str(c.get("desde") or "—"),
+                  str(c.get("hasta") or "—")] for c in cambios]
+        elements.append(_branded_table(rows, [1.4 * inch, 1.9 * inch, 1.9 * inch],
+                                       styles, font_size=9.5, padding=5))
+        elements.append(Spacer(1, 0.25 * inch))
+
+    bal = rev.get("balance") or []
+    if bal:
+        elements.append(Paragraph("Balance: apertura contra cierre", styles["SDQHeading"]))
+        rows = [["Indicador", "Apertura", "Cierre", "Cambio"]]
+        for f in bal:
+            rotulo, cierre_txt = _rotulo_y_valor(str(f.get("indicador", "")), f.get("cierre"))
+            _, apertura_txt = _rotulo_y_valor(str(f.get("indicador", "")), f.get("apertura"))
+            cambio = f.get("cambio")
+            rows.append([rotulo, apertura_txt, cierre_txt,
+                         f"{cambio:+.2f}" if isinstance(cambio, (int, float)) else "—"])
+        elements.append(_branded_table(rows, [2.3 * inch, 1.2 * inch, 1.2 * inch, 1.1 * inch],
+                                       styles, font_size=9.5, padding=5))
+        elements.append(Spacer(1, 0.08 * inch))
+        elements.append(Paragraph(
+            "Los indicadores de balance son fotos a cada corte: el nivel de diciembre no "
+            "describe el año sin el nivel del que partió.", styles["SDQSmall"]))
+        elements.append(Spacer(1, 0.25 * inch))
+
+    faltantes = rev.get("cortes_faltantes") or []
+    if faltantes:
+        # Se DECLARA: el pico de una serie con huecos es el pico de lo que se vio, no el del
+        # año, y ocultarlo haría pasar una lectura parcial por completa.
+        elements.append(Paragraph(
+            "Cortes ausentes en el año: " + ", ".join(str(c) for c in faltantes)
+            + ". Las anclas del camino son de los cortes disponibles, no del año completo.",
+            styles["SDQSmall"]))
+        elements.append(Spacer(1, 0.2 * inch))
+    return elements
+
+
 def _build_anuario_tables(anuario: Dict, styles) -> List:
     """Las tablas del ANUARIO: el año del sistema, por tipo y los cambios de banda.
 
@@ -973,6 +1050,7 @@ async def generate_pdf_report(
     band_distribution: Optional[Dict[str, int]] = None,
     peer_block: Optional[Dict] = None,
     anuario: Optional[Dict] = None,
+    revision: Optional[Dict] = None,
 ) -> str:
     """Generate a branded PDF report and return the file path.
 
@@ -1063,6 +1141,11 @@ async def generate_pdf_report(
     # documento, no un anexo: el anuario no analiza una entidad, analiza el año.
     if anuario:
         body.extend(_build_anuario_tables(anuario, styles))
+
+    # 3a-quater. REVISIÓN ANUAL — el año de la ENTIDAD. Mismo criterio que el anuario: son
+    # el sujeto del documento, no un anexo.
+    if revision:
+        body.extend(_build_revision_anual_tables(revision, styles))
 
     # 3b. Pulse — distribución del sistema por banda (opt-in, anonimizado).
     if band_distribution:
