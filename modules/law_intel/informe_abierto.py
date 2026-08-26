@@ -84,6 +84,136 @@ OPERACION_QUE_ALIMENTA = {
 
 _MAX_FILAS_INDICADORES = 60
 
+#: Cómo se dice en prosa cada periodicidad. El vocabulario del expediente es nuestro; el
+#: lector externo lee «cada cuatro años», no «cuatrienal».
+CADA_CUANTO = {
+    "anual": "cada año",
+    "semestral": "cada seis meses",
+    "cuatrienal": "cada cuatro años",
+    "quinquenal": "cada cinco años",
+    "continua": "de forma continua",
+    "unica": "por única vez",
+}
+
+
+def _fechas_del_plazo(plazo: Optional[Dict[str, Any]]) -> str:
+    """Cuándo vence, en prosa y sin jerga de tipos.
+
+    Se imprime la LISTA completa cuando la ley fija fechas ciertas —2016, 2020, 2024, 2028—
+    porque ahí está el hallazgo: se ve de un vistazo cuántas pasaron.
+    """
+    if not plazo:
+        return "—"
+    tipo, vence = plazo.get("tipo"), plazo.get("vence")
+    if tipo == "fecha_anual" and isinstance(vence, str) and "-" in vence:
+        mes, dia = vence.split("-")[:2]
+        meses = ("enero", "febrero", "marzo", "abril", "mayo", "junio", "julio", "agosto",
+                 "septiembre", "octubre", "noviembre", "diciembre")
+        try:
+            return f"antes del {int(dia)} de {meses[int(mes) - 1]}"
+        except (ValueError, IndexError):                   # pragma: no cover - defensivo
+            return str(vence)
+    if isinstance(vence, (list, tuple)):
+        return ", ".join(str(v)[:4] for v in vence)
+    return str(vence) if vence else "—"
+
+
+#: Escalas cuyo «meta» NO es un valor contra el cual juzgar. Una meta REDACTADA —«todos los
+#: que la Administración exija»— no fija un corte: es la forma en que un expediente declara
+#: que la ley no puso cifra.
+_ESCALAS_SIN_CORTE = ("redactada", "sin_meta")
+
+
+def _cortes_de_las_metas(exp: Any) -> List[str]:
+    """Los años en que la ley fija metas JUZGABLES, en orden.
+
+    Salen de las metas de los indicadores y no de una lista escrita: la ley fija sus cortes
+    en un anexo, y transcribirlos acá los desincronizaría del día que se corrija uno.
+
+    **Las metas redactadas no cuentan, y el caso lo destapó un test.** La 167-21 tiene un
+    único indicador con la misma frase bajo 2025 y 2030 —puesta ahí justamente para declarar
+    que la ley NO fijó una cifra—, y contarlas producía «la ley fija sus metas por corte:
+    2025 y 2030» sobre una norma que no fija ninguna, seguido de una advertencia sobre
+    incumplir un corte que no existe.
+    """
+    anios = {a for i in getattr(exp, "indicadores", ()) or ()
+             if str(getattr(i, "escala", "")) not in _ESCALAS_SIN_CORTE
+             for a in (i.metas or {})}
+    return sorted(anios)
+
+
+def _cuando_manda_la_ley_medir(exp: Any, obs: List[Dict[str, Any]]
+                               ) -> Optional[Tuple[str, Optional[Tuple[str, List[List[str]]]]]]:
+    """Qué calendario de evaluación fijó la propia ley, y si se está cumpliendo.
+
+    **Es la respuesta buena a «cuándo se mide esta ley», y no la agenda de nuestros
+    conectores.** El primer intento iba a publicar cada cuánto relee el dato nuestro sync,
+    que es un detalle de implementación nuestro: al lector le importa cada cuánto manda la
+    NORMA evaluarse, porque eso es exigible y lo otro no.
+
+    Devuelve `None` cuando la ley no fija ninguno —que es información y se dice en otra
+    parte, no un hueco que se rellene con nuestra cadencia—.
+    """
+    hitos = [o for o in obs if o.get("hito_de_medicion")]
+    cortes = _cortes_de_las_metas(exp)
+    if not hitos and not cortes:
+        return None
+
+    partes: List[str] = []
+    if cortes:
+        partes.append(
+            f"La ley fija sus metas por corte: {_lista_en_prosa(cortes)}. La evaluación de "
+            f"un indicador se hace contra el corte que corresponda, y no contra el valor "
+            f"final: un indicador que va camino a su meta de {cortes[-1]} puede estar "
+            f"incumpliendo la de {cortes[-2] if len(cortes) > 1 else cortes[0]}.")
+    if hitos:
+        cumplidos = [o for o in hitos if o.get("estado") == "cumplida"]
+        incumplidos = [o for o in hitos if o.get("estado") == "incumplida"]
+        partes.append(
+            f"Además, la norma fija {_plural(len(hitos), 'un momento', f'{len(hitos)} momentos')} "
+            f"en que debe evaluarse a sí misma, con deudor y con fecha. La tabla siguiente "
+            f"los consigna.")
+        if incumplidos and cumplidos:
+            # El contraste ES el hallazgo y se dice en prosa, no se deja deducir de la tabla.
+            #
+            # Y el recuento nombra los TRES grupos, incluido el que no está vencido. Una
+            # primera versión decía «uno consta cumplido y otro no» sobre tres hitos: el
+            # tercero desaparecía de la frase, y un hito que todavía no vence es
+            # exactamente el que no hay que dar por perdido.
+            otros = len(hitos) - len(cumplidos) - len(incumplidos)
+            frase = (f"De {_plural(len(hitos), 'ese momento', f'esos {len(hitos)} momentos')}, "
+                     f"{len(cumplidos)} {_plural(len(cumplidos), 'consta cumplido', 'constan cumplidos')} y "
+                     f"{len(incumplidos)} no")
+            if otros:
+                frase += (f"; {_plural(otros, 'el restante todavía no vence', f'los {otros} restantes todavía no vencen')}")
+            partes.append(
+                frase + ". La distinción entre los dos primeros no es de grado: reportar el "
+                "avance y revisar la estrategia son deberes distintos, y el segundo exige "
+                "evaluación externa.")
+
+    tabla = None
+    if hitos:
+        filas: List[List[str]] = [["Artículo", "Qué manda", "Cada cuánto", "Cuándo vence",
+                                   "Estado"]]
+        for o in sorted(hitos, key=lambda x: int(x.get("articulo") or 0)):
+            filas.append([
+                str(o.get("articulo") or "—"),
+                _recortar(str(o.get("deber") or ""), 58),
+                CADA_CUANTO.get(str(o.get("periodicidad") or ""), "por una sola vez"),
+                _fechas_del_plazo(o.get("plazo")),
+                ESTADO_EN_PROSA.get(str(o.get("estado")), str(o.get("estado"))),
+            ])
+        tabla = ("Los momentos en que la ley manda evaluarse", filas)
+    return ("\n\n".join(partes), tabla)
+
+
+def _lista_en_prosa(xs: Sequence[Any]) -> str:
+    """`a, b y c`. Una lista con «y» final se lee; una separada por comas se escanea."""
+    ss = [str(x) for x in xs]
+    if len(ss) <= 1:
+        return ss[0] if ss else ""
+    return ", ".join(ss[:-1]) + " y " + ss[-1]
+
 
 def _tabla_de_obligaciones(publicable: Dict[str, Any]) -> Optional[Tuple[str, List[List[str]]]]:
     obs = publicable.get("obligaciones") or []
@@ -526,7 +656,9 @@ def construir(expediente_id: str, db: Any = None) -> Dict[str, Any]:
            "resumen": _resumen_obligaciones(expediente_id),
            "obligaciones": [
                {"articulo": o.articulo, "deber": o.deber, "deudor": o.deudor,
-                "estado": o.estado, "consecuencia": o.consecuencia}
+                "estado": o.estado, "consecuencia": o.consecuencia,
+                "hito_de_medicion": o.hito_de_medicion, "periodicidad": o.periodicidad,
+                "plazo": o.plazo}
                for o in cargar_obligaciones(expediente_id)]}
     ver = _verificabilidad(expediente_id)
     dec = _declaraciones(expediente_id)
@@ -543,6 +675,11 @@ def construir(expediente_id: str, db: Any = None) -> Dict[str, Any]:
     juridica = lectura_juridica.prosa(expediente_id)
     resumen_obs: Dict[str, Any] = obs.get("resumen") or {}
     lista_obs: List[Dict[str, Any]] = list(obs.get("obligaciones") or [])
+    _calendario = _cuando_manda_la_ley_medir(exp, lista_obs)
+    if _calendario and _calendario[1] is not None:
+        # Va pegada a la tabla de obligaciones: las dos hablan de lo mismo y separarlas
+        # obliga al lector a volver atrás.
+        tablas.insert(min(2, len(tablas)), _calendario[1])
     con_consecuencia = sum(1 for o in lista_obs if o.get("consecuencia"))
     # Enteros explícitos: los resúmenes se tipan como `Dict[str, object]` y de ahí no sale
     # una concordancia comprobable — ni aritmética.
@@ -562,9 +699,21 @@ def construir(expediente_id: str, db: Any = None) -> Dict[str, Any]:
         "lo_que_ordena": (
             f"El instrumento contiene {resumen_obs.get('total', 0)} obligaciones con deudor y "
             f"plazo identificables. La tabla siguiente consigna su estado.\n\n"
-            f"{con_consecuencia} de ellas tienen una consecuencia jurídica asignada a su "
-            f"incumplimiento. El resto no: la norma manda hacer algo y no dice qué ocurre si "
-            f"no se hace.\n\n{ADVERTENCIA_DEL_REGISTRO}"),
+            + (
+                # El caso CERO se dice como lo que es —un hallazgo sobre la norma— y no
+                # interpolando el contador en una frase escrita para el caso general:
+                # «0 de ellas tienen una consecuencia… El resto no» no concuerda, y además
+                # entierra lo interesante, que es que la ley no trae ningún mecanismo.
+                "Ninguna de ellas trae una consecuencia jurídica asignada a su "
+                "incumplimiento: la norma manda hacer cosas y no dice qué ocurre si no se "
+                "hacen."
+                if con_consecuencia == 0 else
+                f"{con_consecuencia} de ellas "
+                f"{_plural(con_consecuencia, 'tiene', 'tienen')} una consecuencia jurídica "
+                f"asignada a su incumplimiento. "
+                f"{_plural(resumen_obs.get('total', 0) - con_consecuencia, 'La restante no', 'Las restantes no')}: "
+                f"la norma manda hacer algo y no dice qué ocurre si no se hace.")
+            + f"\n\n{ADVERTENCIA_DEL_REGISTRO}"),
         # La lectura jurídica va junto a la tabla y no al final: dice de qué rango es cada
         # disposición y de dónde sale lo que exige, y sin eso la tabla se lee como si todo
         # lo que el informe mide lo mandara la ley.
@@ -588,6 +737,7 @@ def construir(expediente_id: str, db: Any = None) -> Dict[str, Any]:
             "coincidencia de nombre sin coincidencia de valor no identifica la magnitud, y "
             "una coincidencia de valor sin coincidencia de concepto tampoco."),
         **({"lo_que_declara_el_emisor": _prosa_de_declaraciones(dec)} if dec["total"] else {}),
+        **({"cuando_manda_la_ley_medir": _calendario[0]} if _calendario else {}),
         **({"como_se_obtuvo": anexo.metodologia} if anexo.metodologia else {}),
         **({"cuando_se_actualiza": _actualiza} if _actualiza else {}),
         "alcance": (
@@ -612,7 +762,8 @@ def construir(expediente_id: str, db: Any = None) -> Dict[str, Any]:
     }
 
 
-SECCIONES_EN_ORDEN = ("que_es", "lo_que_ordena", "lectura_juridica", "lo_que_se_mide",
+SECCIONES_EN_ORDEN = ("que_es", "lo_que_ordena", "lectura_juridica",
+                      "cuando_manda_la_ley_medir", "lo_que_se_mide",
                       "lo_que_declara_el_emisor", "como_se_obtuvo", "cuando_se_actualiza",
                       "alcance")
 
@@ -623,7 +774,11 @@ TITULOS = {
     "lo_que_se_mide": "Qué se mide, y cómo se verifica",
     "lo_que_declara_el_emisor": "Qué declara el organismo sobre su propia información",
     "como_se_obtuvo": "Cómo se obtuvo la medición",
-    "cuando_se_actualiza": "Cuándo se actualiza este informe",
+    # Dos preguntas distintas, y el orden importa: primero cuándo manda la NORMA medir
+    # —que es exigible— y después cada cuánto relee el dato esta plataforma, que es un
+    # detalle nuestro. El título de la segunda lo dice para que no se confundan.
+    "cuando_manda_la_ley_medir": "Cuándo manda la ley que se mida",
+    "cuando_se_actualiza": "Cuándo vuelve a leerse el dato de este informe",
     "alcance": "Alcance y limitaciones",
 }
 
