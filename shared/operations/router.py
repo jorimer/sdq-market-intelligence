@@ -145,3 +145,37 @@ async def llm_spend(
                 "llamadas": spend.spend_detail(db, desde=desde, hasta=hasta,
                                                trigger=trigger)}
     return spend.spend_summary(db, desde=desde, hasta=hasta)
+
+
+@router.get("/marcas-del-guard", summary="Cifras que el guard numérico marcó (y sobrevivieron)")
+async def marcas_del_guard(
+    desde: Optional[date] = Query(
+        None, description="Fecha inicial inclusive (AAAA-MM-DD). Por defecto, 30 días atrás"),
+    hasta: Optional[date] = Query(
+        None, description="Fecha final INCLUSIVE del día completo. Por defecto, hoy"),
+    modulo: Optional[str] = Query(
+        None, description="Acotar a un eje (banking_score, insurance, …)"),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Qué cifras marcó el guard, para que el patrón se vea antes de que lo vea un cliente.
+
+    Una marca del guard puede ser dos cosas opuestas: una cifra INVENTADA —su razón de ser— o
+    una cifra REAL dicha en otra forma, que es un falso veto y que en su variante silenciosa
+    borra del informe una observación verdadera sin producir ningún error.
+
+    Hasta acá las marcas vivían en un `logger.warning`, que no es evento de Sentry y que no
+    mira nadie, y en un contador que dice cuántas fueron pero no cuáles. Los dos falsos vetos
+    de agosto de 2026 se descubrieron porque el dueño los vio en pantalla: un informe roto por
+    cada dato que ya estaba en la base.
+
+    Se agrupa por CIFRA a propósito: una que se repite entre ejes y períodos es la firma de un
+    falso positivo estructural; una que aparece sola es lo que el guard vino a atrapar.
+    """
+    from shared.observability import marcas_del_guard as mg
+
+    _require_admin(current_user)
+    if desde and hasta and desde > hasta:
+        raise HTTPException(status_code=400,
+                            detail="El rango está invertido: 'desde' es posterior a 'hasta'.")
+    return mg.marcas_del_guard(db, desde=desde, hasta=hasta, modulo=modulo)
