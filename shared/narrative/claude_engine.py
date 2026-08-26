@@ -1939,7 +1939,7 @@ class NarrativeEngine:
         recording figures still unverified (if the regen also failed) — best-effort, never
         blanks the insight."""
         from shared.narrative.numeric_guard import (
-            CORRECTION_NOTICE, DIRECTION_CORRECTION_NOTICE,
+            CORRECTION_NOTICE, DIRECTION_CORRECTION_NOTICE, fragmento_alrededor,
             deterministic_direction_errors, deterministic_uncited_figures,
             deterministic_unsupported, verify_figures)
 
@@ -2042,6 +2042,16 @@ class NarrativeEngine:
                     detail={"guard_flags": len(result.guard_unsupported),
                             "guard_marcas": [str(h)[:180]
                                              for h in result.guard_unsupported[:8]],
+                            # Y la FRASE en la que el modelo usó cada cifra marcada. Con la
+                            # marca sola —«38 %: no coincide»— no se distingue una invención
+                            # de una cifra real dicha en otra forma, que son los dos casos
+                            # opuestos que este guard confunde; y la única manera de verlo
+                            # era regenerar el informe y perderlo otra vez, a 88-264 s por
+                            # intento de diagnóstico.
+                            "guard_fragmentos": [
+                                {"cifra": str(h)[:40],
+                                 "frase": fragmento_alrededor(result.text, str(h))[:220]}
+                                for h in result.guard_unsupported[:4]],
                             "truncada": result.truncated})
         return result
 

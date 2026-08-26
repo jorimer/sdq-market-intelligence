@@ -98,12 +98,24 @@ def marcas_del_guard(db: Session, desde: Optional[date] = None,
         con_marca += 1
         if not marcas:
             marcas = [f"(sin detalle: {det.get('guard_flags')} marca(s) previas al registro)"]
+        # La FRASE en que el modelo usó cada cifra. Es lo que distingue una invención de una
+        # cifra real dicha en otra forma —los dos casos opuestos que el guard confunde— y sin
+        # ella la única manera de saberlo era regenerar el informe y perderlo otra vez.
+        frases = {str(f.get("cifra", ""))[:40]: str(f.get("frase") or "")
+                  for f in (det.get("guard_fragmentos") or []) if isinstance(f, dict)}
         for m in marcas:
             clave = _cifra_de(str(m))
             e = por_cifra.setdefault(clave, {
                 "cifra": clave, "veces": 0, "modulos": set(), "plantillas": set(),
-                "ejemplo": str(m)[:180], "ultima_vez": None,
+                "ejemplo": str(m)[:180], "frases": [], "ultima_vez": None,
             })
+            frase = frases.get(str(m)[:40])
+            if frase and frase not in e["frases"]:
+                # Se guardan VARIAS: la misma cifra usada en dos frases distintas dice algo
+                # que una sola no dice — si el modelo la repite en el mismo sentido, es una
+                # derivación que le falta al contexto; si la usa para cosas distintas, es
+                # relleno.
+                e["frases"].append(frase[:220])
             e["veces"] += 1
             if f.module:
                 e["modulos"].add(f.module)
@@ -131,5 +143,6 @@ def marcas_del_guard(db: Session, desde: Optional[date] = None,
             "modelo lo escribe (pasó con «69 %» por redondeo y con «132 %», que era la razón "
             "1,32 servida). Una cifra que aparece una sola vez es lo que el guard vino a "
             "atrapar. Ante una marca, la primera pregunta es si esa cifra es una FORMA de "
-            "algo que sí servimos."),
+            "algo que sí servimos — y para contestarla está `frases`, que muestra CÓMO la "
+            "usó el modelo sin tener que regenerar el informe."),
     }
