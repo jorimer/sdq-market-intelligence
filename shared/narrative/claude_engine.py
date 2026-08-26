@@ -1544,34 +1544,31 @@ def degraded_sections(narratives: dict, sections) -> list:
     return [s for s in sections if is_static_fallback_text(n.get(s))]
 
 
-def secciones_con_cifra_sin_respaldo(narratives: dict, sections, context: dict) -> dict:
-    """`{sección: [hallazgos]}` de las secciones cuyo texto AFIRMA cifras que el contexto no
-    sostiene.
+def _depositar_cifras(template: str, result: "NarrativeResult") -> None:
+    """Deja en el canal las cifras que el motor marcó y que sobrevivieron a la reparación.
 
-    Es el gemelo de `degraded_sections` para el otro modo de entregar un informe malo. Aquél
-    detecta una sección HUECA —fácil de ver—; éste detecta una sección LLENA con un número que
-    nadie puede respaldar, que es peor: se lee como un hallazgo y viaja citado.
+    Un solo punto de depósito, y a propósito: el veredicto de ``guard_unsupported`` se fija en
+    TRES ramas distintas —el lazo agotado, la excepción del reintento y el HIT de caché— y
+    depositar en cada una es exactamente cómo se pierde una. Acá se llama cuando el valor ya
+    es definitivo.
 
-    **Solo corre los checks DETERMINISTAS**, y eso es una limitación que hay que declarar: son
-    gratis y mecánicos, así que pueden vivir en la ruta de entrega sin costo ni latencia ni
-    variabilidad. El juez semántico del motor ve cosas que éstos no —y por eso el motor además
-    se niega a propagar a la caché compartida lo que él marcó—. Los dos filtros se necesitan:
-    ninguno cubre al otro.
+    Lee ``guard_cifras`` y NO ``guard_unsupported``: aquél concatena cifras y direcciones
+    para el log, y separarlas por el texto del hallazgo es frágil — el de dirección dice
+    «pero es al revés», no «invertida».
     """
-    from shared.narrative.numeric_guard import (deterministic_uncited_figures,
-                                                deterministic_unsupported)
+    marcas = [str(h) for h in (result.guard_cifras or [])]
+    if not marcas:
+        return
+    from shared.narrative.cifras_pendientes import registrar
+    registrar(template, marcas)
 
-    n, ctx = narratives or {}, context or {}
-    out = {}
-    for s in sections:
-        texto = n.get(s)
-        if not isinstance(texto, str) or not texto.strip():
-            continue
-        hallazgos = deterministic_unsupported(ctx, texto) + deterministic_uncited_figures(ctx, texto)
-        if hallazgos:
-            out[s] = hallazgos
-    return out
 
+# `secciones_con_cifra_sin_respaldo` VIVÍA ACÁ y se eliminó el 2026-08-26. Re-juzgaba el texto
+# en la superficie de entrega, con el snapshot en la mano en vez del contexto que lo generó, y
+# ésa era la causa de tres informes vetados con cifras REALES. No se deja «por si acaso»: una
+# función que solo puede usarse mal es la forma en que el defecto vuelve. El hallazgo llega por
+# `shared/narrative/hallazgos_pendientes`, desde el motor, que juzgó con el contexto correcto y
+# además con el juez semántico. Lo vigila `test_regla_nadie_re_juzga_a_ciegas.py`.
 
 #: Cuántas veces se le pide al modelo que corrija antes de darse por vencido. Era UNA sola.
 #: Con la lectura correcta ya entregada en el aviso (ver `DIRECTION_CORRECTION_NOTICE`), un
@@ -1695,6 +1692,11 @@ class NarrativeResult:
     # Cifras del output que el guardrail numérico no pudo trazar al contexto tras
     # regenerar (cerebro). Vacío = verificado limpio o ruta sin guardrail.
     guard_unsupported: list = field(default_factory=list)
+    #: SOLO las cifras sin respaldo. `guard_unsupported` concatena cifras y direcciones para
+    #: el log, y separarlas por el TEXTO del hallazgo es frágil —el de dirección dice «pero es
+    #: al revés», no «invertida», y filtrar por la palabra equivocada mandaba una relación
+    #: invertida por el canal de las cifras—. Cada hallazgo viaja por su canal con su política.
+    guard_cifras: list = field(default_factory=list)
     # True cuando el modelo se quedó SIN PRESUPUESTO de tokens: el texto está cortado, no
     # terminado. Un PDF entregado a mitad de oración —pasó con Perspectiva Sectorial— es
     # peor que un error visible: parece el documento final.
@@ -1796,6 +1798,7 @@ class NarrativeEngine:
                     model_used=str(data.get("model_used") or ""),
                     from_cache=True,
                     guard_unsupported=list(data.get("guard_unsupported") or []),
+                    guard_cifras=list(data.get("guard_cifras") or []),
                 )
                 self._cache[key] = (result, time.time())  # promover a L1
                 return result
@@ -1804,17 +1807,30 @@ class NarrativeEngine:
         return None
 
     def _set_cache(self, key: str, result: NarrativeResult):
-        self._cache[key] = (result, time.time())
         if result.guard_unsupported:
-            # Lo que el guard marcó NO viaja a la caché compartida. Escribirlo ahí es cómo un
-            # texto con una cifra sin respaldo sobrevive a la corrida que lo produjo y se
-            # sirve —idéntico y en silencio— a todos los informes que vengan: la caché no
-            # tiene TTL. Queda en L1 por-worker para no re-pagar la generación dentro de la
-            # misma corrida, que de todos modos el gate del ensamblador va a frenar.
-            logger.warning("Narrativa con %d hallazgo(s) del guard: no se propaga a la caché "
-                           "compartida (%s)", len(result.guard_unsupported),
+            # Lo que el guard marcó NO SE CACHEA EN NINGÚN NIVEL, ni siquiera en L1.
+            #
+            # En la caché compartida es evidente: no tiene TTL, así que el texto sobreviviría
+            # a la corrida que lo produjo y se serviría idéntico y en silencio para siempre.
+            #
+            # En L1 costó más verlo, y era peor de lo que parecía. El veto le dice al usuario
+            # «reintente en unos minutos, el texto se regenera». Con el resultado marcado en
+            # L1, el reintento que caía en el MISMO worker devolvía el HIT: mismo veto, misma
+            # cifra, en 4,7 s en vez de 264 s. Medido en producción contra el SDQ Rating de
+            # Asociación Bonao al 2025-03-31. El mensaje prometía una regeneración que no
+            # ocurría, y el informe quedaba muerto hasta que expirara el TTL de L1 o el
+            # request cayera en otro worker — o sea, al azar.
+            #
+            # La justificación anterior («no re-pagar la generación dentro de la misma
+            # corrida») no compraba nada: la clave incluye contexto y plantilla, así que
+            # dentro de una corrida se pide UNA vez. Lo único que compraba era volver
+            # inservible el reintento.
+            logger.warning("Narrativa con %d hallazgo(s) del guard: NO se cachea (ni L1 ni "
+                           "compartida) para que el reintento regenere de verdad (%s)",
+                           len(result.guard_unsupported),
                            "; ".join(map(str, result.guard_unsupported))[:200])
             return
+        self._cache[key] = (result, time.time())
         if result.model_used == STATIC_FALLBACK_MODEL:
             # El fallback estático es un degradado transitorio (sin API key, error,
             # presupuesto): se cachea solo por-worker, no se propaga a los demás.
@@ -1826,6 +1842,7 @@ class NarrativeEngine:
                 "cost_estimate": result.cost_estimate,
                 "model_used": result.model_used,
                 "guard_unsupported": result.guard_unsupported,
+                "guard_cifras": result.guard_cifras,
             }, ensure_ascii=False)
             cache_set(_L2_NS + key, payload, CACHE_TTL_SECONDS)
         except (TypeError, ValueError) as e:  # payload no serializable — solo L1
@@ -1988,6 +2005,7 @@ class NarrativeEngine:
                     if not (bad or wrong_dir):
                         break
                 result.guard_unsupported = bad + wrong_dir
+                result.guard_cifras = list(bad)
                 if result.guard_unsupported:
                     logger.warning(
                         "Guardrail (%s): persisten hallazgos tras %d reintento(s): %s",
@@ -2002,6 +2020,8 @@ class NarrativeEngine:
             except Exception as e:  # noqa: BLE001 — best-effort; sirve el original marcado
                 logger.error("Regeneración del guardrail falló: %s", e)
                 result.guard_unsupported = bad + wrong_dir
+                result.guard_cifras = list(bad)
+        _depositar_cifras(template, result)
         self._set_cache(cache_key, result)
         logger.info("Narrative (cerebro) template=%s tokens=%d guard_flags=%d",
                     template, result.tokens_used, len(result.guard_unsupported))
@@ -2011,7 +2031,17 @@ class NarrativeEngine:
         record_call(purpose=PURPOSE_NARRATIVE, model=result.model_used or "",
                     cost_usd=result.cost_estimate, tokens_out=result.tokens_used,
                     module=axis, template=template, cache_hit=False,
+                    # Las marcas van ENTERAS, no solo su cantidad. Con el contador solo se
+                    # sabe que el guard actuó; con el texto se sabe QUÉ marcó, y eso es lo
+                    # que distingue una cifra inventada de una cifra real dicha en otra
+                    # forma. Los dos falsos vetos de esta semana —«69 %» y «132 %»— se
+                    # descubrieron porque una persona los vio en pantalla; el patrón estaba
+                    # en un `logger.warning`, que no es evento de Sentry y que nadie lee.
+                    # Se acotan por si el juez devuelve una glosa larga: la tabla es de
+                    # gasto, no un almacén de texto.
                     detail={"guard_flags": len(result.guard_unsupported),
+                            "guard_marcas": [str(h)[:180]
+                                             for h in result.guard_unsupported[:8]],
                             "truncada": result.truncated})
         return result
 
@@ -2072,6 +2102,11 @@ class NarrativeEngine:
             record_call(purpose=PURPOSE_NARRATIVE, model=cached.model_used or "",
                         cost_usd=0.0, module=axis, template=template, cache_hit=True,
                         detail={"lang": lang, "mode": mode})
+            # Un HIT marcado tiene que avisar igual. El motor se niega a propagar a la caché
+            # COMPARTIDA lo que él marcó, pero L1 es por-proceso y sí puede devolverlo: sin
+            # esta línea, la segunda vista del mismo informe se entregaría sin el veto que la
+            # primera sí levantó, y el defecto dependería de a qué worker cayó el request.
+            _depositar_cifras(template, cached)
             return cached
 
         # Try Claude API

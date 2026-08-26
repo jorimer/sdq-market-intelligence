@@ -195,7 +195,16 @@ async def _narratives_cached(
         logger.warning("caché de narrativas (lectura) no disponible: %s", e)
         return await product.narratives(tier, snapshot, lang)
 
-    narratives = await product.narratives(tier, snapshot, lang)  # MISS → generar
+    # El canal se ASEGURA acá y no se abre: si la ruta de entrega ya lo abrió, se usa el
+    # suyo —abrir uno anidado descartaría los hallazgos al salir y el gate de entrega no
+    # vería nada—; y si nadie lo abrió, este punto igual necesita verlos, porque lo que se
+    # persiste acá vive en Postgres SIN TTL.
+    # Se retiene la CAJA, no se consulta el ContextVar después: al salir del bloque el
+    # ContextVar se restaura, pero el dict sigue siendo el mismo objeto que se fue llenando.
+    # Consultarlo después devolvía {} y la fila marcada se cacheaba igual.
+    from shared.narrative.cifras_pendientes import asegurando as asegurando_cifras
+    with asegurando_cifras() as sin_respaldo:
+        narratives = await product.narratives(tier, snapshot, lang)  # MISS → generar
     # NUNCA persistir texto degradado: si el motor IA cayó al fallback estático (rate-limit,
     # outage o corte de presupuesto), cachearlo serviría el mismo relleno hueco incluso
     # después de que el servicio se recupere (envenenamiento de caché). Se devuelve tal cual
@@ -211,9 +220,11 @@ async def _narratives_cached(
     # en Postgres y NO tiene TTL, así que una cifra que nadie puede respaldar se serviría
     # idéntica y en silencio en cada descarga posterior. Es lo que convirtió un hallazgo del
     # guard en un número citado dentro de un PDF de rating real.
-    from shared.narrative.claude_engine import secciones_con_cifra_sin_respaldo
-    sin_respaldo = secciones_con_cifra_sin_respaldo(narratives, list(narratives),
-                                                    snapshot.payload or {})
+    # El hallazgo lo trae el MOTOR, que juzgó contra el contexto con el que escribió el texto.
+    # Antes se re-juzgaba acá con `snapshot.payload`, que no tiene las relaciones computadas
+    # (`razones`, `comparaciones`): 133 números contra 55 en un Deep Dive real, y la razón
+    # servida —el «132 %» de Asociación Bonao— no estaba entre esos 55. Ver
+    # `shared/narrative/hallazgos_pendientes`.
     if sin_respaldo:
         logger.warning(
             "Narrativa con cifras sin respaldo en %s/%s (scope=%s, período=%s): %s — "
@@ -283,8 +294,9 @@ async def _content_from_snapshot(
     # El acumulador se abre ALREDEDOR de la generación: el motor deposita ahí las relaciones
     # invertidas que sobrevivieron a la reparación, y la política se decide abajo, donde se
     # conoce el nivel. Ver `shared/narrative/relaciones_pendientes`.
+    from shared.narrative.cifras_pendientes import acumulando as acumulando_cifras
     from shared.narrative.relaciones_pendientes import acumulando
-    with acumulando() as relaciones_pendientes:
+    with acumulando() as relaciones_pendientes, acumulando_cifras() as sin_respaldo:
         narratives = await _narratives_cached(product, tier, snapshot, lang, scope)
     # GATE DE DEGRADACIÓN: si el motor IA cayó al fallback estático en secciones de ANÁLISIS
     # del nivel, un Deep Dive/Insight —que ES el producto pago completo— saldría hueco
@@ -320,10 +332,7 @@ async def _content_from_snapshot(
     # Misma política que la degradación, por la misma razón: premium FALLA CERRADO, Pulse solo
     # se registra. Y el veto se LISTA —qué sección y qué hallazgos—: un veto silencioso se lee
     # como que el informe no existía.
-    from shared.narrative.claude_engine import (NarrativeSinRespaldoError,
-                                                secciones_con_cifra_sin_respaldo)
-    sin_respaldo = secciones_con_cifra_sin_respaldo(narratives, level.sections,
-                                                    snapshot.payload or {})
+    from shared.narrative.claude_engine import NarrativeSinRespaldoError
     if sin_respaldo:
         blocked = level.granularity is not Granularity.system
         logger.warning(

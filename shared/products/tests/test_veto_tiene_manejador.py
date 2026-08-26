@@ -234,8 +234,12 @@ def test_todo_veto_del_ensamblador_tiene_manejador_en_el_router():
 #: en verde contra ese código. Fueron necesarias las dos.
 _GATES = {
     "degraded_sections": "sección hueca (degradación)",
-    "secciones_con_cifra_sin_respaldo": "cifra sin respaldo",
-    "acumulando": "relación invertida (acumulador por generación)",
+    # Los dos hallazgos del guard llegan por CANAL desde el motor, no re-juzgando el texto
+    # acá. Una superficie no tiene el contexto con el que se escribió —tiene el snapshot— y
+    # juzgar con él vetaba prosa correcta: el «132 %» de un Deep Dive real era la razón 1,32
+    # servida, invisible en el payload. Ver `shared/narrative/hallazgos_pendientes`.
+    "acumulando_cifras": "cifra sin respaldo (canal desde el motor)",
+    "acumulando": "relación invertida (canal desde el motor)",
 }
 
 

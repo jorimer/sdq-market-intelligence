@@ -19,7 +19,7 @@ import logging
 import math
 import re
 import unicodedata
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Tuple
 
 logger = logging.getLogger("sdq.narrative.numeric_guard")
 
@@ -28,7 +28,7 @@ logger = logging.getLogger("sdq.narrative.numeric_guard")
 # el CÓDIGO de este módulo —una regla nueva, un umbral distinto— no cambia ningún prompt y
 # pasaría inadvertido: la caché seguiría sirviendo texto que el guard nuevo habría marcado.
 # Es el único bump manual irreducible; por eso vive acá, junto a lo que describe.
-GUARD_VERSION = "8"  # "8": razones servidas + múltiplo invertido/cruce de cero (2026-08-24)
+GUARD_VERSION = "9"  # "9": formas derivadas por clave + aviso que pide anclar (2026-08-26)
 
 _JUDGE_SYSTEM = (
     "Sos un verificador numérico estricto y preciso. Tu ÚNICA tarea es detectar cifras "
@@ -66,11 +66,29 @@ _JUDGE_USER = (
     "Si todas están respaldadas: {{\"unsupported\": []}}"
 )
 
+# El aviso de reparación de CIFRAS. Su versión anterior le decía al modelo que las cifras
+# marcadas «NO están en el contexto» y le ordenaba no darlas. Eso era una AFIRMACIÓN FALSA
+# cada vez que la cifra era real y solo estaba dicha en otra forma —el «132%» que era la razón
+# 1,32 servida—, y la orden que la acompañaba mandaba a BORRAR una observación verdadera.
+#
+# Los dos desenlaces de esa versión eran malos, y el peor era el silencioso: si el modelo
+# obedecía, el informe salía más pobre sin veto, sin error en pantalla y sin que nadie se
+# enterara; si no obedecía —porque tenía razón—, el informe no se entregaba.
+#
+# El aviso nuevo dice la verdad («no pude anclarla») y pide lo único que resuelve las dos
+# ramas: que se vea de dónde sale la cifra. Anclar es además VERIFICABLE — la base nombrada
+# tiene que ser un número del contexto, y de eso ya se ocupa este mismo guard.
 CORRECTION_NOTICE = (
-    "\n\nCORRECCIÓN OBLIGATORIA: en una versión previa de este análisis aparecieron "
-    "cifras que NO están en el contexto: {bad}. Reescribí el análisis SIN inventar ni "
-    "alterar ninguna cifra; usá EXCLUSIVAMENTE números del contexto (o derivaciones "
-    "explícitas de ellos). Si no tenés una cifra, no la des."
+    "\n\nCORRECCIÓN OBLIGATORIA: en una versión previa de este análisis quedaron cifras que "
+    "NO pude anclar al dato servido: {bad}. Puede que las hayas DERIVADO de algo del contexto "
+    "—una razón dicha como porcentaje, una participación, una diferencia—: en ese caso la "
+    "cifra es legítima y lo que falta es que se vea de dónde sale. Para CADA una, elegí:\n"
+    "(a) DEJARLA Y ANCLARLA: nombrá en el texto la base del contexto de la que sale, de modo "
+    "que el lector pueda rehacer la cuenta (p. ej. «26,84 contra un promedio de 20,33, un "
+    "132% de esa referencia»).\n"
+    "(b) QUITARLA: solo si no podés señalar de qué dato del contexto sale.\n"
+    "No inventes ninguna cifra nueva, y no borres una observación que SÍ podés anclar: una "
+    "lectura verdadera que se explica vale más que una que se calla."
 )
 
 # Aviso PROPIO para la dirección invertida: acá las cifras SÍ están en el contexto y son
@@ -374,6 +392,114 @@ def _decimales(literal: str) -> int:
     return len(normal.split(".", 1)[1]) if "." in normal else 0
 
 
+# ── Formas DERIVADAS de una magnitud relacional ──────────────────────────────
+#
+# Un analista dice la MISMA razón de cuatro maneras: «1,32 veces», «el 132 % del promedio»,
+# «un 32 % más», «0,76 veces» (la inversa). Las cuatro son correctas y el dato las sostiene a
+# todas. Pero el contexto sirve UNA forma y este guard compara NÚMEROS, no formas: así se vetó
+# un Deep Dive real por un «132 %» que era exactamente la razón servida (1,32).
+#
+# Parchear el contexto forma por forma —agregarle una clave cada vez que el modelo elige otra
+# manera de decir el mismo número— no escala: es el mismo defecto con otra cara, y reapareció
+# dos veces en una semana (el «69 %» por redondeo, el «132 %» por porcentaje). La cura es que
+# el guard entienda la FAMILIA de formas.
+#
+# **El costo está MEDIDO, no supuesto.** Sobre el contexto real de una sección de riesgo
+# (Asociación Bonao, 133 números servidos, 47 de ellos magnitudes relacionales), la tasa de
+# escape de una cifra inventada en 0-100 pasa de **10,70 % a 14,00 %** (+3,3 pp). Se acepta a
+# sabiendas y por la misma razón que el redondeo de #916: éste es el filtro mecánico y barato,
+# nunca fue el único —el juez semántico corre aparte, y el motor se niega a propagar a la
+# caché compartida lo que él marcó—, y vetar prosa correcta no es «ser estricto», es negar el
+# producto por un número que sí estaba. El modo de falla que cierra es peor que el que abre:
+# cuando el aviso de corrección manda a borrar una cifra REAL, el informe sale más pobre sin
+# veto y sin que nadie se entere.
+#
+# **Dos cosas que la medición corrigió sobre el diseño original, y quedan escritas porque las
+# dos sonaban bien:**
+#
+# 1. «Un 500 % inventado pasaría, porque el contexto tiene un 5,0 en algún lado» — era el
+#    argumento para NO tocar el guard. En el contexto real no hay ningún 5,0 y el 500 % se
+#    sigue marcando. El argumento era un ejemplo plausible sin verificar.
+# 2. Generar las formas en las DOS direcciones sin mirar la clave —sin saber si el valor viene
+#    como múltiplo o como porcentaje— produjo 251 derivados de 47 magnitudes y una apertura
+#    de 1,79 %: PEOR que aplicar ×100 a todo el contexto (1,52 %). Por eso el mapa de abajo es
+#    por-clave. Con la unidad conocida son 89 derivados y 1,63 %, y —a diferencia de la regla
+#    general— un «150 %», un «250 %» y un «1000 %» inventados se siguen marcando, en vez de
+#    colar por un 1,5, un 2,4999 y un 10,0 que no son razón de nada.
+#
+# Lo que NO entra acá, a propósito: los aportes y las brechas, que se sirven en PUNTOS. Un
+# ×100 sobre un aporte no es otra forma de decirlo — es otro número.
+
+#: Cada clave relacional con su UNIDAD conocida, y por eso con sus formas equivalentes
+#: propias. Que sea por-clave y no universal no es prolijidad: generar las formas en las dos
+#: direcciones —sin saber si el valor viene como razón o como porcentaje— produjo 251 valores
+#: derivados de 44 magnitudes y llevó la apertura del guard a 1,79 %, PEOR que la regla
+#: general que este diseño venía a mejorar. Medido, no supuesto.
+#:
+#: Las emite ``shared/narrative/derived.py``. Si agregás allá una familia de relación, su
+#: clave va acá con su unidad, o la forma derivada de esa familia se vetará.
+FORMAS_POR_CLAVE: Dict[str, Tuple[str, ...]] = {
+    # Razones y factores: vienen como MÚLTIPLO (1,32). Se dicen también como porcentaje del
+    # referente (132 %), como exceso (32 % más) y como la inversa (0,76 veces).
+    "razon_vs_referencia": ("por_cien", "exceso", "inversa"),
+    "factor_para_igualar_referencia": ("por_cien",),
+    "factor_para_alcanzar_umbral": ("por_cien",),
+    # Ya vienen como PORCENTAJE: la forma alternativa es el múltiplo, y el exceso sobre 100.
+    "razon_como_pct_del_referente": ("entre_cien", "menos_cien"),
+    "cuota_del_principal_pct": ("entre_cien",),
+    # Proporción de la rúbrica (0,25): se dice «pesa un 25 %».
+    "peso": ("por_cien",),
+}
+
+#: Nombres de ``FORMAS_POR_CLAVE`` a la operación. Separado del mapa para que agregar una
+#: clave no invite a inventar una transformación nueva sin declararla acá.
+_TRANSFORMACIONES = {
+    "por_cien": lambda v: v * 100.0,
+    "entre_cien": lambda v: v / 100.0,
+    "exceso": lambda v: abs(v * 100.0 - 100.0),
+    "menos_cien": lambda v: abs(v - 100.0),
+    "inversa": lambda v: (1.0 / v) if v else None,
+}
+
+
+def valores_relacionales(context: Any) -> set:
+    """Las magnitudes relacionales servidas, con la clave bajo la que viajan.
+
+    Devuelve ``{(clave, valor_absoluto)}``. Recorre el contexto sin conocer su forma, igual
+    que ``context_values``, pero recoge SOLO lo que vive bajo una clave de
+    ``FORMAS_POR_CLAVE``.
+    """
+    out: set = set()
+
+    def _walk(o: Any) -> None:
+        if isinstance(o, dict):
+            for k, v in o.items():
+                if (k in FORMAS_POR_CLAVE and isinstance(v, (int, float))
+                        and not isinstance(v, bool)):
+                    out.add((k, abs(float(v))))
+                else:
+                    _walk(v)
+        elif isinstance(o, (list, tuple, set)):
+            for v in o:
+                _walk(v)
+
+    _walk(context)
+    return out
+
+
+def formas_derivadas(clave: str, v: float) -> set:
+    """Las otras maneras legítimas de decir *v*, según la unidad que declara *clave*.
+
+    ``("razon_vs_referencia", 1.32)`` → ``{132.0, 32.0, 0.757…}``.
+    """
+    out: set = set()
+    for nombre in FORMAS_POR_CLAVE.get(clave, ()):
+        x = _TRANSFORMACIONES[nombre](v)
+        if x is not None:
+            out.add(abs(x))
+    return out
+
+
 def deterministic_uncited_figures(context: dict, text: str) -> List[str]:
     """Porcentajes y puntos del *text* que no aparecen en el contexto.
 
@@ -402,6 +528,10 @@ def deterministic_uncited_figures(context: dict, text: str) -> List[str]:
         known = context_values(context)
         if not known:
             return []
+        # Formas equivalentes de las magnitudes relacionales: la razón 1,32 respalda también
+        # «132 %», «32 %» y «0,76». Se computan una vez por sección, no por cita.
+        derivadas = {d for k, v in valores_relacionales(context)
+                     for d in formas_derivadas(k, v)}
         seen: set = set()
         for m in _CLAIM_UNIT.finditer(text or ""):
             literal = m.group(1)
@@ -411,14 +541,20 @@ def deterministic_uncited_figures(context: dict, text: str) -> List[str]:
                 continue
             dp = _decimales(literal)
             escala = 10 ** dp
-            # Redondeo Y truncación, las dos formas legítimas de acortar una cifra.
-            respaldada = any(
-                round(x, dp) == value or math.floor(x * escala) / escala == value
-                for x in known)
-            if respaldada or m.group(0).strip() in seen:
+
+            def _cubre(candidatos: set, valor: float = value, d: int = dp,
+                       e: int = escala) -> bool:
+                # Redondeo Y truncación, las dos formas legítimas de acortar una cifra.
+                return any(round(x, d) == valor or math.floor(x * e) / e == valor
+                           for x in candidatos)
+
+            if _cubre(known) or _cubre(derivadas) or m.group(0).strip() in seen:
                 continue
             seen.add(m.group(0).strip())
-            flags.append(f"{m.group(0).strip()}: no aparece en el contexto servido")
+            # La marca dice QUÉ se intentó. Un veto que solo dice «no aparece» se lee como
+            # «el modelo inventó», y dos veces en una semana esa lectura fue equivocada.
+            flags.append(f"{m.group(0).strip()}: no coincide con ningún valor servido ni con "
+                         "una forma derivada de las relaciones del contexto")
     except Exception:  # noqa: BLE001 — el guard nunca tumba la entrega
         logger.exception("deterministic_uncited_figures falló; se sigue sin esa capa")
     return flags
