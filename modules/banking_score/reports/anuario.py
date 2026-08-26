@@ -43,6 +43,18 @@ def _cortes(anio: int) -> List[date]:
             date(anio, 9, 30), date(anio, 12, 31)]
 
 
+def _anios_con_cierre(db: Session) -> List[int]:
+    """Los años que tienen su corte de DICIEMBRE calificado, en orden.
+
+    Es la definición operativa de «año completo» para el anuario: el producto compara cierre
+    contra cierre, así que el año sin diciembre no se puede resumir.
+    """
+    cierres = (db.query(RatingResult.period_end)
+               .filter(RatingResult.model_type == ModelType.deterministic)
+               .distinct().all())
+    return sorted({p.year for (p,) in cierres if p and (p.month, p.day) == (12, 31)})
+
+
 def _panel(db: Session, cortes: List[date]) -> Dict[date, Dict[str, Dict[str, Any]]]:
     filas = (db.query(RatingResult, Bank)
              .join(Bank, Bank.id == RatingResult.bank_id)
@@ -69,6 +81,33 @@ def _direccion(delta: float) -> str:
     return "estable"
 
 
+def estado_del_anio(db: Session, anio: int) -> Dict[str, Any]:
+    """Qué tiene el panel de *anio*, para decidir Y para explicar la negativa.
+
+    El anuario mide UN AÑO, así que necesita que el año haya CERRADO: sin el corte de
+    diciembre no hay «cambio del año», hay un tramo. La cuenta mínima de dos cortes que el
+    motor exigía dejaba pasar exactamente eso — con el panel de producción al 2026-03-31, el
+    período por defecto de la aplicación es 2026-Q1 y un anuario 2026 se armaba con la línea
+    base de dic-2025 y un solo trimestre. El documento no traía ninguna cifra falsa: traía un
+    TRIMESTRE con el encabezado de un año, que es la misma familia de defecto que la doctrina
+    llama declarar la brecha en vez de rellenarla.
+
+    Devuelve también el último año COMPLETO, porque una negativa que no dice qué sí se puede
+    pedir obliga a adivinar.
+    """
+    cortes = _cortes(anio)
+    panel = _panel(db, cortes)
+    presentes = [c for c in cortes if panel.get(c)]
+    completos = _anios_con_cierre(db)
+    return {
+        "anio": anio,
+        "cortes_presentes": len(presentes),
+        "cortes_esperados": len(cortes),
+        "tiene_cierre": bool(panel.get(date(anio, 12, 31))),
+        "ultimo_anio_completo": completos[-1] if completos else None,
+    }
+
+
 def anuario_del_sistema(db: Session, anio: int) -> Optional[Dict[str, Any]]:
     """Los hechos del año del sistema. ``None`` si el año no tiene panel suficiente."""
     cortes = _cortes(anio)
@@ -76,6 +115,11 @@ def anuario_del_sistema(db: Session, anio: int) -> Optional[Dict[str, Any]]:
     presentes = [c for c in cortes if panel.get(c)]
     if len(presentes) < 2:
         logger.info("Anuario %s: el panel no tiene cortes suficientes (%d).", anio, len(presentes))
+        return None
+    # EL AÑO TIENE QUE HABER CERRADO. Ver `estado_del_anio`: sin el corte de diciembre esto
+    # no es el año, es un tramo, y salía titulado como un año.
+    if not panel.get(date(anio, 12, 31)):
+        logger.info("Anuario %s: el año no ha cerrado (falta el corte de diciembre).", anio)
         return None
 
     vistas = set().union(*(set(panel[c]) for c in presentes))

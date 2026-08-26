@@ -11,9 +11,11 @@ import {
   downloadReport,
   listSystemReports,
   generateSystemReport,
+  SYSTEM_REPORT_ES_ANUAL,
   SYSTEM_REPORT_TYPES,
   SYSTEM_REPORT_NEEDS_PERIOD,
   SystemReportType,
+  anioDelInforme,
   ReportItem,
 } from "../api";
 import { mensajeDeError } from "../../../shared/api/errores";
@@ -150,6 +152,11 @@ export function ReportsPage() {
                 : t(`banking.repType.${type}`, type)}
               {!SYSTEM_REPORT_NEEDS_PERIOD[type] && (
                 <span className="text-muted ml-1">· {t("banking.repNoPeriod")}</span>
+              )}
+              {/* Un informe ANUAL descarta el trimestre del selector: se muestra el año que
+                  va a resumir para que la relación entre lo elegido y lo que sale se vea. */}
+              {SYSTEM_REPORT_ES_ANUAL[type] && anioDelInforme(periodEnd) && (
+                <span className="text-muted ml-1 mono">· {anioDelInforme(periodEnd)}</span>
               )}
             </button>
           ))}

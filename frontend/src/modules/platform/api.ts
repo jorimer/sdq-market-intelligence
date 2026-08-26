@@ -471,6 +471,23 @@ export function componentesDeAportes(ventanas: VentanaDeCambio[]): string[] {
   return vistos;
 }
 
+/**
+ * ¿Este corte es el CIERRE DE UN AÑO? Los informes de una entidad al 31 de diciembre son su
+ * lectura anual, y nada en el selector lo decía.
+ *
+ * No hay —ni debe haber— un SKU «informe anual» aparte: el año de la entidad se sirve como
+ * el informe AL CIERRE, porque la rentabilidad ya usa ventana móvil de doce meses (ROA/ROE
+ * de diciembre SON los del año) y la tabla «qué movió el score» trae su columna del año.
+ * Inventar un producto anual paralelo daría dos respuestas legítimas a «¿cuál es el score de
+ * X en 2025?», que es exactamente lo que se decidió no hacer.
+ *
+ * Lo que faltaba era DECIRLO: la capacidad estaba y no se podía descubrir desde la pantalla.
+ */
+export function cierreDeAnio(periodEnd: string): string | null {
+  const m = /^(\d{4})-12-31$/.exec(periodEnd);
+  return m ? m[1] : null;
+}
+
 export async function getProductReport(
   sector: string,
   tier: string,

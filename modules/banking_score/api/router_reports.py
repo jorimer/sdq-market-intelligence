@@ -138,13 +138,29 @@ async def _generate_system_report(
             raise HTTPException(
                 status_code=400,
                 detail="El anuario requiere un período: indique el cierre del año (YYYY-12-31).")
-        from modules.banking_score.reports.anuario import anuario_del_sistema
+        from modules.banking_score.reports.anuario import (anuario_del_sistema,
+                                                            estado_del_anio)
         anuario_datos = anuario_del_sistema(db, pe.year)
         if anuario_datos is None:
-            raise HTTPException(
-                status_code=422,
-                detail=(f"No hay panel suficiente para el anuario {pe.year}: se necesitan al "
-                        "menos dos cierres trimestrales calificados."))
+            # La negativa NOMBRA la causa y dice qué SÍ se puede pedir. Un 422 genérico
+            # obliga a adivinar, y acá la causa habitual no es «faltan datos» sino «el año
+            # no cerró todavía»: el período por defecto de la aplicación es el corte más
+            # reciente, así que apretar el botón sin tocar el selector pedía el anuario del
+            # año EN CURSO.
+            est = estado_del_anio(db, pe.year)
+            if not est["tiene_cierre"]:
+                motivo = (f"el año {pe.year} no ha cerrado: falta el corte de diciembre "
+                          f"(hay {est['cortes_presentes']} de {est['cortes_esperados']} "
+                          "cortes). Un anuario compara cierre contra cierre, así que un año "
+                          "en curso daría un tramo con el encabezado de un año")
+            else:
+                motivo = (f"el panel de {pe.year} tiene {est['cortes_presentes']} de "
+                          f"{est['cortes_esperados']} cortes y se necesitan al menos dos")
+            disponible = est["ultimo_anio_completo"]
+            sugerencia = (f" El último año completo es {disponible}: elegí un período de "
+                          f"{disponible} en la barra superior." if disponible else "")
+            raise HTTPException(status_code=422,
+                                detail=f"No se emite el anuario {pe.year}: {motivo}.{sugerencia}")
     try:
         if report_type == "criteria":
             # El documento de criterios es la METODOLOGÍA: determinista, no varía por
