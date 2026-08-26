@@ -66,6 +66,13 @@ PRODUCT_CATALOG: List[CatalogEntry] = [
     # cumplimiento de las metas que una ley se fijó a sí misma. Cada ley es un expediente
     # (datos) y el motor no conoce ninguna, así que el catálogo lista un solo sector aunque
     # sirva N instrumentos — el selector de alcance los expone.
+    # Producto cuya unidad de observación es el AÑO y no el corte. Va aparte del Banking
+    # Score —y no como una sección que aparece en diciembre— porque responde otra pregunta:
+    # el informe al 31-dic dice CÓMO ESTÁ la entidad; la Revisión Anual dice CÓMO LE FUE en
+    # el ejercicio. Confundirlos fue el error que originó este producto: la ventana móvil de
+    # doce meses toca UNA magnitud (ROA/ROE) y el resto del informe de diciembre son fotos.
+    CatalogEntry("banking_year_review", "SDQ Banking · Revisión Anual", "banking_score",
+                 "SIB · el mismo panel del Banking Score, reencuadrado en el AÑO"),
     CatalogEntry("law", "SDQ Evaluación de Leyes", "law_intel",
                  "Articulado de la norma · fuentes oficiales del propio Estado evaluado"),
 ]

@@ -235,6 +235,7 @@ import modules.macro_monitor.comunicados.freshness  # noqa: F401 — registra fr
 # Product catalog: each sector registers its SectorProduct into shared.products at
 # import time (anti-Frankenstein: shared/products never imports a sector).
 import modules.banking_score.products  # noqa: F401 — registers banking SectorProduct
+import modules.banking_score.products_year_review  # noqa: F401 — Revisión Anual
 import modules.trade_intel.products  # noqa: F401 — registers trade SectorProduct
 import modules.esg_climate.products  # noqa: F401 — registers esg SectorProduct
 import modules.sector_intel.products  # noqa: F401 — registers agribusiness (slot transversal)
