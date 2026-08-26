@@ -22,6 +22,7 @@ from shared.narrative.claude_engine import (NarrativeDegradedError,
                                            NarrativeSinRespaldoError)
 from shared.narrative.lang_context import resolve_request_lang
 from shared.narrative.mensajes_de_veto import (NARRATIVE_DEGRADED_MSG,
+                                               mensaje_de_degradacion,
                                                mensaje_relacion, mensaje_sin_respaldo)
 from shared.products.access import (
     AccessDecision,
@@ -278,9 +279,10 @@ async def get_product_report(
     try:
         content = await assemble_product_content(
             product, access.tier, period=period or "", scope=scope, lang=lang)
-    except NarrativeDegradedError:
+    except NarrativeDegradedError as d:
         # Narrativa IA degradada a fallback estático en un premium: no se sirve hueco.
-        raise HTTPException(status_code=503, detail=NARRATIVE_DEGRADED_MSG)
+        raise HTTPException(status_code=503,
+                            detail=mensaje_de_degradacion(getattr(d, "motivo", "degradado")))
     except NarrativeSinRespaldoError as e:
         raise HTTPException(status_code=503, detail=mensaje_sin_respaldo(e.hallazgos))
     except NarrativeRelacionInvertidaError as e:
@@ -331,9 +333,10 @@ async def get_product_pdf(
         path = await assemble_product_report(
             product, access.tier, period=period or "", scope=scope, lang=lang, fmt=fmt,
             out=meta)
-    except NarrativeDegradedError:
+    except NarrativeDegradedError as d:
         # Narrativa IA degradada a fallback estático en un premium: no se descarga hueco.
-        raise HTTPException(status_code=503, detail=NARRATIVE_DEGRADED_MSG)
+        raise HTTPException(status_code=503,
+                            detail=mensaje_de_degradacion(getattr(d, "motivo", "degradado")))
     except NarrativeSinRespaldoError as e:
         raise HTTPException(status_code=503, detail=mensaje_sin_respaldo(e.hallazgos))
     except NarrativeRelacionInvertidaError as e:

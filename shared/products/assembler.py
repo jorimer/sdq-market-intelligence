@@ -332,8 +332,15 @@ async def _content_from_snapshot(
                 "Ensamblado de %s/%s (scope=%s, período=%s) excedió %ds: se responde 503 "
                 "en vez de morir en el proxy.", product.sector_key, tier.value, scope or "",
                 snapshot.period or "", PRESUPUESTO_DE_ENSAMBLADO_S)
+            # Telemetría PROPIA. Sin esto el corte por tiempo no dejaba rastro en el mismo
+            # lugar donde se mira la degradación, y las dos causas se volvían la misma cosa.
+            from shared.narrative.degradation_events import emit_narrative_degraded
+            emit_narrative_degraded(
+                surface="products", sector_key=product.sector_key, tier=tier.value,
+                sections=list(level.sections), blocked=True, scope=scope,
+                period=snapshot.period)
             from shared.narrative.claude_engine import NarrativeDegradedError
-            raise NarrativeDegradedError(list(level.sections))
+            raise NarrativeDegradedError(list(level.sections), motivo="tiempo")
     # GATE DE DEGRADACIÓN: si el motor IA cayó al fallback estático en secciones de ANÁLISIS
     # del nivel, un Deep Dive/Insight —que ES el producto pago completo— saldría hueco
     # ("El análisis ampliado se incorpora en la versión completa del producto"), engañoso y

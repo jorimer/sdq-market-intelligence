@@ -1683,16 +1683,27 @@ class NarrativeRelacionInvertidaError(RuntimeError):
 
 
 class NarrativeDegradedError(RuntimeError):
-    """La narrativa IA cayó al fallback estático en secciones de ANÁLISIS de un producto
-    premium (Insight/Deep Dive). Degradación transitoria (rate-limit/outage del API o corte
-    de presupuesto): el reporte NO se entrega hueco. El llamador la traduce a un error de
-    reintento en español, en vez de completar un PDF de cliente con relleno."""
+    """El informe premium no se entrega porque su análisis no se produjo. DOS motivos.
 
-    def __init__(self, sections):
+    - ``motivo="degradado"``: la narrativa cayó al fallback estático (rate-limit/outage del
+      API o corte de presupuesto). El reporte NO se entrega hueco.
+    - ``motivo="tiempo"``: el ensamblado excedió su techo. Es distinto y el remedio es
+      distinto, y sin separarlos NO SE PUEDE DIAGNOSTICAR: cuando un Deep Dive falló el
+      2026-08-26 no había forma de saber cuál de los dos había sido, porque el techo de
+      tiempo reusaba esta excepción sin decirlo. Un mismo síntoma para dos causas es
+      exactamente lo que este repo aprendió a no hacer.
+
+    El llamador la traduce a un error de reintento en español, nunca a un PDF con relleno.
+    """
+
+    def __init__(self, sections, motivo: str = "degradado"):
         self.sections = list(sections)
+        self.motivo = motivo
+        que = ("el ensamblado excedió su techo de tiempo"
+               if motivo == "tiempo" else "la narrativa cayó al fallback estático")
         super().__init__(
-            "Narrativa IA no disponible por límite temporal del servicio de análisis en "
-            f"{len(self.sections)} sección(es): {', '.join(self.sections)}."
+            f"Narrativa IA no disponible ({que}) en {len(self.sections)} sección(es): "
+            f"{', '.join(self.sections)}."
         )
 
 

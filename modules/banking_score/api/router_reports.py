@@ -21,6 +21,7 @@ from shared.narrative.claude_engine import (NarrativeDegradedError,
 from shared.narrative.cifras_pendientes import acumulando as acumulando_cifras
 from shared.narrative.relaciones_pendientes import acumulando
 from shared.narrative.mensajes_de_veto import (NARRATIVE_DEGRADED_MSG,
+                                               mensaje_de_degradacion,
                                                mensaje_relacion,
                                                mensaje_sin_respaldo)
 from shared.products.filenames import (
@@ -718,7 +719,8 @@ async def generate_report(
         db.commit()
         logger.warning("Reporte %s premium para %s con %d sección(es) degradada(s): "
                        "no se completa (%s).", report_type, bank.name, len(d.sections), d.sections)
-        raise HTTPException(status_code=503, detail=NARRATIVE_DEGRADED_MSG)
+        raise HTTPException(status_code=503,
+                            detail=mensaje_de_degradacion(getattr(d, "motivo", "degradado")))
     except NarrativeSinRespaldoError as v:
         # Va ANTES del `except Exception`, que si no se la traga y devuelve 200 con el reporte
         # marcado `error`: quien pidió el PDF vería un éxito con estado raro en vez del motivo.
