@@ -206,3 +206,31 @@ cambios:
         Contra intensidad de inversión el índice da −0,321 y el tamaño solo −0,323; contra
         nivel, el índice da 0,287 y el tamaño solo 0,377.
     pr: [814, 815, 816]
+
+  - id: 2026-08-26-solidez-un-hecho-un-voto
+    fecha_efectiva: "2026-08-26"
+    sectores: [banking]
+    titulo: "Solidez pondera por FAMILIA de indicador, no por indicador"
+    que_cambio: >-
+      El score de Solidez Financiera deja de ser el promedio simple de sus cinco indicadores y
+      pasa a promediar TRES familias: adecuación de capital (solvencia, solvencia de capital
+      primario y capital primario/activos ponderados), cobertura de provisiones, y capital
+      sobre activos sin ponderar. Los cinco indicadores se siguen calculando y publicando; lo
+      que cambia es que los tres primeros aportan un voto entre los tres en vez de uno cada
+      uno. Se corrige además el rótulo de `leverage`, que decía «Apalancamiento (Basilea)»
+      para un ratio cuyo denominador está PONDERADO por riesgo — el de Basilea es, por
+      definición, no ponderado.
+    por_que: >-
+      Los tres ratios de capital miden el mismo hecho: capital sobre activos ponderados por
+      riesgo, cambiando el numerador entre patrimonio técnico y capital primario. El promedio
+      simple le daba a ese único hecho el 60% de la dimensión, y cuando la entidad no tiene
+      capital secundario dos de ellos son EXACTAMENTE el mismo número — 9 de 43 entidades
+      calificadas al corte 2026-03. Un lector razonable los leía como tres evidencias
+      independientes de solidez.
+    impacto:
+      medido_al_publicar: >-
+        Sobre las 43 entidades con indicadores al corte más reciente: el score de Solidez
+        cambia en promedio -1,95 puntos (máximo -8,74; p10 -7,18, p90 +2,97), lo que sobre el
+        score global equivale a del orden de -0,75 puntos. Ninguna cifra de cliente se ve
+        afectada: los informes distribuidos hasta esta fecha fueron muestras.
+    pr: 967
