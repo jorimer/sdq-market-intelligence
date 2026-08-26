@@ -1060,7 +1060,8 @@
       "datawatch": "DataWatch",
       "wire": "Wire",
       "criteria": "Criteria",
-      "sector_outlook": "Sector outlook"
+      "sector_outlook": "Sector outlook",
+      "anuario": "System yearbook"
     },
     "mdlTitle": "ML model",
     "mdlSub": "Explainable complement to the deterministic core (per-variable contributions), not an oracle.",

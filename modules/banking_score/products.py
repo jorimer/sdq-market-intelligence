@@ -649,6 +649,29 @@ class BankingProduct:
         scoring_result["trayectorias"] = entity_trajectories(
             db, bank, as_of=cast(date, rr.period_end))
         scoring_result["percentiles"] = period_percentiles(db, bank, rr.period_end)
+        # QUÉ MOVIÓ EL SCORE, ya descompuesto, DENTRO DEL PAYLOAD. Se computa acá y no en el
+        # frontend por la misma razón por la que se computa para el modelo: una segunda
+        # implementación de la misma cuenta es una segunda oportunidad de que discrepen, y
+        # la dimensión que más se movió NO es la que más movió el resultado —los pesos
+        # difieren—.
+        #
+        # Vivía solo en el contexto de la narrativa y en el PDF, así que la VISTA IN-APP del
+        # Deep Dive no la mostraba: el mismo producto decía cosas distintas según se mirara
+        # en pantalla o se descargara. Es la doctrina literal —«aplica al contexto de IA y a
+        # la tabla renderizada: son superficies distintas y arreglar una sola deja el
+        # documento contradiciéndose»— aplicada a la superficie que faltaba.
+        try:
+            from shared.narrative.derived import aportes_al_cambio
+            from modules.banking_score.scoring.weights import get_sub_component_weights
+            _traj_sub = (scoring_result.get("trayectorias") or {}).get("sub")
+            if _traj_sub:
+                _aportes = aportes_al_cambio(
+                    _traj_sub,
+                    get_sub_component_weights(bank.bank_type.value if bank.bank_type else None))
+                if _aportes:
+                    scoring_result["aportes_al_cambio"] = _aportes
+        except Exception:  # noqa: BLE001 — el snapshot nunca depende de esta tabla
+            logger.exception("No se pudo computar la atribución del cambio para %s", bank.name)
         # Mismo valor que el `entity_type` del scoring_result (el dict lo declara para el
         # contexto del modelo); se recomputa acá para conservar el tipo `str | None`.
         entity_type = bank.bank_type.value if bank.bank_type else None
