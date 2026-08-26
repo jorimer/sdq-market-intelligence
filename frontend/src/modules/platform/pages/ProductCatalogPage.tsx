@@ -15,9 +15,11 @@ import { VigilarButton } from "@/shared/ui/VigilarButton";
 import { Markdown } from "@/shared/ui/Markdown";
 import { useApp, periodToDate } from "@/shared/context/AppContext";
 import { DimensionBars } from "../components/DimensionBars";
+import { AportesAlCambio } from "../components/AportesAlCambio";
 import {
   getProductCatalog,
   getProductReport,
+  reportAportes,
   getProductScopeOptions,
   getProductPeriods,
   downloadProductReport,
@@ -485,6 +487,10 @@ function ProductReportDrawer({ sector, level, periodEnd, onClose, t }: {
               <DimensionBars title={t("platform.catalog.dimensionsTitle")} data={dims} />
             ) : null;
           })()}
+          {/* Las barras muestran el NIVEL de cada dimensión; esto muestra el MOVIMIENTO y de
+              quién fue. La tabla se computaba desde hacía tiempo y se dibujaba SOLO en el PDF:
+              el mismo producto decía cosas distintas en pantalla y al descargarlo. */}
+          <AportesAlCambio ventanas={reportAportes(report)} />
           {(() => { let n = 0; return report.commercial.sections.map((sec) => {
             const text = report.narratives[sec];
             if (!text) return null;

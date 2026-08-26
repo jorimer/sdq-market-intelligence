@@ -1060,7 +1060,8 @@
       "datawatch": "DataWatch",
       "wire": "Wire",
       "criteria": "Critères",
-      "sector_outlook": "Perspective sectorielle"
+      "sector_outlook": "Perspective sectorielle",
+      "anuario": "Annuaire du système"
     },
     "mdlTitle": "Modèle ML",
     "mdlSub": "Complément explicable au noyau déterministe (contributions par variable), pas un oracle.",
