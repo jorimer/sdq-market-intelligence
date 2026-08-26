@@ -1,0 +1,59 @@
+# DECLARACIONES — qué dijo el propio evaluado sobre la información que maneja.
+#
+# No son opinión nuestra ni hallazgo: son actos del emisor, con fecha y fuente. Cambian lo
+# que el informe puede afirmar, y por eso se registran acá y no en el código.
+
+version: "1.0"
+
+declaraciones:
+  - id: sismap-burocracia-cero-reservado
+    fecha: "2026-03-12"
+    quien: Ministerio de Administración Pública (MAP)
+    que_declara: >-
+      Puso en marcha el SISMAP Burocracia Cero mediante la Resolución núm. 034-2026, una
+      herramienta para evaluar y dar seguimiento a los trámites públicos de mayor demanda
+      ciudadana. Arranca con 362 trámites y se implementará de forma progresiva hasta
+      alcanzar la cobertura del 100% de los trámites del Estado. Declara que el sistema está
+      en fase de acompañamiento institucional y estabilización metodológica, y que sus datos
+      son de carácter interno y reservado hasta lograr la madurez operativa.
+    fuente: >-
+      https://presidencia.gob.do/noticias/el-map-pone-en-marcha-el-sismap-burocracia-cero-para-evaluar-y-dar-seguimiento-la-gestion
+    disponible_desde: null
+    consecuencia_para_la_medicion: >-
+      La medición del desempeño de los trámites EXISTE y su emisor la declaró no pública. No
+      es una brecha de información: es una decisión declarada, sin fecha de levantamiento. Lo
+      que este informe mide se limita a lo que el catálogo publica, que es otra cosa y más
+      pobre.
+
+  - id: registro-unico-no-opera-plenamente
+    fecha: "2025-02-01"
+    quien: Congreso Nacional
+    que_declara: >-
+      La Ley 14-25, que modifica varios artículos de la Ley 167-21, adiciona un artículo
+      45.Bis que permite a los entes publicar en sus portales institucionales mientras el
+      Registro Único de Mejora Regulatoria no funcione plenamente.
+    fuente: >-
+      Ley núm. 14-25 que modifica varios artículos de la Ley núm. 167-21 del 9 de agosto de 2021
+    disponible_desde: null
+    consecuencia_para_la_medicion: >-
+      El legislador reconoce, cuatro años después de ordenarlo, que el registro central no
+      opera plenamente. La información de los procedimientos puede estar repartida entre
+      portales institucionales, así que el catálogo del Portal Único no es necesariamente el
+      universo completo de lo publicado.
+
+  - id: guia-de-campos-142-2024
+    fecha: "2024-05-21"
+    quien: Ministerio de Administración Pública (MAP)
+    que_declara: >-
+      Aprobó por Resolución núm. 142-2024 la guía para la identificación, estandarización y
+      registro de los trámites y servicios públicos, que fija los campos de cada ficha:
+      descripción, objetivo, a quién va dirigido, base normativa, requisitos, documentos,
+      costo, canales de prestación, pasos a seguir, tiempo de respuesta y vigencia del
+      entregable.
+    fuente: >-
+      https://presidencia.gob.do/noticias/map-aprueba-guia-para-la-identificacion-estandarizacion-y-registro-de-los-tramites-y
+    disponible_desde: "2024-05-21"
+    consecuencia_para_la_medicion: >-
+      El tiempo de respuesta es un campo NORMADO por el órgano rector, no una expectativa de
+      esta firma. Que la ficha pública del catálogo no lo exponga como campo propio es
+      contrastable contra esta resolución.
