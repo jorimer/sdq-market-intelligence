@@ -12,6 +12,7 @@ ensamblador es el director de orquesta. Las cifras se generan dentro del sector 
 """
 from __future__ import annotations
 
+import asyncio
 import hashlib
 import json
 import logging
@@ -23,6 +24,12 @@ from shared.products.anonymization import AnonymizationError, enforce_anonymized
 from shared.products.contract import ProductSnapshot, SectorProduct
 from shared.products.filenames import SUJETO_SISTEMA
 from shared.products.tiers import Granularity, ProductTier, TierLevelSpec
+
+#: Techo de tiempo del ensamblado de UN informe, por debajo del límite del proxy (~300 s
+#: medidos: una descarga que lo cruzó devolvió 502 sin cuerpo). Se deja margen para el render
+#: y la serialización. Un informe que no entra acá NO es un informe lento: es uno que el
+#: cliente nunca va a recibir, y conviene decirlo con un 503 que invita a reintentar.
+PRESUPUESTO_DE_ENSAMBLADO_S = 240
 
 logger = logging.getLogger("sdq.products.assembler")
 
@@ -297,7 +304,25 @@ async def _content_from_snapshot(
     from shared.narrative.cifras_pendientes import acumulando as acumulando_cifras
     from shared.narrative.relaciones_pendientes import acumulando
     with acumulando() as relaciones_pendientes, acumulando_cifras() as sin_respaldo:
-        narratives = await _narratives_cached(product, tier, snapshot, lang, scope)
+        try:
+            narratives = await asyncio.wait_for(
+                _narratives_cached(product, tier, snapshot, lang, scope),
+                timeout=PRESUPUESTO_DE_ENSAMBLADO_S)
+        except asyncio.TimeoutError:
+            # TECHO DE TIEMPO. Sin esto, una generación larga muere en el PROXY con un 502
+            # sin cuerpo, y el frontend —que lee `detail`— no tiene nada que mostrar salvo
+            # «No se pudo cargar el producto». El usuario ve un producto roto en vez del
+            # motivo. Ocurrió con la Revisión Anual: el guard reintentaba sobre umbrales
+            # prospectivos y la petición llegaba a 16 llamadas al modelo.
+            #
+            # Se responde el MISMO 503 de la degradación, que es lo que de verdad pasó: el
+            # servicio de análisis no entregó a tiempo, y reintentar sirve.
+            logger.error(
+                "Ensamblado de %s/%s (scope=%s, período=%s) excedió %ds: se responde 503 "
+                "en vez de morir en el proxy.", product.sector_key, tier.value, scope or "",
+                snapshot.period or "", PRESUPUESTO_DE_ENSAMBLADO_S)
+            from shared.narrative.claude_engine import NarrativeDegradedError
+            raise NarrativeDegradedError(list(level.sections))
     # GATE DE DEGRADACIÓN: si el motor IA cayó al fallback estático en secciones de ANÁLISIS
     # del nivel, un Deep Dive/Insight —que ES el producto pago completo— saldría hueco
     # ("El análisis ampliado se incorpora en la versión completa del producto"), engañoso y

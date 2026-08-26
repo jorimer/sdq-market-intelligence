@@ -33,8 +33,18 @@ INDICATOR_META: Dict[str, Dict[str, Any]] = {
                   "que": "Patrimonio técnico / activos ponderados por riesgo. Suficiencia de capital."},
     "tier1_ratio": {"label": "Solvencia de capital primario", "sub": "solidez", "unit": "%", "direction": "higher",
                     "que": "Capital primario / APR. Calidad del capital de mayor absorción de pérdidas."},
-    "leverage": {"label": "Apalancamiento (Basilea)", "sub": "solidez", "unit": "%", "direction": "higher",
-                 "que": "Capital nivel 1 / exposición total."},
+    # NO es el ratio de apalancamiento de Basilea, aunque se llamó así hasta 2026-08-26. El
+    # de Basilea es deliberadamente NO ponderado por riesgo —ése es su propósito: ser el
+    # contrapeso de los índices de solvencia—, y el denominador que sirve el SIB acá son
+    # «ACTIVOS Y CONTINGENTES PONDERADOS POR RIESGO CREDITICIO Y RIESGO DE MERCADO». Es un
+    # tercer índice de adecuación de capital, y el rótulo tiene que decirlo: en un documento
+    # de rating, llamar Basilea a algo que no lo es lo nota cualquier analista.
+    "leverage": {"label": "Capital primario / activos ponderados", "sub": "solidez",
+                 "unit": "%", "direction": "higher",
+                 "que": ("Capital primario / activos y contingentes ponderados por riesgo. "
+                         "Comparte numerador con la solvencia de capital primario y "
+                         "denominador con el índice de solvencia: coincide con éste cuando "
+                         "la entidad no tiene capital secundario.")},
     "cobertura_provisiones": {"label": "Cobertura de cartera vencida", "sub": "solidez", "unit": "%", "direction": "higher",
                               "que": "Provisiones / cartera vencida >90d. Colchón ante pérdidas crediticias."},
     "patrimonio_activos": {"label": "Patrimonio / activos", "sub": "solidez", "unit": "%", "direction": "higher",

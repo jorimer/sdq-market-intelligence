@@ -236,3 +236,44 @@ def test_lo_limpio_SI_queda_en_L1():
     motor._cache = {}
     motor._set_cache("k", ce.NarrativeResult(text="ok", model_used="claude-sonnet-4-6"))
     assert "k" in motor._cache
+
+
+def test_un_ensamblado_que_excede_el_techo_responde_503_y_no_muere_en_el_proxy(monkeypatch):
+    """Sin techo, una generación larga muere en el PROXY con un 502 SIN CUERPO.
+
+    El frontend lee `detail` para mostrar el motivo; un 502 no lo trae, así que el usuario ve
+    «No se pudo cargar el producto» — un producto roto en vez de una explicación. Pasó con la
+    Revisión Anual, donde el guard reintentaba sobre umbrales prospectivos y la petición
+    llegaba a 16 llamadas al modelo para dos secciones.
+
+    El 503 de degradación es la respuesta correcta porque es lo que de verdad ocurrió: el
+    servicio de análisis no entregó a tiempo, y reintentar sirve.
+    """
+    import asyncio as _asyncio
+
+    from shared.narrative.claude_engine import NarrativeDegradedError
+    from shared.products import assembler as A
+
+    monkeypatch.setattr(A, "PRESUPUESTO_DE_ENSAMBLADO_S", 0.05)
+
+    async def _eterna(*a, **kw):
+        await _asyncio.sleep(5)
+        return {}
+
+    monkeypatch.setattr(A, "_narratives_cached", _eterna)
+    p = _Product(Granularity.named_entity, ProductTier.deep_dive, _todas(_CON_RESPALDO))
+    with pytest.raises(NarrativeDegradedError):
+        asyncio.run(_content_from_snapshot(
+            p, ProductTier.deep_dive, _snap(ProductTier.deep_dive, "Banco X"),
+            "es", scope="bx"))
+
+
+def test_un_ensamblado_NORMAL_no_se_corta():
+    """El contrapeso: sin él, la regla se satisface poniendo el techo en cero."""
+    from shared.products import assembler as A
+    assert A.PRESUPUESTO_DE_ENSAMBLADO_S >= 120, (
+        "un techo bajo convertiría informes buenos en 503; el límite del proxy son ~300 s")
+    p = _Product(Granularity.named_entity, ProductTier.deep_dive, _todas(_CON_RESPALDO))
+    c = asyncio.run(_content_from_snapshot(
+        p, ProductTier.deep_dive, _snap(ProductTier.deep_dive, "Banco X"), "es", scope="bx"))
+    assert c.narratives["assessment"] == _CON_RESPALDO

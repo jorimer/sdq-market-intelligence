@@ -151,6 +151,41 @@ con HTTP 200 mientras los tests de `render()` seguían verdes—. Lo vigila
 `shared/tests/test_toda_ruta_recibe_su_path.py`, que exige que toda función reciba los
 parámetros que su path declara. Cuando el entregable sale por HTTP, **pedilo por HTTP**.
 
+**A un texto lo juzga quien tiene el CONTEXTO con el que se escribió.** El guard numérico
+corría dos veces con contextos distintos: el motor con el de la sección (133 números, con las
+relaciones computadas) y la superficie de entrega con `snapshot.payload` (55, sin ellas). La
+razón 1,32 servida —que el modelo escribió como «132 %»— pasaba en el motor y la vetaba el
+ensamblador, que nunca vio ese número. Tres informes REALES murieron así, y dos arreglos
+míos no movieron la aguja porque estaban del lado que ya funcionaba. La superficie no
+re-juzga: **se ENTERA**, por `shared/narrative/hallazgos_pendientes`. Lo vigila
+`test_regla_nadie_re_juzga_a_ciegas.py`. Corolario: si un veto ocurre y el instrumento no
+registra ninguna marca, el que miente no es el instrumento — es tu modelo de dónde ocurre.
+
+**El guard veta una cifra REAL cuando cambia de FORMA.** «69 %» por redondeo, «132 %» por
+decir una razón en porcentaje, «38 %» por ser un peso de la rúbrica servido como `0,38`. Ante
+una marca, la primera pregunta no es «¿el modelo inventó?» sino **«¿esta cifra es una FORMA de
+algo que sí servimos?»**. Las magnitudes relacionales viajan de dos maneras y el detector
+entiende las dos: en una fila con su clave, o dentro de un CONTENEDOR cuyo nombre declara la
+unidad de lo que hay adentro (`pesos_sub_componentes`). Y el aviso de corrección pide ANCLAR
+la cifra nombrando su base, nunca borrarla: mandar a borrar una cifra real empobrece el
+informe **sin veto y sin que nadie se entere**, que es peor que el veto.
+
+**Un tipo de informe o producto NUEVO se registra en TODAS sus superficies, o DESAPARECE.** Al
+anuario le faltaron cuatro registros de a uno —endpoint, plantilla, etiqueta de portada, lista
+del frontend— y **ninguno falló**: cada uno lo hacía desaparecer en un lugar distinto. La
+lección escrita no alcanzó porque solo se revisaron los diccionarios del backend. Hoy lo
+vigilan tests de paridad backend↔UI para las DOS listas de la interfaz (sistema y entidad), y
+el framework de productos exige por su cuenta etiqueta de archivo, resumidor de data-pull,
+keywords de ruteo y **muestra curada** — un producto listado que no se puede mostrar es una
+vidriera rota.
+
+**Un año no se resume hasta que CIERRA.** El anuario del sistema y la Revisión Anual exigen el
+corte de diciembre: sin él no hay año, hay un tramo, y salía publicado con el encabezado de un
+año. No se exigen los cuatro trimestres —un hueco en el medio deja un año resumible cierre a
+cierre— pero la negativa **nombra la causa y dice qué sí se puede pedir**. Y no existe un
+«score anual» promediado: el del año es el DEL CIERRE, porque un promedio no coincidiría con
+ningún score publicado y dejaría «¿cuál es el score de X en 2025?» con dos respuestas legítimas.
+
 ## Tech Stack
 
 - **Backend**: FastAPI, SQLAlchemy 2.0, Pydantic Settings, Alembic
