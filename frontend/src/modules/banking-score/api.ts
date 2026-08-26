@@ -311,6 +311,23 @@ const SYSTEM_REPORT_PATH: Record<SystemReportType, string> = {
   anuario: "anuario",
 };
 
+/**
+ * Los informes que resumen un AÑO y no un corte: el backend lee el AÑO del período que se le
+ * manda y descarta el trimestre. El botón tiene que decirlo, porque la relación entre lo que
+ * se elige arriba y lo que sale no está a la vista: con 2025-Q2 seleccionado sale el anuario
+ * de 2025 ENTERO, y con el período por defecto —el corte más reciente— se pediría el del año
+ * en curso.
+ */
+export const SYSTEM_REPORT_ES_ANUAL: Partial<Record<SystemReportType, boolean>> = {
+  anuario: true,
+};
+
+/** El año que un informe anual va a resumir, a partir del período del topbar. */
+export function anioDelInforme(periodEnd: string): string | null {
+  const m = /^(\d{4})-\d{2}-\d{2}$/.exec(periodEnd);
+  return m ? m[1] : null;
+}
+
 export async function listSystemReports(): Promise<ReportItem[]> {
   const { data } = await client.get<{ reports: ReportItem[] }>(
     "/banking-score/reports/system/list",
