@@ -5,6 +5,8 @@ plataforma contra uno escrito a mano: el documento a mano explicaba el criterio 
 extracción, sus límites propios y el rango de cada disposición, y la plataforma publicaba
 las cifras sin nada de eso. Una tabla cuyo método quedó en otro documento no es verificable.
 """
+import datetime as _d
+
 import pytest
 
 from modules.law_intel.informe_abierto import (ANEXOS_POR_EXPEDIENTE, Anexo, LIMITES_TRAMITES,
@@ -12,9 +14,11 @@ from modules.law_intel.informe_abierto import (ANEXOS_POR_EXPEDIENTE, Anexo, LIM
 
 
 class _Fila:
-    def __init__(self, theme, value, entity="nacional", nota="nacional", period="2026-08"):
+    def __init__(self, theme, value, entity="nacional", nota="nacional", period="2026-08",
+                 leida=_d.date(2026, 8, 26)):
         self.theme, self.value, self.entity_key = theme, value, entity
         self.disaggregation, self.period = nota, period
+        self.published_at = leida
         self.enabled, self.interval_hours = False, None
 
 
@@ -211,3 +215,73 @@ class TestElGuardESTRUCTURAL:
                 assert len(filas) >= 2, f"«{eid}» → «{titulo}» sale sin filas"
                 assert len(set(len(f) for f in filas)) == 1, (
                     f"«{eid}» → «{titulo}»: filas de anchos distintos rompen el render")
+
+
+class TestLaFechaDeLECTURAsaleDelDATO:
+    """El informe decía «la última lectura registrada es del 2026-08-25» leyendo la AGENDA,
+    mientras el dato que mostraba se había leído el 26: una corrida manual no mueve la
+    agenda. El lector entiende esa frase como «cuándo se leyó este dato»."""
+
+    def test_el_anexo_trae_la_fecha_de_la_SERIE(self):
+        assert ANEXOS_POR_EXPEDIENTE["ley_167_21"](_db()).leido_el == "2026-08-26"
+
+    def test_toma_la_MAS_RECIENTE_del_periodo(self):
+        """Las filas del período no se escriben todas en el mismo instante."""
+        db = _db()
+        db._f[0].published_at = _d.date(2026, 8, 24)
+        db._f[1].published_at = _d.date(2026, 8, 27)
+        assert ANEXOS_POR_EXPEDIENTE["ley_167_21"](db).leido_el == "2026-08-27"
+
+    def test_SIN_fecha_en_la_serie_no_se_inventa(self):
+        """«Cuándo corrió la operación» y «cuándo se leyó el dato» son afirmaciones
+        distintas. Rellenar una con la otra es lo que produjo el error."""
+        db = _db()
+        for f in db._f:
+            f.published_at = None
+        assert ANEXOS_POR_EXPEDIENTE["ley_167_21"](db).leido_el is None
+
+    def test_la_seccion_NO_afirma_una_lectura_sin_fecha_del_dato(self):
+        from modules.law_intel.informe_abierto import _cuando_se_actualiza
+
+        class _Ag:
+            enabled, interval_hours = True, 730
+            next_run_at = _d.datetime(2026, 9, 25)
+            last_run_at = _d.datetime(2026, 8, 25)
+
+        class _DBag:
+            def query(self, *a, **k):
+                return self
+
+            def filter(self, *a, **k):
+                return self
+
+            def all(self):
+                return [_Ag()]
+
+        sin = _cuando_se_actualiza("ley_167_21", _DBag(), leido_el=None)
+        assert "La lectura que se publica" not in sin
+        assert "cada 30 días" in sin and "2026-09-25" in sin
+        # Y la fecha de la agenda NO se cuela como si fuera la del dato.
+        assert "2026-08-25" not in sin
+
+    def test_la_seccion_publica_la_fecha_del_DATO_cuando_la_hay(self):
+        from modules.law_intel.informe_abierto import _cuando_se_actualiza
+
+        class _Ag:
+            enabled, interval_hours = True, 730
+            next_run_at = _d.datetime(2026, 9, 25)
+            last_run_at = _d.datetime(2026, 8, 25)      # la agenda va un día atrás
+
+        class _DBag:
+            def query(self, *a, **k):
+                return self
+
+            def filter(self, *a, **k):
+                return self
+
+            def all(self):
+                return [_Ag()]
+
+        con = _cuando_se_actualiza("ley_167_21", _DBag(), leido_el="2026-08-26")
+        assert "La lectura que se publica acá es del 2026-08-26" in con
+        assert "2026-08-25" not in con, "la fecha de la agenda volvió a colarse"

@@ -211,6 +211,10 @@ class Anexo:
     metodologia: Optional[str] = None
     #: Qué NO afirma este dato. Se suma al alcance genérico, no lo reemplaza.
     limites: Optional[str] = None
+    #: Cuándo se leyó el dato que el anexo publica, `YYYY-MM-DD`. Sale de la SERIE y no de
+    #: la agenda: la agenda dice cuándo tocaba correr, el dato dice cuándo se leyó, y una
+    #: corrida manual las separa.
+    leido_el: Optional[str] = None
 
 
 def _tabla_de_mas_consultados(db: Any, periodo: str) -> Optional[Tuple[str, List[List[str]]]]:
@@ -298,6 +302,28 @@ LIMITES_TRAMITES = (
     "detectada, una atribución que corregir— son bienvenidas y se incorporan con crédito.")
 
 
+def _leido_el(filas: Any, periodo: str) -> Optional[str]:
+    """Cuándo se leyó el dato de este período, de la propia serie.
+
+    **La agenda no sirve para esto y por eso se dejó de usar.** El informe decía «la última
+    lectura registrada es del 2026-08-25» leyendo el `last_run_at` de la agenda, mientras el
+    dato que mostraba se había leído el 26: una corrida manual no mueve la agenda. El lector
+    entiende esa frase como «cuándo se leyó este dato», y respondía con otra cosa.
+
+    `None` cuando la serie no lo trae. No se sustituye por la fecha de la agenda: «cuándo
+    corrió la operación» y «cuándo se leyó el dato» son afirmaciones distintas, y rellenar
+    una con la otra es exactamente lo que produjo el error.
+
+    Se lee de `published_at`, que en el resto de las series del módulo guarda la fecha en
+    que el EMISOR publicó. Acá coinciden y no por casualidad: el catálogo de trámites es un
+    estado continuo sin fecha de publicación —no hay una edición que el portal cierre—, así
+    que la fecha de la lectura es la única fecha que ese dato tiene.
+    """
+    fechas = [f.published_at for f in filas
+              if str(f.period) == periodo and getattr(f, "published_at", None)]
+    return max(fechas).isoformat() if fechas else None
+
+
 def _anexo_tramites(db: Any) -> Anexo:
     """La evidencia del catálogo de trámites: la prueba de la obligación del artículo 39.
 
@@ -313,16 +339,16 @@ def _anexo_tramites(db: Any) -> Anexo:
 
     if db is None:
         return Anexo(tablas=[])
-    filas = (db.query(SocialIndicator)
-             .filter(SocialIndicator.entity_key == ENTIDAD,
-                     SocialIndicator.theme.in_((TEMA_TOTAL, TEMA_CON_TIEMPO, TEMA_PCT)))
-             .all())
-    if not filas:
+    nacionales = (db.query(SocialIndicator)
+                  .filter(SocialIndicator.entity_key == ENTIDAD,
+                          SocialIndicator.theme.in_((TEMA_TOTAL, TEMA_CON_TIEMPO, TEMA_PCT)))
+                  .all())
+    if not nacionales:
         return Anexo(tablas=[])
     # El período MÁS RECIENTE, y se nombra en el título: una tabla sin fecha de lectura
     # sobre un catálogo vivo se lee como si fuera de hoy para siempre.
-    periodo = max(str(f.period) for f in filas)
-    v = {f.theme: f.value for f in filas if str(f.period) == periodo}
+    periodo = max(str(f.period) for f in nacionales)
+    v = {f.theme: f.value for f in nacionales if str(f.period) == periodo}
     if TEMA_TOTAL not in v:
         return Anexo(tablas=[])
     tablas: List[Tuple[str, List[List[str]]]] = [(
@@ -379,7 +405,8 @@ def _anexo_tramites(db: Any) -> Anexo:
         tablas.insert(1, mas)
     return Anexo(tablas=tablas,
                  metodologia=_metodologia_tramites(db, periodo, float(v[TEMA_TOTAL])),
-                 limites=LIMITES_TRAMITES)
+                 limites=LIMITES_TRAMITES,
+                 leido_el=_leido_el(nacionales, periodo))
 
 
 #: Anexos de evidencia propios de una ley. Se declaran por expediente y no se deducen: la
@@ -427,8 +454,9 @@ def _prosa_de_declaraciones(dec: Dict[str, Any]) -> str:
     return "\n\n".join(partes)
 
 
-def _cuando_se_actualiza(expediente_id: str, db: Any) -> Optional[str]:
-    """Cuándo vuelve a leerse el dato, tomado de la AGENDA de la operación que lo lee.
+def _cuando_se_actualiza(expediente_id: str, db: Any,
+                         leido_el: Optional[str] = None) -> Optional[str]:
+    """Cuándo vuelve a leerse el dato: la CADENCIA de la agenda, la fecha de lectura del DATO.
 
     No de una frase escrita a mano. Una promesa de actualización redactada en el documento
     envejece en cuanto alguien cambia la cadencia, y el lector no tiene cómo enterarse; la
@@ -436,6 +464,11 @@ def _cuando_se_actualiza(expediente_id: str, db: Any) -> Optional[str]:
 
     Se resuelve por la `serie_de_seguimiento` que la obligación declara: si ninguna
     obligación de esta ley sigue una serie, el documento no promete ninguna actualización.
+
+    **Cada dato de esta sección viene de donde ese dato vive.** La cadencia y la próxima
+    corrida son hechos de la agenda. La ÚLTIMA LECTURA es un hecho del dato, y se recibe
+    computada de la serie: usar el `last_run_at` de la agenda para eso publicó una fecha un
+    día vieja —una corrida manual no mueve la agenda— y el lector no tenía cómo saberlo.
     """
     from modules.law_intel.obligaciones import cargar_obligaciones
 
@@ -460,10 +493,9 @@ def _cuando_se_actualiza(expediente_id: str, db: Any) -> Optional[str]:
     f = min(activas, key=lambda x: x.interval_hours)
     dias = round(f.interval_hours / 24)
     proxima = f.next_run_at.date().isoformat() if f.next_run_at else None
-    ultima = f.last_run_at.date().isoformat() if f.last_run_at else None
     partes = [f"El dato de este informe se vuelve a leer cada {dias} días."]
-    if ultima:
-        partes.append(f"La última lectura registrada es del {ultima}.")
+    if leido_el:
+        partes.append(f"La lectura que se publica acá es del {leido_el}.")
     if proxima:
         partes.append(f"La próxima está prevista para el {proxima}.")
     partes.append(
@@ -507,7 +539,7 @@ def construir(expediente_id: str, db: Any = None) -> Dict[str, Any]:
     anexo = arma_anexo(db) if (arma_anexo is not None and db is not None) else Anexo(tablas=[])
     tablas.extend(anexo.tablas)
 
-    _actualiza = _cuando_se_actualiza(expediente_id, db)
+    _actualiza = _cuando_se_actualiza(expediente_id, db, leido_el=anexo.leido_el)
     juridica = lectura_juridica.prosa(expediente_id)
     resumen_obs: Dict[str, Any] = obs.get("resumen") or {}
     lista_obs: List[Dict[str, Any]] = list(obs.get("obligaciones") or [])

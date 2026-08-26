@@ -188,9 +188,17 @@ class TestCuandoSeActualiza:
 
     def test_dice_cada_cuanto_y_cuando_toca(self):
         from modules.law_intel.informe_abierto import _cuando_se_actualiza
-        t = _cuando_se_actualiza("ley_167_21", self._DB())
+        t = _cuando_se_actualiza("ley_167_21", self._DB(), leido_el="2026-08-26")
         assert "cada 30 días" in t
-        assert "2026-08-25" in t and "2026-09-25" in t
+        assert "2026-09-25" in t
+
+    def test_la_fecha_de_la_AGENDA_no_se_publica_como_la_del_dato(self):
+        """El `last_run_at` de la agenda dice cuándo corrió la operación, no cuándo se leyó
+        el dato. Una corrida manual las separa, y el informe publicó la de la agenda."""
+        from modules.law_intel.informe_abierto import _cuando_se_actualiza
+        t = _cuando_se_actualiza("ley_167_21", self._DB(), leido_el="2026-08-26")
+        assert "La lectura que se publica acá es del 2026-08-26" in t
+        assert "2026-08-25" not in t
 
     def test_una_ley_SIN_serie_de_seguimiento_no_promete_actualizacion(self):
         from modules.law_intel.informe_abierto import _cuando_se_actualiza
