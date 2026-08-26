@@ -52,6 +52,7 @@ REPORT_SECTIONS: Dict[str, list] = {
     "criteria": ["risk_assessment"],
     "sector_outlook": ["sector_outlook"],
     "anuario": ["anuario"],
+    "revision_anual": ["revision_anual"],
 }
 
 # Map each section to the NarrativeEngine template name
@@ -70,6 +71,7 @@ _SECTION_TO_TEMPLATE: Dict[str, str] = {
     "trend_analysis": "trend_analysis",
     "sector_outlook": "sector_outlook",
     "anuario": "anuario_sistema",
+    "revision_anual": "revision_anual",
 }
 
 # Plantillas de banking que van por la RUTA CEREBRO (axis="banking"): obtienen la Barra de
@@ -85,6 +87,8 @@ _CEREBRO_TEMPLATES = frozenset({
     # de análisis diciendo «el análisis cualitativo ampliado se incorpora en la versión
     # completa del producto». Registrado pero inalcanzable, igual que su endpoint.
     "anuario_sistema",
+    # Misma trampa, mismo remedio: sin esta línea la Revisión Anual saldría hueca.
+    "revision_anual",
 })
 
 # Profundidad POR SECCIÓN (alineada con shared.products.section_mode), para que el deep dive
@@ -97,7 +101,7 @@ _CEREBRO_TEMPLATES = frozenset({
 # pide hasta 800 palabras y corría con el presupuesto `standard` (1024 tokens), que en
 # español no alcanza (~1.120). `trend_analysis` ya estaba acá por lo mismo.
 _DEEP_SECTIONS = frozenset({"risk_assessment", "trend_analysis", "sector_outlook",
-                            "anuario"})
+                            "anuario", "revision_anual"})
 
 
 def _section_mode(section: str, base_mode: str) -> str:
@@ -607,6 +611,7 @@ async def generate_report_narratives(
     period: str,
     benchmarks: Optional[Dict] = None,
     anuario: Optional[Dict] = None,
+    revision: Optional[Dict] = None,
 ) -> Dict[str, str]:
     """Generate all narrative sections required for *report_type*.
 
@@ -638,6 +643,16 @@ async def generate_report_narratives(
             template = "anuario_sistema"
             context = _build_system_context(report_type, bank_name, period, benchmarks,
                                             anuario=anuario)
+        elif section == "revision_anual":
+            # La Revisión Anual tiene sujeto de ENTIDAD pero unidad de AÑO, así que no entra
+            # ni por el caso de sistema ni por el de sección de corte: su contexto son los
+            # hechos del año ya computados (ver `reports/revision_anual`), con el telón de
+            # pares del cierre para que la posición relativa tenga contra qué leerse.
+            template = "revision_anual"
+            context = {"entity_name": bank_name, "period": period,
+                       "revision_anual": revision or {}}
+            if benchmarks:
+                context["benchmarks"] = benchmarks
         elif is_system and section == "executive_summary":
             template = "system_summary"
             context = _build_system_context(report_type, bank_name, period, benchmarks)

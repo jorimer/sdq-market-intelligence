@@ -1061,7 +1061,8 @@
       "wire": "Wire",
       "criteria": "Critères",
       "sector_outlook": "Perspective sectorielle",
-      "anuario": "Annuaire du système"
+      "anuario": "Annuaire du système",
+      "revision_anual": "Revue annuelle"
     },
     "mdlTitle": "Modèle ML",
     "mdlSub": "Complément explicable au noyau déterministe (contributions par variable), pas un oracle.",

@@ -617,6 +617,22 @@ async def generate_report(
             "indicators": {},
         }
 
+    # REVISIÓN ANUAL: sujeto de entidad, unidad de AÑO. Se computa antes de narrar y se exige
+    # el año CERRADO por el mismo motivo que el anuario del sistema — sin diciembre esto es un
+    # tramo, no un año, y saldría con el encabezado de un año.
+    revision = None
+    if report_type == "revision_anual":
+        from modules.banking_score.reports.revision_anual import revision_anual
+        revision = revision_anual(db, bank, pe.year)
+        if revision is None:
+            report.status = ReportStatus.error  # type: ignore[assignment]
+            db.commit()
+            raise HTTPException(
+                status_code=422,
+                detail=(f"No se emite la Revisión Anual {pe.year} de {bank.name}: el año no "
+                        "cerró (falta el corte de diciembre) o la entidad no tiene panel "
+                        "suficiente. Elegí un período de un año ya cerrado."))
+
     try:
         from modules.banking_score.reports.narrative import generate_report_narratives
         from modules.banking_score.reports.pdf_generator import generate_pdf_report
@@ -634,6 +650,7 @@ async def generate_report(
                 scoring_result=scoring_result,
                 period=period_end,
                 benchmarks=benchmarks,
+                revision=revision,
             )
         # GATE DE DEGRADACIÓN: en un reporte premium (SDQ Rating / deep dive de la entidad)
         # una sola sección de análisis caída a fallback estático produce un PDF hueco. Se
@@ -684,6 +701,9 @@ async def generate_report(
             scoring_result=scoring_result,
             period=period_end,
             narratives=narratives,
+            # Las tablas del año viajan al PDF: sin ellas la Revisión Anual sería la misma
+            # foto de diciembre con otro título, que es exactamente lo que vino a corregir.
+            revision=revision,
         )
         _attach_pdf(report, file_path, narratives)
     except NarrativeDegradedError as d:
