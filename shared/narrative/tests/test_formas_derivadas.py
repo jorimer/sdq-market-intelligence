@@ -159,3 +159,37 @@ def test_sin_texto_no_inventa_fragmento():
     from shared.narrative.numeric_guard import fragmento_alrededor
 
     assert fragmento_alrededor("", "38%: x") == ""
+
+
+# ── El CONTENEDOR: cuando la clave es el sujeto y no la magnitud ───────
+
+def _ctx_pesos():
+    """Los pesos REALES de la rúbrica para una AAyP, tal como los sirve el contexto."""
+    return {"entity_name": "Asociación Bonao de Ahorros y Préstamos",
+            "pesos_sub_componentes": {"solidez": 0.38, "calidad": 0.34, "eficiencia": 0.13,
+                                      "liquidez": 0.1, "diversificacion": 0.05}}
+
+
+def test_el_peso_de_la_rubrica_dicho_en_PORCENTAJE_pasa():
+    """El caso real, capturado con la frase que el modelo escribió.
+
+    «La dimensión de mayor peso en el modelo (solidez de capital, ponderación 38%) sostiene la
+    calificación con 82.32 puntos». El 0,38 estaba servido; el guard lo marcó como inventado
+    porque los pesos viajan como `{componente: peso}` —la clave es el SUJETO, no la magnitud—
+    y el detector solo miraba filas con una clave tipada.
+    """
+    frase = ("la dimensión de mayor peso en el modelo (solidez de capital, ponderación 38%) "
+             "sostiene la calificación")
+    assert deterministic_uncited_figures(_ctx_pesos(), frase) == []
+
+
+@pytest.mark.parametrize("cita,ok", [("34", True), ("13", True), ("5", True), ("27", False)])
+def test_cada_peso_servido_pasa_y_uno_que_no_existe_no(cita, ok):
+    marcas = deterministic_uncited_figures(_ctx_pesos(), f"con una ponderación de {cita}%")
+    assert (marcas == []) is ok
+
+
+def test_sin_el_contenedor_declarado_el_guard_no_afloja():
+    """Prueba negativa: el mecanismo es el nombre del contenedor, no «cualquier dict»."""
+    ctx = {"entity_name": "X", "otros_coeficientes": {"solidez": 0.38}}
+    assert deterministic_uncited_figures(ctx, "una ponderación de 38%")
