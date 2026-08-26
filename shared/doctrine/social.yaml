@@ -100,6 +100,7 @@ variable_scopes:
   tramites_catalogados: national
   tramites_con_tiempo_declarado: national
   tramites_pct_con_tiempo_sobre_los_catalogados: national
+  tramites_mencionan_cifra_de_tiempo_sin_anclar: national
   secondary_coverage_pais: national      # MINERD SIIE, fila TOTAL PAIS
   primary_coverage_pais: national        # MINERD SIIE, fila TOTAL PAIS
   schooling_years_pais: national         # SISDOM 05 3 007, fila «Total»

@@ -227,12 +227,14 @@ def register() -> None:
     ))
     register_operation(Operation(
         "tramites-registro-unico", "Catálogo de trámites del Estado (Registro Único)",
-        "Lee los ~710 trámites del Portal Único de Servicios (gob.do) y persiste tres "
+        "Lee los ~710 trámites del Portal Único de Servicios (gob.do) y persiste las "
         "cifras del mes: cuántos publica el Estado, cuántos declaran su tiempo de "
-        "respuesta y la razón entre las dos. Es la serie que sigue la obligación del "
-        "artículo 39 de la Ley 167-21 —publicar los procedimientos en el Registro Único— "
-        "y el cumplimiento de la Resolución 142-2024 del MAP, que exige el campo de "
-        "tiempo. Al 2026-08: 3 de 710.",
+        "respuesta, la razón entre las dos y el contrafactual del criterio de extracción. "
+        "Persiste además el desglose por institución y por trámite, que es la evidencia "
+        "del informe abierto. Es la serie que sigue la obligación del artículo 39 de la "
+        "Ley 167-21 —publicar los procedimientos en el Registro Único— y el cumplimiento "
+        "de la Resolución 142-2024 del MAP, que exige el campo de tiempo. La cifra "
+        "vigente la sirve la serie: escribirla acá la vuelve falsa en la próxima corrida.",
         _run_tramites,
         # MENSUAL (~730 h). Sin `anclaje`: el anclaje alinea con el calendario de
         # publicación de una fuente —un trimestre que cierra y se publica 45 días
