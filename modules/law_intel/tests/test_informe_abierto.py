@@ -226,6 +226,7 @@ class TestElAnexoDeEVIDENCIA:
     class _Fila:
         def __init__(self, theme, value, period="2026-08"):
             self.theme, self.value, self.period = theme, value, period
+            self.entity_key, self.disaggregation = "nacional", "nacional"
             # La misma sesión de mentira atiende dos consultas —la del anexo y la de la
             # agenda—. Se declara `enabled=False` para que la de la agenda descarte estas
             # filas en vez de reventar: el test del anexo prueba el anexo, no la cadencia.
@@ -306,3 +307,100 @@ class TestLaPROSAquesEIMPRIME:
         from modules.law_intel.informe_abierto import _titular
         assert _titular({"medidos": 46, "total": 90, "obligaciones": 7}) == \
             "Mide 46 de 90 indicadores"
+
+
+class TestElDetalleDelAnexo:
+    """Las tablas que hacen que el anexo diga algo, y los dos errores que casi publica."""
+
+    class _Fila:
+        def __init__(self, theme, value, entity="nacional", nota="nacional",
+                     period="2026-08"):
+            self.theme, self.value, self.entity_key = theme, value, entity
+            self.disaggregation, self.period = nota, period
+            self.enabled, self.interval_hours = False, None
+
+    class _DB:
+        def __init__(self, filas):
+            self._f, self._t, self._p = filas, None, None
+
+        def query(self, *a, **k):
+            self._t = None
+            return self
+
+        def filter(self, *cond, **k):
+            # El doble filtra por el tema que pide cada consulta. `str(expr)` de SQLAlchemy
+            # NO trae el valor —renderiza `theme = :theme_1`—, así que hay que compilar con
+            # los literales o el doble devuelve TODAS las filas a TODAS las consultas y las
+            # tablas salen mezcladas sin que ningún test lo note.
+            for c in cond:
+                txt = str(c.compile(compile_kwargs={"literal_binds": True}))
+                pedidos = {f.theme for f in self._f if f"'{f.theme}'" in txt}
+                if pedidos:
+                    self._t = pedidos if self._t is None else (self._t & pedidos)
+            return self
+
+        def all(self):
+            return [f for f in self._f if self._t is None or f.theme in self._t]
+
+    def _db(self):
+        from modules.social_dev.tramites_sync import (TEMA_CON_TIEMPO,
+                                                      TEMA_CON_TIEMPO_POR_INSTITUCION,
+                                                      TEMA_CONSULTAS_POR_INSTITUCION,
+                                                      TEMA_PCT, TEMA_POR_INSTITUCION,
+                                                      TEMA_TIEMPO_POR_TRAMITE, TEMA_TOTAL)
+        F = self._Fila
+        return self._DB([
+            F(TEMA_TOTAL, 710.0), F(TEMA_CON_TIEMPO, 22.0), F(TEMA_PCT, 3.1),
+            F(TEMA_POR_INSTITUCION, 23.0, "DGP", "por institución"),
+            F(TEMA_POR_INSTITUCION, 11.0, "Supérate", "por institución"),
+            F(TEMA_CONSULTAS_POR_INSTITUCION, 85432.0, "DGP", "por institución"),
+            F(TEMA_CONSULTAS_POR_INSTITUCION, 1535542.0, "Supérate", "por institución"),
+            F(TEMA_CON_TIEMPO_POR_INSTITUCION, 14.0, "DGP", "por institución"),
+            F(TEMA_CON_TIEMPO_POR_INSTITUCION, 0.0, "Supérate", "por institución"),
+            F(TEMA_TIEMPO_POR_TRAMITE, 0.125, "pasaporte-1", "DGP · 3 horas · perifrasis"),
+            F(TEMA_TIEMPO_POR_TRAMITE, 0.125, "pasaporte-2", "DGP · 3 horas · perifrasis"),
+            F(TEMA_TIEMPO_POR_TRAMITE, 5.0, "cnzfe-1", "CNZFE · 5 días laborables · explicito"),
+        ])
+
+    def _tabla(self, titulo):
+        t = [x for x in construir("ley_167_21", self._db())["tablas"] if titulo in x[0]]
+        return t[0] if t else None
+
+    def test_las_instituciones_se_ordenan_por_CONSULTAS(self):
+        """Una con 61 trámites y otra con 1,5 millones de consultas no pesan igual para
+        quien espera."""
+        filas = self._tabla("instituciones más consultadas")[1][1:]
+        assert filas[0][0] == "Supérate"
+
+    def test_la_columna_de_declara_dice_la_VERDAD(self):
+        """El primer intento tenía una caché que nunca se llenaba: la columna habría dicho
+        «No» para todas, afirmando que ninguna institución declara nada."""
+        filas = {f[0]: f[3] for f in self._tabla("instituciones más consultadas")[1][1:]}
+        assert filas["DGP"] == "Sí" and filas["Supérate"] == "No"
+
+    def test_los_tiempos_se_AGRUPAN_por_institución_y_plazo(self):
+        """Sin agrupar salen catorce filas de pasaporte con el mismo tiempo."""
+        filas = self._tabla("declaran cuánto tardan")[1][1:]
+        assert ["DGP", "2", "3 horas", "Lo dice en prosa"] in filas
+        assert len(filas) == 2
+
+    def test_distingue_NOMBRAR_el_campo_de_decirlo_en_prosa(self):
+        """La Resolución 142-2024 exige un campo; una perífrasis lo suple sin cumplirlo."""
+        filas = self._tabla("declaran cuánto tardan")[1][1:]
+        niveles = {f[0]: f[3] for f in filas}
+        assert niveles["CNZFE"] == "Nombra el campo"
+        assert niveles["DGP"] == "Lo dice en prosa"
+
+    def test_el_titulo_lleva_los_DOS_denominadores(self):
+        assert "3 de 710" in self._tabla("declaran cuánto tardan")[0]
+
+    def test_el_numerador_del_titulo_es_la_SUMA_de_las_filas(self):
+        """Contar las filas de la serie en vez de las de la tabla afirma un total que la
+        tabla debajo no muestra: la fila con la nota malformada se salta al agrupar."""
+        t = self._tabla("declaran cuánto tardan")
+        n = int(t[0].split("(")[1].split(" de")[0])
+        assert n == sum(int(f[1]) for f in t[1][1:])
+
+    def test_la_notacion_de_miles_es_ESPAÑOLA(self):
+        filas = self._tabla("instituciones más consultadas")[1][1:]
+        assert filas[0][2] == "1.535.542"

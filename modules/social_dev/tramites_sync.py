@@ -52,12 +52,38 @@ TEMA_TOTAL = "tramites_catalogados"
 TEMA_CON_TIEMPO = "tramites_con_tiempo_declarado"
 TEMA_PCT = "tramites_pct_con_tiempo_sobre_los_catalogados"
 
+#: Los tres agregados NACIONALES, que son los que van al Data Registry y los que un binding
+#: puede atar. Se nombran aparte de los desgloses porque tienen alcance distinto.
 TEMAS = (TEMA_TOTAL, TEMA_CON_TIEMPO, TEMA_PCT)
+
+#: El desglose POR INSTITUCIÓN y POR TRÁMITE. No va al Data Registry y es deliberado: son
+#: evidencia del informe, no indicadores de una ley. Publicarlos como señales los volvería
+#: `per_subject` y el eje de leyes los descartaría uno por uno en cada corrida, llenando el
+#: log de omisiones correctas y ruidosas.
+#:
+#: Se guardan en el mismo modelo usando `entity_key` para el sujeto —la sigla o el slug—,
+#: que es exactamente para lo que ese campo existe. Sin esto, el anexo tendría que
+#: dispararle 711 llamadas al portal cada vez que alguien descarga el informe.
+TEMA_POR_INSTITUCION = "tramites_por_institucion"
+TEMA_CONSULTAS_POR_INSTITUCION = "tramites_consultas_por_institucion"
+TEMA_TIEMPO_POR_TRAMITE = "tramites_tiempo_declarado_por_tramite"
+#: Cuántos trámites CON tiempo declarado tiene cada institución. Se persiste aunque parezca
+#: derivable: el slug del trámite no lleva la sigla, así que sin esta fila el informe no
+#: puede decir qué institución declara alguno — y una columna que dice «No» sin saberlo
+#: afirma que la institución no declara nada.
+TEMA_CON_TIEMPO_POR_INSTITUCION = "tramites_con_tiempo_por_institucion"
+
+TEMAS_DESGLOSE = (TEMA_POR_INSTITUCION, TEMA_CONSULTAS_POR_INSTITUCION,
+                  TEMA_CON_TIEMPO_POR_INSTITUCION, TEMA_TIEMPO_POR_TRAMITE)
 
 UNIDADES = {
     TEMA_TOTAL: "trámites",
     TEMA_CON_TIEMPO: "trámites",
     TEMA_PCT: "% de los catalogados",
+    TEMA_POR_INSTITUCION: "trámites",
+    TEMA_CONSULTAS_POR_INSTITUCION: "consultas",
+    TEMA_CON_TIEMPO_POR_INSTITUCION: "trámites",
+    TEMA_TIEMPO_POR_TRAMITE: "días",
 }
 
 #: Por debajo de esto, lo que se leyó no es el catálogo del Estado. El portal publicaba 710
@@ -82,18 +108,64 @@ def periodo_de(hoy: Optional[_dt.date] = None) -> str:
 
 
 def _upsert(db: Any, tema: str, periodo: str, valor: float, fuente: str,
-            licencia: str) -> None:
+            licencia: str, sujeto: str = ENTIDAD, nota: str = "nacional") -> None:
     fila = (db.query(SocialIndicator)
-            .filter_by(entity_key=ENTIDAD, theme=tema, period=periodo).first())
+            .filter_by(entity_key=sujeto, theme=tema, period=periodo).first())
     if fila is None:
-        fila = SocialIndicator(theme=tema, entity_key=ENTIDAD, period=periodo)
+        fila = SocialIndicator(theme=tema, entity_key=sujeto, period=periodo)
         db.add(fila)
     fila.value = valor
     fila.unit = UNIDADES[tema]
-    fila.disaggregation = "nacional"
+    fila.disaggregation = nota[:60]
     fila.source = fuente[:40]
     fila.license = licencia[:120]
     fila.published_at = _dt.date.today()
+
+
+def _persistir_desglose(db: Any, tramites: Any, periodo: str, fuente: str,
+                        licencia: str) -> None:
+    """El desglose por institución y por trámite, para el anexo del informe.
+
+    **Se borra y se reescribe el período entero, no se actualiza fila a fila.** Una
+    institución que deja de publicar trámites tiene que DESAPARECER del desglose; con un
+    upsert por clave quedaría con su último valor congelado y el informe la seguiría
+    contando. Es el mismo motivo por el que una serie que se recorta no se rellena.
+    """
+    import collections
+
+    from modules.social_dev.models.models import SocialIndicator
+
+    (db.query(SocialIndicator)
+       .filter(SocialIndicator.period == periodo,
+               SocialIndicator.theme.in_(TEMAS_DESGLOSE))
+       .delete(synchronize_session=False))
+
+    por_inst: Any = collections.defaultdict(lambda: {"n": 0, "visitas": 0, "con_tiempo": 0})
+    for t in tramites:
+        d = por_inst[t.institucion_sigla or t.institucion]
+        d["n"] += 1
+        d["visitas"] += t.visitas or 0
+        d["con_tiempo"] += 1 if t.tiempo else 0
+    for sigla, d in por_inst.items():
+        _upsert(db, TEMA_POR_INSTITUCION, periodo, float(d["n"]), fuente, licencia,
+                sujeto=sigla, nota="por institución")
+        _upsert(db, TEMA_CONSULTAS_POR_INSTITUCION, periodo, float(d["visitas"]), fuente,
+                licencia, sujeto=sigla, nota="por institución")
+        _upsert(db, TEMA_CON_TIEMPO_POR_INSTITUCION, periodo, float(d["con_tiempo"]),
+                fuente, licencia, sujeto=sigla, nota="por institución")
+
+    for t in tramites:
+        if not t.tiempo:
+            continue
+        # El TEXTO original y cómo lo dice la ficha viajan en la desagregación: la cifra
+        # sola —«5»— no deja ver si son días laborables o de calendario, ni si la ficha
+        # nombra el campo o lo suple en prosa.
+        # La SIGLA va en la nota: el slug del trámite no la lleva, y sin ella el informe no
+        # puede agrupar los 22 por institución — y catorce filas de pasaporte casi idénticas
+        # no se leen. Caben: la más larga mide 49 de los 60 caracteres del campo.
+        nota = f"{t.institucion_sigla} · {t.tiempo.texto_original} · {t.tiempo.como_lo_dice}"
+        _upsert(db, TEMA_TIEMPO_POR_TRAMITE, periodo, float(t.tiempo.dias or 0), fuente,
+                licencia, sujeto=(t.slug or "")[:60], nota=nota)
 
 
 def run_tramites(force: bool = False,
@@ -140,6 +212,7 @@ def run_tramites(force: bool = False,
         }
         for tema, valor in valores.items():
             _upsert(db, tema, periodo, valor, SOURCE, LICENSE)
+        _persistir_desglose(db, tramites, periodo, SOURCE, LICENSE)
         db.commit()
     finally:
         db.close()

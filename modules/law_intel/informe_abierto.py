@@ -150,6 +150,46 @@ def _tabla_de_cobertura(cobertura: Dict[str, Any],
     ])
 
 
+#: Cuántas instituciones entran en la tabla. Con 91 la tabla ocupa tres páginas y deja de
+#: leerse; con las diez más consultadas se ve quién concentra la espera de la gente.
+_TOP_INSTITUCIONES = 12
+
+
+def _mil(n: Any) -> str:
+    """Notación española de miles. El informe entero usa una sola convención."""
+    return f"{int(n or 0):,}".replace(",", ".")
+
+
+def _por_sujeto(db: Any, tema: str, periodo: str) -> Dict[str, float]:
+    from modules.social_dev.models.models import SocialIndicator
+    filas = (db.query(SocialIndicator)
+             .filter(SocialIndicator.theme == tema, SocialIndicator.period == periodo).all())
+    return {str(f.entity_key): float(f.value or 0) for f in filas}
+
+
+def _tiempos_declarados(db: Any, periodo: str) -> Dict[str, Tuple[float, str]]:
+    """`{slug: (días, «texto · nivel»)}` de los trámites que declaran su tiempo."""
+    from modules.social_dev.models.models import SocialIndicator
+    from modules.social_dev.tramites_sync import TEMA_TIEMPO_POR_TRAMITE
+    filas = (db.query(SocialIndicator)
+             .filter(SocialIndicator.theme == TEMA_TIEMPO_POR_TRAMITE,
+                     SocialIndicator.period == periodo).all())
+    return {str(f.entity_key): (float(f.value or 0), str(f.disaggregation or ""))
+            for f in filas}
+
+
+def _instituciones_que_declaran(db: Any, periodo: str) -> set:
+    """Siglas con al menos un trámite de tiempo declarado, leído del desglose persistido.
+
+    El primer intento tenía una caché que nunca se llenaba: la columna habría dicho «No»
+    para todas, afirmando que ninguna institución declara nada. El sync persiste el conteo
+    por institución justamente porque el slug del trámite no lleva la sigla.
+    """
+    from modules.social_dev.tramites_sync import TEMA_CON_TIEMPO_POR_INSTITUCION
+    return {s for s, n in _por_sujeto(db, TEMA_CON_TIEMPO_POR_INSTITUCION, periodo).items()
+            if n > 0}
+
+
 def _anexo_tramites(db: Any) -> List[Tuple[str, List[List[str]]]]:
     """La evidencia del catálogo de trámites: la prueba de la obligación del artículo 39.
 
@@ -159,8 +199,9 @@ def _anexo_tramites(db: Any) -> List[Tuple[str, List[List[str]]]]:
     del mismo día dan lo mismo— y barato.
     """
     from modules.social_dev.models.models import SocialIndicator
-    from modules.social_dev.tramites_sync import (ENTIDAD, TEMA_CON_TIEMPO, TEMA_PCT,
-                                                  TEMA_TOTAL)
+    from modules.social_dev.tramites_sync import (ENTIDAD, TEMA_CON_TIEMPO,
+                                                  TEMA_CONSULTAS_POR_INSTITUCION, TEMA_PCT,
+                                                  TEMA_POR_INSTITUCION, TEMA_TOTAL)
 
     if db is None:
         return []
@@ -176,12 +217,53 @@ def _anexo_tramites(db: Any) -> List[Tuple[str, List[List[str]]]]:
     v = {f.theme: f.value for f in filas if str(f.period) == periodo}
     if TEMA_TOTAL not in v:
         return []
-    return [(f"El catálogo de trámites al {periodo}", [
-        ["Concepto", "Valor"],
-        ["Trámites publicados en el catálogo", f"{int(v[TEMA_TOTAL]):,}".replace(",", ".")],
-        ["Declaran su tiempo de respuesta", str(int(v.get(TEMA_CON_TIEMPO, 0)))],
-        ["Proporción sobre los publicados", f"{v.get(TEMA_PCT, 0)} %".replace(".", ",")],
-    ])]
+    tablas: List[Tuple[str, List[List[str]]]] = [(
+        f"El catálogo de trámites al {periodo}", [
+            ["Concepto", "Valor"],
+            ["Trámites publicados en el catálogo", _mil(v[TEMA_TOTAL])],
+            ["Instituciones que publican", str(len(_por_sujeto(db, TEMA_POR_INSTITUCION,
+                                                              periodo)))],
+            ["Consultas ciudadanas acumuladas",
+             _mil(sum(_por_sujeto(db, TEMA_CONSULTAS_POR_INSTITUCION, periodo).values()))],
+            ["Declaran su tiempo de respuesta", str(int(v.get(TEMA_CON_TIEMPO, 0)))],
+            ["Proporción sobre los publicados", f"{v.get(TEMA_PCT, 0)} %".replace(".", ",")],
+        ])]
+
+    # Las que más ciudadanos consultan, con cuántos trámites publican y si alguno declara su
+    # tiempo. Ordenadas por CONSULTAS y no por número de trámites: una institución con 61
+    # trámites y otra con 1,5 millones de consultas no pesan igual para quien espera.
+    consultas = _por_sujeto(db, TEMA_CONSULTAS_POR_INSTITUCION, periodo)
+    cantidad = _por_sujeto(db, TEMA_POR_INSTITUCION, periodo)
+    declaran = _instituciones_que_declaran(db, periodo)
+    if consultas:
+        filas = [["Institución", "Trámites", "Consultas", "Declara algún tiempo"]]
+        for sigla, n in sorted(consultas.items(), key=lambda kv: -kv[1])[:_TOP_INSTITUCIONES]:
+            filas.append([sigla, str(int(cantidad.get(sigla, 0))), _mil(n),
+                          "Sí" if sigla in declaran else "No"])
+        tablas.append(("Las instituciones más consultadas", filas))
+
+    # Y los que sí lo declaran, AGRUPADOS por institución y plazo. Sin agrupar salen catorce
+    # filas de pasaporte con el mismo tiempo, que ocupan media página y no dicen nada más que
+    # la primera.
+    tiempos = _tiempos_declarados(db, periodo)
+    if tiempos:
+        grupos: Dict[Tuple[str, str, str], int] = {}
+        for _slug, (_dias, nota) in tiempos.items():
+            partes = [x.strip() for x in nota.split("·")]
+            if len(partes) < 3:
+                continue
+            grupos[(partes[0], partes[1], partes[2])] = grupos.get(
+                (partes[0], partes[1], partes[2]), 0) + 1
+        filas = [["Institución", "Trámites", "Tiempo que declara la ficha", "Cómo lo dice"]]
+        for (sigla, texto, nivel), n in sorted(grupos.items(), key=lambda kv: (-kv[1], kv[0])):
+            filas.append([sigla, str(n), texto,
+                          "Nombra el campo" if nivel == "explicito" else "Lo dice en prosa"])
+        # El numerador sale de la SUMA de las filas, no de `len(tiempos)`: una fila con la
+        # nota malformada se salta arriba, y un título que la contara igual afirmaría un
+        # total que la tabla debajo no muestra.
+        tablas.append((f"Los trámites que declaran cuánto tardan ({sum(grupos.values())} de "
+                       f"{_mil(v[TEMA_TOTAL])})", filas))
+    return tablas
 
 
 #: Anexos de evidencia propios de una ley. Se declaran por expediente y no se deducen: la
