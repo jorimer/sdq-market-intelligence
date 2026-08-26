@@ -65,6 +65,22 @@ ADVERTENCIA_DEL_REGISTRO = (
     "estas obligaciones recaen sobre el conjunto de la Administración; establecer si se "
     "atendieron exige revisarlas institución por institución.")
 
+#: Qué operación del console alimenta cada serie de seguimiento declarada por un expediente.
+#:
+#: **Explícito, y no por coincidencia de cadenas.** El primer intento buscaba el nombre de la
+#: serie dentro de la descripción de la operación: funciona hasta que alguien reescribe la
+#: descripción, y entonces el informe deja de prometer actualización sin que nadie se entere
+#: — un fallo silencioso en la sección que existe para decirle al lector cuándo volver.
+#:
+#: Es un mapa a mano, y por eso lleva guard: `test_informe_abierto` exige que TODA
+#: `serie_de_seguimiento` declarada en cualquier expediente tenga su entrada acá, y que la
+#: operación exista de verdad en el registro.
+OPERACION_QUE_ALIMENTA = {
+    "social_dev:tramites_catalogados": "tramites-registro-unico",
+    "social_dev:tramites_con_tiempo_declarado": "tramites-registro-unico",
+    "social_dev:tramites_pct_con_tiempo_sobre_los_catalogados": "tramites-registro-unico",
+}
+
 _MAX_FILAS_INDICADORES = 60
 
 
@@ -134,6 +150,112 @@ def _tabla_de_cobertura(cobertura: Dict[str, Any],
     ])
 
 
+def _anexo_tramites(db: Any) -> List[Tuple[str, List[List[str]]]]:
+    """La evidencia del catálogo de trámites: la prueba de la obligación del artículo 39.
+
+    Se lee de la SERIE persistida, no del portal. Un informe que sale del console no puede
+    dispararle 711 llamadas a un emisor público cada vez que alguien lo descarga: la serie ya
+    la tiene la operación mensual, y usarla mantiene el documento reproducible —dos descargas
+    del mismo día dan lo mismo— y barato.
+    """
+    from modules.social_dev.models.models import SocialIndicator
+    from modules.social_dev.tramites_sync import (ENTIDAD, TEMA_CON_TIEMPO, TEMA_PCT,
+                                                  TEMA_TOTAL)
+
+    if db is None:
+        return []
+    filas = (db.query(SocialIndicator)
+             .filter(SocialIndicator.entity_key == ENTIDAD,
+                     SocialIndicator.theme.in_((TEMA_TOTAL, TEMA_CON_TIEMPO, TEMA_PCT)))
+             .all())
+    if not filas:
+        return []
+    # El período MÁS RECIENTE, y se nombra en el título: una tabla sin fecha de lectura
+    # sobre un catálogo vivo se lee como si fuera de hoy para siempre.
+    periodo = max(str(f.period) for f in filas)
+    v = {f.theme: f.value for f in filas if str(f.period) == periodo}
+    if TEMA_TOTAL not in v:
+        return []
+    return [(f"El catálogo de trámites al {periodo}", [
+        ["Concepto", "Valor"],
+        ["Trámites publicados en el catálogo", f"{int(v[TEMA_TOTAL]):,}".replace(",", ".")],
+        ["Declaran su tiempo de respuesta", str(int(v.get(TEMA_CON_TIEMPO, 0)))],
+        ["Proporción sobre los publicados", f"{v.get(TEMA_PCT, 0)} %".replace(".", ",")],
+    ])]
+
+
+#: Anexos de evidencia propios de una ley. Se declaran por expediente y no se deducen: la
+#: 167-21 tiene una serie que la sigue y las otras no, y un renderizador que adivinara cuál
+#: aplicar acabaría poniéndole a una ley la evidencia de otra.
+ANEXOS_POR_EXPEDIENTE = {
+    "ley_167_21": _anexo_tramites,
+}
+
+
+def _prosa_de_declaraciones(dec: Dict[str, Any]) -> str:
+    """Lo que el evaluado dijo sobre sus propios datos, en prosa y con su fecha.
+
+    Cada una va con la consecuencia que tiene para lo que se mide. Citar lo que dijo el
+    emisor sin decir qué implica deja al lector con una noticia, no con información.
+    """
+    partes = [
+        "Los organismos evaluados han hecho declaraciones sobre la información que manejan. "
+        "Se recogen porque cambian lo que puede afirmarse: «no hay dato» y «el organismo "
+        "tiene el dato y declaró que no lo publica todavía» son cosas distintas."]
+    for d in dec["declaraciones"]:
+        cola = (f" El propio organismo indicó su disponibilidad a partir del "
+                f"{d['disponible_desde']}." if d.get("disponible_desde") else
+                " No se declaró una fecha a partir de la cual esté disponible.")
+        partes.append(f"**{d['quien']}, {d['fecha']}.** {' '.join(d['que_declara'].split())}"
+                      f"{cola} {' '.join(d['consecuencia_para_la_medicion'].split())}")
+    return "\n\n".join(partes)
+
+
+def _cuando_se_actualiza(expediente_id: str, db: Any) -> Optional[str]:
+    """Cuándo vuelve a leerse el dato, tomado de la AGENDA de la operación que lo lee.
+
+    No de una frase escrita a mano. Una promesa de actualización redactada en el documento
+    envejece en cuanto alguien cambia la cadencia, y el lector no tiene cómo enterarse; la
+    agenda es la que manda de verdad y es la que se publica.
+
+    Se resuelve por la `serie_de_seguimiento` que la obligación declara: si ninguna
+    obligación de esta ley sigue una serie, el documento no promete ninguna actualización.
+    """
+    from modules.law_intel.obligaciones import cargar_obligaciones
+
+    series = {o.serie_de_seguimiento for o in cargar_obligaciones(expediente_id)
+              if o.serie_de_seguimiento}
+    if not series or db is None:
+        return None
+    try:
+        from shared.operations.models import OperationSchedule
+    except Exception:                                      # pragma: no cover - defensivo
+        return None
+    nombres = [OPERACION_QUE_ALIMENTA[x] for x in series if x in OPERACION_QUE_ALIMENTA]
+    if not nombres:
+        logger.info("[informe_abierto] %s sigue %s y ninguna operación la declara alimentar",
+                    expediente_id, sorted(series))
+        return None
+    filas = (db.query(OperationSchedule)
+             .filter(OperationSchedule.operation.in_(nombres)).all())
+    activas = [f for f in filas if f.enabled and f.interval_hours]
+    if not activas:
+        return None
+    f = min(activas, key=lambda x: x.interval_hours)
+    dias = round(f.interval_hours / 24)
+    proxima = f.next_run_at.date().isoformat() if f.next_run_at else None
+    ultima = f.last_run_at.date().isoformat() if f.last_run_at else None
+    partes = [f"El dato de este informe se vuelve a leer cada {dias} días."]
+    if ultima:
+        partes.append(f"La última lectura registrada es del {ultima}.")
+    if proxima:
+        partes.append(f"La próxima está prevista para el {proxima}.")
+    partes.append(
+        "La cadencia sale de la agenda del sistema que hace la lectura, no de una promesa "
+        "escrita en este documento: si cambia, cambia acá.")
+    return " ".join(partes)
+
+
 def construir(expediente_id: str, db: Any = None) -> Dict[str, Any]:
     """Las secciones y las tablas del informe abierto de una ley.
 
@@ -145,6 +267,7 @@ def construir(expediente_id: str, db: Any = None) -> Dict[str, Any]:
     from modules.law_intel.obligaciones import cargar_obligaciones
     from modules.law_intel.obligaciones import resumen as _resumen_obligaciones
     from modules.law_intel.registro import cargar
+    from modules.law_intel.declaraciones import publicable as _declaraciones
     from modules.law_intel.verificabilidad import publicable as _verificabilidad
 
     exp = cargar(expediente_id)
@@ -157,12 +280,17 @@ def construir(expediente_id: str, db: Any = None) -> Dict[str, Any]:
                 "estado": o.estado, "consecuencia": o.consecuencia}
                for o in cargar_obligaciones(expediente_id)]}
     ver = _verificabilidad(expediente_id)
+    dec = _declaraciones(expediente_id)
 
     tablas: List[Tuple[str, Sequence[Sequence[str]]]] = [_tabla_de_cobertura(cob, campo)]
     for t in (_tabla_de_obligaciones(obs), _tabla_de_medicion(ver)):
         if t is not None:
             tablas.append(t)
+    anexo = ANEXOS_POR_EXPEDIENTE.get(expediente_id)
+    if anexo is not None:
+        tablas.extend(anexo(db))
 
+    _actualiza = _cuando_se_actualiza(expediente_id, db)
     resumen_obs: Dict[str, Any] = obs.get("resumen") or {}
     lista_obs: List[Dict[str, Any]] = list(obs.get("obligaciones") or [])
     con_consecuencia = sum(1 for o in lista_obs if o.get("consecuencia"))
@@ -192,6 +320,8 @@ def construir(expediente_id: str, db: Any = None) -> Dict[str, Any]:
             f"que la norma señala, el valor que la norma fija como línea base. Una "
             f"coincidencia de nombre sin coincidencia de valor no identifica la magnitud, y "
             f"una coincidencia de valor sin coincidencia de concepto tampoco."),
+        **({"lo_que_declara_el_emisor": _prosa_de_declaraciones(dec)} if dec["total"] else {}),
+        **({"cuando_se_actualiza": _actualiza} if _actualiza else {}),
         "alcance": (
             "Este documento no audita la exactitud de las cifras que publican los organismos "
             "citados ni verifica su conformidad con las metodologías que dichos organismos "
@@ -213,12 +343,15 @@ def construir(expediente_id: str, db: Any = None) -> Dict[str, Any]:
     }
 
 
-SECCIONES_EN_ORDEN = ("que_es", "lo_que_ordena", "lo_que_se_mide", "alcance")
+SECCIONES_EN_ORDEN = ("que_es", "lo_que_ordena", "lo_que_se_mide",
+                      "lo_que_declara_el_emisor", "cuando_se_actualiza", "alcance")
 
 TITULOS = {
     "que_es": "Qué es este documento",
     "lo_que_ordena": "Qué ordena la norma",
     "lo_que_se_mide": "Qué se mide, y cómo se verifica",
+    "lo_que_declara_el_emisor": "Qué declara el organismo sobre su propia información",
+    "cuando_se_actualiza": "Cuándo se actualiza este informe",
     "alcance": "Alcance y limitaciones",
 }
 

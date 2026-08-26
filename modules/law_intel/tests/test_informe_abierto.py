@@ -26,10 +26,23 @@ class TestSirveACUALQUIERley:
     def test_siempre_trae_la_tabla_de_ALCANCE(self, eid):
         assert construir(eid)["tablas"][0][0] == "Alcance de la medición"
 
-    def test_todas_las_secciones_declaradas_tienen_TEXTO(self, eid):
+    def test_las_secciones_OBLIGATORIAS_estan_y_tienen_texto(self, eid):
+        """Cuatro salen siempre. Las otras dos —lo que declara el emisor, cuándo se
+        actualiza— dependen de que la ley las tenga: inventarlas vacías sería peor que no
+        tenerlas, porque una sección vacía se lee como que no hay nada que decir."""
         sec = construir(eid)["secciones"]
-        for k in SECCIONES_EN_ORDEN:
+        for k in ("que_es", "lo_que_ordena", "lo_que_se_mide", "alcance"):
             assert sec.get(k, "").strip(), f"la sección «{k}» sale vacía"
+
+    def test_ninguna_seccion_PRESENTE_sale_vacia(self, eid):
+        sec = construir(eid)["secciones"]
+        vacias = [k for k, v in sec.items() if not str(v).strip()]
+        assert not vacias, f"secciones presentes y vacías: {vacias}"
+
+    def test_las_secciones_salen_en_el_ORDEN_declarado(self, eid):
+        sec = construir(eid)["secciones"]
+        assert set(sec) <= set(SECCIONES_EN_ORDEN), (
+            f"secciones sin lugar en el orden: {set(sec) - set(SECCIONES_EN_ORDEN)}")
 
     def test_toda_seccion_tiene_TITULO(self, eid):
         assert set(SECCIONES_EN_ORDEN) <= set(TITULOS)
@@ -109,3 +122,158 @@ def test_el_nombre_del_archivo_DISTINGUE_la_norma():
 def test_la_ruta_esta_registrada():
     import modules.law_intel.api.router as r
     assert any("informe-abierto" in x.path for x in r.router.routes)
+
+
+class TestLoQueDeclaraElEMISOR:
+    """«No hay dato» y «el organismo tiene el dato y declaró que no lo publica todavía» son
+    cosas distintas. La segunda no es una brecha de nadie: es una decisión con fecha."""
+
+    def test_la_167_21_recoge_las_declaraciones_del_MAP(self):
+        from modules.law_intel.declaraciones import cargar
+        ds = {d.id for d in cargar("ley_167_21")}
+        assert "sismap-burocracia-cero-reservado" in ds
+
+    def test_una_ley_sin_declaraciones_NO_inventa_la_seccion(self):
+        d = construir("end_2030")
+        assert "lo_que_declara_el_emisor" not in d["secciones"]
+
+    def test_cada_declaracion_llega_con_su_FECHA_y_su_AUTOR(self):
+        texto = construir("ley_167_21")["secciones"]["lo_que_declara_el_emisor"]
+        assert "2026-03-12" in texto and "Ministerio de Administración Pública" in texto
+
+    def test_cada_declaracion_llega_con_su_CONSECUENCIA(self):
+        """Citar lo que dijo el emisor sin decir qué implica deja al lector con una noticia."""
+        texto = construir("ley_167_21")["secciones"]["lo_que_declara_el_emisor"]
+        assert "no es una brecha de información" in texto.lower()
+
+    def test_una_declaracion_sin_fuente_NO_carga(self):
+        from modules.law_intel.declaraciones import Declaracion, _validar
+        from modules.law_intel.registro import ExpedienteInvalido
+        d = Declaracion(id="x", fecha="2026-01-01", quien="Alguien",
+                        que_declara="algo", fuente="",
+                        consecuencia_para_la_medicion="implica algo")
+        with pytest.raises(ExpedienteInvalido, match="rumor"):
+            _validar([d])
+
+    def test_una_declaracion_sin_CONSECUENCIA_no_carga(self):
+        from modules.law_intel.declaraciones import Declaracion, _validar
+        from modules.law_intel.registro import ExpedienteInvalido
+        d = Declaracion(id="x", fecha="2026-01-01", quien="Alguien", que_declara="algo",
+                        fuente="http://x", consecuencia_para_la_medicion="")
+        with pytest.raises(ExpedienteInvalido, match="noticia"):
+            _validar([d])
+
+
+class TestCuandoSeActualiza:
+    """La cadencia sale de la AGENDA, no de una frase escrita a mano que envejece."""
+
+    class _Fila:
+        def __init__(self):
+            import datetime as _d
+            self.operation = "tramites-registro-unico"
+            self.enabled = True
+            self.interval_hours = 730
+            self.next_run_at = _d.datetime(2026, 9, 25, 9, 55)
+            self.last_run_at = _d.datetime(2026, 8, 25, 23, 55)
+
+    class _DB:
+        def query(self, *a, **k):
+            return self
+
+        def filter(self, *a, **k):
+            return self
+
+        def all(self):
+            return [TestCuandoSeActualiza._Fila()]
+
+    def test_dice_cada_cuanto_y_cuando_toca(self):
+        from modules.law_intel.informe_abierto import _cuando_se_actualiza
+        t = _cuando_se_actualiza("ley_167_21", self._DB())
+        assert "cada 30 días" in t
+        assert "2026-08-25" in t and "2026-09-25" in t
+
+    def test_una_ley_SIN_serie_de_seguimiento_no_promete_actualizacion(self):
+        from modules.law_intel.informe_abierto import _cuando_se_actualiza
+        assert _cuando_se_actualiza("end_2030", self._DB()) is None
+
+    def test_TODA_serie_declarada_tiene_su_operacion_MAPEADA(self):
+        """El guard del mapa a mano: una serie nueva sin entrada deja el informe sin
+        prometer actualización, en silencio."""
+        from modules.law_intel.informe_abierto import OPERACION_QUE_ALIMENTA
+        from modules.law_intel.obligaciones import cargar_obligaciones
+        from modules.law_intel.registro import expedientes
+        faltan = []
+        for eid in expedientes():
+            for o in cargar_obligaciones(eid):
+                if o.serie_de_seguimiento and o.serie_de_seguimiento not in OPERACION_QUE_ALIMENTA:
+                    faltan.append(f"{eid}:{o.serie_de_seguimiento}")
+        assert not faltan, f"series de seguimiento sin operación declarada: {faltan}"
+
+    def test_las_operaciones_del_mapa_EXISTEN(self):
+        """Un nombre mal escrito acá se ve igual que «no hay agenda»."""
+        import modules.social_dev.operations  # noqa: F401 — registra al importar
+        from shared.operations.service import OPERATIONS
+
+        from modules.law_intel.informe_abierto import OPERACION_QUE_ALIMENTA
+        faltan = [n for n in set(OPERACION_QUE_ALIMENTA.values()) if n not in OPERATIONS]
+        assert not faltan, f"operaciones declaradas que no existen: {faltan}"
+
+
+class TestElAnexoDeEVIDENCIA:
+    """La 167-21 tiene una serie que la sigue y las otras no. Un renderizador que adivinara
+    cuál anexo aplicar acabaría poniéndole a una ley la evidencia de otra."""
+
+    class _Fila:
+        def __init__(self, theme, value, period="2026-08"):
+            self.theme, self.value, self.period = theme, value, period
+            # La misma sesión de mentira atiende dos consultas —la del anexo y la de la
+            # agenda—. Se declara `enabled=False` para que la de la agenda descarte estas
+            # filas en vez de reventar: el test del anexo prueba el anexo, no la cadencia.
+            self.enabled, self.interval_hours = False, None
+
+    class _DB:
+        def __init__(self, filas):
+            self._f = filas
+
+        def query(self, *a, **k):
+            return self
+
+        def filter(self, *a, **k):
+            return self
+
+        def all(self):
+            return self._f
+
+    def _db(self):
+        from modules.social_dev.tramites_sync import (TEMA_CON_TIEMPO, TEMA_PCT, TEMA_TOTAL)
+        return self._DB([self._Fila(TEMA_TOTAL, 710.0),
+                         self._Fila(TEMA_CON_TIEMPO, 22.0),
+                         self._Fila(TEMA_PCT, 3.1)])
+
+    def test_la_167_21_trae_el_anexo_del_catalogo(self):
+        titulos = [t[0] for t in construir("ley_167_21", self._db())["tablas"]]
+        assert any("catálogo de trámites" in t for t in titulos)
+
+    def test_el_titulo_del_anexo_NOMBRA_el_periodo(self):
+        """Una tabla sin fecha de lectura sobre un catálogo vivo se lee como si fuera de hoy
+        para siempre."""
+        t = [x for x in construir("ley_167_21", self._db())["tablas"]
+             if "catálogo" in x[0]][0]
+        assert "2026-08" in t[0]
+
+    def test_las_otras_leyes_NO_reciben_ese_anexo(self):
+        for eid in ("end_2030", "meta_rd_2036"):
+            titulos = [t[0] for t in construir(eid, self._db())["tablas"]]
+            assert not any("catálogo de trámites" in t for t in titulos)
+
+    def test_sin_serie_persistida_el_anexo_NO_sale(self):
+        """Un anexo vacío afirmaría que el catálogo está vacío."""
+        titulos = [t[0] for t in construir("ley_167_21", self._DB([]))["tablas"]]
+        assert not any("catálogo" in t for t in titulos)
+
+    def test_toda_ley_del_ANEXO_existe_en_el_catalogo(self):
+        from modules.law_intel.registro import expedientes
+
+        from modules.law_intel.informe_abierto import ANEXOS_POR_EXPEDIENTE
+        faltan = [e for e in ANEXOS_POR_EXPEDIENTE if e not in expedientes()]
+        assert not faltan, f"anexos declarados para expedientes que no existen: {faltan}"
