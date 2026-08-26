@@ -20,6 +20,8 @@ from modules.law_intel.bindings import (cargar_bindings, cobertura, hipotesis_ab
                                         motivos_con_hipotesis_sin_declarar)
 from modules.law_intel.campo import campo as estado_del_campo
 from modules.law_intel.campo import resumen as resumen_del_campo
+from modules.law_intel.perseguibilidad import clasificar as clasificar_perseguibilidad
+from modules.law_intel.perseguibilidad import resumen as resumen_perseguibilidad
 from modules.law_intel.verificabilidad import publicable as verificabilidad_publicable
 from modules.law_intel.verificacion import informe
 from shared.registry.service import build_data_registry
@@ -169,6 +171,23 @@ def cobertura_(expediente_id: str, _: User = Depends(get_current_user)) -> Dict[
     """
     _expediente(expediente_id)
     return cobertura(expediente_id)   # trae el desglose por camino de verificación
+
+
+@router.get("/{expediente_id}/perseguibilidad")
+def perseguibilidad_(expediente_id: str,
+                     _: User = Depends(get_current_user)) -> Dict[str, Any]:
+    """De QUIÉN depende cerrar cada indicador que todavía no tiene veredicto.
+
+    El campo dice por qué falta; esto dice quién lo puede cerrar, que es lo que decide dónde
+    poner el próximo día de trabajo. Agrupa causas distintas que llevan a la misma acción y
+    separa causas parecidas que llevan a acciones opuestas: dos indicadores igualmente
+    descartados pueden estar esperando, uno, que identifiquemos un universo, y el otro que el
+    Estado vuelva a levantar una encuesta.
+    """
+    _expediente(expediente_id)
+    r = resumen_perseguibilidad(expediente_id)
+    r["detalle"] = clasificar_perseguibilidad(expediente_id)
+    return r
 
 
 @router.get("/{expediente_id}/hipotesis")
