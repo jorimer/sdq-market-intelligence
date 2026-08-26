@@ -27,6 +27,7 @@ método por su nombre. Lo vigila `test_informe_abierto.py`.
 from __future__ import annotations
 
 import logging
+from dataclasses import dataclass
 from typing import Any, Dict, List, Optional, Sequence, Tuple
 
 logger = logging.getLogger("sdq.law_intel.informe_abierto")
@@ -190,7 +191,114 @@ def _instituciones_que_declaran(db: Any, periodo: str) -> set:
             if n > 0}
 
 
-def _anexo_tramites(db: Any) -> List[Tuple[str, List[List[str]]]]:
+#: Cuántos trámites entran en la tabla de los más consultados. Con 710 la tabla es el
+#: catálogo entero; con diez se ve qué le pide la gente al Estado.
+_TOP_TRAMITES = 10
+
+
+@dataclass(frozen=True)
+class Anexo:
+    """Lo que un expediente aporta de propio al informe abierto.
+
+    No son solo tablas. Un dato que se construye con un criterio necesita decir CUÁL —si no,
+    el lector no tiene cómo saber si la cifra es seria— y qué NO afirma. Las tres piezas
+    viajan juntas porque las tres describen el mismo dato: separarlas es cómo se publica una
+    tabla cuyo método quedó en otro documento.
+    """
+
+    tablas: List[Tuple[str, List[List[str]]]]
+    #: Con qué criterio se obtuvo la cifra, y qué se descartó al aplicarlo.
+    metodologia: Optional[str] = None
+    #: Qué NO afirma este dato. Se suma al alcance genérico, no lo reemplaza.
+    limites: Optional[str] = None
+
+
+def _tabla_de_mas_consultados(db: Any, periodo: str) -> Optional[Tuple[str, List[List[str]]]]:
+    """Los trámites que más consulta la gente, con su nombre.
+
+    La tabla por institución dice quién concentra la espera; ésta dice qué le pide la gente
+    al Estado, que es otra pregunta. Se imprime el NOMBRE del trámite y no el slug:
+    «consultas-superate» no es como nadie lo busca.
+    """
+    from modules.social_dev.tramites_sync import TEMA_CONSULTAS_POR_TRAMITE
+    from modules.social_dev.models.models import SocialIndicator
+
+    filas = (db.query(SocialIndicator)
+             .filter(SocialIndicator.theme == TEMA_CONSULTAS_POR_TRAMITE,
+                     SocialIndicator.period == periodo).all())
+    if not filas:
+        return None
+    orden = sorted(filas, key=lambda f: -float(f.value or 0))[:_TOP_TRAMITES]
+    out: List[List[str]] = [["Trámite", "Institución", "Consultas"]]
+    for f in orden:
+        partes = [x.strip() for x in str(f.disaggregation or "").split("·")]
+        sigla = partes[0] if partes else ""
+        nombre = partes[1] if len(partes) > 1 else str(f.entity_key)
+        out.append([_recortar(nombre, 62), sigla, _mil(f.value)])
+    return (f"Los trámites que más consulta la gente (los {len(orden)} primeros de "
+            f"{len(filas)})", out)
+
+
+def _metodologia_tramites(db: Any, periodo: str, total: float) -> Optional[str]:
+    """Con qué criterio se contó, y cuánto se descartó al aplicarlo.
+
+    **La razón se COMPUTA.** La primera versión de este documento decía «un criterio más
+    amplio arroja una proporción cinco veces mayor», escrito a mano sobre una medición de
+    ese día. En cuanto el criterio estrecho pasó de 3 a 22 la frase quedó falsa, y nadie se
+    entera de eso leyendo el documento. El contrafactual se persiste en cada corrida y la
+    razón sale de dividir.
+    """
+    from modules.social_dev.models.models import SocialIndicator
+    from modules.social_dev.tramites_sync import (ENTIDAD, TEMA_CIFRA_SIN_ANCLAR,
+                                                  TEMA_CON_TIEMPO)
+
+    v = {f.theme: float(f.value or 0) for f in db.query(SocialIndicator)
+         .filter(SocialIndicator.entity_key == ENTIDAD,
+                 SocialIndicator.period == periodo,
+                 SocialIndicator.theme.in_((TEMA_CON_TIEMPO, TEMA_CIFRA_SIN_ANCLAR))).all()}
+    base = (
+        "El catálogo se lee de la interfaz pública del Portal Único de Servicios, que "
+        "permite el rastreo completo: se consulta el listado y la ficha de cada uno de los "
+        "trámites publicados. La lectura se repite entera cada vez, de modo que una "
+        "institución que deja de publicar desaparece del recuento en lugar de quedar "
+        "congelada en su último valor.\n\n"
+        "El tiempo de respuesta no tiene campo propio en el catálogo: cuando aparece, "
+        "aparece dentro del texto descriptivo de la ficha. Se extrae con un criterio "
+        "deliberadamente estrecho: la cifra se admite únicamente cuando está pegada a una "
+        "expresión que la identifica como el plazo del trámite —«el tiempo de entrega es "
+        "de», «se le entrega en», «este proceso toma»—. Una cifra de tiempo suelta se "
+        "descarta sin contarse.")
+    estrecho, amplio = v.get(TEMA_CON_TIEMPO), v.get(TEMA_CIFRA_SIN_ANCLAR)
+    if estrecho and amplio and amplio > estrecho:
+        razon = amplio / estrecho
+        # Una décima, y con coma: el documento entero usa la convención española. Y sin el
+        # «,0» cuando la razón es entera — «9,0 veces más» se lee como una precisión que la
+        # cifra no tiene.
+        cuantas = f"{razon:.1f}".rstrip("0").rstrip(".").replace(".", ",")
+        base += (
+            f"\n\nEl criterio importa y puede medirse cuánto: aceptar cualquier cifra "
+            f"seguida de una unidad de tiempo llevaría el recuento de "
+            f"{_entero(estrecho)} a {_entero(amplio)} de {_entero(total)} fichas, {cuantas} "
+            f"veces más. Esa diferencia no son plazos de trámites: son plazos de multas, "
+            f"vigencias de documentos y condiciones de agenda. Publicarla sería publicar "
+            f"una magnitud distinta de la que el título anuncia.")
+    return base
+
+
+#: Lo que este dato NO afirma. Va aparte del alcance genérico del informe porque es propio
+#: del catálogo: el alcance genérico sirve para cualquier ley, esto solo para ésta.
+LIMITES_TRAMITES = (
+    "Este recuento consigna lo que el catálogo publica. No audita si el tiempo declarado "
+    "por un trámite se cumple en la práctica, ni verifica la exactitud de la información "
+    "que cada institución publica sobre sus propios procedimientos.\n\n"
+    "Tampoco se estableció institución por institución el cumplimiento de las obligaciones "
+    "que la ley impone al conjunto de la Administración. Las afirmaciones se limitan a lo "
+    "que consta publicado en el Registro Único.\n\n"
+    "Las observaciones sobre este inventario —una ficha que sí declara su tiempo y no fue "
+    "detectada, una atribución que corregir— son bienvenidas y se incorporan con crédito.")
+
+
+def _anexo_tramites(db: Any) -> Anexo:
     """La evidencia del catálogo de trámites: la prueba de la obligación del artículo 39.
 
     Se lee de la SERIE persistida, no del portal. Un informe que sale del console no puede
@@ -204,19 +312,19 @@ def _anexo_tramites(db: Any) -> List[Tuple[str, List[List[str]]]]:
                                                   TEMA_POR_INSTITUCION, TEMA_TOTAL)
 
     if db is None:
-        return []
+        return Anexo(tablas=[])
     filas = (db.query(SocialIndicator)
              .filter(SocialIndicator.entity_key == ENTIDAD,
                      SocialIndicator.theme.in_((TEMA_TOTAL, TEMA_CON_TIEMPO, TEMA_PCT)))
              .all())
     if not filas:
-        return []
+        return Anexo(tablas=[])
     # El período MÁS RECIENTE, y se nombra en el título: una tabla sin fecha de lectura
     # sobre un catálogo vivo se lee como si fuera de hoy para siempre.
     periodo = max(str(f.period) for f in filas)
     v = {f.theme: f.value for f in filas if str(f.period) == periodo}
     if TEMA_TOTAL not in v:
-        return []
+        return Anexo(tablas=[])
     tablas: List[Tuple[str, List[List[str]]]] = [(
         f"El catálogo de trámites al {periodo}", [
             ["Concepto", "Valor"],
@@ -263,7 +371,15 @@ def _anexo_tramites(db: Any) -> List[Tuple[str, List[List[str]]]]:
         # total que la tabla debajo no muestra.
         tablas.append((f"Los trámites que declaran cuánto tardan ({sum(grupos.values())} de "
                        f"{_mil(v[TEMA_TOTAL])})", filas))
-    return tablas
+
+    mas = _tabla_de_mas_consultados(db, periodo)
+    if mas is not None:
+        # Va DESPUÉS del catálogo y ANTES de los tiempos: primero qué publica el Estado,
+        # después qué le pide la gente, y al final qué se sabe de cuánto tarda.
+        tablas.insert(1, mas)
+    return Anexo(tablas=tablas,
+                 metodologia=_metodologia_tramites(db, periodo, float(v[TEMA_TOTAL])),
+                 limites=LIMITES_TRAMITES)
 
 
 #: Anexos de evidencia propios de una ley. Se declaran por expediente y no se deducen: la
@@ -369,6 +485,7 @@ def construir(expediente_id: str, db: Any = None) -> Dict[str, Any]:
     from modules.law_intel.registro import cargar
     from modules.law_intel.declaraciones import publicable as _declaraciones
     from modules.law_intel.verificabilidad import publicable as _verificabilidad
+    from modules.law_intel import lectura_juridica
 
     exp = cargar(expediente_id)
     cob = _cobertura(expediente_id)
@@ -386,11 +503,12 @@ def construir(expediente_id: str, db: Any = None) -> Dict[str, Any]:
     for t in (_tabla_de_obligaciones(obs), _tabla_de_medicion(ver)):
         if t is not None:
             tablas.append(t)
-    anexo = ANEXOS_POR_EXPEDIENTE.get(expediente_id)
-    if anexo is not None:
-        tablas.extend(anexo(db))
+    arma_anexo = ANEXOS_POR_EXPEDIENTE.get(expediente_id)
+    anexo = arma_anexo(db) if (arma_anexo is not None and db is not None) else Anexo(tablas=[])
+    tablas.extend(anexo.tablas)
 
     _actualiza = _cuando_se_actualiza(expediente_id, db)
+    juridica = lectura_juridica.prosa(expediente_id)
     resumen_obs: Dict[str, Any] = obs.get("resumen") or {}
     lista_obs: List[Dict[str, Any]] = list(obs.get("obligaciones") or [])
     con_consecuencia = sum(1 for o in lista_obs if o.get("consecuencia"))
@@ -415,6 +533,10 @@ def construir(expediente_id: str, db: Any = None) -> Dict[str, Any]:
             f"{con_consecuencia} de ellas tienen una consecuencia jurídica asignada a su "
             f"incumplimiento. El resto no: la norma manda hacer algo y no dice qué ocurre si "
             f"no se hace.\n\n{ADVERTENCIA_DEL_REGISTRO}"),
+        # La lectura jurídica va junto a la tabla y no al final: dice de qué rango es cada
+        # disposición y de dónde sale lo que exige, y sin eso la tabla se lee como si todo
+        # lo que el informe mide lo mandara la ley.
+        **({"lectura_juridica": juridica} if juridica else {}),
         "lo_que_se_mide": (
             _plural(total,
                     "La norma numera un solo indicador y "
@@ -434,9 +556,11 @@ def construir(expediente_id: str, db: Any = None) -> Dict[str, Any]:
             "coincidencia de nombre sin coincidencia de valor no identifica la magnitud, y "
             "una coincidencia de valor sin coincidencia de concepto tampoco."),
         **({"lo_que_declara_el_emisor": _prosa_de_declaraciones(dec)} if dec["total"] else {}),
+        **({"como_se_obtuvo": anexo.metodologia} if anexo.metodologia else {}),
         **({"cuando_se_actualiza": _actualiza} if _actualiza else {}),
         "alcance": (
-            "Este documento no audita la exactitud de las cifras que publican los organismos "
+            (anexo.limites + "\n\n" if anexo.limites else "")
+            + "Este documento no audita la exactitud de las cifras que publican los organismos "
             "citados ni verifica su conformidad con las metodologías que dichos organismos "
             "declaran. La identificación de un productor no constituye validación de sus "
             "cifras.\n\n"
@@ -456,14 +580,17 @@ def construir(expediente_id: str, db: Any = None) -> Dict[str, Any]:
     }
 
 
-SECCIONES_EN_ORDEN = ("que_es", "lo_que_ordena", "lo_que_se_mide",
-                      "lo_que_declara_el_emisor", "cuando_se_actualiza", "alcance")
+SECCIONES_EN_ORDEN = ("que_es", "lo_que_ordena", "lectura_juridica", "lo_que_se_mide",
+                      "lo_que_declara_el_emisor", "como_se_obtuvo", "cuando_se_actualiza",
+                      "alcance")
 
 TITULOS = {
     "que_es": "Qué es este documento",
     "lo_que_ordena": "Qué ordena la norma",
+    "lectura_juridica": "Qué alcance tiene cada disposición",
     "lo_que_se_mide": "Qué se mide, y cómo se verifica",
     "lo_que_declara_el_emisor": "Qué declara el organismo sobre su propia información",
+    "como_se_obtuvo": "Cómo se obtuvo la medición",
     "cuando_se_actualiza": "Cuándo se actualiza este informe",
     "alcance": "Alcance y limitaciones",
 }

@@ -52,9 +52,19 @@ TEMA_TOTAL = "tramites_catalogados"
 TEMA_CON_TIEMPO = "tramites_con_tiempo_declarado"
 TEMA_PCT = "tramites_pct_con_tiempo_sobre_los_catalogados"
 
+#: El CONTRAFACTUAL del criterio estrecho: cuántas fichas traerían una cifra si se aceptara
+#: cualquier número de tiempo de la prosa. **No es una medición del plazo de los trámites** y
+#: el nombre lo dice: son multas, vigencias y condiciones de agenda.
+#:
+#: Se persiste para que el informe pueda decir cuánto MÁS grande sería la cifra publicada con
+#: un criterio laxo, computando la razón en vez de afirmarla. La primera versión del
+#: documento dejó «cinco veces mayor» escrito a mano y quedó falso en cuanto el criterio
+#: estrecho pasó de 3 a 22.
+TEMA_CIFRA_SIN_ANCLAR = "tramites_mencionan_cifra_de_tiempo_sin_anclar"
+
 #: Los tres agregados NACIONALES, que son los que van al Data Registry y los que un binding
 #: puede atar. Se nombran aparte de los desgloses porque tienen alcance distinto.
-TEMAS = (TEMA_TOTAL, TEMA_CON_TIEMPO, TEMA_PCT)
+TEMAS = (TEMA_TOTAL, TEMA_CON_TIEMPO, TEMA_PCT, TEMA_CIFRA_SIN_ANCLAR)
 
 #: El desglose POR INSTITUCIÓN y POR TRÁMITE. No va al Data Registry y es deliberado: son
 #: evidencia del informe, no indicadores de una ley. Publicarlos como señales los volvería
@@ -73,8 +83,14 @@ TEMA_TIEMPO_POR_TRAMITE = "tramites_tiempo_declarado_por_tramite"
 #: afirma que la institución no declara nada.
 TEMA_CON_TIEMPO_POR_INSTITUCION = "tramites_con_tiempo_por_institucion"
 
+#: Cuántas veces se consultó CADA trámite. Se persisten los 710 y no un top: un «top 25»
+#: guardado es una MUESTRA, y una muestra en el registro se lee después como el agregado.
+#: El informe elige el corte que quiera mostrar; la serie no lo elige por él.
+TEMA_CONSULTAS_POR_TRAMITE = "tramites_consultas_por_tramite"
+
 TEMAS_DESGLOSE = (TEMA_POR_INSTITUCION, TEMA_CONSULTAS_POR_INSTITUCION,
-                  TEMA_CON_TIEMPO_POR_INSTITUCION, TEMA_TIEMPO_POR_TRAMITE)
+                  TEMA_CON_TIEMPO_POR_INSTITUCION, TEMA_TIEMPO_POR_TRAMITE,
+                  TEMA_CONSULTAS_POR_TRAMITE)
 
 UNIDADES = {
     TEMA_TOTAL: "trámites",
@@ -84,6 +100,8 @@ UNIDADES = {
     TEMA_CONSULTAS_POR_INSTITUCION: "consultas",
     TEMA_CON_TIEMPO_POR_INSTITUCION: "trámites",
     TEMA_TIEMPO_POR_TRAMITE: "días",
+    TEMA_CONSULTAS_POR_TRAMITE: "consultas",
+    TEMA_CIFRA_SIN_ANCLAR: "trámites",
 }
 
 #: Por debajo de esto, lo que se leyó no es el catálogo del Estado. El portal publicaba 710
@@ -154,6 +172,13 @@ def _persistir_desglose(db: Any, tramites: Any, periodo: str, fuente: str,
         _upsert(db, TEMA_CON_TIEMPO_POR_INSTITUCION, periodo, float(d["con_tiempo"]),
                 fuente, licencia, sujeto=sigla, nota="por institución")
 
+    # Las consultas de cada trámite, con su institución y su nombre en la nota. El slug no
+    # se imprime: «consultas-superate» no es el nombre que la gente busca.
+    for t in tramites:
+        _upsert(db, TEMA_CONSULTAS_POR_TRAMITE, periodo, float(t.visitas or 0), fuente,
+                licencia, sujeto=(t.slug or "")[:60],
+                nota=f"{t.institucion_sigla} · {t.nombre}"[:60])
+
     for t in tramites:
         if not t.tiempo:
             continue
@@ -209,6 +234,8 @@ def run_tramites(force: bool = False,
             TEMA_TOTAL: float(total),
             TEMA_CON_TIEMPO: float(r["declaran_su_tiempo_de_respuesta"] or 0),
             TEMA_PCT: float(r["pct_declaran_sobre_los_del_catalogo"] or 0.0),
+            TEMA_CIFRA_SIN_ANCLAR: float(
+                r["mencionan_alguna_cifra_de_tiempo_sin_anclar"] or 0),
         }
         for tema, valor in valores.items():
             _upsert(db, tema, periodo, valor, SOURCE, LICENSE)

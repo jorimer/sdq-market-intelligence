@@ -277,13 +277,13 @@ def pendiente_(expediente_id: str,
             **pendiente_publicable(pendientes, horizonte)}
 
 
-@router.get("/{expediente_id}/informe-abierto",
-            summary="Informe ABIERTO de una ley (PDF o Word) — se comparte sin destinatario")
 def _hoy() -> str:
     import datetime as _d
     return _d.date.today().isoformat()
 
 
+@router.get("/{expediente_id}/informe-abierto",
+            summary="Informe ABIERTO de una ley (PDF o Word) — se comparte sin destinatario")
 def informe_abierto_(expediente_id: str,
                      fmt: str = Query("pdf", pattern="^(pdf|docx)$"),
                      db: Session = Depends(get_db),
