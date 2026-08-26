@@ -179,3 +179,34 @@ async def marcas_del_guard(
         raise HTTPException(status_code=400,
                             detail="El rango está invertido: 'desde' es posterior a 'hasta'.")
     return mg.marcas_del_guard(db, desde=desde, hasta=hasta, modulo=modulo)
+
+
+@router.get("/tiempos-de-narrativa",
+            summary="Cuánto tarda cada sección de un informe, y armarlo entero")
+async def tiempos_de_narrativa(
+    desde: Optional[date] = Query(
+        None, description="Fecha inicial inclusive (AAAA-MM-DD). Por defecto, 7 días atrás"),
+    hasta: Optional[date] = Query(
+        None, description="Fecha final INCLUSIVE del día completo. Por defecto, hoy"),
+    modulo: Optional[str] = Query(None, description="Acotar a un eje o producto"),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Qué sección se come el tiempo de un informe — la pregunta que no se podía contestar.
+
+    El registro guardaba costo, tokens y caché, pero no cuánto tardaba nada, así que un
+    informe que se pasaba del techo de tiempo dejaba al diagnóstico con promedios y conjeturas.
+    Se intentó así el 2026-08-26 y no alcanzó.
+
+    Las secciones se generan en PARALELO, así que el total de un informe es aproximadamente el
+    de su sección más lenta y NO la suma. Dentro de una sección el trabajo sí es serial
+    —generar, juez, regenerar—, de modo que una sola con reparaciones puede consumir el
+    presupuesto entero: por eso la unidad de esta consulta es la sección.
+    """
+    from shared.observability import tiempos_de_narrativa as tn
+
+    _require_admin(current_user)
+    if desde and hasta and desde > hasta:
+        raise HTTPException(status_code=400,
+                            detail="El rango está invertido: 'desde' es posterior a 'hasta'.")
+    return tn.tiempos_de_narrativa(db, desde=desde, hasta=hasta, modulo=modulo)

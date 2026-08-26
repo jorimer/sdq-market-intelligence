@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import asyncio
 import hashlib
+import time
 import json
 import logging
 import pathlib
@@ -299,6 +300,24 @@ def _assert_system_narratives(level, snapshot: ProductSnapshot, narratives) -> N
         enforce_anonymized(narratives, entity_roster=snapshot.entity_roster)
 
 
+def _registrar_tiempo_de_ensamblado(product, tier, scope, snapshot, segundos: float,
+                                    *, corto: bool) -> None:
+    """Deja en el registro cuánto tardó ARMAR este informe. Best-effort.
+
+    Va al mismo `llm_calls` que ya lleva el gasto —con `purpose="ensamblado"` y coste cero—
+    para que el diagnóstico se lea en un solo lugar y sin migración. `corto=True` marca el
+    que se pasó del techo, que es el que interesa buscar.
+    """
+    try:
+        from shared.observability.llm_ledger import record_call
+        record_call(purpose="ensamblado", model="", cost_usd=0.0,
+                    module=product.sector_key, template=tier.value, cache_hit=False,
+                    detail={"segundos": round(segundos, 2), "corto_por_tiempo": corto,
+                            "scope": scope or "", "periodo": snapshot.period or ""})
+    except Exception:  # noqa: BLE001 — medir jamás puede tumbar una entrega
+        logger.exception("No se pudo registrar el tiempo de ensamblado")
+
+
 async def _content_from_snapshot(
     product: SectorProduct,
     tier: ProductTier,
@@ -314,6 +333,7 @@ async def _content_from_snapshot(
     # conoce el nivel. Ver `shared/narrative/relaciones_pendientes`.
     from shared.narrative.cifras_pendientes import acumulando as acumulando_cifras
     from shared.narrative.relaciones_pendientes import acumulando
+    _t0 = time.monotonic()
     with acumulando() as relaciones_pendientes, acumulando_cifras() as sin_respaldo:
         try:
             narratives = await asyncio.wait_for(
@@ -339,6 +359,8 @@ async def _content_from_snapshot(
                 surface="products", sector_key=product.sector_key, tier=tier.value,
                 sections=list(level.sections), blocked=True, scope=scope,
                 period=snapshot.period)
+            _registrar_tiempo_de_ensamblado(product, tier, scope, snapshot,
+                                            time.monotonic() - _t0, corto=True)
             from shared.narrative.claude_engine import NarrativeDegradedError
             raise NarrativeDegradedError(list(level.sections), motivo="tiempo")
     # GATE DE DEGRADACIÓN: si el motor IA cayó al fallback estático en secciones de ANÁLISIS
@@ -349,6 +371,11 @@ async def _content_from_snapshot(
     # reintento; el Pulse (abierto) solo se registra. Umbral = 1: una sola sección de análisis
     # degradada ya invalida un premium. La caché nunca guardó este texto (ver _narratives_cached),
     # así que al recuperarse el servicio la próxima descarga regenera de verdad.
+    # El TOTAL del ensamblado, al lado de los segundos por sección. Con los dos se responde
+    # «¿se pasó del techo por una sección lenta o por la suma?» sin volver a generar nada.
+    _registrar_tiempo_de_ensamblado(product, tier, scope, snapshot,
+                                    time.monotonic() - _t0, corto=False)
+
     from shared.narrative.claude_engine import NarrativeDegradedError, degraded_sections
     degraded = degraded_sections(narratives, level.sections)
     if degraded:

@@ -1993,6 +1993,11 @@ class NarrativeEngine:
                           context_str: str, cache_key: str, template: str,
                           context: Optional[dict] = None,
                           axis: Optional[str] = None) -> NarrativeResult:
+        # SEGUNDOS de la sección, de punta a punta: incluye la generación, los reintentos del
+        # guard y las llamadas al juez. Es el número que faltaba para diagnosticar un corte por
+        # tiempo — el registro guardaba costo, tokens y caché, pero no cuánto tardó nada, así
+        # que un informe que se pasaba del techo no dejaba forma de saber QUÉ sección se lo
+        # comió. `monotonic` porque acá interesa el DELTA, no el instante (su origen no es fijo).
         """Cerebro generation + numeric guardrail: generate, verify every figure traces
         to the context, and regenerate ONCE if any is unsupported. Two layers feed the
         check: a DETERMINISTIC computation (deltas vs median, range bounds, value↔period,
@@ -2000,6 +2005,12 @@ class NarrativeEngine:
         judge for the rest. Caches and returns the final result with ``guard_unsupported``
         recording figures still unverified (if the regen also failed) — best-effort, never
         blanks the insight."""
+        # SEGUNDOS de la sección, de punta a punta: generación + reintentos del guard + juez.
+        # Es el número que faltaba para diagnosticar un corte por tiempo. El registro guardaba
+        # costo, tokens y caché, pero no cuánto tardó NADA, así que un informe que se pasaba
+        # del techo no dejaba forma de saber qué sección se lo comió — solo promedios y
+        # conjeturas. `monotonic` porque acá interesa el DELTA, no el instante.
+        _t0 = time.monotonic()
         from shared.narrative.numeric_guard import (
             CORRECTION_NOTICE, DIRECTION_CORRECTION_NOTICE, fragmento_alrededor,
             deterministic_direction_errors, deterministic_uncited_figures,
@@ -2101,7 +2112,8 @@ class NarrativeEngine:
                     # en un `logger.warning`, que no es evento de Sentry y que nadie lee.
                     # Se acotan por si el juez devuelve una glosa larga: la tabla es de
                     # gasto, no un almacén de texto.
-                    detail={"guard_flags": len(result.guard_unsupported),
+                    detail={"segundos": round(time.monotonic() - _t0, 2),
+                            "guard_flags": len(result.guard_unsupported),
                             "guard_marcas": [str(h)[:180]
                                              for h in result.guard_unsupported[:8]],
                             # Y la FRASE en la que el modelo usó cada cifra marcada. Con la
@@ -2173,7 +2185,10 @@ class NarrativeEngine:
             # diferencia que decide si la caché vale lo que ocupa.
             record_call(purpose=PURPOSE_NARRATIVE, model=cached.model_used or "",
                         cost_usd=0.0, module=axis, template=template, cache_hit=True,
-                        detail={"lang": lang, "mode": mode})
+                        # Un HIT no tarda: se declara en 0 para que el percentil de tiempos
+                        # no se calcule sobre una mezcla de generaciones y hits, que lo haría
+                        # parecer más rápido de lo que es una generación real.
+                        detail={"lang": lang, "mode": mode, "segundos": 0.0})
             # Un HIT marcado tiene que avisar igual. El motor se niega a propagar a la caché
             # COMPARTIDA lo que él marcó, pero L1 es por-proceso y sí puede devolverlo: sin
             # esta línea, la segunda vista del mismo informe se entregaría sin el veto que la
