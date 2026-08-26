@@ -65,7 +65,7 @@ def test_guard_version_declara_la_regla_vigente():
     módulo no toca ningún prompt y pasaría inadvertido."""
     from shared.narrative.numeric_guard import GUARD_VERSION
 
-    assert GUARD_VERSION == "8", (
+    assert GUARD_VERSION == "9", (
         "Si cambiaste la lógica del guard, bumpeá GUARD_VERSION y actualizá este test: si no, "
         "la caché sigue sirviendo texto que la regla nueva evaluaría distinto.")
 

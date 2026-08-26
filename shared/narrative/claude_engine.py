@@ -2011,7 +2011,17 @@ class NarrativeEngine:
         record_call(purpose=PURPOSE_NARRATIVE, model=result.model_used or "",
                     cost_usd=result.cost_estimate, tokens_out=result.tokens_used,
                     module=axis, template=template, cache_hit=False,
+                    # Las marcas van ENTERAS, no solo su cantidad. Con el contador solo se
+                    # sabe que el guard actuó; con el texto se sabe QUÉ marcó, y eso es lo
+                    # que distingue una cifra inventada de una cifra real dicha en otra
+                    # forma. Los dos falsos vetos de esta semana —«69 %» y «132 %»— se
+                    # descubrieron porque una persona los vio en pantalla; el patrón estaba
+                    # en un `logger.warning`, que no es evento de Sentry y que nadie lee.
+                    # Se acotan por si el juez devuelve una glosa larga: la tabla es de
+                    # gasto, no un almacén de texto.
                     detail={"guard_flags": len(result.guard_unsupported),
+                            "guard_marcas": [str(h)[:180]
+                                             for h in result.guard_unsupported[:8]],
                             "truncada": result.truncated})
         return result
 
