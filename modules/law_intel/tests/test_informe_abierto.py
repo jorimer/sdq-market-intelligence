@@ -277,3 +277,32 @@ class TestElAnexoDeEVIDENCIA:
         from modules.law_intel.informe_abierto import ANEXOS_POR_EXPEDIENTE
         faltan = [e for e in ANEXOS_POR_EXPEDIENTE if e not in expedientes()]
         assert not faltan, f"anexos declarados para expedientes que no existen: {faltan}"
+
+
+class TestLaPROSAquesEIMPRIME:
+    """Se comparte: una concordancia rota le dice al lector que nadie lo leyó."""
+
+    @pytest.mark.parametrize("eid", EXPEDIENTES)
+    def test_ninguna_seccion_dice_UNO_en_plural(self, eid):
+        texto = " ".join(construir(eid)["secciones"].values())
+        for roto in ("De los 1 ", "Los 1 restantes", "1 indicadores", "1 obligaciones",
+                     "los 1 indicadores"):
+            assert roto not in texto, f"concordancia rota: «{roto}»"
+
+    @pytest.mark.parametrize("eid", EXPEDIENTES)
+    def test_el_titular_CONCUERDA(self, eid):
+        from modules.law_intel.informe_abierto import _titular
+        t = _titular(construir(eid)["titulares"])
+        assert "1 indicadores" not in t and "1 obligaciones" not in t
+
+    def test_el_titular_de_una_ley_de_OBLIGACIONES_no_habla_de_indicadores(self):
+        """«Mide 0 de 1 indicadores» es cierto y se lee como un fracaso: la 167-21 no es una
+        ley de metas. Titular por indicadores le pone una vara que su objeto no admite."""
+        from modules.law_intel.informe_abierto import _titular
+        assert _titular({"medidos": 0, "total": 1, "obligaciones": 10}) == \
+            "10 obligaciones con deudor y plazo"
+
+    def test_el_titular_de_una_ley_de_METAS_sí(self):
+        from modules.law_intel.informe_abierto import _titular
+        assert _titular({"medidos": 46, "total": 90, "obligaciones": 7}) == \
+            "Mide 46 de 90 indicadores"

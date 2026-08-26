@@ -192,6 +192,24 @@ ANEXOS_POR_EXPEDIENTE = {
 }
 
 
+def _entero(v: Any) -> int:
+    """Un conteo de un resumen, como entero. Los resúmenes se tipan `Dict[str, object]` y de
+    ahí no sale ni aritmética ni concordancia comprobables."""
+    return int(v) if isinstance(v, (int, float)) else 0
+
+
+def _plural(n: int, singular: str, plural: str, cero: Optional[str] = None) -> str:
+    """Concordancia de número para la prosa del informe.
+
+    «De los 1 indicadores… Los 1 restantes» es lo que sale de interpolar un contador en una
+    frase escrita en plural. Se imprime en un documento que se comparte, y le dice al lector
+    que nadie lo leyó antes de soltarlo.
+    """
+    if n == 0 and cero:
+        return cero
+    return singular if n == 1 else plural
+
+
 def _prosa_de_declaraciones(dec: Dict[str, Any]) -> str:
     """Lo que el evaluado dijo sobre sus propios datos, en prosa y con su fecha.
 
@@ -294,8 +312,11 @@ def construir(expediente_id: str, db: Any = None) -> Dict[str, Any]:
     resumen_obs: Dict[str, Any] = obs.get("resumen") or {}
     lista_obs: List[Dict[str, Any]] = list(obs.get("obligaciones") or [])
     con_consecuencia = sum(1 for o in lista_obs if o.get("consecuencia"))
-    medidos = cob.get("medidos") or 0
-    total = cob.get("total") or 0
+    # Enteros explícitos: los resúmenes se tipan como `Dict[str, object]` y de ahí no sale
+    # una concordancia comprobable — ni aritmética.
+    medidos = _entero(cob.get("medidos"))
+    total = _entero(cob.get("total"))
+    sin_medicion = _entero(campo.get("declarados_sin_veredicto"))
 
     secciones = {
         "que_es": (
@@ -313,13 +334,23 @@ def construir(expediente_id: str, db: Any = None) -> Dict[str, Any]:
             f"incumplimiento. El resto no: la norma manda hacer algo y no dice qué ocurre si "
             f"no se hace.\n\n{ADVERTENCIA_DEL_REGISTRO}"),
         "lo_que_se_mide": (
-            f"De los {total} indicadores que la norma numera, {medidos} cuentan hoy con una "
-            f"fuente verificada. Los {campo.get('declarados_sin_veredicto', 0)} restantes "
-            f"tienen un motivo registrado y ninguno queda sin explicación.\n\n"
-            f"Una serie se admite como medición de un indicador cuando reproduce, en el año "
-            f"que la norma señala, el valor que la norma fija como línea base. Una "
-            f"coincidencia de nombre sin coincidencia de valor no identifica la magnitud, y "
-            f"una coincidencia de valor sin coincidencia de concepto tampoco."),
+            _plural(total,
+                    "La norma numera un solo indicador y "
+                    + ("cuenta hoy con fuente verificada. " if medidos
+                       else "no cuenta hoy con fuente verificada. "),
+                    f"De los {total} indicadores que la norma numera, {medidos} "
+                    f"{_plural(medidos, 'cuenta', 'cuentan')} hoy con una fuente "
+                    f"verificada. ")
+            + _plural(sin_medicion,
+                      "El indicador sin medición tiene un motivo registrado.",
+                      f"Los {sin_medicion} restantes tienen un "
+                      f"motivo registrado y ninguno queda sin explicación.",
+                      cero="Ninguno queda sin explicación.")
+            + "\n\n"
+            "Una serie se admite como medición de un indicador cuando reproduce, en el año "
+            "que la norma señala, el valor que la norma fija como línea base. Una "
+            "coincidencia de nombre sin coincidencia de valor no identifica la magnitud, y "
+            "una coincidencia de valor sin coincidencia de concepto tampoco."),
         **({"lo_que_declara_el_emisor": _prosa_de_declaraciones(dec)} if dec["total"] else {}),
         **({"cuando_se_actualiza": _actualiza} if _actualiza else {}),
         "alcance": (
@@ -356,6 +387,22 @@ TITULOS = {
 }
 
 
+def _titular(t: Dict[str, int]) -> str:
+    """La cifra de portada, elegida por lo que la norma ES.
+
+    «Mide 0 de 1 indicadores» es cierto y se lee como un fracaso, cuando lo que pasa es que
+    la Ley 167-21 no es una ley de metas: son obligaciones. Titular por indicadores a una
+    norma que casi no tiene le pone al documento una vara que su objeto no admite.
+    """
+    medidos, total, obs = t["medidos"], t["total"], t["obligaciones"]
+    if medidos:
+        return f"Mide {medidos} de {total} indicadores"
+    if obs:
+        return _plural(obs, "1 obligación con deudor y plazo",
+                       f"{obs} obligaciones con deudor y plazo")
+    return _plural(total, "1 indicador numerado", f"{total} indicadores numerados")
+
+
 def render(expediente_id: str, db: Any = None, fmt: str = "pdf",
            output_dir: Optional[str] = None) -> str:
     """Genera el archivo del informe abierto y devuelve su ruta."""
@@ -370,7 +417,6 @@ def render(expediente_id: str, db: Any = None, fmt: str = "pdf",
         narratives={k: d["secciones"][k] for k in SECCIONES_EN_ORDEN if k in d["secciones"]},
         section_titles=TITULOS,
         tables=d["tablas"], charts=[],
-        headline=(f"Mide {t['medidos']} de {t['total']} indicadores"
-                  if t["total"] else f"{t['obligaciones']} obligaciones registradas"),
+        headline=_titular(t),
         subtitle="Documento abierto — qué ordena la norma y qué puede medirse de ella",
         watermark=MARCA, sample=False, output_dir=output_dir, fmt=fmt)
