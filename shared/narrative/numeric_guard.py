@@ -28,7 +28,7 @@ logger = logging.getLogger("sdq.narrative.numeric_guard")
 # el CÓDIGO de este módulo —una regla nueva, un umbral distinto— no cambia ningún prompt y
 # pasaría inadvertido: la caché seguiría sirviendo texto que el guard nuevo habría marcado.
 # Es el único bump manual irreducible; por eso vive acá, junto a lo que describe.
-GUARD_VERSION = "9"  # "9": formas derivadas por clave + aviso que pide anclar (2026-08-26)
+GUARD_VERSION = "10"  # "10": los pesos de la rúbrica cuentan como magnitud relacional (2026-08-26)
 
 _JUDGE_SYSTEM = (
     "Sos un verificador numérico estricto y preciso. Tu ÚNICA tarea es detectar cifras "
@@ -451,6 +451,20 @@ FORMAS_POR_CLAVE: Dict[str, Tuple[str, ...]] = {
     "peso": ("por_cien",),
 }
 
+#: Las magnitudes relacionales viajan de DOS formas y el detector tiene que entender las dos:
+#: en una FILA con su clave (`{"razon_vs_referencia": 1.32}`) o dentro de un CONTENEDOR cuyo
+#: nombre declara la unidad de todo lo que hay adentro (`{"pesos_sub_componentes":
+#: {"solidez": 0.38, "calidad": 0.34}}`), donde las claves son los sujetos y no la magnitud.
+#:
+#: Mirar solo la primera forma fue la TERCERA instancia del mismo defecto en una semana. El
+#: caso, capturado con la frase que el modelo escribió: «La dimensión de mayor peso en el
+#: modelo (solidez de capital, ponderación 38 %) sostiene la calificación con 82.32 puntos».
+#: El 0,38 estaba servido —es el peso de solidez para las AAyP—, el modelo lo dijo en la forma
+#: en que se dice un peso, y el guard lo marcó como inventado.
+CONTENEDORES_RELACIONALES: Dict[str, str] = {
+    "pesos_sub_componentes": "peso",
+}
+
 #: Nombres de ``FORMAS_POR_CLAVE`` a la operación. Separado del mapa para que agregar una
 #: clave no invite a inventar una transformación nueva sin declararla acá.
 _TRANSFORMACIONES = {
@@ -466,8 +480,10 @@ def valores_relacionales(context: Any) -> set:
     """Las magnitudes relacionales servidas, con la clave bajo la que viajan.
 
     Devuelve ``{(clave, valor_absoluto)}``. Recorre el contexto sin conocer su forma, igual
-    que ``context_values``, pero recoge SOLO lo que vive bajo una clave de
-    ``FORMAS_POR_CLAVE``.
+    que ``context_values``, pero recoge SOLO dos cosas: lo que vive bajo una clave de
+    ``FORMAS_POR_CLAVE`` y lo que vive dentro de un contenedor de
+    ``CONTENEDORES_RELACIONALES``. Las dos formas hacen falta — mirar solo la primera dejaba
+    fuera los pesos de la rúbrica, que viajan como ``{componente: peso}``.
     """
     out: set = set()
 
@@ -477,6 +493,13 @@ def valores_relacionales(context: Any) -> set:
                 if (k in FORMAS_POR_CLAVE and isinstance(v, (int, float))
                         and not isinstance(v, bool)):
                     out.add((k, abs(float(v))))
+                elif k in CONTENEDORES_RELACIONALES and isinstance(v, dict):
+                    # El nombre del contenedor declara la unidad de TODO lo de adentro; las
+                    # claves de acá son los sujetos (solidez, calidad…), no la magnitud.
+                    unidad = CONTENEDORES_RELACIONALES[k]
+                    for x in v.values():
+                        if isinstance(x, (int, float)) and not isinstance(x, bool):
+                            out.add((unidad, abs(float(x))))
                 else:
                     _walk(v)
         elif isinstance(o, (list, tuple, set)):
