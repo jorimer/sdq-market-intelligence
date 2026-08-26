@@ -125,3 +125,37 @@ def test_la_marca_dice_QUE_se_intento():
     """«no aparece» se lee como «el modelo inventó», y dos veces estuvo equivocado."""
     marcas = deterministic_uncited_figures(_ctx_razon(), "un 512,7% del promedio")
     assert "forma derivada" in marcas[0]
+
+
+# ── El fragmento: cómo usó el modelo la cifra marcada ──────────────────
+
+def test_el_fragmento_muestra_la_frase_de_la_cifra():
+    from shared.narrative.numeric_guard import fragmento_alrededor
+
+    texto = ("La entidad sostiene una posición adecuada. La eficiencia operativa se ubica "
+             "en 38% de los ingresos recurrentes, por debajo de sus pares. El apalancamiento "
+             "acompaña esa lectura y no compromete la solvencia declarada.")
+    f = fragmento_alrededor(texto, "38%: no coincide con ningún valor servido")
+    assert "38%" in f and "eficiencia operativa" in f
+    assert "solvencia declarada" not in f, "recorta a una ventana, no guarda la sección entera"
+
+
+def test_el_fragmento_no_corta_palabras_por_la_mitad():
+    from shared.narrative.numeric_guard import fragmento_alrededor
+
+    texto = "palabra " * 40 + "un 38% aquí " + "palabra " * 40
+    f = fragmento_alrededor(texto, "38%: x").strip("…").strip()
+    assert not f.startswith("abra") and not f.endswith("pala"), f"cortó una palabra: {f!r}"
+
+
+def test_una_marca_del_JUEZ_que_no_calza_literal_no_devuelve_vacio():
+    """El juez semántico reformula: media oración es más que nada."""
+    from shared.narrative.numeric_guard import fragmento_alrededor
+
+    assert fragmento_alrededor("Prosa cualquiera sin esa cifra.", "99,9% — reformulado")
+
+
+def test_sin_texto_no_inventa_fragmento():
+    from shared.narrative.numeric_guard import fragmento_alrededor
+
+    assert fragmento_alrededor("", "38%: x") == ""
