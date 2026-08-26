@@ -31,6 +31,25 @@ NARRATIVE_DEGRADED_MSG = (
     "del servicio de generación. Reintente en unos minutos."
 )
 
+#: El OTRO motivo por el que un premium no se entrega, y hasta el 2026-08-26 compartía el
+#: mensaje de arriba: el ensamblado no terminó dentro de su techo de tiempo. Son causas
+#: distintas con remedios distintos, y confundirlas impedía diagnosticar.
+#:
+#: El reintento acá NO es una espera a que el servicio se recupere: es aprovechamiento. El
+#: motor cachea CADA SECCIÓN por separado en cuanto la termina, así que las que alcanzaron a
+#: generarse antes del corte ya están guardadas y el intento siguiente arranca desde ahí.
+#: Decirlo cambia lo que el usuario hace: reintentar sirve, y sirve enseguida.
+NARRATIVE_TIEMPO_MSG = (
+    "El informe no terminó de generarse dentro del tiempo disponible. Reintente ahora: las "
+    "secciones que ya se generaron quedan guardadas y el siguiente intento retoma desde "
+    "ahí, así que suele completarse."
+)
+
+
+def mensaje_de_degradacion(motivo: str) -> str:
+    """El mensaje que corresponde al motivo por el que el análisis no se produjo."""
+    return NARRATIVE_TIEMPO_MSG if motivo == "tiempo" else NARRATIVE_DEGRADED_MSG
+
 SIN_RESPALDO_MSG = (
     "El informe no se entrega: una revisión automática detectó cifras que el dato servido no "
     "respalda en {n} sección(es) ({secciones}). No publicamos un número que no podemos "

@@ -283,3 +283,55 @@ def test_un_ensamblado_NORMAL_no_se_corta():
     c = asyncio.run(_content_from_snapshot(
         p, ProductTier.deep_dive, _snap(ProductTier.deep_dive, "Banco X"), "es", scope="bx"))
     assert c.narratives["assessment"] == _CON_RESPALDO
+
+
+def test_el_corte_por_TIEMPO_se_distingue_de_la_degradación(monkeypatch):
+    """Dos causas, un solo síntoma: eso impedía diagnosticar.
+
+    El techo de tiempo reusaba `NarrativeDegradedError` sin decirlo, así que cuando un Deep
+    Dive falló el 2026-08-26 no había forma de saber si el servicio de IA no había respondido
+    o si el ensamblado se había pasado del techo. Son causas distintas con remedios distintos.
+    """
+    import asyncio as _asyncio
+
+    from shared.narrative.claude_engine import NarrativeDegradedError
+    from shared.narrative.mensajes_de_veto import (NARRATIVE_DEGRADED_MSG,
+                                                   NARRATIVE_TIEMPO_MSG,
+                                                   mensaje_de_degradacion)
+    from shared.products import assembler as A
+
+    monkeypatch.setattr(A, "PRESUPUESTO_DE_ENSAMBLADO_S", 0.05)
+
+    async def _eterna(*a, **kw):
+        await _asyncio.sleep(5)
+        return {}
+
+    monkeypatch.setattr(A, "_narratives_cached", _eterna)
+    p = _Product(Granularity.named_entity, ProductTier.deep_dive, _todas(_CON_RESPALDO))
+    with pytest.raises(NarrativeDegradedError) as ei:
+        asyncio.run(_content_from_snapshot(
+            p, ProductTier.deep_dive, _snap(ProductTier.deep_dive, "Banco X"),
+            "es", scope="bx"))
+    assert ei.value.motivo == "tiempo"
+    assert mensaje_de_degradacion("tiempo") == NARRATIVE_TIEMPO_MSG
+    assert mensaje_de_degradacion("degradado") == NARRATIVE_DEGRADED_MSG
+    assert NARRATIVE_TIEMPO_MSG != NARRATIVE_DEGRADED_MSG
+
+
+def test_el_mensaje_de_TIEMPO_dice_que_el_reintento_APROVECHA_lo_hecho():
+    """No es «esperá a que se recupere»: el motor cachea CADA sección al terminarla, así que
+    las que alcanzaron a generarse quedan guardadas y el intento siguiente retoma desde ahí.
+    Decirlo cambia lo que el usuario hace."""
+    from shared.narrative.mensajes_de_veto import NARRATIVE_TIEMPO_MSG
+
+    assert "Reintente ahora" in NARRATIVE_TIEMPO_MSG
+    assert "quedan guardadas" in NARRATIVE_TIEMPO_MSG
+
+
+def test_una_degradacion_REAL_sigue_diciendo_lo_de_siempre():
+    """El contrapeso: sin él, la regla se satisface renombrando el mensaje de siempre."""
+    from shared.narrative.claude_engine import NarrativeDegradedError
+
+    e = NarrativeDegradedError(["assessment"])
+    assert e.motivo == "degradado"
+    assert "fallback estático" in str(e)
