@@ -194,4 +194,45 @@ def test_el_motor_no_propaga_a_la_cache_compartida_lo_que_el_mismo_marco(monkeyp
     antes = len(escrituras)
     motor._set_cache("k-marcada", marcado)
     assert len(escrituras) == antes, "el texto marcado no puede llegar a la caché compartida"
-    assert "k-marcada" in motor._cache, "sí queda en L1: no hay que re-pagar la generación"
+    # Ni a L1. La versión anterior de este test exigía lo contrario —«sí queda en L1: no hay
+    # que re-pagar la generación»— y esa decisión volvía INSERVIBLE el reintento que el propio
+    # mensaje de veto promete. Ver `test_lo_marcado_no_queda_NI_en_L1_...` más abajo.
+    assert "k-marcada" not in motor._cache
+
+
+def test_lo_marcado_no_queda_NI_en_L1_para_que_el_reintento_regenere(monkeypatch):
+    """El veto promete «reintente, el texto se regenera». Con L1 guardándolo, mentía.
+
+    Medido en producción contra el SDQ Rating de Asociación Bonao al 2025-03-31: la primera
+    generación tardó 264 s y se vetó; el reintento devolvió **el mismo veto en 4,7 s** —un HIT
+    de L1—. El informe quedaba muerto hasta que expirara el TTL o el request cayera en otro
+    worker, o sea al azar, y cada reintento del usuario era un no-op disfrazado de espera.
+
+    La justificación vieja de conservarlo en L1 —«no re-pagar la generación dentro de la misma
+    corrida»— no compraba nada: la clave incluye contexto y plantilla, así que dentro de una
+    corrida se pide una sola vez.
+    """
+    from shared.narrative import claude_engine as ce
+
+    monkeypatch.setattr(ce, "cache_set", lambda k, v, ttl: None)
+    motor = ce.NarrativeEngine.__new__(ce.NarrativeEngine)
+    motor._cache = {}
+
+    marcado = ce.NarrativeResult(text="38%", model_used="claude-sonnet-4-6",
+                                 guard_unsupported=["38%: no coincide con ningún valor servido"],
+                                 guard_cifras=["38%: no coincide con ningún valor servido"])
+    motor._set_cache("k", marcado)
+    assert "k" not in motor._cache, (
+        "el texto marcado quedó en L1: el reintento devolverá el mismo veto sin regenerar")
+    assert motor._get_cached("k") is None
+
+
+def test_lo_limpio_SI_queda_en_L1():
+    """El contrapeso: sin él, la regla de arriba se satisface tirando la caché entera —y esa
+    caché existe para que la descarga no espere 15-90 s."""
+    from shared.narrative import claude_engine as ce
+
+    motor = ce.NarrativeEngine.__new__(ce.NarrativeEngine)
+    motor._cache = {}
+    motor._set_cache("k", ce.NarrativeResult(text="ok", model_used="claude-sonnet-4-6"))
+    assert "k" in motor._cache
