@@ -84,6 +84,8 @@ def _entity_share(db: Session, bank: Bank, period_end: date, metric: str) -> Opt
     top = conc.get("top10") or []
     for i, t in enumerate(top):
         if t.get("name") == bank.name:
+            # sujeto-ok: es la cuota de ESTA entidad —se llega acá por `t["name"] ==
+            # bank.name`— y viaja con `rank` y `n_entities`, que declaran contra qué.
             return {"share": t.get("share"), "rank": i + 1, "n_entities": conc.get("n_entities")}
     return None
 
@@ -160,8 +162,10 @@ def support_overlay(db: Session, bank: Bank, standalone_score: float,
                      "catálogo SIB); no es un flag publicado por el supervisor."),
         },
         "systemic": {
+            # sujeto-ok: las dos nombran su población en la propia clave (activos del
+            # sistema, depósitos del sistema) y son de la entidad del informe.
             "activos_share": (activos or {}).get("share"),
-            "depositos_share": (depositos or {}).get("share"),
+            "depositos_share": (depositos or {}).get("share"),  # sujeto-ok: ver arriba
             "rank_activos": rank,
             "is_systemic": is_systemic,
             "label": sys_label,
