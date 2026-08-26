@@ -25,11 +25,22 @@ from shared.products.contract import ProductSnapshot, SectorProduct
 from shared.products.filenames import SUJETO_SISTEMA
 from shared.products.tiers import Granularity, ProductTier, TierLevelSpec
 
-#: Techo de tiempo del ensamblado de UN informe, por debajo del límite del proxy (~300 s
-#: medidos: una descarga que lo cruzó devolvió 502 sin cuerpo). Se deja margen para el render
-#: y la serialización. Un informe que no entra acá NO es un informe lento: es uno que el
-#: cliente nunca va a recibir, y conviene decirlo con un 503 que invita a reintentar.
-PRESUPUESTO_DE_ENSAMBLADO_S = 240
+#: Techo de tiempo del ensamblado de UN informe, apenas por debajo del límite del proxy
+#: (~300 s medidos: una descarga que lo cruzó devolvió 502 sin cuerpo). Un informe que no
+#: entra acá NO es un informe lento: es uno que el cliente nunca va a recibir, y conviene
+#: decirlo con un 503 que invita a reintentar en vez de morir mudo.
+#:
+#: **Estuvo en 240 s durante unas horas y fue una REGRESIÓN.** Lo calibré contra la Revisión
+#: Anual, que narra DOS secciones, y se lo apliqué al Deep Dive de banca, que narra ONCE: a
+#: 25-50 s por sección son 275-550 s, así que todo Deep Dive frío moría en 503 a los 240 s —
+#: incluidos los que antes alcanzaban a terminar. Se sube a 270 s, que deja 30 s para el
+#: render y la serialización sin cortar lo que sí llegaba.
+#:
+#: **Y esto NO resuelve el Deep Dive.** Once secciones no entran en una petición HTTP
+#: síncrona: la cola alta del rango sigue por encima del proxy, y ahí ningún techo ayuda. La
+#: cura es generar en segundo plano y entregar cuando esté — un cambio de forma del producto,
+#: no una constante. Mientras tanto el 503 es honesto: el servicio no entregó a tiempo.
+PRESUPUESTO_DE_ENSAMBLADO_S = 270
 
 logger = logging.getLogger("sdq.products.assembler")
 

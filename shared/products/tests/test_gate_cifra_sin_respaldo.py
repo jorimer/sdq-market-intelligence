@@ -271,8 +271,14 @@ def test_un_ensamblado_que_excede_el_techo_responde_503_y_no_muere_en_el_proxy(m
 def test_un_ensamblado_NORMAL_no_se_corta():
     """El contrapeso: sin él, la regla se satisface poniendo el techo en cero."""
     from shared.products import assembler as A
-    assert A.PRESUPUESTO_DE_ENSAMBLADO_S >= 120, (
-        "un techo bajo convertiría informes buenos en 503; el límite del proxy son ~300 s")
+    # El techo tiene que caber el informe MÁS LARGO, no el más corto. Estuvo en 240 s y cortaba
+    # el Deep Dive de banca —once secciones narradas, 275-550 s— convirtiendo en 503 informes
+    # que antes llegaban. El piso de este test es lo que aprendimos de esa regresión.
+    assert A.PRESUPUESTO_DE_ENSAMBLADO_S >= 260, (
+        "un techo por debajo de ~260 s corta el Deep Dive de banca (11 secciones narradas), "
+        "que es el informe más largo del catálogo")
+    assert A.PRESUPUESTO_DE_ENSAMBLADO_S < 300, (
+        "por encima del límite del proxy el techo no sirve: la petición muere muda antes")
     p = _Product(Granularity.named_entity, ProductTier.deep_dive, _todas(_CON_RESPALDO))
     c = asyncio.run(_content_from_snapshot(
         p, ProductTier.deep_dive, _snap(ProductTier.deep_dive, "Banco X"), "es", scope="bx"))
