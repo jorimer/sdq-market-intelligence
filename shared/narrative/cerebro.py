@@ -166,7 +166,12 @@ NO_META_COMMENTARY = (
     "referirte a ti como IA o modelo, o dejar etiquetas de razonamiento (<thinking>, "
     "[reasoning]…). Si al redactar detectas que una cifra o afirmación estaba mal, "
     "reconsidérala EN SILENCIO y escribe únicamente la versión corregida y definitiva —nunca "
-    "el titubeo ni la versión descartada—. El lector solo debe ver el juicio final, pulido."
+    "el titubeo ni la versión descartada—. El lector solo debe ver el juicio final, pulido. "
+    "NO REPITAS LA RAÍZ DE UN CONCEPTO PARA CALIFICARLO: los rótulos que estas instrucciones "
+    "usan (asimetría, mecanismo, tensión, veredicto…) son lo que tenés que TRANSMITIR, no "
+    "palabras que debas colocar. Escribir «la asimetría de riesgo es asimétrica hacia la baja» "
+    "—frase real de un informe entregado— no dice nada: decí HACIA DÓNDE se inclina el riesgo "
+    "y por qué, sin nombrar la figura."
 )
 
 # Defensa PRIMARIA contra la comparación INVERTIDA (bug 2026-08-05: el resumen ejecutivo de

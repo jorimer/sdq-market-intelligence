@@ -76,3 +76,28 @@ def test_el_anuario_NO_se_entrega_hueco():
     from modules.banking_score.api.router_reports import _NO_SE_ENTREGAN_HUECOS
 
     assert "anuario" in _NO_SE_ENTREGAN_HUECOS
+
+
+# ── La ETIQUETA de portada ─────────────────────────────────────────────
+#
+# Tercera pieza que al anuario le faltaba, después del endpoint y de la plantilla: sin entrada
+# en `REPORT_TYPE_LABELS`, el fallback imprime la CLAVE CRUDA y la portada del primer anuario
+# de producción decía «anuario» en minúscula. El comentario que vive diez líneas más abajo de
+# ese diccionario documenta el mismo defecto para el `tier` — «bug real detectado en
+# producción» — así que la lección ya estaba escrita y no alcanzó.
+
+def test_todo_tipo_de_informe_tiene_etiqueta_de_portada():
+    from modules.banking_score.reports.pdf_generator import REPORT_TYPE_LABELS
+
+    sin_etiqueta = sorted(set(REPORT_SECTIONS) - set(REPORT_TYPE_LABELS))
+    assert not sin_etiqueta, (
+        "Estos tipos imprimirían su clave cruda en la portada del PDF: "
+        f"{sin_etiqueta}. Agregales una entrada en REPORT_TYPE_LABELS.")
+
+
+def test_la_etiqueta_no_es_la_clave_cruda():
+    """Poner `\"anuario\": \"anuario\"` pasaría el test de arriba sin arreglar nada."""
+    from modules.banking_score.reports.pdf_generator import REPORT_TYPE_LABELS
+
+    crudas = sorted(k for k, v in REPORT_TYPE_LABELS.items() if k == v)
+    assert not crudas, f"la etiqueta repite la clave técnica: {crudas}"

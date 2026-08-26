@@ -140,3 +140,43 @@ def test_el_chequeo_corre_desde_el_punto_de_entrada_unico():
     solo_razones = {"razones": _CTX["razones"]}
     assert deterministic_direction_errors(
         solo_razones, "un ROA (0.39%) que triplica el promedio de bancos múltiples (1.61%)")
+
+
+# ── La razón también se dice en PORCENTAJE ─────────────────────────────
+
+def test_la_razon_se_sirve_TAMBIEN_como_porcentaje():
+    """Un analista escribe indistintamente «1.32 veces» y «el 132% del promedio». El guard
+    compara contra los números del contexto, y ahí solo estaba el 1.32: un Deep Dive REAL
+    (Asociación Bonao, 2025-03-31) se vetó por un «132%» que era exactamente la razón
+    servida — su apalancamiento, 26.84 contra una mediana de sistema de 20.33."""
+    f = _una(26.8415, 20.33)
+    assert f["razon_vs_referencia"] == 1.32
+    assert f["razon_como_pct_del_referente"] == 132.0
+
+
+def test_las_DOS_formas_pasan_el_guard():
+    from shared.narrative.numeric_guard import deterministic_uncited_figures
+
+    ctx = {"razones": razones_vs_referencia(
+        {"leverage": 26.8415}, {"leverage": {"promedio del sistema": 20.33}})}
+    for frase in ("es 1.32 veces el promedio del sistema",
+                  "alcanza el 132% del promedio del sistema"):
+        assert deterministic_uncited_figures(ctx, f"El apalancamiento {frase}.") == []
+
+
+def test_un_porcentaje_INVENTADO_se_sigue_marcando():
+    """La cura sirve el número, no afloja el guard: aceptar cualquier valor ×100 dejaría pasar
+    un «500%» porque el contexto tiene un 5.0 en cualquier parte."""
+    from shared.narrative.numeric_guard import deterministic_uncited_figures
+
+    ctx = {"razones": razones_vs_referencia(
+        {"leverage": 26.8415}, {"leverage": {"promedio del sistema": 20.33}})}
+    assert deterministic_uncited_figures(
+        ctx, "El apalancamiento alcanza el 180% del promedio del sistema.")
+
+
+def test_el_cruce_de_cero_NO_recibe_porcentaje():
+    """Donde no hay razón que publicar tampoco hay porcentaje: sería reintroducir por la
+    ventana el número que la clase entera existe para no dar."""
+    f = _una(-0.26, 1.52)
+    assert "razon_como_pct_del_referente" not in f
