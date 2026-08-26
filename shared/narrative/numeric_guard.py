@@ -560,6 +560,44 @@ def deterministic_uncited_figures(context: dict, text: str) -> List[str]:
     return flags
 
 
+#: La cifra que encabeza una marca: «132%: no coincide con…» → «132%».
+_CIFRA_DE_LA_MARCA = re.compile(r"^\s*([\d.,]+\s*(?:%|pp|puntos)?)\s*:")
+
+
+def fragmento_alrededor(texto: str, marca: str, ventana: int = 90) -> str:
+    """La FRASE en la que el modelo usó la cifra marcada, recortada a su alrededor.
+
+    Sin esto, una marca dice «38 %: no coincide» y no hay forma de saber si el modelo inventó
+    un número o si citó uno real que el contexto no sirve en esa forma —que son los dos casos
+    opuestos que este guard confunde—. La única manera de verlo era volver a generar el
+    informe y perderlo otra vez: 88-264 s y costo de modelo por cada intento de diagnóstico.
+
+    Se recorta a una ventana en vez de guardar la sección entera: la tabla es el registro de
+    gasto, no un almacén de narrativas, y para decidir «inventada o real» alcanza con la
+    oración. Se ensancha hasta el espacio más cercano para no cortar palabras por la mitad.
+    """
+    try:
+        m = _CIFRA_DE_LA_MARCA.match(marca or "")
+        literal = (m.group(1) if m else (marca or "")).strip()
+        if not literal or not texto:
+            return ""
+        i = texto.find(literal)
+        if i < 0:
+            # La marca puede venir del juez semántico, que reformula. Se cae al inicio del
+            # texto en vez de devolver vacío: media oración es más que nada.
+            return texto[:ventana * 2].strip()
+        ini, fin = max(0, i - ventana), min(len(texto), i + len(literal) + ventana)
+        if ini:
+            ini = texto.find(" ", ini) + 1 or ini
+        if fin < len(texto):
+            corte = texto.rfind(" ", ini, fin)
+            fin = corte if corte > i + len(literal) else fin
+        return ("…" if ini else "") + texto[ini:fin].strip() + ("…" if fin < len(texto) else "")
+    except Exception:  # noqa: BLE001 — un fragmento nunca puede tumbar el registro
+        logger.exception("No se pudo recortar el fragmento de la marca %s", marca)
+        return ""
+
+
 def guard_coverage(context: dict) -> Dict[str, bool]:
     """Qué insumos del chequeo determinista EXISTEN en este contexto.
 

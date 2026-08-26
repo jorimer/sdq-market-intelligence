@@ -100,3 +100,36 @@ def test_los_HIT_de_cache_no_se_cuentan(db):
     f.cache_hit = True
     db.commit()
     assert marcas_del_guard(db)["cifras"] == []
+
+
+def test_la_frase_viaja_con_la_cifra(db):
+    """Sin la frase, «38 %: no coincide» no distingue una invención de una forma derivada.
+
+    Son los dos casos OPUESTOS que este guard confunde, y hasta ahora la única manera de
+    verlo era regenerar el informe —88 a 264 s y costo de modelo— y perderlo otra vez.
+    """
+    f = _fila(db, marcas=["38%: no coincide con ningún valor servido"])
+    f.detail = dict(f.detail, guard_fragmentos=[
+        {"cifra": "38%: no coincide con ningún valor servido",
+         "frase": "…la eficiencia operativa se ubica en 38% de los ingresos…"}])
+    db.commit()
+    c = marcas_del_guard(db)["cifras"][0]
+    assert c["frases"] == ["…la eficiencia operativa se ubica en 38% de los ingresos…"]
+
+
+def test_dos_frases_distintas_para_la_misma_cifra_se_conservan(db):
+    """Repetir la cifra en el mismo sentido es una derivación que falta; usarla para cosas
+    distintas es relleno. Colapsarlas a una borraría justo esa diferencia."""
+    for frase in ("…margen de 72% sobre ingresos…", "…cobertura del 72% de los depósitos…"):
+        f = _fila(db, marcas=["72%: no coincide con ningún valor servido"])
+        f.detail = dict(f.detail, guard_fragmentos=[
+            {"cifra": "72%: no coincide con ningún valor servido", "frase": frase}])
+        db.commit()
+    c = marcas_del_guard(db)["cifras"][0]
+    assert c["veces"] == 2 and len(c["frases"]) == 2
+
+
+def test_una_fila_sin_fragmento_no_rompe(db):
+    """Las filas anteriores a este cambio no tienen `guard_fragmentos`."""
+    _fila(db, marcas=["55%: x"])
+    assert marcas_del_guard(db)["cifras"][0]["frases"] == []
