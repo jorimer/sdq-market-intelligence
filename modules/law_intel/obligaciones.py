@@ -66,6 +66,17 @@ class Obligacion:
     plazo: Optional[Dict[str, Any]] = None
     evidencia: Optional[str] = None
     produce: List[str] = field(default_factory=list)
+    #: Si esta obligación es un HITO DE MEDICIÓN de la propia ley: el momento en que la
+    #: norma manda evaluarse a sí misma.
+    #:
+    #: Se declara y no se deduce. Ni `periodicidad` ni `produce` sirven para inferirlo: la
+    #: 167-21 tiene una obligación `continua` de publicar trámites —que es lo que se mide, no
+    #: un momento de medir— y la END tiene una que produce el `reglamento_de_aplicacion`, que
+    #: es una norma. Adivinarlo publicaría un calendario de evaluación que la ley no fijó.
+    #:
+    #: Importa porque es la respuesta buena a «cuándo se mide esta ley»: la cadencia la fija
+    #: el legislador, no la agenda de nuestros conectores.
+    hito_de_medicion: bool = False
     #: Código de la serie del Data Registry que sigue el cumplimiento de esta obligación,
     #: cuando existe. Es el enlace entre una obligación y un dato que se mueve: sin él, el
     #: cumplimiento de un deber CONTINUO solo se puede afirmar por la evidencia escrita a
@@ -159,6 +170,14 @@ def _validar(obs: List[Obligacion]) -> None:
             raise ExpedienteInvalido(
                 f"{o.id}: `verificacion_congresual` sin `registro_de`. Quién lleva el "
                 f"registro decide si la evidencia es de tercero o del propio obligado.")
+
+        # Un hito de medición SIN fecha no es un hito: es una intención. Publicar «la ley
+        # manda medirse» sin decir cuándo deja al lector sin lo único accionable, y es la
+        # forma más fácil de que una obligación cualquiera se cuele en el calendario.
+        if o.hito_de_medicion and not (o.periodicidad or o.plazo):
+            raise ExpedienteInvalido(
+                f"{o.id}: declarado `hito_de_medicion` sin `periodicidad` ni `plazo`. Un "
+                f"hito sin fecha no se puede exigir ni verificar.")
 
         # Un universo no se acusa en bloque. «Los entes incumplieron» sobre cientos de
         # instituciones se refuta con UNA que sí cumplió, y se lleva puesto el informe. La

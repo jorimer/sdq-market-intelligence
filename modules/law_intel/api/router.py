@@ -403,6 +403,10 @@ def obligaciones_(expediente_id: str, _: User = Depends(get_current_user)) -> Di
             "estado": o.estado, "consecuencia": o.consecuencia, "plazo": o.plazo,
             "periodicidad": o.periodicidad, "evidencia": o.evidencia,
             "exigible": o.exigible, "produce": o.produce,
+            # Si es un HITO DE MEDICIÓN de la propia ley: el momento en que la norma manda
+            # evaluarse a sí misma. Es la respuesta a «cuándo se mide esta ley», y no la
+            # cadencia de nuestros conectores — que es un detalle nuestro y no es exigible.
+            "hito_de_medicion": o.hito_de_medicion,
             # La serie que sigue el cumplimiento, cuando existe. Un deber CONTINUO —publicar
             # los procedimientos, mantenerlos actualizados— no se verifica una vez: se
             # verifica mirando si la cifra se mueve, y esto dice dónde mirar.
