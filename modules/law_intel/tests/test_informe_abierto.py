@@ -342,9 +342,15 @@ class TestElDetalleDelAnexo:
             # tablas salen mezcladas sin que ningún test lo note.
             for c in cond:
                 txt = str(c.compile(compile_kwargs={"literal_binds": True}))
-                pedidos = {f.theme for f in self._f if f"'{f.theme}'" in txt}
-                if pedidos:
-                    self._t = pedidos if self._t is None else (self._t & pedidos)
+                # Los literales de la CONSULTA, no los temas que el doble tiene. Filtrar
+                # contra las filas existentes hace que una consulta por un tema sin filas no
+                # restrinja nada y devuelva todas: así el nombre del trámite salía de la
+                # serie de tiempos y la tabla imprimía «3 horas» en la columna del nombre.
+                import re as _re
+                if ".theme" not in txt:
+                    continue
+                pedidos = set(_re.findall(r"'([a-z_]+)'", txt))
+                self._t = pedidos if self._t is None else (self._t & pedidos)
             return self
 
         def all(self):
@@ -368,6 +374,12 @@ class TestElDetalleDelAnexo:
             F(TEMA_TIEMPO_POR_TRAMITE, 0.125, "pasaporte-1", "DGP · 3 horas · perifrasis"),
             F(TEMA_TIEMPO_POR_TRAMITE, 0.125, "pasaporte-2", "DGP · 3 horas · perifrasis"),
             F(TEMA_TIEMPO_POR_TRAMITE, 5.0, "cnzfe-1", "CNZFE · 5 días laborables · explicito"),
+            F("tramites_consultas_por_tramite", 500.0, "pasaporte-1",
+              "DGP · Renovación Pasaporte"),
+            F("tramites_consultas_por_tramite", 450.0, "pasaporte-2",
+              "DGP · Renovación Pasaporte Menor"),
+            F("tramites_consultas_por_tramite", 400.0, "cnzfe-1",
+              "CNZFE · Cambio de Nombre Empresas"),
         ])
 
     def _tabla(self, titulo):
@@ -386,29 +398,82 @@ class TestElDetalleDelAnexo:
         filas = {f[0]: f[3] for f in self._tabla("instituciones más consultadas")[1][1:]}
         assert filas["DGP"] == "Sí" and filas["Supérate"] == "No"
 
-    def test_los_tiempos_se_AGRUPAN_por_institución_y_plazo(self):
-        """Sin agrupar salen catorce filas de pasaporte con el mismo tiempo."""
+    def test_cada_trámite_va_con_su_NOMBRE(self):
+        """Agrupar por institución y plazo daba una tabla compacta y equivocada: el
+        documento afirma que 22 declaran su tiempo y no decía CUÁLES ni qué hace cada uno,
+        que es lo único que vuelve comprobable la afirmación."""
         filas = self._tabla("declaran cuánto tardan")[1][1:]
-        assert ["DGP", "2", "3 horas", "Lo dice en prosa"] in filas
-        assert len(filas) == 2
+        assert ["Renovación Pasaporte", "DGP", "3 horas", "Lo dice en prosa"] in filas
+        assert len(filas) == 3, "una fila por trámite, no una por grupo"
+
+    def test_el_NOMBRE_no_sale_de_la_serie_de_tiempos(self):
+        """El doble devolvía todas las filas a la consulta por consultas y la columna del
+        nombre imprimía «3 horas». Un doble que no restringe convierte un test en adorno."""
+        filas = self._tabla("declaran cuánto tardan")[1][1:]
+        assert not any(f[0] == f[2] for f in filas)
+
+    def test_el_slug_NO_se_imprime_cuando_hay_nombre(self):
+        """«pasaporte-1» no es lo que nadie busca. El nombre se une por slug desde la serie
+        de consultas, que es la que lo trae."""
+        filas = self._tabla("declaran cuánto tardan")[1][1:]
+        assert not any(f[0].startswith("pasaporte-") for f in filas)
+
+    def test_sin_nombre_en_la_serie_cae_al_SLUG_y_no_a_vacío(self):
+        """Una fila sin nombre con la celda en blanco se lee como si el trámite no
+        existiera. El slug es feo pero identifica."""
+        db = self._db()
+        db._f = [f for f in db._f if f.theme != "tramites_consultas_por_tramite"]  # noqa: E501
+        t = [x for x in construir("ley_167_21", db)["tablas"]
+             if "declaran cuánto tardan" in x[0]][0]
+        assert all(f[0].strip() for f in t[1][1:])
+        assert any(f[0].startswith("pasaporte-") for f in t[1][1:])
+
+    def test_ordena_por_INSTITUCION_y_después_por_nombre(self):
+        """Las fichas de una misma institución se leen juntas, y el orden es estable entre
+        corridas — si no, dos descargas del mismo día dan tablas distintas."""
+        filas = self._tabla("declaran cuánto tardan")[1][1:]
+        assert [f[1] for f in filas] == sorted(f[1] for f in filas)
 
     def test_distingue_NOMBRAR_el_campo_de_decirlo_en_prosa(self):
         """La Resolución 142-2024 exige un campo; una perífrasis lo suple sin cumplirlo."""
         filas = self._tabla("declaran cuánto tardan")[1][1:]
-        niveles = {f[0]: f[3] for f in filas}
+        niveles = {f[1]: f[3] for f in filas}
         assert niveles["CNZFE"] == "Nombra el campo"
         assert niveles["DGP"] == "Lo dice en prosa"
 
     def test_el_titulo_lleva_los_DOS_denominadores(self):
         assert "3 de 710" in self._tabla("declaran cuánto tardan")[0]
 
-    def test_el_numerador_del_titulo_es_la_SUMA_de_las_filas(self):
+    def test_el_numerador_del_titulo_CUENTA_las_filas_de_la_tabla(self):
         """Contar las filas de la serie en vez de las de la tabla afirma un total que la
-        tabla debajo no muestra: la fila con la nota malformada se salta al agrupar."""
+        tabla debajo no muestra: la fila con la nota malformada se salta al armarla."""
         t = self._tabla("declaran cuánto tardan")
         n = int(t[0].split("(")[1].split(" de")[0])
-        assert n == sum(int(f[1]) for f in t[1][1:])
+        assert n == len(t[1]) - 1
 
     def test_la_notacion_de_miles_es_ESPAÑOLA(self):
         filas = self._tabla("instituciones más consultadas")[1][1:]
         assert filas[0][2] == "1.535.542"
+
+
+class TestLasTablasVanDESPUESdelTexto:
+    """Un informe que abre con seis páginas de tablas antes de una sola frase se lee como un
+    anexo: el lector externo llega a los 22 trámites sin saber todavía qué se le está
+    midiendo ni con qué criterio. Pedido del dueño, el mismo que ya se había hecho sobre el
+    informe de brand_intel."""
+
+    def test_render_pasa_tables_last(self, monkeypatch):
+        visto = {}
+        monkeypatch.setattr("shared.products.render.render_product_pdf",
+                            lambda **k: (visto.update(k), "/tmp/x.pdf")[1])
+        from modules.law_intel.informe_abierto import render
+        render("ley_167_21", db=None, fmt="pdf")
+        assert visto.get("tables_last") is True
+
+    def test_el_renderizador_compartido_SIGUE_soportando_la_opción(self):
+        """Si alguien quita el parámetro del renderizador compartido, este producto vuelve a
+        abrir con tablas y nadie lo nota hasta que el dueño lo lee."""
+        import inspect
+
+        from shared.products.render import render_product_pdf
+        assert "tables_last" in inspect.signature(render_product_pdf).parameters

@@ -373,6 +373,26 @@ def _tabla_de_mas_consultados(db: Any, periodo: str) -> Optional[Tuple[str, List
             f"{len(filas)})", out)
 
 
+def _nombres_de_tramite(db: Any, periodo: str) -> Dict[str, str]:
+    """`{slug: nombre}` del período, leído de la serie de consultas.
+
+    La serie de tiempos se guarda por slug y no lleva el nombre; la de consultas sí. Se unen
+    por slug en vez de persistir el nombre dos veces: un nombre duplicado en dos series es un
+    nombre que se puede desincronizar.
+    """
+    from modules.social_dev.models.models import SocialIndicator
+    from modules.social_dev.tramites_sync import TEMA_CONSULTAS_POR_TRAMITE
+
+    out: Dict[str, str] = {}
+    for f in (db.query(SocialIndicator)
+              .filter(SocialIndicator.theme == TEMA_CONSULTAS_POR_TRAMITE,
+                      SocialIndicator.period == periodo).all()):
+        partes = [x.strip() for x in str(f.disaggregation or "").split("·")]
+        if len(partes) > 1 and partes[1]:
+            out[str(f.entity_key)] = partes[1]
+    return out
+
+
 def _metodologia_tramites(db: Any, periodo: str, total: float) -> Optional[str]:
     """Con qué criterio se contó, y cuánto se descartó al aplicarlo.
 
@@ -506,26 +526,36 @@ def _anexo_tramites(db: Any) -> Anexo:
                           "Sí" if sigla in declaran else "No"])
         tablas.append(("Las instituciones más consultadas", filas))
 
-    # Y los que sí lo declaran, AGRUPADOS por institución y plazo. Sin agrupar salen catorce
-    # filas de pasaporte con el mismo tiempo, que ocupan media página y no dicen nada más que
-    # la primera.
+    # Y los que sí lo declaran, UNO POR UNO y con su nombre.
+    #
+    # La primera versión los agrupaba por institución y plazo —«DGP · 12 · 3 horas»— para que
+    # la tabla no ocupara media página con catorce filas de pasaporte casi idénticas. Compacta
+    # y equivocada: el documento afirma que 22 trámites declaran cuánto tardan y no decía
+    # CUÁLES ni qué hace cada uno, que es lo único que vuelve comprobable la afirmación. Un
+    # lector que quiera refutarla —o usarla— necesita poder ir a la ficha.
+    #
+    # El nombre no está en la serie de tiempos, que se guarda por slug: se une con la serie de
+    # consultas, que sí lo trae, por el slug y el mismo período.
     tiempos = _tiempos_declarados(db, periodo)
     if tiempos:
-        grupos: Dict[Tuple[str, str, str], int] = {}
-        for _slug, (_dias, nota) in tiempos.items():
+        nombres = _nombres_de_tramite(db, periodo)
+        filas = [["Trámite", "Institución", "Tiempo que declara la ficha", "Cómo lo dice"]]
+        cuerpo = []
+        for slug, (_dias, nota) in tiempos.items():
             partes = [x.strip() for x in nota.split("·")]
             if len(partes) < 3:
                 continue
-            grupos[(partes[0], partes[1], partes[2])] = grupos.get(
-                (partes[0], partes[1], partes[2]), 0) + 1
-        filas = [["Institución", "Trámites", "Tiempo que declara la ficha", "Cómo lo dice"]]
-        for (sigla, texto, nivel), n in sorted(grupos.items(), key=lambda kv: (-kv[1], kv[0])):
-            filas.append([sigla, str(n), texto,
-                          "Nombra el campo" if nivel == "explicito" else "Lo dice en prosa"])
+            sigla, texto, nivel = partes[0], partes[1], partes[2]
+            cuerpo.append([_recortar(nombres.get(slug, slug), 56), sigla, texto,
+                           "Nombra el campo" if nivel == "explicito" else "Lo dice en prosa"])
+        # Por institución y después por nombre: las fichas de una misma institución quedan
+        # juntas, que es como se leen, y dentro el orden es estable entre corridas.
+        cuerpo.sort(key=lambda f: (f[1], f[0]))
+        filas.extend(cuerpo)
         # El numerador sale de la SUMA de las filas, no de `len(tiempos)`: una fila con la
         # nota malformada se salta arriba, y un título que la contara igual afirmaría un
         # total que la tabla debajo no muestra.
-        tablas.append((f"Los trámites que declaran cuánto tardan ({sum(grupos.values())} de "
+        tablas.append((f"Los trámites que declaran cuánto tardan ({len(cuerpo)} de "
                        f"{_mil(v[TEMA_TOTAL])})", filas))
 
     mas = _tabla_de_mas_consultados(db, periodo)
@@ -815,4 +845,8 @@ def render(expediente_id: str, db: Any = None, fmt: str = "pdf",
         tables=d["tablas"], charts=[],
         headline=_titular(t),
         subtitle="Documento abierto — qué ordena la norma y qué puede medirse de ella",
-        watermark=MARCA, sample=False, output_dir=output_dir, fmt=fmt)
+        watermark=MARCA, sample=False, output_dir=output_dir, fmt=fmt,
+        # Las tablas van DESPUÉS de la prosa. Un informe que abre con seis páginas de tablas
+        # antes de una sola frase se lee como un anexo: el lector externo llega a los 22
+        # trámites sin saber todavía qué se le está midiendo ni con qué criterio.
+        tables_last=True)
