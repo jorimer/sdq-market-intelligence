@@ -1807,17 +1807,30 @@ class NarrativeEngine:
         return None
 
     def _set_cache(self, key: str, result: NarrativeResult):
-        self._cache[key] = (result, time.time())
         if result.guard_unsupported:
-            # Lo que el guard marcó NO viaja a la caché compartida. Escribirlo ahí es cómo un
-            # texto con una cifra sin respaldo sobrevive a la corrida que lo produjo y se
-            # sirve —idéntico y en silencio— a todos los informes que vengan: la caché no
-            # tiene TTL. Queda en L1 por-worker para no re-pagar la generación dentro de la
-            # misma corrida, que de todos modos el gate del ensamblador va a frenar.
-            logger.warning("Narrativa con %d hallazgo(s) del guard: no se propaga a la caché "
-                           "compartida (%s)", len(result.guard_unsupported),
+            # Lo que el guard marcó NO SE CACHEA EN NINGÚN NIVEL, ni siquiera en L1.
+            #
+            # En la caché compartida es evidente: no tiene TTL, así que el texto sobreviviría
+            # a la corrida que lo produjo y se serviría idéntico y en silencio para siempre.
+            #
+            # En L1 costó más verlo, y era peor de lo que parecía. El veto le dice al usuario
+            # «reintente en unos minutos, el texto se regenera». Con el resultado marcado en
+            # L1, el reintento que caía en el MISMO worker devolvía el HIT: mismo veto, misma
+            # cifra, en 4,7 s en vez de 264 s. Medido en producción contra el SDQ Rating de
+            # Asociación Bonao al 2025-03-31. El mensaje prometía una regeneración que no
+            # ocurría, y el informe quedaba muerto hasta que expirara el TTL de L1 o el
+            # request cayera en otro worker — o sea, al azar.
+            #
+            # La justificación anterior («no re-pagar la generación dentro de la misma
+            # corrida») no compraba nada: la clave incluye contexto y plantilla, así que
+            # dentro de una corrida se pide UNA vez. Lo único que compraba era volver
+            # inservible el reintento.
+            logger.warning("Narrativa con %d hallazgo(s) del guard: NO se cachea (ni L1 ni "
+                           "compartida) para que el reintento regenere de verdad (%s)",
+                           len(result.guard_unsupported),
                            "; ".join(map(str, result.guard_unsupported))[:200])
             return
+        self._cache[key] = (result, time.time())
         if result.model_used == STATIC_FALLBACK_MODEL:
             # El fallback estático es un degradado transitorio (sin API key, error,
             # presupuesto): se cachea solo por-worker, no se propaga a los demás.
