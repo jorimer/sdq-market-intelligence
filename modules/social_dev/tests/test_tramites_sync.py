@@ -72,6 +72,14 @@ class TestLoQuePersiste:
                 self._k = k
                 return self
 
+            def filter(self, *a, **k):
+                return self
+
+            def delete(self, **k):
+                # El desglose se borra y se reescribe: una institución que deja de publicar
+                # tiene que desaparecer, no quedarse con su último valor congelado.
+                return 0
+
             def all(self):
                 return []
 
@@ -79,7 +87,7 @@ class TestLoQuePersiste:
                 return None
 
             def add(self, fila):
-                escrito[fila.theme] = fila
+                escrito.setdefault(fila.theme, []).append(fila)
 
             def commit(self):
                 pass
@@ -90,14 +98,33 @@ class TestLoQuePersiste:
         monkeypatch.setattr(sync, "SessionLocal", lambda: _DB())
         return run_tramites(force=force), escrito
 
-    def test_persiste_los_TRES_temas(self, monkeypatch):
+    def test_persiste_los_TRES_agregados_nacionales(self, monkeypatch):
         catalogo = [_tramite(True)] * 3 + [_tramite()] * 707
         r, escrito = self._correr(monkeypatch, catalogo)
         assert r["persistido"] is True
-        assert set(escrito) == set(TEMAS)
-        assert escrito[TEMA_TOTAL].value == 710.0
-        assert escrito[TEMA_CON_TIEMPO].value == 3.0
-        assert escrito[TEMA_PCT].value == 0.4
+        assert set(TEMAS) <= set(escrito)
+        assert escrito[TEMA_TOTAL][0].value == 710.0
+        assert escrito[TEMA_CON_TIEMPO][0].value == 3.0
+        assert escrito[TEMA_PCT][0].value == 0.4
+
+    def test_persiste_el_DESGLOSE_por_institución_y_por_trámite(self, monkeypatch):
+        """El anexo del informe lo necesita, y sin esto tendría que dispararle 711 llamadas
+        al portal cada vez que alguien lo descarga."""
+        from modules.social_dev.tramites_sync import (TEMA_CONSULTAS_POR_INSTITUCION,
+                                                      TEMA_POR_INSTITUCION,
+                                                      TEMA_TIEMPO_POR_TRAMITE)
+        catalogo = [_tramite(True, sigla="AAA")] + [_tramite(sigla="BBB")] * 709
+        _, escrito = self._correr(monkeypatch, catalogo)
+        assert {s.entity_key for s in escrito[TEMA_POR_INSTITUCION]} == {"AAA", "BBB"}
+        assert TEMA_CONSULTAS_POR_INSTITUCION in escrito
+        assert len(escrito[TEMA_TIEMPO_POR_TRAMITE]) == 1
+
+    def test_el_texto_del_tiempo_VIAJA_con_la_cifra(self, monkeypatch):
+        """«5» sola no deja ver si son días laborables ni si la ficha nombra el campo."""
+        from modules.social_dev.tramites_sync import TEMA_TIEMPO_POR_TRAMITE
+        _, escrito = self._correr(monkeypatch, [_tramite(True)] + [_tramite()] * 709)
+        fila = escrito[TEMA_TIEMPO_POR_TRAMITE][0]
+        assert "5 días laborables" in fila.disaggregation
 
     def test_la_clave_del_PORCENTAJE_nombra_su_denominador(self):
         """Acá conviven dos poblaciones y `pct_con_tiempo` a secas se reatribuye."""
@@ -105,15 +132,18 @@ class TestLoQuePersiste:
 
     def test_cada_tema_lleva_su_UNIDAD(self, monkeypatch):
         _, escrito = self._correr(monkeypatch, [_tramite(True)] + [_tramite()] * 709)
-        assert escrito[TEMA_TOTAL].unit == "trámites"
-        assert escrito[TEMA_PCT].unit == "% de los catalogados"
+        assert escrito[TEMA_TOTAL][0].unit == "trámites"
+        assert escrito[TEMA_PCT][0].unit == "% de los catalogados"
 
-    def test_el_alcance_persistido_es_NACIONAL(self, monkeypatch):
-        """Son conteos del Estado entero, no de una institución."""
+    def test_los_AGREGADOS_son_nacionales_y_el_desglose_NO(self, monkeypatch):
+        """Los tres agregados son del Estado entero; el desglose es por sujeto, y
+        confundirlos haría leer «710 trámites» como el número de una institución."""
         _, escrito = self._correr(monkeypatch, [_tramite(True)] + [_tramite()] * 709)
-        assert all(f.disaggregation == "nacional" for f in escrito.values())
-        assert all(f.entity_key is None or f.entity_key == "nacional"
-                   for f in escrito.values())
+        for tema in TEMAS:
+            for f in escrito[tema]:
+                assert f.disaggregation == "nacional" and f.entity_key == "nacional"
+        from modules.social_dev.tramites_sync import TEMA_POR_INSTITUCION
+        assert all(f.entity_key != "nacional" for f in escrito[TEMA_POR_INSTITUCION])
 
 
 def test_los_tres_temas_declaran_su_alcance_en_la_DOCTRINA():
