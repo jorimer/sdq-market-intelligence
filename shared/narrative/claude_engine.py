@@ -522,6 +522,36 @@ THIN_TEMPLATES = {
         "No recalcules ninguna cifra: todas vienen resueltas. Si una relación no está servida, "
         "expresala en palabras sin número."
     ),
+    "anio_del_sistema": (
+        "Escribí la lectura ABIERTA del año del sistema bancario dominicano.\n"
+        "Contexto:\n{context}\n\n"
+        "Máximo 300 palabras. Nivel abierto: el sujeto es el SISTEMA y **NO PODÉS NOMBRAR "
+        "NINGUNA ENTIDAD** — ni una sola, ni siquiera como ejemplo. El contexto no trae "
+        "nombres a propósito; si te falta uno, no es un olvido: es la doctrina del nivel.\n\n"
+        "EL ESTADÍSTICO ES LA MEDIANA. Si 'medias_y_medianas_divergen' es verdadero, la media "
+        "y la mediana se mueven en sentidos OPUESTOS y las dos son correctas: titulá con la "
+        "mediana, decí que discrepan y por qué (a la media la levantan unos pocos extremos). "
+        "Nunca titules el año con la media.\n\n"
+        "'por_tipo' trae el cambio MEDIANO de cada tipo de entidad, ya computado: es el "
+        "hallazgo estructural del año y merece el centro. 'conteo_direccion' dice cuántas "
+        "mejoraron, empeoraron y quedaron estables — son cifras del sistema, no casos.\n\n"
+        "DECLARÁ EL UNIVERSO al menos una vez: cuántas entran al orden y cuántas quedan fuera "
+        "por año incompleto.\n\n"
+        "No recalcules ninguna cifra: todas vienen resueltas."
+    ),
+    "revision_anual_mercado": (
+        "Escribí el CONTRASTE contra el mercado del año de esta entidad.\n"
+        "Contexto:\n{context}\n\n"
+        "Máximo 250 palabras. Una sola pregunta y respondela: **¿lo que le pasó a esta "
+        "entidad en el año fue suyo o fue del mercado?**\n\n"
+        "El movimiento de la entidad se lee CONTRA el cambio mediano de su TIPO y el del "
+        "sistema, en el MISMO año. Los tres números vienen servidos. Si la entidad cayó y su "
+        "tipo también, el hecho es sectorial y decirlo como mérito o demérito propio sería "
+        "falso; si cayó mientras su tipo subía, es idiosincrático y ESO es el hallazgo.\n\n"
+        "No repitas la descripción del año —ya la da la otra sección—: acá va solo el "
+        "contraste y lo que implica.\n\n"
+        "No recalcules ninguna cifra: todas vienen resueltas."
+    ),
     "sector_outlook": (
         "Explica el FUNDAMENTO del atractivo de inversión (IAI) de este sector.\n"
         "Contexto:\n{context}\n\n"

@@ -47,6 +47,7 @@ def _register_all():
     """Importa los módulos de sector → se auto-registran en el catálogo de productos."""
     import app.products_macro  # noqa: F401
     import modules.banking_score.products  # noqa: F401
+    import modules.banking_score.products_year_review  # noqa: F401 — producto ANUAL
     import modules.energy_intel.products  # noqa: F401
     import modules.esg_climate.products  # noqa: F401
     import modules.free_zones_intel.products  # noqa: F401
