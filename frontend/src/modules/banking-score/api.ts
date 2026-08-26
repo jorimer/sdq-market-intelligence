@@ -285,6 +285,11 @@ export const SYSTEM_REPORT_TYPES = [
   "wire",
   "datawatch",
   "sector_outlook",
+  // El ANUARIO resume un AÑO, no un corte: el backend lee el AÑO del período que se le
+  // manda. Llegó a producción sin esta línea —endpoint, plantilla y etiqueta de portada
+  // sí, registro del frontend no— y el resultado fue un producto que no se podía pedir
+  // desde la interfaz. Lo vigila `systemReportTypes.paridad.test.ts`.
+  "anuario",
 ] as const;
 
 export type SystemReportType = (typeof SYSTEM_REPORT_TYPES)[number];
@@ -295,6 +300,7 @@ export const SYSTEM_REPORT_NEEDS_PERIOD: Record<SystemReportType, boolean> = {
   wire: true,
   datawatch: true,
   sector_outlook: true,
+  anuario: true,
 };
 
 const SYSTEM_REPORT_PATH: Record<SystemReportType, string> = {
@@ -302,6 +308,7 @@ const SYSTEM_REPORT_PATH: Record<SystemReportType, string> = {
   wire: "wire",
   datawatch: "datawatch",
   sector_outlook: "sector-outlook",
+  anuario: "anuario",
 };
 
 export async function listSystemReports(): Promise<ReportItem[]> {
