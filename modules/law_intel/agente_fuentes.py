@@ -45,9 +45,14 @@ MAX_POR_CORRIDA = 20
 # dirigidas a un organismo que no existe, y quien las revisa las descarta una por una.
 _HECHOS = (
     "Contexto institucional vigente (posterior a tu conocimiento, tomalo como cierto):\n"
-    "· El MEPyD fue DISUELTO: la Ley 45-25 (2025-07-23) lo fusionó con Hacienda creando el "
-    "Ministerio de Hacienda y Economía (MHE). No propongas al MEPyD como organismo actual; "
-    "si la serie la producía él, nombrá al MHE y decilo.\n"
+    "· El MEPyD fue DISUELTO por la Ley 45-25 (2025-07-23), pero sus FUNCIONES continúan "
+    "repartidas: la política fiscal y macroeconómica pasó al Ministerio de Hacienda y "
+    "Economía (MHE), y la planificación estratégica y el seguimiento al Ministerio de la "
+    "Presidencia. Tres consecuencias, y las tres importan: (a) el emisor vigente depende de "
+    "la FUNCIÓN —no todo va a Hacienda—, así que nombrá el que corresponde a la magnitud "
+    "que estés proponiendo; (b) las series y fichas que el MEPyD publicó SIGUEN SIENDO "
+    "VÁLIDAS y citables, porque la función no se interrumpió; (c) si no sabés a cuál de los "
+    "dos fue esa función, decilo en vez de adivinar.\n"
     "· La ONE sigue existiendo y sigue siendo el productor de estadística nacional.\n"
 )
 

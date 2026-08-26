@@ -402,6 +402,92 @@ export function reportDimensions(report: ProductReport): ReportDimension[] {
   return out;
 }
 
+/** El aporte de un componente dentro de una ventana. */
+export interface AporteComponente {
+  componente: string;
+  delta_score: number | null;
+  peso: number | null;
+  aporte_al_cambio: number | null;
+}
+
+/** «Qué movió el score» en una ventana: trimestre, semestre o año. */
+export interface VentanaDeCambio {
+  ventana: string;
+  /** Los aportes de la ventana SUMAN esto — es lo que vuelve auditable la atribución. */
+  cambio_total: number | null;
+  aportes: AporteComponente[];
+  principal: string | null;
+  cuota_del_principal_pct: number | null;
+  lectura: string | null;
+}
+
+/**
+ * La atribución del cambio del score, del payload del reporte.
+ *
+ * Se LEE, no se computa: la cuenta ya la hizo el backend con los pesos del TIPO de entidad
+ * (`shared.narrative.derived.aportes_al_cambio`). Recomputarla acá sería una segunda
+ * implementación de la misma cuenta y una segunda oportunidad de que discrepen — y la
+ * dimensión que más se movió NO es la que más movió el resultado, porque los pesos difieren.
+ * Un informe entregado atribuyó el deterioro de un semestre al «colapso de eficiencia»
+ * cuando en ese semestre la eficiencia MEJORÓ.
+ *
+ * Vivía solo en el PDF: el mismo Deep Dive mostraba la tabla al descargarlo y no al verlo.
+ */
+export function reportAportes(report: ProductReport): VentanaDeCambio[] {
+  const filas = (report.payload as any)?.scoring_result?.aportes_al_cambio;
+  if (!Array.isArray(filas)) return [];
+  return filas
+    .filter((f) => f && typeof f.ventana === "string" && Array.isArray(f.aportes))
+    .map((f) => ({
+      ventana: f.ventana as string,
+      cambio_total: typeof f.cambio_total === "number" ? f.cambio_total : null,
+      aportes: (f.aportes as any[])
+        .filter((a) => a && typeof a.componente === "string")
+        .map((a) => ({
+          componente: a.componente as string,
+          delta_score: typeof a.delta_score === "number" ? a.delta_score : null,
+          peso: typeof a.peso === "number" ? a.peso : null,
+          aporte_al_cambio:
+            typeof a.aporte_al_cambio === "number" ? a.aporte_al_cambio : null,
+        })),
+      principal: typeof f.principal === "string" ? f.principal : null,
+      cuota_del_principal_pct:
+        typeof f.cuota_del_principal_pct === "number" ? f.cuota_del_principal_pct : null,
+      lectura: typeof f.lectura === "string" ? f.lectura : null,
+    }));
+}
+
+/**
+ * Los componentes que aparecen, en el orden en que el backend los sirvió.
+ *
+ * No se ordenan alfabéticamente ni por magnitud: el backend ya los ordena, y reordenar acá
+ * haría que la pantalla y el PDF listaran lo mismo en distinto orden.
+ */
+export function componentesDeAportes(ventanas: VentanaDeCambio[]): string[] {
+  const vistos: string[] = [];
+  for (const v of ventanas) {
+    for (const a of v.aportes) if (!vistos.includes(a.componente)) vistos.push(a.componente);
+  }
+  return vistos;
+}
+
+/**
+ * ¿Este corte es el CIERRE DE UN AÑO? Los informes de una entidad al 31 de diciembre son su
+ * lectura anual, y nada en el selector lo decía.
+ *
+ * No hay —ni debe haber— un SKU «informe anual» aparte: el año de la entidad se sirve como
+ * el informe AL CIERRE, porque la rentabilidad ya usa ventana móvil de doce meses (ROA/ROE
+ * de diciembre SON los del año) y la tabla «qué movió el score» trae su columna del año.
+ * Inventar un producto anual paralelo daría dos respuestas legítimas a «¿cuál es el score de
+ * X en 2025?», que es exactamente lo que se decidió no hacer.
+ *
+ * Lo que faltaba era DECIRLO: la capacidad estaba y no se podía descubrir desde la pantalla.
+ */
+export function cierreDeAnio(periodEnd: string): string | null {
+  const m = /^(\d{4})-12-31$/.exec(periodEnd);
+  return m ? m[1] : null;
+}
+
 export async function getProductReport(
   sector: string,
   tier: string,

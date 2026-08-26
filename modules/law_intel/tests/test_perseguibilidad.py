@@ -66,13 +66,56 @@ class TestLasDosReglasQueNoSalenDelEstado:
 
     def test_una_fuente_no_procesable_SI_es_trabajo_nuestro(self):
         """El dato existe y el emisor lo publica: lo que falta es extraerlo. Clasificarlo
-        como hecho de tercero lo sacaría de la cola sin motivo."""
+        como hecho de tercero lo sacaría de la cola sin motivo.
+
+        El estado se vació del expediente entre que se escribió este módulo y que se mergeó,
+        así que la regla se prueba contra un caso construido. Se deja la comprobación sobre
+        los datos reales al lado: si vuelve a haber uno, tiene que caer donde corresponde.
+        """
         cs = campo(E)
-        no_proc = [i for i, c in cs.items() if c.estado == "fuente_no_procesable"]
-        assert no_proc, "no hay fuentes no procesables: la regla no probaría nada"
         por_ind = {f["indicador"]: f for f in clasificar(E)}
-        for i in no_proc:
-            assert por_ind[i]["depende_de"] == "trabajo_nuestro", i
+        for i, c in cs.items():
+            if c.estado == "fuente_no_procesable":
+                assert por_ind[i]["depende_de"] == "trabajo_nuestro", i
+
+
+class TestElDefaultNoESsilencioso:
+    """La primera versión resolvía el estado desconocido con `.get(estado,
+    "hecho_de_un_tercero")`. Entre que se escribió y que se mergeó, el expediente ganó dos
+    estados nuevos: los OCHO indicadores de la END que hoy son hallazgos sobre la ley habrían
+    salido publicados como «esperando que un emisor publique algo». Un default silencioso en
+    una tabla que se usa para planificar manda a la gente a esperar en vez de a trabajar."""
+
+    def test_un_estado_desconocido_LEVANTA(self, monkeypatch):
+        from modules.law_intel.campo import Casilla
+        import modules.law_intel.perseguibilidad as P
+
+        real = P.campo
+        def _falso(eid):
+            cs = dict(real(eid))
+            k = next(iter(cs))
+            cs[k] = Casilla(**{**vars(cs[k]), "estado": "un_estado_que_nadie_declaro"})
+            return cs
+        monkeypatch.setattr(P, "campo", _falso)
+        with pytest.raises(P.EstadoSinClasificar, match="un_estado_que_nadie_declaro"):
+            clasificar(E)
+
+    def test_TODO_estado_en_uso_hoy_está_clasificado(self):
+        """El guard sobre los expedientes reales: un estado nuevo rompe acá, no en prod."""
+        from modules.law_intel.registro import expedientes
+        for eid in expedientes():
+            clasificar(eid)      # levanta si alguno no está clasificado
+
+    def test_los_dos_estados_NUEVOS_son_hallazgos_sobre_la_ley(self):
+        """`linea_base_no_reproduce` y `termino_legal_sin_fuente`: el trabajo está hecho y el
+        que no cierra es el instrumento. Nadie va a publicar nada que los arregle."""
+        cs = campo(E)
+        por_ind = {f["indicador"]: f for f in clasificar(E)}
+        afectados = [i for i, c in cs.items()
+                     if c.estado in ("linea_base_no_reproduce", "termino_legal_sin_fuente")]
+        assert afectados, "los dos estados se vaciaron: la regla no probaría nada"
+        for i in afectados:
+            assert por_ind[i]["depende_de"] == "lo_impide_la_ley", i
 
 
 class TestLoQueLaClasificacionAfirma:
@@ -84,13 +127,21 @@ class TestLoQueLaClasificacionAfirma:
         r = resumen(E)
         assert r["por_grupo"]["ya_medido"] == cobertura(E)["medidos"]
 
-    def test_lo_que_impide_la_ley_son_metas_no_indicadores_sin_fuente(self):
+    #: Los cuatro estados en que el que no cierra es el INSTRUMENTO. Los dos primeros son
+    #: sobre la meta —la ley no puso cifra, o la puso de un modo que no admite veredicto—; los
+    #: dos segundos son sobre la magnitud: la línea base que la norma fija no la reproduce
+    #: ninguna serie, o el término que la norma usa no lo publica nadie. En los cuatro el
+    #: trabajo está hecho.
+    IMPIDE_LA_LEY = ("sin_meta_legal", "meta_no_interpretable",
+                     "linea_base_no_reproduce", "termino_legal_sin_fuente")
+
+    def test_lo_que_impide_la_ley_son_HALLAZGOS_no_brechas_nuestras(self):
         """El grupo más grande de los no medidos no puede ser una brecha nuestra disfrazada:
-        son indicadores cuya META la ley escribió de un modo que no admite veredicto."""
+        en los cuatro estados el que no cierra es el instrumento, no nosotros."""
         cs = campo(E)
         for f in clasificar(E):
             if f["depende_de"] == "lo_impide_la_ley":
-                assert cs[f["indicador"]].estado in ("sin_meta_legal", "meta_no_interpretable")
+                assert cs[f["indicador"]].estado in self.IMPIDE_LA_LEY
 
     def test_la_lista_perseguible_es_la_union_de_los_dos_grupos_nuestros(self):
         r = resumen(E)

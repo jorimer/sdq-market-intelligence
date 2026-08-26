@@ -224,6 +224,7 @@ import app.market_brief as _market_brief_ops  # noqa: F401 — registers market-
 import shared.billing.operations  # noqa: F401 — registers fiscal-sequence-watch (NCF/e-NCF)
 import shared.products.operations  # noqa: F401 — registers products-readiness-recompute
 import shared.source_intel.operations  # noqa: F401 — registers source-research-agent (Capa 3)
+import shared.operations.operaciones_de_aseo  # noqa: F401 — registers aseo-directorios-de-salida
 import shared.reference.operations  # noqa: F401 — registers dgii-contribuyentes-sync
 import shared.operations.freshness  # noqa: F401 — registers data-freshness-audit (alerta dato viejo)
 import shared.alerts.motor  # noqa: F401 — registers alerts-sweep (barrido de alertas)
@@ -234,6 +235,7 @@ import modules.macro_monitor.comunicados.freshness  # noqa: F401 — registra fr
 # Product catalog: each sector registers its SectorProduct into shared.products at
 # import time (anti-Frankenstein: shared/products never imports a sector).
 import modules.banking_score.products  # noqa: F401 — registers banking SectorProduct
+import modules.banking_score.products_year_review  # noqa: F401 — Revisión Anual
 import modules.trade_intel.products  # noqa: F401 — registers trade SectorProduct
 import modules.esg_climate.products  # noqa: F401 — registers esg SectorProduct
 import modules.sector_intel.products  # noqa: F401 — registers agribusiness (slot transversal)

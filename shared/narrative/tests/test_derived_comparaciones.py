@@ -137,3 +137,56 @@ def test_el_puesto_salta_tras_un_empate():
         {"id": "c", "name": "C", "dimensiones": {"X": 5.0}},
     ]
     assert posiciones_por_dimension("c", panel)["X"]["rank"] == 3
+
+
+# ── La UNIDAD viaja con la brecha ──────────────────────────────────────
+#
+# `_lectura` decía siempre "puntos porcentuales". Al empezar a comparar el HHI —un ÍNDICE de
+# 0 a 10.000— la brecha salía enunciada como «412.30 puntos porcentuales por encima del
+# promedio del sistema»: cifra correcta, unidad imposible. Misma familia que el sujeto que no
+# viaja con el número.
+
+def test_un_indice_no_se_enuncia_en_puntos_porcentuales():
+    from shared.narrative.derived import comparaciones_vs_referencia as cmp_
+
+    (c,) = cmp_({"hhi": 2091.68}, {"hhi": {"promedio del sistema": 1680.0}},
+                unidades={"hhi": "índice"})
+    assert c["unidad_brecha"] == "puntos del índice"
+    assert "puntos porcentuales" not in c["lectura"]
+    assert "411.68 puntos del índice" in c["lectura"]
+
+
+def test_sin_unidades_declaradas_se_comporta_como_antes():
+    """Compat: seguros y pensiones llaman sin `unidades` y son todos porcentajes."""
+    from shared.narrative.derived import comparaciones_vs_referencia as cmp_
+
+    (c,) = cmp_({"npl": 1.67}, {"npl": {"promedio de pares": 1.5}})
+    assert c["unidad_brecha"] == "puntos porcentuales"
+    assert "0.17 puntos porcentuales" in c["lectura"]
+
+
+def test_el_piso_de_ruido_se_ajusta_a_la_escala_de_la_unidad():
+    """0.1 punto de HHI es ruido de redondeo, no una diferencia: forzar un lado ahí sería el
+    mismo error que el test de materialidad ya cierra para porcentajes."""
+    from shared.narrative.derived import comparaciones_vs_referencia as cmp_
+
+    (ruido,) = cmp_({"hhi": 1680.05}, {"hhi": {"promedio del sistema": 1680.0}},
+                    unidades={"hhi": "índice"})
+    assert ruido["direccion"] == "en línea"
+    (real,) = cmp_({"hhi": 1750.0}, {"hhi": {"promedio del sistema": 1680.0}},
+                   unidades={"hhi": "índice"})
+    assert real["direccion"] == "por encima"
+    # El mismo delta de 0.05 en PORCENTAJE tampoco es material, pero 70 pp sí lo es: los dos
+    # pisos son distintos y eso es justamente el punto.
+    (pct,) = cmp_({"x": 10.05}, {"x": {"promedio del sistema": 10.0}})
+    assert pct["direccion"] == "en línea"
+
+
+def test_la_brecha_sigue_llamandose_brecha_pp_para_el_guard():
+    """Contrato con `numeric_guard._gap_index` y con la instrucción del cerebro: el nombre del
+    campo no se toca aunque la unidad no sea pp — la unidad viaja al lado."""
+    from shared.narrative.derived import comparaciones_vs_referencia as cmp_
+
+    (c,) = cmp_({"hhi": 2091.68}, {"hhi": {"promedio del sistema": 1680.0}},
+                unidades={"hhi": "índice"})
+    assert c["brecha_pp"] == 411.68

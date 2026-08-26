@@ -26,6 +26,12 @@ AXIS_KEYWORDS: Dict[str, Tuple[str, ...]] = {
     "banking": ("banco", "banca", "bancari", "rating", "calificacion", "solidez",
                 "liquidez", "mora", "cartera", "solvencia", "eficiencia", "deposito",
                 "aeh", "asociacion de ahorro", "ahorro", "prestamo"),
+    # El producto ANUAL. Sus keywords son las que denotan un EJERCICIO cerrado, no las de
+    # banca: si repitiera "banco"/"solidez" competiría con el eje trimestral en toda pregunta
+    # y ninguno de los dos quedaría claramente primario.
+    "banking_year_review": ("revision anual", "año completo", "anio completo", "ejercicio",
+                            "cierre del año", "cierre del anio", "anuario", "year review",
+                            "como le fue en el año", "balance del año"),
     "macro": ("macro", "inflacion", "pib", "crecimiento", "riesgo pais", "fiscal",
               "deficit", "reservas", "tipo de cambio", "soberano"),
     "monetary_policy": ("politica monetaria", "tpm", "tasa de politica", "tasa de interes",

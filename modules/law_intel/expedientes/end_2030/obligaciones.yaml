@@ -32,6 +32,10 @@ obligaciones:
     estado: cumplida
     evidencia: "13 informes anuales publicados; el 13.º en abril de 2026 con datos al cierre de 2024."
     produce: [informe_anual_de_avance]
+    # Hito de MEDICIÓN de la propia ley: el momento en que la norma manda
+    # evaluarse a sí misma. Se declara porque no se deduce del resto.
+    hito_de_medicion: true
+    hito_de_medicion: true
 
   - id: art-42-informe-mediano-plazo
     articulo: 42
@@ -51,6 +55,9 @@ obligaciones:
       de REPORTAR, cero de la obligación de REVISAR. Reportar se hace con personal propio;
       revisar exige contratar evaluación externa.
     produce: [estudios_independientes, informe_mediano_plazo]
+    # Hito de MEDICIÓN de la propia ley: el momento en que la norma manda
+    # evaluarse a sí misma. Se declara porque no se deduce del resto.
+    hito_de_medicion: true
     habilita_exigir: [requerimiento_al_organo_rector, amparo_de_cumplimiento]
 
   - id: art-44-revision-de-termino
@@ -69,6 +76,9 @@ obligaciones:
       expediente: la sucesión de la END no hay que inventarla, está mandada por la propia ley
       con fecha — y nadie la está preparando.
     produce: [estudios_independientes, revision_de_termino]
+    # Hito de MEDICIÓN de la propia ley: el momento en que la norma manda
+    # evaluarse a sí misma. Se declara porque no se deduce del resto.
+    hito_de_medicion: true
     habilita_exigir: [calendarizacion_formal]
 
   - id: art-50-informe-de-vinculacion

@@ -132,7 +132,6 @@ modules/banking_score/models/models.py:0: error: Need type annotation for "statu
 modules/banking_score/operations.py:0: error: Incompatible types in assignment (expression has type "str", variable has type "Column[str]")  [assignment]
 modules/banking_score/products.py:0: error: Argument "entity_name" to "ProductSnapshot" has incompatible type "Column[str]"; expected "str | None"  [arg-type]
 modules/banking_score/products.py:0: error: Argument "key" to "sorted" has incompatible type "Callable[[dict[str, object]], object]"; expected "Callable[[dict[str, object]], SupportsDunderLT[Any] | SupportsDunderGT[Any]]"  [arg-type]
-modules/banking_score/products.py:0: error: Argument 1 to "sensitivity_table" has incompatible type "object"; expected "dict[str, Any]"  [arg-type]
 modules/banking_score/products.py:0: error: Argument 1 to "setdefault" of "MutableMapping" has incompatible type "object"; expected "str"  [arg-type]
 modules/banking_score/products.py:0: error: Argument 2 to "bank_alerts" has incompatible type "Column[str]"; expected "str"  [arg-type]
 modules/banking_score/products.py:0: error: Argument 2 to "compute_market_concentration" has incompatible type "Column[date]"; expected "date | None"  [arg-type]

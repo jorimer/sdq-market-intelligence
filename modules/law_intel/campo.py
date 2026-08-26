@@ -47,17 +47,98 @@ ESTADOS_DEL_CAMPO = {
                              "del binding"),
     "candidato_sin_verificar": ("hay serie y una duda de comparabilidad abierta; la nota "
                                 "cuelga del binding"),
+    # ── El que no cierra es el instrumento LEGAL, y eso es un hallazgo, no una tarea ──
+    "linea_base_no_reproduce": ("el emisor publica la magnitud con el término de la ley y su "
+                                "serie NO reproduce la línea base que la ley fija"),
+    "termino_legal_sin_fuente": ("la ley nombra la magnitud con un término que ningún emisor "
+                                 "publica, y las lecturas vecinas se probaron sin cerrar"),
     "pendiente_de_derivacion": ("la serie existe y falta definir la derivación, el "
                                 "denominador o la convención de anualización"),
     # ── Nosotros ───────────────────────────────────────────────────────────────────────
     "pendiente_de_busqueda": "no se ha buscado fuente todavía",
 }
 
+#: Los motivos cuya causa está en el INSTRUMENTO LEGAL o en el aparato estadístico del
+#: Estado evaluado, no en nuestro trabajo pendiente.
+#:
+#: **Para qué existe esta lista.** El gate de readiness de la plataforma pregunta «¿qué
+#: fracción de tu índice tiene dato real?» — una pregunta sobre nuestro cableado. Aplicada a
+#: una ley, la misma aritmética responde «¿qué fracción de las metas que la ley se fijó son
+#: medibles?», que es una pregunta sobre la LEY. Con la primera lectura, cuanto peor
+#: redactada esté la norma menos «listo» parece nuestro producto: el eje quedaba castigado
+#: por su propio hallazgo de venta, y su techo real caía por debajo del umbral de
+#: publicación. Estos motivos salen del DENOMINADOR de esa cobertura efectiva.
+#:
+#: **Lo que esta lista NO puede volverse.** Una puerta trasera para esconder deuda propia.
+#: Nada de lo que depende de nosotros entra: `pendiente_de_busqueda`, `candidato_descartado`,
+#: `candidato_sin_verificar`, `pendiente_de_derivacion` y `fuente_no_procesable` siguen
+#: pesando en el denominador aunque duelan. `fuente_no_procesable` en particular es tentadora
+#: —el emisor publica en un formato incómodo— y se queda adentro: un formato difícil es
+#: trabajo, no una imposibilidad de la ley.
+#:
+#: Y lo excluido **se LISTA en el informe**, en la sección de brechas. Sacarlo del gate sin
+#: nombrarlo sería exactamente el veto silencioso que esta plataforma persigue.
+IMPOSIBLES_POR_EL_INSTRUMENTO = frozenset({
+    # Lo impide el texto de la ley.
+    "sin_meta_legal", "meta_no_interpretable",
+    "linea_base_no_reproduce", "termino_legal_sin_fuente",
+    # Lo impide el aparato estadístico del Estado evaluado.
+    "instrumento_discontinuado", "sin_fuente_conocida", "magnitud_no_publicada",
+})
+
+#: Los motivos que dependen de NOSOTROS y siguen contando en el denominador del gate.
+#: Se declara explícito, y no como «todo lo demás», para que un motivo nuevo tenga que
+#: clasificarse a mano en vez de caer por defecto del lado que conviene.
+DEPENDEN_DE_NOSOTROS = frozenset({
+    "fuente_no_procesable", "candidato_descartado", "candidato_sin_verificar",
+    "pendiente_de_derivacion", "pendiente_de_busqueda",
+})
+
+
+#: De quién es la brecha, POR MOTIVO. Es la única autoridad sobre esta pregunta.
+#:
+#: **Por qué vive acá y no en `brecha.py`.** Ese módulo clasificaba por la ESTRUCTURA del
+#: binding —¿existe?, ¿está verificado?— y de ahí salía que 20 indicadores eran deuda de SDQ.
+#: Pero un binding `propuesto` con `linea_base_no_reproduce` no es trabajo pendiente: es el
+#: hallazgo, y el que no cierra es el instrumento. Las dos superficies particionaban los
+#: mismos 44 indicadores y no coincidían —«20 son de SDQ» contra «2 son de SDQ»—, así que el
+#: informe generado citaba una u otra según la sección. Es el mismo defecto que el #927
+#: corrigió en este módulo y que allá siguió vivo: un guard que existe en un motor y falta en
+#: el otro.
+RESPONSABLE_POR_MOTIVO = {
+    # Lo impide el TEXTO de la ley.
+    "sin_meta_legal": "instrumento",
+    "meta_no_interpretable": "instrumento",
+    "linea_base_no_reproduce": "instrumento",
+    "termino_legal_sin_fuente": "instrumento",
+    # Lo impide el APARATO ESTADÍSTICO del Estado evaluado.
+    "instrumento_discontinuado": "estado",
+    "sin_fuente_conocida": "estado",
+    "magnitud_no_publicada": "estado",
+    # Depende de NOSOTROS. Nada se muda de acá para arriba sin que el informe lo diga.
+    "fuente_no_procesable": "sdq",
+    "candidato_descartado": "sdq",
+    "candidato_sin_verificar": "sdq",
+    "pendiente_de_derivacion": "sdq",
+    "pendiente_de_busqueda": "sdq",
+}
+
+
+def imposibles_por_el_instrumento(expediente_id: str) -> int:
+    """Cuántos indicadores de la ley no puede medir NADIE, por defecto del instrumento."""
+    return sum(1 for c in campo(expediente_id).values()
+               if c.estado in IMPOSIBLES_POR_EL_INSTRUMENTO)
+
+
 #: Los que AFIRMAN algo sobre el mundo. Exigen evidencia con fecha, por la misma razón que una
 #: obligación `incumplida` la exige: sin ella, «no existe fuente» es una conjetura publicada.
 _EXIGEN_EVIDENCIA = frozenset({
     "sin_fuente_conocida", "fuente_no_procesable", "magnitud_no_publicada",
     "instrumento_discontinuado",
+    # Estos dos afirman algo sobre la LEY —que su línea base no reproduce, o que su término
+    # no lo publica nadie— y es lo más fuerte que este producto dice. Con más razón exigen la
+    # medición y la fecha: es la diferencia entre un hallazgo y una opinión sobre el legislador.
+    "linea_base_no_reproduce", "termino_legal_sin_fuente",
 })
 
 #: Los que se computan del registro y del binding, sin declaración humana. Declararlos a mano
@@ -132,10 +213,25 @@ def campo(expediente_id: str) -> Dict[str, Casilla]:
                 f"como valor, umbral ni escalar rotulado.")
             continue
         if b is not None:
-            estado = ("candidato_descartado" if b.estado == "descartado"
-                      else "candidato_sin_verificar")
+            # Un binding que DECLARA por qué no produce veredicto no tiene una duda abierta:
+            # tiene la respuesta. Derivar `candidato_sin_verificar` para todos borraba esa
+            # diferencia y hacía que ocho hallazgos se leyeran como ocho tareas pendientes.
+            if b.sin_veredicto_por in ("linea_base_no_reproduce", "termino_legal_sin_fuente"):
+                estado = b.sin_veredicto_por
+            elif b.sin_veredicto_por == "instrumento_discontinuado":
+                estado = "instrumento_discontinuado"
+            elif b.estado == "descartado":
+                estado = "candidato_descartado"
+            else:
+                estado = "candidato_sin_verificar"
             detalle = (b.motivo_descarte if b.estado == "descartado"
-                       else b.nota_comparabilidad) or "sin detalle en el binding"
+                       else (b.nota_comparabilidad or b.nota)) or "sin detalle en el binding"
+            if b.sin_veredicto_por:
+                # La evidencia de estos estados ES la nota del binding, que trae la medición.
+                # Se pasa explícita para que el validador la exija igual que a las declaradas.
+                out[ind.id] = Casilla(ind.id, estado, detalle, detalle,
+                                      b.sin_veredicto_desde)
+                continue
             out[ind.id] = Casilla(ind.id, estado, detalle)
             continue
         # ── declarados ──
@@ -180,7 +276,12 @@ def resumen(expediente_id: str) -> Dict[str, Any]:
     _validar(casillas)
 
     numerados = exp.numerados
-    con_veredicto = [i.id for i in numerados if (b := bs.get(i.id)) and b.cuenta]
+    # Son los MEDIDOS —los que tienen serie verificada—, no los que producen veredicto de
+    # cumplimiento. La diferencia no es semántica: 2 de ellos quedan `sin_dato` y el semáforo
+    # los cuenta fuera de sus 44 evaluados. Llamarlos «con_veredicto» puso dos poblaciones
+    # distintas detrás del mismo 46, y el informe generado dijo «veredicto sobre 44 de 90» en
+    # una sección y «sobre 46 de 90» en otra, citando la plataforma las dos veces.
+    medidos = [i.id for i in numerados if (b := bs.get(i.id)) and b.cuenta]
     por_estado: Dict[str, int] = {}
     for c in casillas.values():
         por_estado[c.estado] = por_estado.get(c.estado, 0) + 1
@@ -188,12 +289,21 @@ def resumen(expediente_id: str) -> Dict[str, Any]:
 
     return {
         "total_indicadores_de_la_ley": len(numerados),
-        "con_veredicto": len(con_veredicto),
+        "medidos": len(medidos),
+        "aclaracion_de_poblaciones": (
+            "`medidos` son los indicadores con serie verificada. NO es lo mismo que «con "
+            "veredicto de cumplimiento»: algunos medidos no tienen observación utilizable. "
+            "Esa cifra la da el semáforo en `evaluados`."),
         "declarados_sin_veredicto": len(casillas),
-        "en_silencio": len(numerados) - len(con_veredicto) - len(casillas),
-        "campo_cerrado": (len(con_veredicto) + len(casillas)) == len(numerados),
+        "en_silencio": len(numerados) - len(medidos) - len(casillas),
+        "campo_cerrado": (len(medidos) + len(casillas)) == len(numerados),
         # La composición, que es lo que impide leer «cerrado» como «resuelto».
         "motivo_resuelto": len(casillas) - len(pendientes),
+        # Y en porcentaje, servido y no derivado: el redactor lo va a querer, y si no está
+        # lo calcula él — momento en que el guard de cifra sin respaldo veta el informe.
+        "pct_por_estado_sobre_los_declarados_sin_veredicto": {
+            k: round(100.0 * v / len(casillas), 1) if casillas else None
+            for k, v in sorted(por_estado.items())},
         "pendientes_de_trabajo_nuestro": {"n": len(pendientes), "ids": sorted(pendientes)},
         "por_estado": dict(sorted(por_estado.items())),
         "estados": ESTADOS_DEL_CAMPO,

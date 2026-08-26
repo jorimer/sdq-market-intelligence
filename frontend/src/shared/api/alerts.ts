@@ -13,6 +13,9 @@ export interface AlertSubscription {
   sector_label: string;
   /** null = todo el eje (sin nombrar entidad). */
   subject: string | null;
+  /** Nombre legible del sujeto. `null` si es todo el eje, o si el catálogo ya no lo
+   *  resuelve — ahí la pantalla cae al identificador, que es feo y es cierto. */
+  subject_label?: string | null;
   rule_codes: string[] | null;
   min_severity: string; // alta | media | baja
   channels: string[];

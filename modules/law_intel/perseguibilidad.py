@@ -39,6 +39,14 @@ DE_QUIEN_DEPENDE: Dict[str, str] = {
 _POR_ESTADO = {
     "sin_meta_legal": "lo_impide_la_ley",
     "meta_no_interpretable": "lo_impide_la_ley",
+    # Los dos que el expediente ganó después de escribir este módulo. NO son trabajo
+    # pendiente ni espera de un tercero: son HALLAZGOS sobre la ley —la línea base que la
+    # norma fija no la reproduce ninguna serie, el término que la norma usa no lo publica
+    # nadie—. El trabajo está hecho; el que no cierra es el instrumento. Clasificarlos como
+    # «hecho de un tercero» pondría ocho indicadores de la END a esperar una publicación que
+    # nadie va a hacer.
+    "linea_base_no_reproduce": "lo_impide_la_ley",
+    "termino_legal_sin_fuente": "lo_impide_la_ley",
     "pendiente_de_busqueda": "trabajo_nuestro",
     "pendiente_de_derivacion": "trabajo_nuestro",
     "instrumento_discontinuado": "hecho_de_un_tercero",
@@ -48,6 +56,18 @@ _POR_ESTADO = {
     # `fuente_no_procesable` y `candidato_descartado` NO están acá a propósito: los dos
     # dependen de si hay una hipótesis declarada, y eso lo decide `clasificar`.
 }
+
+
+class EstadoSinClasificar(RuntimeError):
+    """Un estado del campo que este módulo no sabe de quién depende.
+
+    **Levanta en vez de caer al cajón más grande.** La primera versión resolvía el caso
+    desconocido con `.get(estado, "hecho_de_un_tercero")`, y entre que se escribió y que se
+    mergeó el expediente ganó dos estados: los ocho indicadores de la END que hoy son
+    hallazgos sobre la ley habrían salido publicados como «esperando que un emisor publique
+    algo». Un default silencioso en una tabla que se usa para planificar manda a la gente a
+    esperar en vez de a trabajar.
+    """
 
 
 def clasificar(expediente_id: str) -> List[Dict[str, Any]]:
@@ -83,8 +103,14 @@ def clasificar(expediente_id: str) -> List[Dict[str, Any]]:
         elif c.estado == "fuente_no_procesable":
             depende, falta = "trabajo_nuestro", (
                 "construir la extracción: el emisor publica y el problema es el formato")
+        elif c.estado not in _POR_ESTADO:
+            raise EstadoSinClasificar(
+                f"{expediente_id}:{ind.id} está en «{c.estado}» y `perseguibilidad` no sabe "
+                f"de quién depende. Declaralo en `_POR_ESTADO` —o por regla en `clasificar` "
+                f"si depende de algo más que el estado—. Estados conocidos: "
+                f"{sorted(_POR_ESTADO)}.")
         else:
-            depende = _POR_ESTADO.get(c.estado, "hecho_de_un_tercero")
+            depende = _POR_ESTADO[c.estado]
             falta = c.detalle
         out.append({"indicador": ind.id, "nombre": ind.nombre, "depende_de": depende,
                     "motivo": c.estado, "que_haria_falta": " ".join(falta.split())})

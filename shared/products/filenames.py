@@ -42,6 +42,9 @@ from typing import Optional
 # declare su etiqueta rompe el test en vez de caer en silencio al slug inglés de su clave.
 EJE_LABELS = {
     "banking": "Banca",
+    # El producto ANUAL: nombre de archivo propio, porque es un documento distinto del
+    # informe al corte y los dos pueden convivir en la carpeta de descargas del cliente.
+    "banking_year_review": "Banca_Revision_Anual",
     "insurance": "Seguros",
     "pension": "Pensiones",
     "macro": "Macro",

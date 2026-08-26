@@ -568,6 +568,9 @@ def _social_summary(label: str, payload: Dict[str, Any], period: Optional[str],
 
 _AXIS_SUMMARY = {
     "banking": _banking_summary,
+    # La Revisión Anual reencuadra el MISMO panel en el año: su resumen de datos es el de
+    # banca. Registrarla con el genérico habría dicho menos de lo que ya sabemos.
+    "banking_year_review": _banking_summary,
     "monetary_policy": _monetary_summary,
     "macro": _macro_summary,
     "trade": _trade_summary,

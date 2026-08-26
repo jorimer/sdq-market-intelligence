@@ -162,7 +162,7 @@ def test_email_SIN_SMTP_configurado_se_rechaza_declarando_el_motivo(db, producto
     """Sin servidor de correo no hay canal. Aceptarlo dejaría al cliente esperando avisos que
     nunca salen — y un canal mudo no falla, desaparece."""
     import shared.notifications.email as mail
-    monkeypatch.setattr(mail, "configurado", lambda: False)
+    monkeypatch.setattr(mail, "configurado", lambda *a, **k: False)
 
     _activar(db, EJE, ProductTier.pulse)
     u = _user(db)
@@ -176,7 +176,7 @@ def test_email_CON_SMTP_configurado_se_acepta(db, productos, monkeypatch):
     """La otra mitad: si el test solo probara el rechazo, un bug que rechazara SIEMPRE
     pasaría inadvertido y el canal nunca se podría usar."""
     import shared.notifications.email as mail
-    monkeypatch.setattr(mail, "configurado", lambda: True)
+    monkeypatch.setattr(mail, "configurado", lambda *a, **k: True)
 
     _activar(db, EJE, ProductTier.pulse)
     u = _user(db)
@@ -423,3 +423,68 @@ def test_el_catalogo_declara_CUALES_tienen_motor_y_cuales_no(db, productos):
     assert body["canales_disponibles"] == ["inapp"]
     assert set(body["canales_no_configurados"]) == {"email", "webhook"}
     assert body["canales_planificados"] == []
+
+
+# ── El NOMBRE del sujeto viaja con su identificador ───────────────
+def test_el_sujeto_se_serializa_con_su_NOMBRE_no_con_el_id(db, productos):
+    """El `value` de `scope_options()` es el IDENTIFICADOR — en banca, el UUID del banco.
+
+    Sin resolver la etiqueta, «Mis vigilancias» mostraba literalmente
+    «Sujeto: aea314c5-876a-404d-8446-523c7b0d9869», que no le dice nada a nadie. Es la
+    doctrina del sujeto invertida: el número viajaba sin su nombre.
+    """
+    _activar(db, EJE, ProductTier.insight)
+    u = _user(db, tier=AccessTier.pro)
+    row = service.crear(db, u, sector_key=EJE, subject="banco-a")
+    out = service.serializar(row, db)
+    assert out["subject"] == "banco-a"          # el id sigue siendo el que empareja eventos
+    assert out["subject_label"] == "Banco A"    # y el nombre viaja al lado
+
+
+def test_vigilar_todo_el_eje_no_inventa_un_nombre(db, productos):
+    """`None` y no una etiqueta vacía ni el nombre del eje: «todo el eje» no es un sujeto,
+    y darle uno haría que la pantalla lo muestre como si lo fuera."""
+    _activar(db, EJE, ProductTier.pulse)
+    u = _user(db)
+    row = service.crear(db, u, sector_key=EJE)
+    assert service.serializar(row, db)["subject_label"] is None
+
+
+def test_un_sujeto_que_ya_no_esta_en_el_catalogo_cae_al_id(db, productos, monkeypatch):
+    """Una entidad que sale del catálogo (se da de baja, deja de calificar) no puede hacer
+    desaparecer la vigilancia ni inventarle un nombre: se degrada al identificador, que es
+    feo y es cierto."""
+    _activar(db, EJE, ProductTier.insight)
+    u = _user(db, tier=AccessTier.pro)
+    row = service.crear(db, u, sector_key=EJE, subject="banco-a")
+
+    class _SinBancoA:
+        def scope_options(self):
+            return [{"value": "banco-b", "label": "Banco B"}]
+
+    monkeypatch.setattr(service, "get_product", lambda key, db=None: _SinBancoA())
+    out = service.serializar(row, db)
+    assert out["subject"] == "banco-a"
+    assert out["subject_label"] is None
+
+
+def test_listar_no_relee_el_catalogo_una_vez_POR_VIGILANCIA(db, productos, monkeypatch):
+    """`scope_options()` consulta la base. Sin memo compartido, 30 vigilancias del mismo eje
+    harían 30 consultas idénticas cada vez que se abre la pantalla."""
+    _activar(db, EJE, ProductTier.insight)
+    u = _user(db, tier=AccessTier.pro)
+    service.crear(db, u, sector_key=EJE, subject="banco-a")
+    service.crear(db, u, sector_key=EJE, subject="banco-b")
+
+    llamadas = {"n": 0}
+    real = productos[EJE].scope_options
+
+    def _contando():
+        llamadas["n"] += 1
+        return real()
+
+    monkeypatch.setattr(productos[EJE], "scope_options", _contando)
+    filas = service.listar(db, str(u.id))
+    assert len(filas) == 2
+    assert {f["subject_label"] for f in filas} == {"Banco A", "Banco B"}
+    assert llamadas["n"] == 1

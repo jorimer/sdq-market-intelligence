@@ -19,7 +19,7 @@ import logging
 import math
 import re
 import unicodedata
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Tuple
 
 logger = logging.getLogger("sdq.narrative.numeric_guard")
 
@@ -28,7 +28,7 @@ logger = logging.getLogger("sdq.narrative.numeric_guard")
 # el CÓDIGO de este módulo —una regla nueva, un umbral distinto— no cambia ningún prompt y
 # pasaría inadvertido: la caché seguiría sirviendo texto que el guard nuevo habría marcado.
 # Es el único bump manual irreducible; por eso vive acá, junto a lo que describe.
-GUARD_VERSION = "5"  # "5": cifra citada que no está en el contexto, sin forma fija (2026-08-15)
+GUARD_VERSION = "11"  # "11": un umbral prospectivo no es una cita (2026-08-26)
 
 _JUDGE_SYSTEM = (
     "Sos un verificador numérico estricto y preciso. Tu ÚNICA tarea es detectar cifras "
@@ -66,11 +66,29 @@ _JUDGE_USER = (
     "Si todas están respaldadas: {{\"unsupported\": []}}"
 )
 
+# El aviso de reparación de CIFRAS. Su versión anterior le decía al modelo que las cifras
+# marcadas «NO están en el contexto» y le ordenaba no darlas. Eso era una AFIRMACIÓN FALSA
+# cada vez que la cifra era real y solo estaba dicha en otra forma —el «132%» que era la razón
+# 1,32 servida—, y la orden que la acompañaba mandaba a BORRAR una observación verdadera.
+#
+# Los dos desenlaces de esa versión eran malos, y el peor era el silencioso: si el modelo
+# obedecía, el informe salía más pobre sin veto, sin error en pantalla y sin que nadie se
+# enterara; si no obedecía —porque tenía razón—, el informe no se entregaba.
+#
+# El aviso nuevo dice la verdad («no pude anclarla») y pide lo único que resuelve las dos
+# ramas: que se vea de dónde sale la cifra. Anclar es además VERIFICABLE — la base nombrada
+# tiene que ser un número del contexto, y de eso ya se ocupa este mismo guard.
 CORRECTION_NOTICE = (
-    "\n\nCORRECCIÓN OBLIGATORIA: en una versión previa de este análisis aparecieron "
-    "cifras que NO están en el contexto: {bad}. Reescribí el análisis SIN inventar ni "
-    "alterar ninguna cifra; usá EXCLUSIVAMENTE números del contexto (o derivaciones "
-    "explícitas de ellos). Si no tenés una cifra, no la des."
+    "\n\nCORRECCIÓN OBLIGATORIA: en una versión previa de este análisis quedaron cifras que "
+    "NO pude anclar al dato servido: {bad}. Puede que las hayas DERIVADO de algo del contexto "
+    "—una razón dicha como porcentaje, una participación, una diferencia—: en ese caso la "
+    "cifra es legítima y lo que falta es que se vea de dónde sale. Para CADA una, elegí:\n"
+    "(a) DEJARLA Y ANCLARLA: nombrá en el texto la base del contexto de la que sale, de modo "
+    "que el lector pueda rehacer la cuenta (p. ej. «26,84 contra un promedio de 20,33, un "
+    "132% de esa referencia»).\n"
+    "(b) QUITARLA: solo si no podés señalar de qué dato del contexto sale.\n"
+    "No inventes ninguna cifra nueva, y no borres una observación que SÍ podés anclar: una "
+    "lectura verdadera que se explica vale más que una que se calla."
 )
 
 # Aviso PROPIO para la dirección invertida: acá las cifras SÍ están en el contexto y son
@@ -78,11 +96,12 @@ CORRECTION_NOTICE = (
 # mandaría al modelo a "no inventar cifras", que no es el problema, y probablemente le
 # haría borrar la comparación en vez de corregirle el signo.
 DIRECTION_CORRECTION_NOTICE = (
-    "\n\nCORRECCIÓN OBLIGATORIA: en una versión previa de este análisis una comparación "
-    "quedó INVERTIDA respecto de los datos: {bad}. Las cifras son correctas; lo que está "
-    "mal es el sentido. Reescribí esas afirmaciones con la dirección correcta (restá y "
-    "mirá el signo antes de escribir 'por encima' / 'por debajo'), sin alterar ningún "
-    "número y sin eliminar la comparación."
+    "\n\nCORRECCIÓN OBLIGATORIA: en una versión previa de este análisis una relación quedó "
+    "INVERTIDA respecto de los datos: {bad}. Las cifras son correctas; lo que está mal es el "
+    "sentido. Cada hallazgo de arriba trae LA LECTURA CORRECTA ya redactada: COPIALA. NO "
+    "vuelvas a deducirla, no restes de nuevo, no recalcules el múltiplo — deducirla es "
+    "exactamente lo que salió mal. Reescribí esas afirmaciones con esa lectura, sin alterar "
+    "ningún número y sin eliminar la comparación."
 )
 
 
@@ -316,19 +335,20 @@ def _norm_series_map(context: dict) -> Dict[str, List[Dict[str, Any]]]:
 _CLAIM_UNIT = re.compile(r"(\d+(?:[.,]\d+)?)\s*(?:%|por\s+ciento)", re.I)
 
 
-def context_figures(context: Any) -> set:
-    """Todos los números del contexto, en valor absoluto y a un decimal.
+def context_values(context: Any) -> set:
+    """Todos los números del contexto, en valor absoluto y SIN redondear.
 
     Recorre la estructura completa sin conocerla: dicts, listas y también los números
     incrustados en las glosas de texto, que el motor sirve y el modelo puede citar con
-    todo derecho. Guarda el redondeo y la truncación de cada valor.
+    todo derecho.
+
+    Devuelve los valores crudos a propósito: quien compara decide la precisión. Fijarla acá
+    fue lo que produjo el falso positivo — ver ``deterministic_uncited_figures``.
     """
     out: set = set()
 
     def _add(x: float) -> None:
-        a = abs(float(x))
-        out.add(round(a, 1))
-        out.add(math.floor(a * 10) / 10)
+        out.add(abs(float(x)))
 
     def _walk(o: Any) -> None:
         if isinstance(o, bool) or o is None:
@@ -352,8 +372,211 @@ def context_figures(context: Any) -> set:
     return out
 
 
+def context_figures(context: Any) -> set:
+    """Los números del contexto a un decimal (redondeo y truncación).
+
+    Se conserva para ``guard_coverage`` y para quien solo necesite saber SI hay cifras. La
+    verificación de una cita ya no pasa por acá: usa ``context_values`` a la precisión que
+    la cita declara.
+    """
+    out: set = set()
+    for a in context_values(context):
+        out.add(round(a, 1))
+        out.add(math.floor(a * 10) / 10)
+    return out
+
+
+def _decimales(literal: str) -> int:
+    """Decimales que DECLARA la cita: '69' → 0, '69,1' → 1, '69,46' → 2."""
+    normal = literal.replace(",", ".")
+    return len(normal.split(".", 1)[1]) if "." in normal else 0
+
+
+# ── Formas DERIVADAS de una magnitud relacional ──────────────────────────────
+#
+# Un analista dice la MISMA razón de cuatro maneras: «1,32 veces», «el 132 % del promedio»,
+# «un 32 % más», «0,76 veces» (la inversa). Las cuatro son correctas y el dato las sostiene a
+# todas. Pero el contexto sirve UNA forma y este guard compara NÚMEROS, no formas: así se vetó
+# un Deep Dive real por un «132 %» que era exactamente la razón servida (1,32).
+#
+# Parchear el contexto forma por forma —agregarle una clave cada vez que el modelo elige otra
+# manera de decir el mismo número— no escala: es el mismo defecto con otra cara, y reapareció
+# dos veces en una semana (el «69 %» por redondeo, el «132 %» por porcentaje). La cura es que
+# el guard entienda la FAMILIA de formas.
+#
+# **El costo está MEDIDO, no supuesto.** Sobre el contexto real de una sección de riesgo
+# (Asociación Bonao, 133 números servidos, 47 de ellos magnitudes relacionales), la tasa de
+# escape de una cifra inventada en 0-100 pasa de **10,70 % a 14,00 %** (+3,3 pp). Se acepta a
+# sabiendas y por la misma razón que el redondeo de #916: éste es el filtro mecánico y barato,
+# nunca fue el único —el juez semántico corre aparte, y el motor se niega a propagar a la
+# caché compartida lo que él marcó—, y vetar prosa correcta no es «ser estricto», es negar el
+# producto por un número que sí estaba. El modo de falla que cierra es peor que el que abre:
+# cuando el aviso de corrección manda a borrar una cifra REAL, el informe sale más pobre sin
+# veto y sin que nadie se entere.
+#
+# **Dos cosas que la medición corrigió sobre el diseño original, y quedan escritas porque las
+# dos sonaban bien:**
+#
+# 1. «Un 500 % inventado pasaría, porque el contexto tiene un 5,0 en algún lado» — era el
+#    argumento para NO tocar el guard. En el contexto real no hay ningún 5,0 y el 500 % se
+#    sigue marcando. El argumento era un ejemplo plausible sin verificar.
+# 2. Generar las formas en las DOS direcciones sin mirar la clave —sin saber si el valor viene
+#    como múltiplo o como porcentaje— produjo 251 derivados de 47 magnitudes y una apertura
+#    de 1,79 %: PEOR que aplicar ×100 a todo el contexto (1,52 %). Por eso el mapa de abajo es
+#    por-clave. Con la unidad conocida son 89 derivados y 1,63 %, y —a diferencia de la regla
+#    general— un «150 %», un «250 %» y un «1000 %» inventados se siguen marcando, en vez de
+#    colar por un 1,5, un 2,4999 y un 10,0 que no son razón de nada.
+#
+# Lo que NO entra acá, a propósito: los aportes y las brechas, que se sirven en PUNTOS. Un
+# ×100 sobre un aporte no es otra forma de decirlo — es otro número.
+
+#: Cada clave relacional con su UNIDAD conocida, y por eso con sus formas equivalentes
+#: propias. Que sea por-clave y no universal no es prolijidad: generar las formas en las dos
+#: direcciones —sin saber si el valor viene como razón o como porcentaje— produjo 251 valores
+#: derivados de 44 magnitudes y llevó la apertura del guard a 1,79 %, PEOR que la regla
+#: general que este diseño venía a mejorar. Medido, no supuesto.
+#:
+#: Las emite ``shared/narrative/derived.py``. Si agregás allá una familia de relación, su
+#: clave va acá con su unidad, o la forma derivada de esa familia se vetará.
+FORMAS_POR_CLAVE: Dict[str, Tuple[str, ...]] = {
+    # Razones y factores: vienen como MÚLTIPLO (1,32). Se dicen también como porcentaje del
+    # referente (132 %), como exceso (32 % más) y como la inversa (0,76 veces).
+    "razon_vs_referencia": ("por_cien", "exceso", "inversa"),
+    "factor_para_igualar_referencia": ("por_cien",),
+    "factor_para_alcanzar_umbral": ("por_cien",),
+    # Ya vienen como PORCENTAJE: la forma alternativa es el múltiplo, y el exceso sobre 100.
+    "razon_como_pct_del_referente": ("entre_cien", "menos_cien"),
+    "cuota_del_principal_pct": ("entre_cien",),
+    # Proporción de la rúbrica (0,25): se dice «pesa un 25 %».
+    "peso": ("por_cien",),
+}
+
+#: Las magnitudes relacionales viajan de DOS formas y el detector tiene que entender las dos:
+#: en una FILA con su clave (`{"razon_vs_referencia": 1.32}`) o dentro de un CONTENEDOR cuyo
+#: nombre declara la unidad de todo lo que hay adentro (`{"pesos_sub_componentes":
+#: {"solidez": 0.38, "calidad": 0.34}}`), donde las claves son los sujetos y no la magnitud.
+#:
+#: Mirar solo la primera forma fue la TERCERA instancia del mismo defecto en una semana. El
+#: caso, capturado con la frase que el modelo escribió: «La dimensión de mayor peso en el
+#: modelo (solidez de capital, ponderación 38 %) sostiene la calificación con 82.32 puntos».
+#: El 0,38 estaba servido —es el peso de solidez para las AAyP—, el modelo lo dijo en la forma
+#: en que se dice un peso, y el guard lo marcó como inventado.
+CONTENEDORES_RELACIONALES: Dict[str, str] = {
+    "pesos_sub_componentes": "peso",
+}
+
+#: Nombres de ``FORMAS_POR_CLAVE`` a la operación. Separado del mapa para que agregar una
+#: clave no invite a inventar una transformación nueva sin declararla acá.
+_TRANSFORMACIONES = {
+    "por_cien": lambda v: v * 100.0,
+    "entre_cien": lambda v: v / 100.0,
+    "exceso": lambda v: abs(v * 100.0 - 100.0),
+    "menos_cien": lambda v: abs(v - 100.0),
+    "inversa": lambda v: (1.0 / v) if v else None,
+}
+
+
+def valores_relacionales(context: Any) -> set:
+    """Las magnitudes relacionales servidas, con la clave bajo la que viajan.
+
+    Devuelve ``{(clave, valor_absoluto)}``. Recorre el contexto sin conocer su forma, igual
+    que ``context_values``, pero recoge SOLO dos cosas: lo que vive bajo una clave de
+    ``FORMAS_POR_CLAVE`` y lo que vive dentro de un contenedor de
+    ``CONTENEDORES_RELACIONALES``. Las dos formas hacen falta — mirar solo la primera dejaba
+    fuera los pesos de la rúbrica, que viajan como ``{componente: peso}``.
+    """
+    out: set = set()
+
+    def _walk(o: Any) -> None:
+        if isinstance(o, dict):
+            for k, v in o.items():
+                if (k in FORMAS_POR_CLAVE and isinstance(v, (int, float))
+                        and not isinstance(v, bool)):
+                    out.add((k, abs(float(v))))
+                elif k in CONTENEDORES_RELACIONALES and isinstance(v, dict):
+                    # El nombre del contenedor declara la unidad de TODO lo de adentro; las
+                    # claves de acá son los sujetos (solidez, calidad…), no la magnitud.
+                    unidad = CONTENEDORES_RELACIONALES[k]
+                    for x in v.values():
+                        if isinstance(x, (int, float)) and not isinstance(x, bool):
+                            out.add((unidad, abs(float(x))))
+                else:
+                    _walk(v)
+        elif isinstance(o, (list, tuple, set)):
+            for v in o:
+                _walk(v)
+
+    _walk(context)
+    return out
+
+
+def formas_derivadas(clave: str, v: float) -> set:
+    """Las otras maneras legítimas de decir *v*, según la unidad que declara *clave*.
+
+    ``("razon_vs_referencia", 1.32)`` → ``{132.0, 32.0, 0.757…}``.
+    """
+    out: set = set()
+    for nombre in FORMAS_POR_CLAVE.get(clave, ()):
+        x = _TRANSFORMACIONES[nombre](v)
+        if x is not None:
+            out.add(abs(x))
+    return out
+
+
+# ── Umbrales en frases PROSPECTIVAS ──────────────────────────────────────────
+#
+# «si la cobertura CAIGA por debajo de 100 %», «que la morosidad CRUCE 2,5 %», «si SUPERA
+# 95 %». Estas cifras no son citas de un dato: son UMBRALES que definen una condición futura,
+# y por definición el contexto no puede respaldarlas — el dato describe el pasado.
+#
+# El guard las trataba como citas y disparaba el lazo de reparación en cada intento. Medido en
+# producción sobre la Revisión Anual: **16 llamadas al modelo para DOS secciones**, entre
+# regeneraciones y juez semántico. La petición cruzaba el límite del proxy y moría con un 502
+# sin cuerpo, así que el usuario no veía un veto explicado sino «No se pudo cargar el
+# producto». El falso positivo no vetaba: rompía el producto.
+#
+# Es una familia DISTINTA de las tres anteriores. Aquéllas eran una FORMA de un número servido
+# (redondeo, razón en porcentaje, peso en un contenedor); ésta no corresponde a ningún número
+# del contexto y no debería.
+#
+# El disparador se acota a marcas PROSPECTIVAS —subjuntivo y futuro— porque son las que un
+# texto no usa para afirmar un hecho del período: «caiga», «cruce», «supere» describen algo
+# que todavía no pasó. Se exige además que la marca esté CERCA (misma cláusula), para que un
+# «si» al principio del párrafo no exima a todas las cifras que vengan después.
+
+#: Ventana hacia atrás desde la cifra. Una cláusula, no un párrafo.
+_VENTANA_PROSPECTIVA = 90
+
+_PROSPECTIVO = re.compile(
+    r"\b(?:si|cuando|en\s+caso\s+de|mientras|hasta\s+que|de\s+persistir|"
+    r"supere|supera|cruce|caiga|descienda|baje|alcance|llegue|se\s+ubique|"
+    r"acercarse|acerca|presionar[aá]n?|operar[aá]|convergir[aá]|"
+    r"sostenid[ao]s?|riesgo\s+de\s+que|umbral)\b", re.I)
+
+
+def _es_umbral_prospectivo(texto: str, pos: int) -> bool:
+    """¿La cifra en *pos* define una CONDICIÓN futura en vez de citar un dato?"""
+    return bool(_PROSPECTIVO.search(texto[max(0, pos - _VENTANA_PROSPECTIVA):pos]))
+
+
 def deterministic_uncited_figures(context: dict, text: str) -> List[str]:
     """Porcentajes y puntos del *text* que no aparecen en el contexto.
+
+    La comparación se hace **a la precisión que declara la cita**: ``69%`` (cero decimales)
+    está respaldado por cualquier valor del contexto que redondee —o trunque— a 69;
+    ``69,1%`` sigue exigiendo el decimal. Es cómo lee un humano una cifra redondeada.
+
+    Antes la comparación era SIEMPRE a un decimal, y eso vetaba citas correctas. El caso que
+    lo destapó (Deep Dive de banca múltiple, Q1-2026): la trayectoria servida traía un
+    cost-to-income de 69,1344% (jun-2024) y 69,4575% (dic-2024) — el guard "veía" 69,1 y 69,4,
+    la narrativa dijo "69%" (=69,0), no matcheó, y el informe se vetó ENTERO: 157 s y ~US$1 de
+    modelo para un error en pantalla. Había un 69 real y citable en el contexto.
+
+    Contrapartida DECLARADA: un entero inventado (80%, 100%) ahora pasa si el contexto tiene
+    algo en su banda de redondeo. Se acepta a sabiendas — este es el filtro mecánico y barato,
+    y nunca fue el único: el juez semántico del motor corre aparte y ve lo que éste no (por eso
+    el motor además se niega a propagar a la caché compartida lo que él marcó). Vetar prosa
+    correcta no es "ser estricto": es negar el producto por un número que sí estaba.
 
     Best-effort y conservador: solo mira cifras con unidad de dato, y ante un contexto sin
     números no marca nada (sin insumo no hay verificación, y fingirla sería el mismo modo
@@ -361,23 +584,80 @@ def deterministic_uncited_figures(context: dict, text: str) -> List[str]:
     """
     flags: List[str] = []
     try:
-        known = context_figures(context)
+        known = context_values(context)
         if not known:
             return []
+        # Formas equivalentes de las magnitudes relacionales: la razón 1,32 respalda también
+        # «132 %», «32 %» y «0,76». Se computan una vez por sección, no por cita.
+        derivadas = {d for k, v in valores_relacionales(context)
+                     for d in formas_derivadas(k, v)}
         seen: set = set()
         for m in _CLAIM_UNIT.finditer(text or ""):
-            raw = m.group(1)
+            literal = m.group(1)
             try:
-                value = round(abs(float(raw.replace(",", "."))), 1)
+                value = abs(float(literal.replace(",", ".")))
             except ValueError:
                 continue
-            if value in known or m.group(0).strip() in seen:
+            dp = _decimales(literal)
+            escala = 10 ** dp
+
+            def _cubre(candidatos: set, valor: float = value, d: int = dp,
+                       e: int = escala) -> bool:
+                # Redondeo Y truncación, las dos formas legítimas de acortar una cifra.
+                return any(round(x, d) == valor or math.floor(x * e) / e == valor
+                           for x in candidatos)
+
+            if _cubre(known) or _cubre(derivadas) or m.group(0).strip() in seen:
+                continue
+            # Un UMBRAL de una frase prospectiva no es una cita: ver `_es_umbral_prospectivo`.
+            if _es_umbral_prospectivo(text or "", m.start()):
                 continue
             seen.add(m.group(0).strip())
-            flags.append(f"{m.group(0).strip()}: no aparece en el contexto servido")
+            # La marca dice QUÉ se intentó. Un veto que solo dice «no aparece» se lee como
+            # «el modelo inventó», y dos veces en una semana esa lectura fue equivocada.
+            flags.append(f"{m.group(0).strip()}: no coincide con ningún valor servido ni con "
+                         "una forma derivada de las relaciones del contexto")
     except Exception:  # noqa: BLE001 — el guard nunca tumba la entrega
         logger.exception("deterministic_uncited_figures falló; se sigue sin esa capa")
     return flags
+
+
+#: La cifra que encabeza una marca: «132%: no coincide con…» → «132%».
+_CIFRA_DE_LA_MARCA = re.compile(r"^\s*([\d.,]+\s*(?:%|pp|puntos)?)\s*:")
+
+
+def fragmento_alrededor(texto: str, marca: str, ventana: int = 90) -> str:
+    """La FRASE en la que el modelo usó la cifra marcada, recortada a su alrededor.
+
+    Sin esto, una marca dice «38 %: no coincide» y no hay forma de saber si el modelo inventó
+    un número o si citó uno real que el contexto no sirve en esa forma —que son los dos casos
+    opuestos que este guard confunde—. La única manera de verlo era volver a generar el
+    informe y perderlo otra vez: 88-264 s y costo de modelo por cada intento de diagnóstico.
+
+    Se recorta a una ventana en vez de guardar la sección entera: la tabla es el registro de
+    gasto, no un almacén de narrativas, y para decidir «inventada o real» alcanza con la
+    oración. Se ensancha hasta el espacio más cercano para no cortar palabras por la mitad.
+    """
+    try:
+        m = _CIFRA_DE_LA_MARCA.match(marca or "")
+        literal = (m.group(1) if m else (marca or "")).strip()
+        if not literal or not texto:
+            return ""
+        i = texto.find(literal)
+        if i < 0:
+            # La marca puede venir del juez semántico, que reformula. Se cae al inicio del
+            # texto en vez de devolver vacío: media oración es más que nada.
+            return texto[:ventana * 2].strip()
+        ini, fin = max(0, i - ventana), min(len(texto), i + len(literal) + ventana)
+        if ini:
+            ini = texto.find(" ", ini) + 1 or ini
+        if fin < len(texto):
+            corte = texto.rfind(" ", ini, fin)
+            fin = corte if corte > i + len(literal) else fin
+        return ("…" if ini else "") + texto[ini:fin].strip() + ("…" if fin < len(texto) else "")
+    except Exception:  # noqa: BLE001 — un fragmento nunca puede tumbar el registro
+        logger.exception("No se pudo recortar el fragmento de la marca %s", marca)
+        return ""
 
 
 def guard_coverage(context: dict) -> Dict[str, bool]:
@@ -976,6 +1256,39 @@ _GAP_CLAIM = re.compile(
 )
 _GAP_MENOR = ("por debajo", "inferior", "debajo d")
 
+# Forma VERBO-PRIMERO: «supera EN 3.70 puntos porcentuales al promedio de su grupo».
+#
+# El patrón de arriba exige el marcador DESPUÉS de la unidad ("3.70 puntos POR DEBAJO"), que
+# es solo una de las dos maneras de decirlo en español. La otra pone el verbo adelante, y por
+# ese hueco salió publicada una inversión real: §7 de un Deep Dive de banca afirmó que la
+# capitalización contable «supera en 3.70 puntos porcentuales al promedio de su grupo» cuando
+# el contexto servía «por debajo … en 3.70 puntos porcentuales» — contradiciendo a la §2 y a
+# la §10 del MISMO documento, que lo decían bien.
+#
+# Dos huecos en el mismo defecto, y los dos del tipo que este repo ya conoce:
+#  1. `supera` y `excede` ya estaban en `_MAYOR` —el vocabulario del detector HERMANO— y
+#     nunca se copiaron acá. Un guard existe en un motor y falta en el otro, dentro del
+#     mismo archivo.
+#  2. El orden verbo-primero no lo contemplaba ningún patrón.
+_GAP_VERBO_MAYOR = r"supera|excede|sobrepasa|aventaja"
+_GAP_VERBO_MENOR = r"es\s+inferior|queda\s+por\s+debajo|se\s+ubica\s+por\s+debajo"
+# La CUÑA entre el verbo y el número se captura porque ahí suele ir la etiqueta: «supera EL
+# PROMEDIO en 7.91 puntos porcentuales» la pone antes, «supera en 25.78 puntos porcentuales EL
+# PROMEDIO DEL SISTEMA» la pone después. La ventana de referencia son las dos juntas.
+_GAP_CLAIM_VERBO = re.compile(
+    r"\b(" + _GAP_VERBO_MAYOR + r"|" + _GAP_VERBO_MENOR + r")\b"
+    r"([^.;:]{0,40}?)\ben\s+(\d+(?:[.,]\d+)?)\s*(" + _GAP_UNIT + r")"
+    r"([^.;:]{0,90})",
+    re.I,
+)
+
+# Palabras que delatan que la cola de la frase nombra una REFERENCIA. Habilitan el pareo por
+# magnitud única cuando el modelo PARAFRASEA la etiqueta ("al promedio de su grupo" por
+# "promedio de bancos múltiples"): sin ellas, cualquier frase con un número y una unidad
+# entraría a competir por una comparación del contexto.
+_REFERENCIA_GENERICA = re.compile(
+    r"\b(promedio|mediana|media|grupo|pares|sistema|panel|sector)\b", re.I)
+
 
 def _norm(s: str) -> str:
     """Minúsculas sin acentos ni espacio redundante — para casar etiqueta contra prosa."""
@@ -1029,8 +1342,15 @@ def deterministic_direction_gap_errors(context: dict, text: str) -> List[str]:
         if not idx:
             return []
         plano = re.sub(r"\s+", " ", text)
-        for m in _GAP_CLAIM.finditer(plano):
-            cifra, unidad, marcador, cola_txt = m.groups()
+        # Las dos formas de enunciar una brecha: "N puntos POR DEBAJO de X" (marcador después
+        # de la unidad) y "SUPERA en N puntos a X" (verbo antes). Se normalizan al mismo
+        # cuádruple para que el resto del chequeo sea uno solo.
+        hallazgos_re = [(m.group(1), m.group(2), m.group(3), m.group(4))
+                        for m in _GAP_CLAIM.finditer(plano)]
+        hallazgos_re += [(m.group(3), m.group(4), m.group(1),
+                          f"{m.group(2)} {m.group(5)}")
+                         for m in _GAP_CLAIM_VERBO.finditer(plano)]
+        for cifra, unidad, marcador, cola_txt in hallazgos_re:
             escala = 0.01 if "asic" in _norm(unidad) else 1.0  # puntos básicos → pp
             derecha = _norm(cola_txt)
             dijo = ("por debajo" if any(k in _norm(marcador) for k in _GAP_MENOR)
@@ -1039,6 +1359,18 @@ def deterministic_direction_gap_errors(context: dict, text: str) -> List[str]:
                 (ind, direccion) for ind, cola, direccion, brecha in idx
                 if cola in derecha and _cited_matches(cifra, brecha / escala)
             ]
+            if not candidatos and _REFERENCIA_GENERICA.search(derecha):
+                # La etiqueta viene PARAFRASEADA ("al promedio de su grupo" por "promedio de
+                # bancos múltiples"), así que el pareo por texto no la encuentra. Si la
+                # MAGNITUD identifica una sola comparación del contexto, el caso sigue siendo
+                # decidible; si identifica varias, se calla — igual que ante el empate de
+                # abajo. Fue el segundo motivo por el que la inversión de §7 pasó entera.
+                por_magnitud = [
+                    (ind, direccion) for ind, _cola, direccion, brecha in idx
+                    if _cited_matches(cifra, brecha / escala)
+                ]
+                if len(por_magnitud) == 1:
+                    candidatos = por_magnitud
             if not candidatos:
                 continue
             # Ambigüedad real (misma magnitud y misma base, direcciones opuestas): el guard
@@ -1051,7 +1383,8 @@ def deterministic_direction_gap_errors(context: dict, text: str) -> List[str]:
                 continue
             flags.append(
                 f"{ind}: se afirma una brecha de {cifra} {unidad} '{dijo}' de "
-                f"'{cola_txt.strip()}', pero la dirección servida es '{correcta}'")
+                f"'{cola_txt.strip()}', pero la dirección servida es '{correcta}'"
+                + _clausula_a_copiar(context, str(ind)))
     except Exception as e:  # noqa: BLE001 — best-effort; jamás rompe la generación
         logger.warning("Chequeo de dirección por brecha no pudo completarse: %s", e)
         return flags
@@ -1082,55 +1415,63 @@ def deterministic_direction_errors(context: dict, text: str) -> List[str]:
     flags: List[str] = []
     try:
         refs = _direction_refs(context)
-        if not refs:
-            return []
-        # Se corta SOLO por puntuación de fin de cláusula, nunca por salto de línea: una
-        # oración larga viene envuelta en varias líneas y partirla ahí deja el sujeto en un
-        # fragmento y la referencia en el siguiente (falso NEGATIVO — así se escapaba el
-        # caso real de BPD al leerlo del PDF). Las filas de tabla, que no traen punto, no
-        # necesitan corte: el pareo por MISMO indicador ya impide cruzar sus números.
-        for sent in re.split(r"(?<=[.;:])\s+", re.sub(r"\s+", " ", text)):
-            marks = sorted(
-                [(m.start(), m.end(), kind)
-                 for kind, pat in (("menor", _MENOR), ("mayor", _MAYOR))
-                 for m in re.finditer(pat, sent, re.I)]
-            )
-            for i, (start, end, kind) in enumerate(marks):
-                # La referencia debe ser el operando de ESTE marcador: la ventana derecha
-                # termina donde empieza el siguiente. Sin ese corte, en "supera el mínimo
-                # (10%) PERO se sitúa por debajo del promedio (16.5%)" —prosa correcta— el
-                # 16.5 del segundo marcador se leía como operando de "supera" y se marcaba
-                # un error inexistente. La ventana izquierda sí queda abierta: el sujeto se
-                # enuncia una vez al principio y los marcadores siguientes lo eliden.
-                stop = marks[i + 1][0] if i + 1 < len(marks) else len(sent)
-                left, right = sent[:start], sent[end:stop]
-                cited_l = _CITED.findall(left)
-                cited_r = _CITED.findall(right)
-                if not cited_l or not cited_r:
-                    continue
-                for name, raw, candidates in refs:
-                    if not any(_cited_matches(c, raw) for c in cited_l):
+        # `return []` acá salteaba TAMBIÉN los chequeos hermanos del final —brecha y razón—,
+        # que no dependen de `refs` sino de `comparaciones` / `razones`. O sea: el "punto de
+        # entrada único" que este archivo declara para que nadie olvide llamarlos podía
+        # saltearlos en silencio cuando el contexto no traía indicadores en la forma que
+        # `_direction_refs` reconoce. Se convierte en una guarda de BLOQUE, no en una salida.
+        if refs:
+            # Se corta SOLO por puntuación de fin de cláusula, nunca por salto de línea: una
+            # oración larga viene envuelta en varias líneas y partirla ahí deja el sujeto en un
+            # fragmento y la referencia en el siguiente (falso NEGATIVO — así se escapaba el
+            # caso real de BPD al leerlo del PDF). Las filas de tabla, que no traen punto, no
+            # necesitan corte: el pareo por MISMO indicador ya impide cruzar sus números.
+            for sent in re.split(r"(?<=[.;:])\s+", re.sub(r"\s+", " ", text)):
+                marks = sorted(
+                    [(m.start(), m.end(), kind)
+                     for kind, pat in (("menor", _MENOR), ("mayor", _MAYOR))
+                     for m in re.finditer(pat, sent, re.I)]
+                )
+                for i, (start, end, kind) in enumerate(marks):
+                    # La referencia debe ser el operando de ESTE marcador: la ventana derecha
+                    # termina donde empieza el siguiente. Sin ese corte, en "supera el mínimo
+                    # (10%) PERO se sitúa por debajo del promedio (16.5%)" —prosa correcta— el
+                    # 16.5 del segundo marcador se leía como operando de "supera" y se marcaba
+                    # un error inexistente. La ventana izquierda sí queda abierta: el sujeto se
+                    # enuncia una vez al principio y los marcadores siguientes lo eliden.
+                    stop = marks[i + 1][0] if i + 1 < len(marks) else len(sent)
+                    left, right = sent[:start], sent[end:stop]
+                    cited_l = _CITED.findall(left)
+                    cited_r = _CITED.findall(right)
+                    if not cited_l or not cited_r:
                         continue
-                    for label, ref in candidates:
-                        # Si entidad y referencia son indistinguibles a la precisión
-                        # citada, la dirección no es afirmable ni refutable: se salta.
-                        if any(_cited_matches(c, raw) and _cited_matches(c, ref)
-                               for c in cited_r):
+                    for name, raw, candidates in refs:
+                        if not any(_cited_matches(c, raw) for c in cited_l):
                             continue
-                        if not any(_cited_matches(c, ref) for c in cited_r):
-                            continue
-                        if (raw < ref) if kind == "menor" else (raw > ref):
-                            continue
-                        sentido = "por debajo" if kind == "menor" else "por encima"
-                        flags.append(
-                            f"{name}: se afirma que {raw} está {sentido} del {label} "
-                            f"({ref}), pero es al revés")
+                        for label, ref in candidates:
+                            # Si entidad y referencia son indistinguibles a la precisión
+                            # citada, la dirección no es afirmable ni refutable: se salta.
+                            if any(_cited_matches(c, raw) and _cited_matches(c, ref)
+                                   for c in cited_r):
+                                continue
+                            if not any(_cited_matches(c, ref) for c in cited_r):
+                                continue
+                            if (raw < ref) if kind == "menor" else (raw > ref):
+                                continue
+                            sentido = "por debajo" if kind == "menor" else "por encima"
+                            flags.append(
+                                f"{name}: se afirma que {raw} está {sentido} del {label} "
+                                f"({ref}), pero es al revés")
     except Exception as e:  # noqa: BLE001 — best-effort; jamás rompe la generación
         logger.warning("Chequeo de dirección no pudo completarse: %s", e)
     # La forma BRECHA se verifica desde el MISMO punto de entrada, no como chequeo aparte:
     # un guard que hay que acordarse de llamar es el que termina faltando en la otra ruta —
     # el modo de falla que ya costó cinco instancias en este repo.
     flags += deterministic_direction_gap_errors(context, text)
+    # La RAZÓN entra por el mismo punto de entrada y por el mismo motivo: es la tercera forma
+    # de relacionar dos cifras, falla igual (la magnitud bien, la relación al revés) y un
+    # guard que hay que acordarse de llamar es el que termina faltando en la otra ruta.
+    flags += deterministic_ratio_errors(context, text)
     seen, out = set(), []
     for f in flags:
         if f not in seen:
@@ -1174,3 +1515,157 @@ def verify_figures(client, model: str, context_str: str, text: str,
     except Exception as e:  # noqa: BLE001 — best-effort; the guardrail must not break generation
         logger.warning("Guardrail numérico no pudo verificar (se sirve sin verificar): %s", e)
         return []
+
+
+# ── Razón / múltiplo invertido ────────────────────────────────────────────────
+#
+# Gemelo de `deterministic_direction_gap_errors` para la tercera forma de relacionar dos
+# cifras. Defecto real (§12 de un Deep Dive de banca): «una rentabilidad sobre activos
+# (0.39%) que TRIPLICA el umbral de alerta respecto al promedio de bancos múltiples (1.61%)»,
+# con el contexto sirviendo 0.24×. Ningún chequeo lo miraba: "triplica" no tiene dígitos que
+# parear, así que la única red era el juez semántico — que corrió sobre ese texto y lo dejó
+# pasar. Comparar dos floats es decidible; esto se resuelve mecánicamente.
+_MULT_PALABRA = {
+    "duplica": 2.0, "dobla": 2.0, "triplica": 3.0, "cuadruplica": 4.0, "quintuplica": 5.0,
+    "el doble": 2.0, "el triple": 3.0, "el cuádruple": 4.0, "el cuadruple": 4.0,
+    "la mitad": 0.5, "un tercio": 1 / 3, "una tercera parte": 1 / 3,
+    "una cuarta parte": 0.25, "un cuarto": 0.25, "tres cuartas partes": 0.75,
+}
+_MULT_CLAIM = re.compile(
+    r"(?:(\d+(?:[.,]\d+)?)\s*(?:veces|x\b|×)"                       # "3 veces", "0.24x"
+    r"|\b(" + "|".join(sorted((re.escape(k) for k in _MULT_PALABRA), key=len, reverse=True))
+    + r")\b)"
+    r"([^.;:]{0,90})",                                               # ventana de la referencia
+    re.I,
+)
+#: Cuán cerca debe estar el factor escrito del servido para considerarlo el MISMO claim.
+_TOLERANCIA_MULT = 0.15
+
+
+#: Números sueltos de una frase — para atribuir un múltiplo a SU indicador por los valores
+#: que la propia frase cita.
+_CIFRAS_DE_FRASE = re.compile(r"-?\d+(?:[.,]\d+)?")
+
+
+def _clausula_a_copiar(context: dict, indicador: str, clave: str = "comparaciones") -> str:
+    """El sufijo `→ escribí: "..."` con la lectura YA REDACTADA de ese indicador.
+
+    El aviso de corrección le pedía al modelo «restá y mirá el signo» — o sea, VOLVER A
+    DERIVAR la relación que acababa de errar, teniendo el sistema la frase correcta ya
+    computada y sin entregársela. Reparar así es pedirle que repita la operación que falla.
+
+    Best-effort: si no encuentra la lectura, devuelve cadena vacía y el hallazgo queda como
+    estaba (el aviso sigue nombrando la dirección correcta).
+    """
+    try:
+        for fila in (context.get(clave) or []):
+            if isinstance(fila, dict) and fila.get("indicador") == indicador:
+                lectura = fila.get("lectura")
+                if isinstance(lectura, str) and lectura.strip():
+                    return f' → escribí exactamente: "{lectura.strip()}"'
+    except Exception:  # noqa: BLE001 — el aviso nunca rompe la generación
+        pass
+    return ""
+
+
+def _razon_index(context: dict) -> List[dict]:
+    """Filas de ``razones`` normalizadas para el pareo."""
+    out: List[dict] = []
+    for fila in (context.get("razones") or []):
+        if not isinstance(fila, dict):
+            continue
+        ind, etiqueta = fila.get("indicador"), fila.get("referencia")
+        if not ind or not etiqueta:
+            continue
+        cola = _norm(_LABEL_PREFIX.sub("", str(etiqueta)))
+        if len(cola) < 4:
+            continue
+        out.append({
+            "ind": str(ind), "cola": cola,
+            "razon": fila.get("razon_vs_referencia"),
+            "cruza": bool(fila.get("cruza_cero")),
+            "valor": fila.get("valor"), "ref": fila.get("valor_referencia"),
+        })
+    return out
+
+
+def _cita_el_valor(frase: str, valor) -> bool:
+    """¿La frase cita *valor* (a la precisión con que esté escrito)?
+
+    Es la costura de ATRIBUCIÓN. Sin ella, un múltiplo contra "el promedio de bancos
+    múltiples" compite con TODOS los indicadores comparados contra esa misma base —que son
+    todos— y el chequeo o se calla siempre o acusa al azar. El detector hermano
+    (`deterministic_direction_errors`) ya resuelve así: parea cuando la frase cita el valor.
+    """
+    if valor is None:
+        return False
+    try:
+        v = float(valor)
+    except (TypeError, ValueError):
+        return False
+    return any(_cited_matches(tok, v) for tok in _CIFRAS_DE_FRASE.findall(frase))
+
+
+def deterministic_ratio_errors(context: dict, text: str) -> List[str]:
+    """Múltiplos del *text* que contradicen la razón servida en ``razones``.
+
+    Dos veredictos, los dos decidibles:
+
+    1. **Cruce de cero.** Si el contexto dice que la entidad y su referencia están en lados
+       opuestos del cero, CUALQUIER "N veces" sobre ese par es incorrecto por construcción —
+       no hay que comparar factores para saberlo.
+    2. **Factor contradicho.** El múltiplo escrito no coincide con el servido (con tolerancia,
+       porque "más que duplicando" un 2.05 es correcto).
+
+    Mismo pareo conservador que el chequeo de brecha: hace falta la etiqueta de la referencia
+    en la ventana derecha, y ante dos razones que compitan por el mismo claim NO se marca. Un
+    falso positivo acá VETA un informe correcto.
+    """
+    flags: List[str] = []
+    try:
+        idx = _razon_index(context)
+        if not idx:
+            return []
+        plano = re.sub(r"\s+", " ", text)
+        vistos: set = set()
+        for m in _MULT_CLAIM.finditer(plano):
+            cifra, palabra, cola_txt = m.group(1), m.group(2), m.group(3)
+            if cifra is not None:
+                try:
+                    factor = abs(float(cifra.replace(",", ".")))
+                except ValueError:
+                    continue
+                escrito = f"{cifra} veces"
+            else:
+                factor = _MULT_PALABRA[_norm(palabra)]
+                escrito = str(palabra)
+            derecha = _norm(cola_txt)
+            # La etiqueta acota la BASE; los valores citados acotan el INDICADOR. Hacen falta
+            # las dos: contra "el promedio de bancos múltiples" se comparan TODOS los
+            # indicadores, así que la etiqueta sola no atribuye nada.
+            candidatos = [f for f in idx if f["cola"] in derecha
+                          and (_cita_el_valor(plano, f["valor"])
+                               or _cita_el_valor(plano, f["ref"]))]
+            if len(candidatos) != 1:
+                continue  # no atribuible o ambiguo: el guard se calla
+            fila = candidatos[0]
+            clave = (fila["ind"], escrito)
+            if clave in vistos:
+                continue
+            vistos.add(clave)
+            razon, cruza = fila["razon"], fila["cruza"]
+            if cruza:
+                flags.append(
+                    f"{fila['ind']}: se afirma un múltiplo ('{escrito}') sobre un par que "
+                    "CRUZA CERO — la entidad y su referencia están en lados opuestos del "
+                    "cero, así que no hay razón que publicar; la relación es de signo, no de "
+                    "magnitud")
+            elif razon is not None and abs(factor - float(razon)) > _TOLERANCIA_MULT * max(
+                    float(razon), 1.0):
+                flags.append(
+                    f"{fila['ind']}: se afirma '{escrito}' pero la razón servida es "
+                    f"{float(razon):.2f}x"
+                    + _clausula_a_copiar(context, fila["ind"], clave="razones"))
+    except Exception as e:  # noqa: BLE001 — best-effort; jamás rompe la generación
+        logger.warning("Chequeo de razón no pudo completarse: %s", e)
+    return flags

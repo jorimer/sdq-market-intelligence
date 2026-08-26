@@ -6,6 +6,7 @@ import client from "@/shared/api/client";
 import { BankSelector } from "../components/BankSelector";
 import { PageHead, Card, CardHead, StatTile, Skeleton } from "@/shared/ui/primitives";
 import { getStats, listPeriods, BankStats } from "../api";
+import { mensajeDeError } from "../../../shared/api/errores";
 
 interface SyncStatus {
   is_running: boolean;
@@ -77,7 +78,7 @@ export function DataPage() {
       setUploadMsg({ ok: true, text: data.message || t("datos.banca.uploadOk") });
       refresh();
     } catch (err: any) {
-      setUploadMsg({ ok: false, text: err?.response?.data?.detail || t("datos.banca.uploadError") });
+      setUploadMsg({ ok: false, text: mensajeDeError(err, t("datos.banca.uploadError")) });
     } finally {
       setUploading(false);
     }
@@ -111,7 +112,7 @@ export function DataPage() {
       setActionMsg(data.message || t("datos.banca.processStarted"));
       refresh();
     } catch (err: any) {
-      setActionMsg(err?.response?.data?.detail || t("datos.banca.backfillError"));
+      setActionMsg(mensajeDeError(err, t("datos.banca.backfillError")));
     } finally {
       setSyncing(false);
     }
@@ -125,7 +126,7 @@ export function DataPage() {
       setActionMsg(data?.detail ? t("datos.banca.seedDone") : t("datos.banca.seedRun"));
       refresh();
     } catch (err: any) {
-      setActionMsg(err?.response?.data?.detail || t("datos.banca.seedError"));
+      setActionMsg(mensajeDeError(err, t("datos.banca.seedError")));
     } finally {
       setSeeding(false);
     }

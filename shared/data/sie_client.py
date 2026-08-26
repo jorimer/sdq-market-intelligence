@@ -97,7 +97,15 @@ def parse_claims(text: str) -> List[Dict[str, object]]:
 
 class SIEClient:
     source = "SIE"
-    license = "Datos Abiertos RD (datos.gob.do)"
+    # Verificado el 2026-08-23 contra el propio CKAN del portal
+    # (`package_show` → `license_id: odc-odbl`) para el dataset que este conector consume,
+    # no para el portal en general: el portal declara licencia POR DATASET y dar por buena
+    # una sola cadena para todos era una suposición. Decía «Datos Abiertos RD
+    # (datos.gob.do)», que no nombra ninguna cláusula — y ODbL tiene dos.
+    license = ("datos.gob.do — Open Database License (ODbL) v1.0, declarada POR DATASET en el "
+        "portal: exige el aviso de atribución, y el share-alike alcanza a las bases "
+        "DERIVADAS. Un informe o un gráfico es «Produced Work» y NO lo dispara "
+        "(§4.5) — https://opendatacommons.org/licenses/odbl/1-0/")
     license_ok = True
 
     def _resolve_csv(self, slug: str) -> str:

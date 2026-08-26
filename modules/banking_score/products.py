@@ -37,6 +37,7 @@ from modules.banking_score.models.models import Bank, ModelType, RatingResult
 from modules.banking_score.reports.narrative import generate_named_narratives
 from modules.banking_score.reports.pdf_generator import generate_pdf_report
 from modules.banking_score.scoring.amplitude import entity_trajectories, period_percentiles
+from modules.banking_score.scoring.benchmarks import panel_benchmarks
 from modules.banking_score.scoring.market_concentration import compute_market_concentration
 from modules.banking_score.scoring.sensitivity import sensitivity_table
 from modules.banking_score.scoring.support import support_overlay
@@ -621,7 +622,7 @@ class BankingProduct:
             or q.order_by(RatingResult.period_end.desc()).first()
         if rr is None:
             raise ValueError(f"No hay calificación para '{bank.name}'.")
-        scoring_result = {
+        scoring_result: Dict[str, Any] = {
             "overall_score": float(rr.overall_score),
             "banda_ejecucion": rr.banda_ejecucion,
             "banda_resiliencia": rr.banda_resiliencia,
@@ -632,6 +633,12 @@ class BankingProduct:
             },
             "indicators": rr.indicator_details or {},
             "model_version": rr.model_version,
+            # Acota la comparación al grupo de pares de la PROPIA entidad. Sin este campo,
+            # `_comparaciones_resueltas` cae al compat "todos los grupos" y mide una banca
+            # múltiple contra el promedio de agentes de cambio — ruido, no señal. La ruta del
+            # PDF ya lo declaraba; ésta no, y el hueco solo se volvió visible al empezar a
+            # servir los benchmarks (antes no había nada que acotar).
+            "entity_type": bank.bank_type.value if bank.bank_type else None,
         }
         # Amplitud (Fase 4): trayectoria multi-período + percentil vs el sistema por
         # indicador. Se calculan aquí (con DB) y viajan en el scoring_result porque
@@ -642,6 +649,31 @@ class BankingProduct:
         scoring_result["trayectorias"] = entity_trajectories(
             db, bank, as_of=cast(date, rr.period_end))
         scoring_result["percentiles"] = period_percentiles(db, bank, rr.period_end)
+        # QUÉ MOVIÓ EL SCORE, ya descompuesto, DENTRO DEL PAYLOAD. Se computa acá y no en el
+        # frontend por la misma razón por la que se computa para el modelo: una segunda
+        # implementación de la misma cuenta es una segunda oportunidad de que discrepen, y
+        # la dimensión que más se movió NO es la que más movió el resultado —los pesos
+        # difieren—.
+        #
+        # Vivía solo en el contexto de la narrativa y en el PDF, así que la VISTA IN-APP del
+        # Deep Dive no la mostraba: el mismo producto decía cosas distintas según se mirara
+        # en pantalla o se descargara. Es la doctrina literal —«aplica al contexto de IA y a
+        # la tabla renderizada: son superficies distintas y arreglar una sola deja el
+        # documento contradiciéndose»— aplicada a la superficie que faltaba.
+        try:
+            from shared.narrative.derived import aportes_al_cambio
+            from modules.banking_score.scoring.weights import get_sub_component_weights
+            _traj_sub = (scoring_result.get("trayectorias") or {}).get("sub")
+            if _traj_sub:
+                _aportes = aportes_al_cambio(
+                    _traj_sub,
+                    get_sub_component_weights(bank.bank_type.value if bank.bank_type else None))
+                if _aportes:
+                    scoring_result["aportes_al_cambio"] = _aportes
+        except Exception:  # noqa: BLE001 — el snapshot nunca depende de esta tabla
+            logger.exception("No se pudo computar la atribución del cambio para %s", bank.name)
+        # Mismo valor que el `entity_type` del scoring_result (el dict lo declara para el
+        # contexto del modelo); se recomputa acá para conservar el tipo `str | None`.
         entity_type = bank.bank_type.value if bank.bank_type else None
         # Entorno Operativo + Sensibilidades (Fase 4) son amplitud EXCLUSIVA del Deep Dive
         # (Insight se queda con trayectoria+percentil). Se gatean por nivel aquí.
@@ -697,6 +729,24 @@ class BankingProduct:
         named = _named_peers(db, bank, rr.period_end)
         if named:
             peer_block["named_peers"] = named
+        # REFERENCIA POR INDICADOR (promedios del sistema y del grupo de pares, MEDIDOS en
+        # este mismo corte). Sin esto, las secciones de dimensión —`subcomponent_focus`, que
+        # es donde el informe analiza eficiencia, liquidez, calidad…— llegaban al modelo con
+        # los indicadores de la entidad y NADA contra qué compararlos: `_build_section_context`
+        # busca `sector_averages`/`peer_groups` y el `peer_block` solo traía concentración.
+        #
+        # El hueco no dejaba la sección vacía: la dejaba INVENTADA. Verificado en prod
+        # (Deep Dive de banca múltiple, Q1-2026): el modelo afirmó una eficiencia del "69%"
+        # que ningún dato sostenía, el guard determinista la marcó, sobrevivió a la
+        # regeneración y el informe se vetó entero — 157 s y ~US$1 de modelo para un 500.
+        # Es la doctrina literal: si no tenés la cifra que el modelo va a necesitar, pasásela
+        # igual con su nombre real; dejar el hueco es lo que lo llena mal.
+        #
+        # La ruta del PDF de banca (router_reports) ya servía esto vía `panel_benchmarks`;
+        # la ruta de PRODUCTOS era la que estaba ciega. Misma función a propósito: computa
+        # en el período del informe (mismo corte a ambos lados), que es lo que impide el
+        # diente de sierra de comparar un Q1 contra una constante ANUAL.
+        peer_block.update(panel_benchmarks(db, cast(date, rr.period_end)))
         return ProductSnapshot(
             tier=tier, period=str(rr.period_end),
             payload={"scoring_result": scoring_result, "peer_block": peer_block or None},

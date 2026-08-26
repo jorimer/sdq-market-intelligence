@@ -86,16 +86,30 @@ def proveedor_registro(db: Optional[Session]) -> Proveedor:
 
 
 def series_de(bindings, proveedor: Proveedor) -> Dict[str, Sequence[Observacion]]:
-    """`{código de serie: observaciones}` para los bindings que CUENTAN.
+    """`{código de serie: observaciones}` para los bindings que cuentan, MÁS uno.
 
-    Solo los verificados: servirle al semáforo la serie de un binding propuesto lo haría
-    emitir un veredicto sobre una hipótesis, que es justo lo que el estado existe para evitar.
+    La regla original era «solo los verificados», y su motivo sigue siendo bueno: servirle al
+    semáforo la serie de un binding propuesto lo haría emitir un veredicto sobre una
+    hipótesis, que es justo lo que el estado existe para evitar.
+
+    ══ AMPLIADO 2026-08-24 ══ Deja de aplicar a UN caso, y hay que decir por qué. Un binding
+    con `sin_veredicto_por = "linea_base_no_reproduce"` no es una hipótesis: el emisor publica
+    la magnitud con el término de la ley, la serie está medida y comprobada, y lo único que no
+    cierra es que el nivel reproduzca la línea base que la LEY fija. Negarle la serie hacía
+    que el 2.33 —dieciocho años— y el 3.30 —seis— salieran como «no hay binding verificado que
+    mida este indicador», que sobre ellos es falso y regala el hallazgo.
+
+    El veredicto que reciben es `medido_sin_certificar`, que publica la distancia a la meta
+    con la salvedad y NO cuenta como cumplimiento. Los otros dos motivos siguen sin serie:
+    `instrumento_discontinuado` no tiene observación en ningún año de meta y
+    `termino_legal_sin_fuente` mide otra magnitud que la que la ley nombra.
     """
     # `Sequence` y no `List` en el retorno: `Dict` es INVARIANTE en su valor, así que
     # prometer la lista concreta impide pasarle el resultado a `panel()`, que pide la
     # secuencia. La lista es un detalle de cómo se arma, no del contrato.
     out: Dict[str, Sequence[Observacion]] = {}
     for b in bindings.values():
-        if b.cuenta and b.serie not in out:
+        publicable = b.cuenta or b.sin_veredicto_por == "linea_base_no_reproduce"
+        if publicable and b.serie not in out:
             out[b.serie] = list(proveedor(b.serie))
     return out

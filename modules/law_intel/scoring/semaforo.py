@@ -34,6 +34,9 @@ VEREDICTOS = {
     "estancada": "el indicador no se mueve, y la meta que lo espera sí",
     "sin_dato": "hay binding pero no hay observación utilizable",
     "sin_medicion": "no hay binding verificado que mida este indicador",
+    "medido_sin_certificar": ("hay serie y observación, y la distancia a la meta se computa; "
+                              "lo que NO se certificó es que el nivel sea comparable con la "
+                              "línea base que la ley fija"),
     "no_evaluable": "la meta no está en una escala que admita diferencia",
 }
 
@@ -109,9 +112,29 @@ def evaluar(ind: Indicador, binding: Optional[Binding],
                              motivo=f"la meta es de escala '{ind.escala}': se cumple o no, "
                                     f"no se resta")
     if binding is None or not binding.cuenta:
+        # Un binding que DECLARA por qué no certifica no es lo mismo que no medir. El 2.33
+        # tiene dieciocho años de serie y el 3.30 seis: decir «no lo medimos» sobre ellos
+        # regala el hallazgo — y el hallazgo es que la línea base de la LEY no reproduce
+        # contra la serie de su propio Estado. Se publica la observación y la distancia, con
+        # la salvedad al lado y sin contar como cumplimiento.
+        motivo_declarado = getattr(binding, "sin_veredicto_por", None) if binding else None
+        if motivo_declarado == "linea_base_no_reproduce":
+            p_meta, m = _meta_vigente(ind, corte)
+            obs_utiles = [o for o in observaciones if isinstance(o[1], (int, float))]
+            if m is not None and isinstance(m, (int, float)) and obs_utiles:
+                p_obs, valor = obs_utiles[-1]
+                return Veredicto(
+                    ind.id, "medido_sin_certificar", meta_periodo=p_meta, meta=m,
+                    observado=round(float(valor), _DECIMALES), periodo_observado=p_obs,
+                    distancia=round(float(valor) - float(m), _DECIMALES),
+                    motivo=("la serie mide el indicador con el término de la ley y no "
+                            "reproduce su línea base; la distancia a la meta se publica con "
+                            "esa salvedad y no cuenta como cumplimiento"))
         estado = binding.estado if binding else "sin binding"
+        detalle = f"; motivo declarado: {motivo_declarado}" if motivo_declarado else ""
         return Veredicto(ind.id, "sin_medicion",
-                         motivo=f"binding en estado '{estado}'; no cuenta como medición")
+                         motivo=f"binding en estado '{estado}'; no cuenta como medición"
+                                f"{detalle}")
 
     periodo_meta, meta = _meta_vigente(ind, corte)
     if meta is None:
@@ -333,12 +356,91 @@ def resumen(veredictos: Sequence[Veredicto]) -> Dict[str, object]:
         "total": len(veredictos),
         "evaluados": len(evaluados),
         "cumplen": sum(1 for v in evaluados if v.cumple),
+        "no_alcanzan": sum(1 for v in evaluados if not v.cumple),
         "pct_sobre_evaluados": (round(100.0 * sum(1 for v in evaluados if v.cumple)
                                       / len(evaluados), 1) if evaluados else None),
+        # El COMPLEMENTO, servido y no derivado. El guard vetó un informe entero por un
+        # «75,0%» que es 100 menos el 25,0 de cumplimiento: correcto y ausente del contexto.
+        # Regla que sale de eso: toda razón que se publique viaja con su complemento, porque
+        # el redactor va a necesitar las dos y la que falte la va a calcular él.
+        "pct_no_alcanzan_sobre_evaluados": (
+            round(100.0 * sum(1 for v in evaluados if not v.cumple) / len(evaluados), 1)
+            if evaluados else None),
+        # Las dos razones que el redactor va a necesitar, COMPUTADAS. No estaban, y el
+        # modelo las derivó: escribió «48,9%» —que es 44/90, aritmética correcta— y el guard
+        # de cifra sin respaldo vetó la entrega del Insight, con razón. La cura no es
+        # aflojar el guard: es que la relación viaje resuelta. Dejar el hueco es lo que lo
+        # llena mal, y acá el hueco eran dos divisiones que el contexto ya tenía servidas
+        # como numerador y denominador sueltos.
+        "pct_con_veredicto_de_cumplimiento_sobre_los_que_la_ley_numera": (
+            round(100.0 * len(evaluados) / len(veredictos), 1) if veredictos else None),
+        "pct_sin_veredicto_de_cumplimiento_sobre_los_que_la_ley_numera": (
+            round(100.0 * (len(veredictos) - len(evaluados)) / len(veredictos), 1)
+            if veredictos else None),
         "por_veredicto": dict(sorted(conteo.items())),
-        "nota": ("El porcentaje se computa sobre los EVALUADOS, no sobre el total de la ley: "
-                 "«no cumple» y «no lo medimos» son cosas distintas."),
+        "nota": ("El porcentaje de CUMPLIMIENTO se computa sobre los EVALUADOS, no sobre el "
+                 "total de la ley: «no cumple» y «no lo medimos» son cosas distintas. Las "
+                 "otras dos razones nombran su denominador en la clave; usalas tal cual y no "
+                 "derives ninguna división por tu cuenta. Y ojo: «sin veredicto de "
+                 "cumplimiento» NO es «sin medición» — hay indicadores medidos que no "
+                 "producen veredicto. Las poblaciones están todas en "
+                 "`poblaciones_de_la_ley`."),
     }
+
+
+def tabla(veredictos: Sequence[Veredicto], indicadores: Sequence[Indicador],
+          nombres_de_eje: Optional[Dict[int, str]] = None,
+          origen_de_la_evidencia: Optional[Dict[str, str]] = None) -> List[Dict[str, Any]]:
+    """Una fila POR INDICADOR con veredicto: la evidencia que el informe tiene que citar.
+
+    **Existe porque el contexto solo llevaba conteos agregados.** A las secciones «Lo que se
+    logró» y «Lo que no se logró» se les pedía nombrar indicadores con su meta y su valor, y
+    lo único que recibían era «11 alcanzan, 33 no». El modelo reconstruía las cifras de
+    memoria y las erraba: publicó «2.7 alcanza 0.39 contra una meta de 0.42» cuando la ley
+    fija 0.44, y «3.13 91.0% frente a una meta de 70.0%» cuando fija 60.0.
+
+    **Y el guard de cifra sin respaldo no las atrapa.** Con noventa indicadores, casi
+    cualquier número aparece en alguna parte del contexto: el guard lo encuentra y lo da por
+    respaldado. Comprueba PRESENCIA, no ATRIBUCIÓN — una meta que existe pero pertenece a
+    otro indicador pasa el filtro. La única cura es que la fila correcta esté servida.
+
+    **Y cada fila lleva el ORIGEN de su evidencia.** Sin esa columna, la sección de logros
+    tenía que cruzar esta tabla con el bloque de verificabilidad, y lo cruzó mal: escribió
+    «el único logro con respaldo metodológico independiente es el 2.38» cuando los únicos dos
+    indicadores con medición independiente son el 1.1 y el 2.17, y **ninguno está entre los
+    logros**. La afirmación verdadera era más fuerte que la publicada: ninguno de los once
+    logros descansa en evidencia independiente del evaluado. Un cruce que el contexto no
+    resuelve es un cruce que el redactor hace a ojo.
+
+    Solo los que producen veredicto de cumplimiento: los demás no tienen meta que citar y
+    llenarían la tabla de huecos que el redactor trataría de completar.
+    """
+    del_indicador = {i.id: i for i in indicadores}
+    ejes = nombres_de_eje or {}
+    origenes = origen_de_la_evidencia or {}
+    filas: List[Dict[str, Any]] = []
+    for v in veredictos:
+        if v.cumple is None:
+            continue
+        ind = del_indicador.get(v.indicador)
+        if ind is None:                                   # pragma: no cover - defensivo
+            continue
+        filas.append({
+            "indicador": v.indicador,
+            # El sujeto viaja con el número, también en la tabla.
+            "nombre_del_indicador": ind.nombre,
+            "fin": ejes.get(ind.eje, f"Eje {ind.eje}"),
+            "veredicto": v.veredicto,
+            "meta_que_fija_la_ley": v.meta,
+            "periodo_de_la_meta": v.meta_periodo,
+            "valor_observado": v.observado,
+            "periodo_observado": v.periodo_observado,
+            "distancia_a_la_meta": v.distancia,
+            "trayectoria": v.trayectoria,
+            "origen_de_la_evidencia": origenes.get(v.indicador, ""),
+            "lectura_ya_redactada": v.motivo or "",
+        })
+    return filas
 
 
 def direccion_declarada_coincide(ind: Indicador, binding: Binding) -> bool:

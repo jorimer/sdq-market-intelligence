@@ -70,6 +70,30 @@ SOLIDEZ_INDICATORS = [
     "cobertura_provisiones", "patrimonio_activos",
 ]
 
+#: FAMILIAS de Solidez: un HECHO, un voto.
+#:
+#: Los cinco indicadores de Solidez no son cinco hechos. `solvencia`, `tier1_ratio` y
+#: `leverage` miden todos capital sobre ACTIVOS PONDERADOS POR RIESGO —cambian el numerador
+#: (patrimonio técnico o capital primario) y poco más—, así que el promedio simple le daba a
+#: ese único hecho el 60 % de la dimensión. Y cuando la entidad no tiene capital secundario,
+#: dos de ellos son EXACTAMENTE el mismo número: 9 de 43 entidades al corte 2026-03.
+#:
+#: Con familias, la adecuación de capital pesa 1/3 igual que la cobertura de provisiones y
+#: que el capital sobre activos SIN ponderar. Los tres indicadores siguen calculándose y
+#: publicándose: lo que cambia es que no votan tres veces.
+#:
+#: Impacto MEDIDO sobre las 43 entidades calificadas al corte más reciente: Δ medio −1,95 en
+#: el score de Solidez (máximo −8,74), que sobre el score global es del orden de −0,75. Ver
+#: `docs/CHANGELOG_METODOLOGIA.md`.
+#:
+#: Un indicador que no esté en ninguna familia se trata como su propia familia — así, agregar
+#: uno nuevo no lo deja fuera del promedio en silencio.
+SOLIDEZ_FAMILIAS = (
+    ("capital_ponderado", ("solvencia", "tier1_ratio", "leverage")),
+    ("cobertura", ("cobertura_provisiones",)),
+    ("capital_sobre_activos", ("patrimonio_activos",)),
+)
+
 CALIDAD_INDICATORS = [
     "morosidad", "pct_cartera_a", "concentracion_top10",
     "hhi_sectorial", "castigos_pct", "exposicion_re",

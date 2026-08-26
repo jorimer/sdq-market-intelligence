@@ -16,6 +16,7 @@ from dataclasses import dataclass
 from typing import Dict, List, Optional, Sequence
 
 from modules.law_intel.bindings import Binding
+from modules.law_intel.campo import RESPONSABLE_POR_MOTIVO
 from modules.law_intel.registro import Indicador
 
 # Los tipos se distinguen porque se exigen distinto. «No existe el dato» se pide al productor
@@ -28,14 +29,22 @@ TIPOS = {
     "escala_no_medible": "la ley fija la meta en una escala que no admite diferencia",
 }
 
-# Cuál de las brechas depende de nosotros y cuál del Estado. Publicarlo evita que el informe
-# le impute al Estado un hueco que es de la plataforma.
-RESPONSABLE = {
+# De quién es la brecha SEGÚN LA ESTRUCTURA del binding. Es un respaldo, no la respuesta:
+# se usa solo cuando el indicador no tiene motivo declarado en el campo.
+#
+# **Por qué no alcanza.** Un binding `propuesto` con `linea_base_no_reproduce` cae acá como
+# `binding_sin_verificar` → «sdq», y no es deuda nuestra: es EL HALLAZGO —la línea base que
+# la ley fija no reproduce contra la serie de su propio emisor— y el trabajo está hecho. Con
+# este mapa solo, la plataforma decía «20 brechas son de SDQ» mientras el campo decía «2», y
+# el informe generado citaba una u otra según la sección. La autoridad es
+# `campo.RESPONSABLE_POR_MOTIVO`; esto queda para el indicador que todavía no tiene casilla.
+RESPONSABLE_POR_ESTRUCTURA = {
     "sin_binding": "sdq",
     "binding_sin_verificar": "sdq",
-    "fuente_descartada": "estado",
+    "fuente_descartada": "sdq",
     "escala_no_medible": "instrumento",
 }
+RESPONSABLE = RESPONSABLE_POR_ESTRUCTURA          # nombre anterior, se conserva
 
 
 @dataclass(frozen=True)
@@ -47,10 +56,21 @@ class Brecha:
     responsable: str
     detalle: Optional[str] = None
     serie_candidata: Optional[str] = None
+    #: El motivo declarado en el campo, cuando existe. Es lo que decide `responsable`, y viaja
+    #: al informe para que la atribución se pueda comprobar en vez de creerse.
+    motivo_declarado: Optional[str] = None
 
 
 def brechas(indicadores: Sequence[Indicador],
-            bindings: Dict[str, Binding]) -> List[Brecha]:
+            bindings: Dict[str, Binding],
+            motivos: Optional[Dict[str, str]] = None) -> List[Brecha]:
+    """Las brechas de medición, con la atribución que declara el campo.
+
+    `motivos` es `{indicador: estado_del_campo}`. Cuando un indicador lo trae, **manda sobre
+    la estructura del binding**: un `propuesto` con `linea_base_no_reproduce` no es trabajo
+    pendiente nuestro por más que su binding no esté verificado.
+    """
+    motivos = motivos or {}
     out: List[Brecha] = []
     for ind in indicadores:
         b = bindings.get(ind.id)
@@ -65,7 +85,11 @@ def brechas(indicadores: Sequence[Indicador],
             tipo, detalle, serie = "fuente_descartada", b.motivo_descarte, b.serie
         else:
             tipo, detalle, serie = "binding_sin_verificar", b.nota_comparabilidad, b.serie
-        out.append(Brecha(ind.id, ind.nombre, ind.eje, tipo, RESPONSABLE[tipo], detalle, serie))
+        motivo = motivos.get(ind.id)
+        responsable = (RESPONSABLE_POR_MOTIVO.get(motivo) if motivo
+                       else None) or RESPONSABLE_POR_ESTRUCTURA[tipo]
+        out.append(Brecha(ind.id, ind.nombre, ind.eje, tipo, responsable, detalle, serie,
+                          motivo_declarado=motivo))
     return out
 
 
@@ -103,6 +127,18 @@ def resumen(brechas_: Sequence[Brecha], total_ley: int) -> Dict[str, object]:
         "por_tipo": dict(sorted(por_tipo.items())),
         # Sin este corte, el informe le imputa al Estado huecos que son nuestros.
         "por_responsable": dict(sorted(por_responsable.items())),
+        "pct_por_responsable_sobre_las_brechas": {
+            k: round(100.0 * v / len(brechas_), 1) if brechas_ else None
+            for k, v in sorted(por_responsable.items())},
+        "de_donde_sale_la_atribucion": (
+            "Del motivo declarado en el campo del expediente, no de si el binding está "
+            "verificado. Un binding propuesto cuya línea base legal no reproduce es un "
+            "HALLAZGO sobre la ley, no trabajo pendiente de esta firma."),
+        "advertencia_sobre_por_tipo": (
+            "`por_tipo` clasifica por la ESTRUCTURA del binding y NO es la composición de "
+            "los indicadores sin veredicto: esa es `estado_del_campo_computado.por_estado`, "
+            "y es la única que se cita. Las dos parten la misma población con criterios "
+            "distintos y sus conteos no coinciden."),
         "nota": ("`escala_no_medible` no es una falla de nadie: la ley fija esas metas en "
                  "palabras o como umbral, y ninguna fuente las vuelve restables."),
     }

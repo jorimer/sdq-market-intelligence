@@ -483,6 +483,75 @@ THIN_TEMPLATES = {
         "posición vs pares si se provee, y un veredicto puntual con qué vigilar. NO repitas el "
         "panorama global del banco ni otros sub-componentes."
     ),
+    "anuario_sistema": (
+        "Escribí la lectura del AÑO del sistema bancario dominicano.\n"
+        "Contexto:\n{context}\n\n"
+        "Máximo 450 palabras. El sujeto es el SISTEMA, no una entidad; podés y debés nombrar "
+        "entidades cuando el dato las nombra.\n\n"
+        "EL ESTADÍSTICO ES LA MEDIANA. Si 'medias_y_medianas_divergen' es verdadero, la media y "
+        "la mediana se mueven en sentidos OPUESTOS y las dos son correctas: titulá con la "
+        "mediana, decí explícitamente que discrepan y por qué (a la media la levantan unos pocos "
+        "extremos). Nunca titules el año con la media.\n\n"
+        "DECLARÁ EL UNIVERSO al menos una vez: cuántas entidades entran al orden y cuántas "
+        "quedan fuera por año incompleto. Las parciales existen y se nombran; no se rankean.\n\n"
+        "'por_tipo' trae el cambio MEDIANO de cada tipo de entidad, ya computado y ordenado: es "
+        "el hallazgo estructural del año y merece el centro. 'extremos' son las COLAS: "
+        "describilos como casos, jamás como el comportamiento del sistema. 'cambios_de_banda' "
+        "son hechos, no opiniones: nombralos con su dirección.\n\n"
+        "No recalcules ninguna cifra: todas vienen resueltas. Si una relación no está servida, "
+        "expresala en palabras sin número."
+    ),
+    "revision_anual": (
+        "Escribí la REVISIÓN ANUAL de esta entidad financiera dominicana.\n"
+        "Contexto:\n{context}\n\n"
+        "Máximo 450 palabras. El sujeto es UNA entidad y el período es UN AÑO CALENDARIO.\n\n"
+        "EL SCORE DEL AÑO ES EL DEL CIERRE. No existe un score anual promediado y no debés "
+        "insinuar que exista: 'regla_del_score' lo declara y esa regla no se negocia.\n\n"
+        "EL CAMINO IMPORTA TANTO COMO EL CIERRE. Si 'camino.valle_intermedio' es verdadero, el "
+        "peor momento del año NO fue diciembre: la entidad cayó y se recuperó, y una lectura "
+        "que solo compare apertura contra cierre estaría contando un año que no ocurrió. "
+        "Decilo explícitamente y nombrá el trimestre del valle.\n\n"
+        "'balance' trae apertura CONTRA cierre de cada indicador. Son STOCKS: su valor de "
+        "diciembre no dice nada del año, lo que dice algo es contra qué nivel arrancó. Elegí "
+        "los pocos que MOVIERON la calificación en vez de recorrerlos todos.\n\n"
+        "'posicion' es el percentil al abrir y al cerrar: responde si mejoró contra sí misma o "
+        "contra el mercado, que son cosas distintas. Si la entidad subió y su percentil bajó, "
+        "el mercado subió más — decilo así.\n\n"
+        "'cortes_faltantes' se DECLARA si no está vacío: las anclas del camino son de lo que se "
+        "vio, no del año entero.\n\n"
+        "No recalcules ninguna cifra: todas vienen resueltas. Si una relación no está servida, "
+        "expresala en palabras sin número."
+    ),
+    "anio_del_sistema": (
+        "Escribí la lectura ABIERTA del año del sistema bancario dominicano.\n"
+        "Contexto:\n{context}\n\n"
+        "Máximo 300 palabras. Nivel abierto: el sujeto es el SISTEMA y **NO PODÉS NOMBRAR "
+        "NINGUNA ENTIDAD** — ni una sola, ni siquiera como ejemplo. El contexto no trae "
+        "nombres a propósito; si te falta uno, no es un olvido: es la doctrina del nivel.\n\n"
+        "EL ESTADÍSTICO ES LA MEDIANA. Si 'medias_y_medianas_divergen' es verdadero, la media "
+        "y la mediana se mueven en sentidos OPUESTOS y las dos son correctas: titulá con la "
+        "mediana, decí que discrepan y por qué (a la media la levantan unos pocos extremos). "
+        "Nunca titules el año con la media.\n\n"
+        "'por_tipo' trae el cambio MEDIANO de cada tipo de entidad, ya computado: es el "
+        "hallazgo estructural del año y merece el centro. 'conteo_direccion' dice cuántas "
+        "mejoraron, empeoraron y quedaron estables — son cifras del sistema, no casos.\n\n"
+        "DECLARÁ EL UNIVERSO al menos una vez: cuántas entran al orden y cuántas quedan fuera "
+        "por año incompleto.\n\n"
+        "No recalcules ninguna cifra: todas vienen resueltas."
+    ),
+    "revision_anual_mercado": (
+        "Escribí el CONTRASTE contra el mercado del año de esta entidad.\n"
+        "Contexto:\n{context}\n\n"
+        "Máximo 250 palabras. Una sola pregunta y respondela: **¿lo que le pasó a esta "
+        "entidad en el año fue suyo o fue del mercado?**\n\n"
+        "El movimiento de la entidad se lee CONTRA el cambio mediano de su TIPO y el del "
+        "sistema, en el MISMO año. Los tres números vienen servidos. Si la entidad cayó y su "
+        "tipo también, el hecho es sectorial y decirlo como mérito o demérito propio sería "
+        "falso; si cayó mientras su tipo subía, es idiosincrático y ESO es el hallazgo.\n\n"
+        "No repitas la descripción del año —ya la da la otra sección—: acá va solo el "
+        "contraste y lo que implica.\n\n"
+        "No recalcules ninguna cifra: todas vienen resueltas."
+    ),
     "sector_outlook": (
         "Explica el FUNDAMENTO del atractivo de inversión (IAI) de este sector.\n"
         "Contexto:\n{context}\n\n"
@@ -511,6 +580,117 @@ THIN_TEMPLATES = {
         "el foco es «dónde está parado vs su propio pasado y vs otros». Si no hay serie ni panel, "
         "decilo y quedate en la lectura de dimensiones, sin fabricar una tendencia. Usa SOLO las "
         "cifras del contexto; respeta la dirección del índice."
+    ),
+    # ── Evaluación de leyes: una plantilla POR SECCIÓN ──
+    #
+    # Existen porque el módulo usaba `sector_decision` —un cierre accionable de 180 palabras
+    # que dice «NO repitas el panorama ya expuesto»— para las CINCO secciones del informe, con
+    # el contexto completo en cada una. El resultado eran cinco resúmenes ejecutivos de 500
+    # palabras con el mismo esqueleto SCQA, cada uno recontando el total de indicadores, la
+    # cobertura y la tasa de cumplimiento. La sección «Lo que se logró» no listaba lo logrado.
+    #
+    # El reparto es el producto: el lector pregunta qué se logró, qué no y qué queda, y cada
+    # sección contesta UNA de esas y cede las otras.
+    "ley_estado": (
+        "EL MARCADOR DE LA LEY: ¿está consiguiendo lo que se propuso?\n"
+        "Contexto:\n{context}\n\n"
+        "Máximo 320 palabras. Esta es la ÚNICA sección que da el panorama; las que siguen lo "
+        "dan por dicho. Abrí con el veredicto FIN POR FIN copiando `lectura_ya_redactada` de "
+        "`fines_de_la_ley_computados` — es la unidad de lectura del informe, no el inventario "
+        "de indicadores. Un fin `no_caracterizable` se nombra con su motivo computado y NUNCA "
+        "se le atribuye una causa que el contexto no traiga. Después, y en una sola frase, la "
+        "cobertura con sus dos poblaciones (`poblaciones_de_la_ley`). NO listes indicadores "
+        "uno por uno, NO proyectes a futuro y NO enumeres brechas: cada cosa tiene su sección."
+    ),
+    "ley_logrado": (
+        "LO QUE LA LEY SÍ CONSIGUIÓ, y qué tan sólido es.\n"
+        "Contexto:\n{context}\n\n"
+        "Máximo 300 palabras. El panorama YA SE DIO: no repitas el total de indicadores, la "
+        "cobertura ni la tasa global de cumplimiento. Esta sección habla SOLO de las metas "
+        "ALCANZADAS: cuáles son, a qué fin pertenecen y qué evidencia las sostiene. **Un "
+        "logro es una fila de `tabla_de_veredictos_por_indicador` cuyo veredicto dice "
+        "`alcanzada`, y ninguna otra**: un indicador que RETROCEDE no entra acá por más que "
+        "su valor suene alto, y presentarlo como avance invierte la dirección de la lectura. "
+        "El reparto por fin se CUENTA sobre esa tabla, no se estima —el informe dijo «nueve "
+        "del Eje social» cuando eran siete—. Nombralas "
+        "con su número Y su nombre de `nombres_de_los_indicadores_de_la_ley`. Decí también qué "
+        "tan sólido es cada logro: si la serie que lo mide la produce el propio evaluado, o si "
+        "lleva salvedad de comparabilidad, eso califica el logro y va acá. Si un logro está a "
+        "punto de perderse porque el indicador ya se aleja, decilo. PROHIBIDO dedicar párrafos "
+        "a lo incumplido: tiene su sección y repetirlo deja esta sin contenido propio."
+    ),
+    "ley_no_logrado": (
+        "LO QUE LA LEY NO CONSIGUIÓ, con la distancia y la dirección.\n"
+        "Contexto:\n{context}\n\n"
+        "Máximo 320 palabras. El panorama YA SE DIO: no lo repitas. SOLO las metas vencidas "
+        "que no se alcanzaron. Distinguí tres cosas que no significan lo mismo y que el "
+        "contexto ya separó: las que no llegaron, las que RETROCEDEN —se alejan— y las "
+        "ESTANCADAS, que no se mueven mientras la meta avanza (una serie plana NO «se aleja»). "
+        "Priorizá por magnitud de la distancia y por concentración: si un sector o un bloque "
+        "temático acumula varias, esa es la lectura. Nombrá cada indicador con su número y su "
+        "nombre. NO hables de lo alcanzado ni de las brechas de medición."
+    ),
+    "ley_pendiente": (
+        "LO QUE QUEDA POR DELANTE: ¿va a llegar la ley a su horizonte?\n"
+        "Contexto:\n{context}\n\n"
+        "Máximo 320 palabras. El panorama YA SE DIO: no lo repitas. SOLO las metas que "
+        "TODAVÍA NO VENCEN, desde `metas_pendientes_al_horizonte_de_la_ley`. Una meta que no "
+        "venció NO SE PUEDE INCUMPLIR: nunca escribas «incumple» ni «falló» sobre ella. Lo que "
+        "se afirma es si al ritmo OBSERVADO se llega, y esa frase lleva el supuesto pegado "
+        "porque es una extrapolación de lo que ya pasó, no un pronóstico. Usá los años de "
+        "recorrido que el contexto computa —«le faltan 36 y quedan 6» decide algo; «no "
+        "llegará» es un adjetivo—. Separá las que YA se cumplen y solo hay que sostener. NO "
+        "vuelvas sobre el corte vencido ni sobre las brechas."
+    ),
+    "ley_brechas": (
+        "QUÉ PARTE DE LA LEY ESTE INFORME NO PUEDE JUZGAR, y de quién es esa imposibilidad.\n"
+        "Contexto:\n{context}\n\n"
+        "Máximo 300 palabras. El panorama YA SE DIO: no lo repitas. SOLO lo que no se puede "
+        "juzgar. Lo central es la ATRIBUCIÓN, y viene computada en "
+        "`brechas_de_medicion.por_responsable`: cuánto lo impide el TEXTO de la ley, cuánto el "
+        "aparato estadístico del Estado, y cuánto es trabajo pendiente de esta firma — que se "
+        "declara sin adornos. Cuidado con `no_confundir_estas_poblaciones`: tres cifras "
+        "distintas se dicen con palabras parecidas y solo una es «el instrumento que la ley "
+        "eligió ya no está disponible». NO atribuyas una causa que el contexto no compute, y "
+        "no cierres con recomendaciones de política."
+    ),
+    "ley_coherencia": (
+        "PROCESO DECLARADO CONTRA RESULTADO MEDIDO.\n"
+        "Contexto:\n{context}\n\n"
+        "Máximo 280 palabras. El panorama YA SE DIO: no lo repitas. Esta sección existe para "
+        "un patrón concreto y solo habla de él: un instrumento de proceso que reporta alto "
+        "cumplimiento de SUS COMPROMISOS mientras el indicador que ese instrumento existía "
+        "para mover no se mueve. Copiá `lectura_ya_redactada` de "
+        "`contradicciones_proceso_vs_resultado_computadas`. Las dos lecturas no pueden ser "
+        "ambas satisfactorias, y eso es lo que se dice — sin acusar de mala fe a nadie: el "
+        "hallazgo es que el tablero de proceso puede reportar éxito indefinidamente mientras "
+        "el resultado se deteriora. Si el contexto no trae contradicciones computadas, decilo "
+        "en una frase y no inventes una."
+    ),
+    "ley_verificabilidad": (
+        "QUIÉN PRODUCE LA EVIDENCIA CON LA QUE SE JUZGA, y si es el mismo a quien se juzga.\n"
+        "Contexto:\n{context}\n\n"
+        "Máximo 300 palabras. El panorama YA SE DIO: no lo repitas. Usá "
+        "`verificabilidad_de_la_evidencia_computada`. La distinción que ordena la sección: un "
+        "emisor internacional NO es una medición independiente — retransmite, o estima con "
+        "método propio sobre insumos que produce el evaluado. Citar «lo dice el organismo» "
+        "sobre una cifra que produjo el evaluado le da al informe una independencia que no "
+        "tiene, y un contradictor la desarma en una línea. Decí cuántos indicadores tienen "
+        "medición realmente independiente y cuáles. Y el matiz que más pesa: la ley SÍ eligió "
+        "instrumentos de tercero para una parte de sus metas, y esa es justo la parte que "
+        "dejó de estar disponible. NO recorras indicadores uno por uno."
+    ),
+    "ley_recomendaciones": (
+        "QUÉ SE PUEDE EXIGIR, Y CON QUÉ INSTRUMENTO.\n"
+        "Contexto:\n{context}\n\n"
+        "Máximo 300 palabras. El panorama YA SE DIO: no lo repitas. Copiá las "
+        "`recomendaciones_ya_redactadas`; no inventes ninguna. **Se recomienda la PUBLICACIÓN "
+        "del dato o la ACTIVACIÓN del mecanismo de control, NUNCA la política**: el informe "
+        "señala qué falta y a quién la ley se lo asigna, y no opina sobre qué debería hacer el "
+        "Estado con un indicador. Cada recomendación va con su base legal —el artículo que la "
+        "sostiene—, su deudor y, cuando el contexto lo traiga, cuántos indicadores desbloquea. "
+        "Separá lo que depende de esta firma de lo que hay que exigirle a un tercero: mezclarlo "
+        "infla el reclamo, y un reclamo inflado es refutable."
     ),
     "sector_decision": (
         "CIERRE ACCIONABLE para la audiencia — conciso y preciso. NO re-describas el índice ni "
@@ -1415,33 +1595,45 @@ def degraded_sections(narratives: dict, sections) -> list:
     return [s for s in sections if is_static_fallback_text(n.get(s))]
 
 
-def secciones_con_cifra_sin_respaldo(narratives: dict, sections, context: dict) -> dict:
-    """`{sección: [hallazgos]}` de las secciones cuyo texto AFIRMA cifras que el contexto no
-    sostiene.
+def _depositar_cifras(template: str, result: "NarrativeResult") -> None:
+    """Deja en el canal las cifras que el motor marcó y que sobrevivieron a la reparación.
 
-    Es el gemelo de `degraded_sections` para el otro modo de entregar un informe malo. Aquél
-    detecta una sección HUECA —fácil de ver—; éste detecta una sección LLENA con un número que
-    nadie puede respaldar, que es peor: se lee como un hallazgo y viaja citado.
+    Un solo punto de depósito, y a propósito: el veredicto de ``guard_unsupported`` se fija en
+    TRES ramas distintas —el lazo agotado, la excepción del reintento y el HIT de caché— y
+    depositar en cada una es exactamente cómo se pierde una. Acá se llama cuando el valor ya
+    es definitivo.
 
-    **Solo corre los checks DETERMINISTAS**, y eso es una limitación que hay que declarar: son
-    gratis y mecánicos, así que pueden vivir en la ruta de entrega sin costo ni latencia ni
-    variabilidad. El juez semántico del motor ve cosas que éstos no —y por eso el motor además
-    se niega a propagar a la caché compartida lo que él marcó—. Los dos filtros se necesitan:
-    ninguno cubre al otro.
+    Lee ``guard_cifras`` y NO ``guard_unsupported``: aquél concatena cifras y direcciones
+    para el log, y separarlas por el texto del hallazgo es frágil — el de dirección dice
+    «pero es al revés», no «invertida».
     """
-    from shared.narrative.numeric_guard import (deterministic_uncited_figures,
-                                                deterministic_unsupported)
+    marcas = [str(h) for h in (result.guard_cifras or [])]
+    if not marcas:
+        return
+    from shared.narrative.cifras_pendientes import registrar
+    registrar(template, marcas)
 
-    n, ctx = narratives or {}, context or {}
-    out = {}
-    for s in sections:
-        texto = n.get(s)
-        if not isinstance(texto, str) or not texto.strip():
-            continue
-        hallazgos = deterministic_unsupported(ctx, texto) + deterministic_uncited_figures(ctx, texto)
-        if hallazgos:
-            out[s] = hallazgos
-    return out
+
+# `secciones_con_cifra_sin_respaldo` VIVÍA ACÁ y se eliminó el 2026-08-26. Re-juzgaba el texto
+# en la superficie de entrega, con el snapshot en la mano en vez del contexto que lo generó, y
+# ésa era la causa de tres informes vetados con cifras REALES. No se deja «por si acaso»: una
+# función que solo puede usarse mal es la forma en que el defecto vuelve. El hallazgo llega por
+# `shared/narrative/hallazgos_pendientes`, desde el motor, que juzgó con el contexto correcto y
+# además con el juez semántico. Lo vigila `test_regla_nadie_re_juzga_a_ciegas.py`.
+
+#: Cuántas veces se le pide al modelo que corrija antes de darse por vencido. Era UNA sola.
+#: Con la lectura correcta ya entregada en el aviso (ver `DIRECTION_CORRECTION_NOTICE`), un
+#: segundo intento es barato al lado de publicar una relación invertida o de negar el informe.
+#: No se sube más: en el caso real que motivó esto, la única corrección que NO convergió fue
+#: la vez que el guard estaba equivocado — insistir ahí solo quema dinero.
+_MAX_REINTENTOS_GUARD = 2
+
+#: Se añade en el ÚLTIMO intento. Sin esto, el modelo no tiene forma de saber que ya no hay
+#: más oportunidades y que lo que siga escribiendo es lo que se evalúa.
+ULTIMO_INTENTO_NOTICE = (
+    "\n\nESTE ES EL ÚLTIMO INTENTO: si la afirmación sigue contradiciendo la lectura servida, "
+    "el informe no se entrega. Ante la duda, copiá la cláusula del contexto tal cual está."
+)
 
 
 class NarrativeSinRespaldoError(RuntimeError):
@@ -1462,6 +1654,32 @@ class NarrativeSinRespaldoError(RuntimeError):
             "La narrativa afirma cifras que el contexto no sostiene en "
             + ", ".join(f"{s} ({len(v)})" for s, v in sorted(self.hallazgos.items()))
             + ". El informe no se entrega con una cifra que no se puede respaldar.")
+
+
+class NarrativeRelacionInvertidaError(RuntimeError):
+    """La narrativa afirma una RELACIÓN que el dato contradice, y sobrevivió a que se le
+    entregara la lectura correcta ya redactada.
+
+    Tercera hermana de `NarrativeSinRespaldoError` y `NarrativeDegradedError`, y la más
+    acotada de las tres A PROPÓSITO. Una relación invertida es REPARABLE —el sistema ya
+    calculó la frase correcta— así que el remedio de primera línea es reparar, no vetar:
+    frenar quince secciones buenas por una frase corregible no protege a nadie.
+
+    Se llega acá solo cuando el modelo contradice una respuesta que se le dio EXPLÍCITAMENTE,
+    dos veces. En ese punto ya no es «se equivocó»: es señal de que algo más está roto —quizá
+    el propio guard, como ocurrió con el falso positivo del 69%— y publicar sin mirar sería
+    apostar a que el equivocado es el detector.
+
+    El caso que la motiva llegó a un informe entregado: la §7 afirmó que la capitalización
+    contable «supera» al promedio de su grupo estando por debajo, contradiciendo a la §2 y a
+    la §10 del MISMO documento.
+    """
+
+    def __init__(self, hallazgos: dict):
+        self.hallazgos = dict(hallazgos)
+        super().__init__(
+            "La narrativa afirma relaciones que el dato contradice en "
+            f"{len(self.hallazgos)} sección(es): {', '.join(self.hallazgos)}.")
 
 
 class NarrativeDegradedError(RuntimeError):
@@ -1525,6 +1743,11 @@ class NarrativeResult:
     # Cifras del output que el guardrail numérico no pudo trazar al contexto tras
     # regenerar (cerebro). Vacío = verificado limpio o ruta sin guardrail.
     guard_unsupported: list = field(default_factory=list)
+    #: SOLO las cifras sin respaldo. `guard_unsupported` concatena cifras y direcciones para
+    #: el log, y separarlas por el TEXTO del hallazgo es frágil —el de dirección dice «pero es
+    #: al revés», no «invertida», y filtrar por la palabra equivocada mandaba una relación
+    #: invertida por el canal de las cifras—. Cada hallazgo viaja por su canal con su política.
+    guard_cifras: list = field(default_factory=list)
     # True cuando el modelo se quedó SIN PRESUPUESTO de tokens: el texto está cortado, no
     # terminado. Un PDF entregado a mitad de oración —pasó con Perspectiva Sectorial— es
     # peor que un error visible: parece el documento final.
@@ -1626,6 +1849,7 @@ class NarrativeEngine:
                     model_used=str(data.get("model_used") or ""),
                     from_cache=True,
                     guard_unsupported=list(data.get("guard_unsupported") or []),
+                    guard_cifras=list(data.get("guard_cifras") or []),
                 )
                 self._cache[key] = (result, time.time())  # promover a L1
                 return result
@@ -1634,17 +1858,30 @@ class NarrativeEngine:
         return None
 
     def _set_cache(self, key: str, result: NarrativeResult):
-        self._cache[key] = (result, time.time())
         if result.guard_unsupported:
-            # Lo que el guard marcó NO viaja a la caché compartida. Escribirlo ahí es cómo un
-            # texto con una cifra sin respaldo sobrevive a la corrida que lo produjo y se
-            # sirve —idéntico y en silencio— a todos los informes que vengan: la caché no
-            # tiene TTL. Queda en L1 por-worker para no re-pagar la generación dentro de la
-            # misma corrida, que de todos modos el gate del ensamblador va a frenar.
-            logger.warning("Narrativa con %d hallazgo(s) del guard: no se propaga a la caché "
-                           "compartida (%s)", len(result.guard_unsupported),
+            # Lo que el guard marcó NO SE CACHEA EN NINGÚN NIVEL, ni siquiera en L1.
+            #
+            # En la caché compartida es evidente: no tiene TTL, así que el texto sobreviviría
+            # a la corrida que lo produjo y se serviría idéntico y en silencio para siempre.
+            #
+            # En L1 costó más verlo, y era peor de lo que parecía. El veto le dice al usuario
+            # «reintente en unos minutos, el texto se regenera». Con el resultado marcado en
+            # L1, el reintento que caía en el MISMO worker devolvía el HIT: mismo veto, misma
+            # cifra, en 4,7 s en vez de 264 s. Medido en producción contra el SDQ Rating de
+            # Asociación Bonao al 2025-03-31. El mensaje prometía una regeneración que no
+            # ocurría, y el informe quedaba muerto hasta que expirara el TTL de L1 o el
+            # request cayera en otro worker — o sea, al azar.
+            #
+            # La justificación anterior («no re-pagar la generación dentro de la misma
+            # corrida») no compraba nada: la clave incluye contexto y plantilla, así que
+            # dentro de una corrida se pide UNA vez. Lo único que compraba era volver
+            # inservible el reintento.
+            logger.warning("Narrativa con %d hallazgo(s) del guard: NO se cachea (ni L1 ni "
+                           "compartida) para que el reintento regenere de verdad (%s)",
+                           len(result.guard_unsupported),
                            "; ".join(map(str, result.guard_unsupported))[:200])
             return
+        self._cache[key] = (result, time.time())
         if result.model_used == STATIC_FALLBACK_MODEL:
             # El fallback estático es un degradado transitorio (sin API key, error,
             # presupuesto): se cachea solo por-worker, no se propaga a los demás.
@@ -1656,6 +1893,7 @@ class NarrativeEngine:
                 "cost_estimate": result.cost_estimate,
                 "model_used": result.model_used,
                 "guard_unsupported": result.guard_unsupported,
+                "guard_cifras": result.guard_cifras,
             }, ensure_ascii=False)
             cache_set(_L2_NS + key, payload, CACHE_TTL_SECONDS)
         except (TypeError, ValueError) as e:  # payload no serializable — solo L1
@@ -1752,7 +1990,7 @@ class NarrativeEngine:
         recording figures still unverified (if the regen also failed) — best-effort, never
         blanks the insight."""
         from shared.narrative.numeric_guard import (
-            CORRECTION_NOTICE, DIRECTION_CORRECTION_NOTICE,
+            CORRECTION_NOTICE, DIRECTION_CORRECTION_NOTICE, fragmento_alrededor,
             deterministic_direction_errors, deterministic_uncited_figures,
             deterministic_unsupported, verify_figures)
 
@@ -1796,27 +2034,45 @@ class NarrativeEngine:
         result = _gen(user)
         bad, wrong_dir = _check(result.text)
         if bad or wrong_dir:
-            logger.warning("Guardrail (%s): cifras sin respaldo %s | dirección invertida %s "
-                           "— regenerando una vez", template, bad, wrong_dir)
             try:
-                notice = ""
-                if bad:
-                    notice += CORRECTION_NOTICE.format(bad="; ".join(bad))
+                for intento in range(1, _MAX_REINTENTOS_GUARD + 1):
+                    logger.warning(
+                        "Guardrail (%s): cifras sin respaldo %s | relación invertida %s — "
+                        "regenerando (intento %d de %d)", template, bad, wrong_dir,
+                        intento, _MAX_REINTENTOS_GUARD)
+                    notice = ""
+                    if bad:
+                        notice += CORRECTION_NOTICE.format(bad="; ".join(bad))
+                    if wrong_dir:
+                        notice += DIRECTION_CORRECTION_NOTICE.format(bad="; ".join(wrong_dir))
+                    if intento == _MAX_REINTENTOS_GUARD:
+                        notice += ULTIMO_INTENTO_NOTICE
+                    corrected = _gen(user + notice)
+                    # acumula tokens/costo de TODAS las llamadas (transparencia)
+                    corrected.tokens_used += result.tokens_used
+                    corrected.cost_estimate += result.cost_estimate
+                    bad, wrong_dir = _check(corrected.text)
+                    result = corrected
+                    if not (bad or wrong_dir):
+                        break
+                result.guard_unsupported = bad + wrong_dir
+                result.guard_cifras = list(bad)
+                if result.guard_unsupported:
+                    logger.warning(
+                        "Guardrail (%s): persisten hallazgos tras %d reintento(s): %s",
+                        template, _MAX_REINTENTOS_GUARD, result.guard_unsupported)
+                # Las relaciones invertidas que SOBREVIVEN a que se les diera la lectura
+                # correcta se depositan para que la superficie decida (premium veta, Pulse
+                # registra). El motor es transversal y no sabe qué nivel se está sirviendo:
+                # solo reporta.
                 if wrong_dir:
-                    notice += DIRECTION_CORRECTION_NOTICE.format(bad="; ".join(wrong_dir))
-                corrected = _gen(user + notice)
-                # acumula tokens/costo de ambas llamadas (transparencia)
-                corrected.tokens_used += result.tokens_used
-                corrected.cost_estimate += result.cost_estimate
-                still_bad, still_dir = _check(corrected.text)
-                corrected.guard_unsupported = still_bad + still_dir
-                if corrected.guard_unsupported:
-                    logger.warning("Guardrail (%s): persisten hallazgos tras regenerar: %s",
-                                   template, corrected.guard_unsupported)
-                result = corrected
+                    from shared.narrative.relaciones_pendientes import registrar
+                    registrar(template, wrong_dir)
             except Exception as e:  # noqa: BLE001 — best-effort; sirve el original marcado
                 logger.error("Regeneración del guardrail falló: %s", e)
                 result.guard_unsupported = bad + wrong_dir
+                result.guard_cifras = list(bad)
+        _depositar_cifras(template, result)
         self._set_cache(cache_key, result)
         logger.info("Narrative (cerebro) template=%s tokens=%d guard_flags=%d",
                     template, result.tokens_used, len(result.guard_unsupported))
@@ -1826,7 +2082,27 @@ class NarrativeEngine:
         record_call(purpose=PURPOSE_NARRATIVE, model=result.model_used or "",
                     cost_usd=result.cost_estimate, tokens_out=result.tokens_used,
                     module=axis, template=template, cache_hit=False,
+                    # Las marcas van ENTERAS, no solo su cantidad. Con el contador solo se
+                    # sabe que el guard actuó; con el texto se sabe QUÉ marcó, y eso es lo
+                    # que distingue una cifra inventada de una cifra real dicha en otra
+                    # forma. Los dos falsos vetos de esta semana —«69 %» y «132 %»— se
+                    # descubrieron porque una persona los vio en pantalla; el patrón estaba
+                    # en un `logger.warning`, que no es evento de Sentry y que nadie lee.
+                    # Se acotan por si el juez devuelve una glosa larga: la tabla es de
+                    # gasto, no un almacén de texto.
                     detail={"guard_flags": len(result.guard_unsupported),
+                            "guard_marcas": [str(h)[:180]
+                                             for h in result.guard_unsupported[:8]],
+                            # Y la FRASE en la que el modelo usó cada cifra marcada. Con la
+                            # marca sola —«38 %: no coincide»— no se distingue una invención
+                            # de una cifra real dicha en otra forma, que son los dos casos
+                            # opuestos que este guard confunde; y la única manera de verlo
+                            # era regenerar el informe y perderlo otra vez, a 88-264 s por
+                            # intento de diagnóstico.
+                            "guard_fragmentos": [
+                                {"cifra": str(h)[:40],
+                                 "frase": fragmento_alrededor(result.text, str(h))[:220]}
+                                for h in result.guard_unsupported[:4]],
                             "truncada": result.truncated})
         return result
 
@@ -1887,6 +2163,11 @@ class NarrativeEngine:
             record_call(purpose=PURPOSE_NARRATIVE, model=cached.model_used or "",
                         cost_usd=0.0, module=axis, template=template, cache_hit=True,
                         detail={"lang": lang, "mode": mode})
+            # Un HIT marcado tiene que avisar igual. El motor se niega a propagar a la caché
+            # COMPARTIDA lo que él marcó, pero L1 es por-proceso y sí puede devolverlo: sin
+            # esta línea, la segunda vista del mismo informe se entregaría sin el veto que la
+            # primera sí levantó, y el defecto dependería de a qué worker cayó el request.
+            _depositar_cifras(template, cached)
             return cached
 
         # Try Claude API

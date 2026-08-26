@@ -119,8 +119,17 @@ _DECLARADAS = sorted(set(_declaraciones()))
 #: Comtrade (dos instancias más del mismo defecto), se confirmó el Banco Mundial como
 #: estaba, y la UIT salió de la deuda por una vía que no estaba prevista: una respuesta
 #: ESCRITA del emisor que ya estaba en el buzón. De 7 fuentes resueltas, 4 estaban
-#: subdeclaradas y 1 SOBRE-declarada; el resto de la deuda no es «probablemente está bien».
-DEUDA_AL_2026_08_23 = 26
+#: subdeclaradas y 1 SOBRE-declarada. Después el lote de datos.gob.do: seis cadenas más que
+#: no nombraban ninguna cláusula, todas ODbL. La deuda NO baja con SISALRIL aunque se
+#: promoviera: salió de la cadena que compartía con el SIS a una entrada propia, y la del
+#: SIS sigue esperando que alguien lea los términos de su canal. El resto de la deuda no es
+#: «probablemente está bien».
+#: +1 el 2026-08-23: DIGEPRES entra con su licencia SIN verificar y eso sube la deuda a
+#: proposito. El informe se publica por mandato del articulo 59 de la Ley 423-06 —lo dice el
+#: propio documento— y su portal no declara terminos de reutilizacion. Publicacion obligatoria
+#: no es reutilizacion libre, y registrar la fuente como verificada por ser oficial habria
+#: sido exactamente la sobre-declaracion que esta regla persigue.
+DEUDA_AL_2026_08_23 = 23
 
 
 def test_el_detector_encuentra_las_declaraciones():

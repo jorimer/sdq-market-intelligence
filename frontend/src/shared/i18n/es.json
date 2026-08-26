@@ -1060,7 +1060,9 @@
       "datawatch": "DataWatch",
       "wire": "Wire",
       "criteria": "Criterios",
-      "sector_outlook": "Perspectiva sectorial"
+      "sector_outlook": "Perspectiva sectorial",
+      "anuario": "Anuario del sistema",
+      "revision_anual": "Revisión Anual"
     },
     "mdlTitle": "Modelo ML",
     "mdlSub": "Complemento explicable al núcleo determinista (contribuciones por variable), no oráculo.",
@@ -1863,7 +1865,28 @@
         "free": "Free",
         "pro": "Pro",
         "enterprise": "Enterprise"
-      }
+      },
+      "cierreAnual": "{{p}} · cierre anual {{anio}}"
+    },
+    "smtp": {
+      "title": "Correo saliente",
+      "sub": "Por dónde salen los avisos de las vigilancias. Sin esto, el canal «correo» no se ofrece.",
+      "on": "El canal de correo está activo.",
+      "off": "El canal de correo NO está activo, así que no se ofrece en las vigilancias.",
+      "missing": "Falta:",
+      "host": "Servidor (host)",
+      "port": "Puerto",
+      "user": "Usuario",
+      "password": "Contraseña o llave de API",
+      "passwordSet": "Hay una guardada — dejalo vacío para conservarla",
+      "from": "Remitente («De»)",
+      "starttls": "Usar STARTTLS (recomendado en el puerto 587)",
+      "test": "Enviar correo de prueba",
+      "testDisabled": "Configurá y guardá el servidor primero.",
+      "testOk": "Correo enviado a {{to}}. Revisá tu bandeja.",
+      "testError": "No se pudo probar el envío.",
+      "loadError": "No se pudo leer la configuración de correo.",
+      "saveError": "No se pudo guardar la configuración."
     }
   },
   "ops": {
@@ -2621,8 +2644,9 @@
       "baja": "Baja"
     },
     "unavailable": {
-      "email": "El aviso por correo no está configurado en esta instalación, así que no se ofrece ese canal.",
+      "email": "El correo saliente todavía no está configurado, así que no se ofrece ese canal. Un administrador lo activa en Configuración → Correo saliente.",
       "webhook": "Para recibir alertas por webhook, registrá un endpoint suscrito a «alert.raised» con tu llave de la Data API."
-    }
+    },
+    "onlyChannel": "Es el único canal disponible hoy; por eso no se puede apagar."
   }
 }

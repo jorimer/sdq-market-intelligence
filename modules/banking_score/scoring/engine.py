@@ -14,6 +14,7 @@ from modules.banking_score.scoring.weights import (
     DIVERSIFICACION_INDICATORS,
     EFICIENCIA_INDICATORS,
     LIQUIDEZ_INDICATORS,
+    SOLIDEZ_FAMILIAS,
     SOLIDEZ_INDICATORS,
     SUB_COMPONENT_WEIGHTS,
     get_sub_component_weights,
@@ -207,10 +208,23 @@ def calc_tier1_ratio(d) -> IndicatorResult:
 
 
 def calc_leverage(d) -> IndicatorResult:
-    """Leverage Ratio: capital_tier1 / exposicion_total."""
+    """Capital primario / activos PONDERADOS por riesgo. NO es el ratio de Basilea.
+
+    El nombre `leverage` es heredado y el denominador que sirve el SIB (`exposicion_total`)
+    son los activos y contingentes PONDERADOS por riesgo crediticio y de mercado. El ratio de
+    apalancamiento de Basilea es, por definición, no ponderado — ése es su propósito. Acá esto
+    es un tercer ángulo de la adecuación de capital, y así se rotula (ver `indicator_detail`).
+
+    Consecuencia declarada: cuando el capital primario iguala al patrimonio técnico —una
+    entidad sin capital secundario— este indicador COINCIDE exactamente con `solvencia`.
+    Medido en producción: 9 de 43 entidades calificadas al corte más reciente.
+    """
     raw = _safe_div(d.capital_tier1, d.exposicion_total) * 100
-    # ref = 3%: leverage ratio mínimo de Basilea III. hi = 30.2: percentil 90 del sistema.
-    # El techo anterior (6%) lo alcanzaba el 96%.
+    # ref = 3.0 es HEREDADO del mínimo de apalancamiento de Basilea III y NO aplica a un ratio
+    # ponderado por riesgo; se conserva porque prácticamente todo el panel cae en el tramo
+    # ref→hi, así que mover ref cambiaría scores publicados sin mejorar la discriminación.
+    # hi = 30.2 sí es empírico: percentil 90 del sistema, y es lo que hace que el indicador
+    # separe (score medio 78.4, σ 13.0 — comparable a solvencia y tier1).
     score = _score_tramos(raw, lo=1.8, ref=3.0, hi=30.2)
     return {"raw": round(raw, 4), "score": round(score, 2)}
 
@@ -614,15 +628,33 @@ def calculate_sub_components(indicators: Dict[str, IndicatorResult]) -> Dict[str
         "diversificacion": DIVERSIFICACION_INDICATORS,
     }
 
+    def _disponibles(keys) -> List[float]:
+        return [indicators[k]["score"] for k in keys
+                if k in indicators and indicators[k].get("available", True)]
+
     def _avg(keys: List[str]) -> Optional[float]:
-        vals = [
-            indicators[k]["score"]
-            for k in keys
-            if k in indicators and indicators[k].get("available", True)
-        ]
+        vals = _disponibles(keys)
         return round(sum(vals) / len(vals), 2) if vals else None
 
-    return {comp: _avg(keys) for comp, keys in groups.items()}
+    def _avg_por_familia(familias) -> Optional[float]:
+        """Promedio de FAMILIAS: un hecho, un voto.
+
+        Tres de los cinco indicadores de Solidez miden capital sobre activos ponderados por
+        riesgo, así que el promedio simple le daba a ese único hecho el 60 % de la dimensión —
+        y cuando la entidad no tiene capital secundario, dos de ellos son el MISMO número.
+        Promediando dentro de cada familia primero, la adecuación de capital pesa lo mismo que
+        la cobertura de provisiones y que el capital sobre activos sin ponderar.
+
+        Una familia sin ningún indicador disponible se OMITE en vez de contar como cero: es la
+        misma regla que ya rige entre sub-componentes —renormalizar sobre lo medido, nunca
+        acreditar dato ausente.
+        """
+        votos = [sum(v) / len(v) for _, keys in familias if (v := _disponibles(keys))]
+        return round(sum(votos) / len(votos), 2) if votos else None
+
+    out = {comp: _avg(keys) for comp, keys in groups.items()}
+    out["solidez"] = _avg_por_familia(SOLIDEZ_FAMILIAS)
+    return out
 
 
 def calculate_deterministic_score(sub_scores: Dict[str, Optional[float]], weights: Dict[str, float] = None) -> float:
@@ -693,7 +725,8 @@ def run_scoring(data, entity_type=None) -> Dict[str, Any]:
     }
 
 
-def simulate_from_scores(modified_scores: Dict[str, float]) -> Dict[str, Any]:
+def simulate_from_scores(modified_scores: Dict[str, float],
+                         entity_type: Optional[str] = None) -> Dict[str, Any]:
     """Recalculate rating from manually modified indicator scores (0-100).
 
     Used by the iSRM interactive scenario modeler.  Accepts a flat dict of
@@ -721,8 +754,13 @@ def simulate_from_scores(modified_scores: Dict[str, float]) -> Dict[str, Any]:
         vals = [modified_scores.get(k, 0.0) for k in keys if k in modified_scores]
         sub_components[comp] = round(sum(vals) / len(vals), 2) if vals else 0.0
 
+    # Pesos DEL TIPO de entidad. Acá el peso no se muestra: COMPUTA el score que devuelve la
+    # simulación, así que usar la constante base daba un resultado sencillamente equivocado
+    # para las 75 entidades que no son banca múltiple. `run_scoring` siempre lo hizo bien; esta
+    # función nació sin el parámetro y el endpoint —que recibe `bank_id`— nunca lo consultaba.
+    pesos = get_sub_component_weights(entity_type)
     overall = round(
-        sum(sub_components.get(k, 0.0) * w for k, w in SUB_COMPONENT_WEIGHTS.items()), 2
+        sum(sub_components.get(k, 0.0) * w for k, w in pesos.items()), 2
     )
 
     return {

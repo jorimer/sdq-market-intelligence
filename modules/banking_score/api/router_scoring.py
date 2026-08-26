@@ -917,13 +917,20 @@ async def get_stats(
 async def simulate(
     bank_id: str,
     body: Dict[str, Any] = Body(...),
+    db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
     if not body or "modified_scores" not in body:
         raise HTTPException(status_code=400, detail="Se requiere 'modified_scores' en el body")
     try:
-        result = simulate_from_scores(body["modified_scores"])
-        return {"bank_id": bank_id, **result}
+        # El TIPO de entidad decide los pesos del score global, y acá el peso no se muestra:
+        # computa el resultado que devuelve la simulación. La ruta recibía `bank_id` y nunca
+        # lo consultaba, así que simulaba con los pesos de banca múltiple para las 75
+        # entidades que no lo son.
+        bank = db.query(Bank).filter(Bank.id == bank_id).one_or_none()
+        entity_type = bank.bank_type.value if bank and bank.bank_type else None
+        result = simulate_from_scores(body["modified_scores"], entity_type)
+        return {"bank_id": bank_id, "entity_type": entity_type, **result}
     except Exception as e:
         logger.error(f"Error en simulación para {bank_id}: {e}")
         raise HTTPException(status_code=500, detail=f"Error en simulación: {e}")

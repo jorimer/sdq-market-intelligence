@@ -72,6 +72,8 @@ bindings:
     serie: "social_dev:poverty_rate_national"
     fuente: mhe
     mejor: menor
+    sin_veredicto_por: termino_legal_sin_fuente
+    sin_veredicto_desde: "2026-08-24"
     estado: propuesto
     origen: declarado_por_el_evaluado
     productor: >-
@@ -225,27 +227,6 @@ bindings:
   # cambio de encuesta y una RAZÓN sí.
 
   # ⚠️ El nivel NO es comparable con la meta. Queda `propuesto` a propósito.
-  - indicador: "2.37"
-    serie: "social_dev:unemployment_rate"
-    fuente: bcrd
-    mejor: menor
-    estado: propuesto
-    origen: declarado_por_el_evaluado
-    productor: >-
-      BCRD — ENCFT.
-    nota_comparabilidad: >-
-      La serie mide bien la desocupación, pero NO la misma que la ley usó para fijar sus
-      metas. La línea base legal (14,3% en 2010) viene de la ENFT; la ENCFT, que la
-      sustituyó, arranca en 7,33% en su primer año completo. El nivel se parte casi al
-      medio en el momento exacto del cambio de encuesta, no de la política. Contrastar el
-      5,14% de 2024 contra la meta de 7,0% para 2025 diría «meta superada con holgura»
-      cuando lo que cambió fue la forma de medir. El Estado nunca re-expresó las metas
-      sobre la encuesta nueva, y hasta que lo haga —o hasta que exista una serie
-      retropolada— este indicador no es evaluable contra su meta. Es una brecha del
-      INSTRUMENTO y de las más publicables: la recomendación es pedir la re-expresión.
-
-  # La razón SÍ es comparable: el cambio de encuesta se cancela entre numerador y
-  # denominador, porque las dos poblaciones se miden con la misma metodología.
   - indicador: "2.41"
     serie: "social_dev:employment_gender_ratio"
     fuente: bcrd
@@ -442,75 +423,413 @@ bindings:
       (1,3 en 2024) queda a un 8,3% de la línea base legal, así que atarlas produciría un
       «prácticamente sin cambios» sobre dos magnitudes que nunca fueron la misma.
 
-  - indicador: "2.33"
-    serie: "wdi.SH.XPD.GHED.GD.ZS"
-    fuente: wdi
+  - indicador: "2.40"
+    serie: "social_dev:income_gender_ratio"
+    fuente: mhe
     mejor: mayor
-    estado: descartado
-    origen: estimacion_de_tercero_sobre_dato_del_evaluado
-    productor: OMS vía Banco Mundial — gasto público interno en salud, metodología SHA 2011.
-    motivo_descarte: >-
-      Gasto público en salud como % del PIB. La ley fija 1,4 para 2009 y la serie da 2,33 el
-      mismo año, un 66,6% por encima. Se probaron el 2026-08-22 las SIETE variantes de gasto
-      en salud que publica el emisor y ninguna se acerca: la más próxima es el gasto externo
-      sobre el gasto corriente (0,93; Δ 33,3%), que mide otra cosa. El agregado del emisor es
-      el del gobierno general e incluye la seguridad social.
-      También se probó la vía nacional el mismo día: el portal de datos abiertos publica
-      ejecución presupuestaria desde 2016 y la línea base de la ley es de 2009, así que no
-      alcanza el año que habría que reproducir.
-    hipotesis_sin_comprobar: >-
-      Que el 1,4 de la ley sea el gasto del gobierno CENTRAL y no el del gobierno general.
-      Sigue siendo la mejor explicacion de la brecha —1,4% del PIB de 2009 son unos RD$23,5
-      mil millones, del orden del presupuesto del ministerio de salud de esos anios— y sigue
-      SIN COMPROBAR, pero ya no por falta de buscar.
-      DONDE SE BUSCO, el 2026-08-22, y que devolvio cada sitio:
-      el organismo internacional de salud publica dos agregados para 2009 y ninguno es 1,4
-      —gasto publico general 2,332% y gasto corriente total 4,767%— y su catalogo no tiene
-      ninguna serie de gobierno CENTRAL;
-      el portal nacional de datos abiertos publica ejecucion presupuestaria desde 2016 y
-      estadisticas de ejecucion de gastos desde 2017, ninguna alcanza 2009;
-      la serie fiscal historica del banco central SI cubre 2000-2013 pero esta clasificada por
-      concepto economico —ingresos, gastos corrientes, de capital— y no trae una linea de
-      salud;
-      el sitio de la oficina de presupuesto no expone informes historicos, solo los del anio
-      en curso.
-      QUE LA CERRARIA: un documento de archivo con la ejecucion presupuestaria de 2009 por
-      clasificacion funcional. Existe —es un informe que ese organismo produjo en su momento—
-      pero no esta en linea. Es trabajo de archivo, no de conexion, y hasta que aparezca la
-      meta de 4,5% para 2025 no se puede medir contra el agregado ancho sin darla por mas
-      cerca de lo que esta.
-  - indicador: "2.34"
-    serie: "wdi.SH.STA.BASS.ZS"
-    fuente: wdi
-    mejor: mayor
-    estado: descartado
-    origen: estimacion_de_tercero_sobre_dato_del_evaluado
+    # El período del ÚLTIMO dato, que es lo que alimenta la frescura. No es el año contra el
+    # que corre el oráculo —ése es 2010, la línea base de la ley—: son dos cosas distintas y
+    # poner acá el de la base hunde la frescura del expediente a cero.
+    periodo_verificado: "2025"
+    estado: verificado
+    verificado_por: oraculo
+    origen: declarado_por_el_evaluado
     productor: >-
-      Programa Conjunto OMS/UNICEF (JMP): estimación con definiciones propias sobre
-      encuestas de hogares dominicanas.
-    motivo_descarte: >-
-      Acceso a saneamiento. La ley dice «servicios sanitarios mejorados» (definición JMP
-      anterior a 2015) y la serie disponible es «al menos básicos», que es otro escalón de
-      la escala revisada. Los niveles quedan cerca —82,7 de la ley contra 80,77 de la serie
-      en 2007— y esa cercanía es justamente lo que haría pasar el cambio de definición por
-      un dato comparable.
-
+      SISDOM — «Indicadores Área Especial END», hoja « END 2.40», fila del total del país.
+      Elaborado por el VAES a partir del procesamiento de los microdatos de la ENFT y la
+      ENCFT del Banco Central; la edición 2025 la firma el Viceministerio de Economía del
+      Ministerio de Hacienda y Economía.
+    nota_comparabilidad: >-
+      ══ VERIFICADO 2026-08-24, ABRIENDO LA CELDA ══ La ley fija 0,95 para 2010 y la hoja da
+      0,95710 — Δ 0,75%, dentro de la tolerancia del oráculo. La auditoría de fuentes había
+      dejado ese valor marcado como lectura NO verificada; se abrió el libro y se confirmó.
+      LAS TRES METAS VENCIDAS ESTÁN INCUMPLIDAS.
+      2015: 0,90470 contra meta 0,98 — −7,7%. Se mide con la MISMA encuesta que la línea
+      base, así que esa comparación no cruza el quiebre.
+      2020: 0,95242 contra meta 1,0 — −4,8%.
+      2025: 0,88363 contra meta 1,0 — −11,6%, y es el peor año desde 2011.
+      La serie no es monótona: en 2012 llegó a 0,97892, a un punto de la meta de 2015, y
+      después bajó.
+      EL QUIEBRE DE INSTRUMENTO, MEDIDO. La ENFT se sustituyó por la ENCFT y el libro marca
+      con asterisco las columnas de la nueva. 2016 trae DOS mediciones —0,91630 con la vieja
+      y 0,90724 con la nueva— y el escalón es de 0,99%. Las metas de 2020 y 2025 se miden
+      con la encuesta nueva y la línea base con la vieja, así que esas dos comparaciones
+      cruzan el quiebre; el escalón de 0,99% no alcanza para explicar brechas de 4,8% y
+      11,6%, que es lo que hace que el veredicto sobreviva. El instrumento viaja en la
+      desagregación de cada año y no se empalma: el emisor no publica factor y fabricarlo
+      sería inventar la convención.
+      CONTRADICCIÓN EN EL PROPIO LIBRO, que queda escrita para que nadie la redescubra: la
+      ficha metodológica del 2.40 define «ingreso laboral promedio POR HORA de las mujeres
+      que trabajan EN JORNADA COMPLETA», y la Nota 2 de la hoja dice «ingreso base MENSUAL
+      en ocupación principal de toda la población ocupada de 15 años y más, incluye
+      trabajadores no remunerados». Son magnitudes distintas. Se ata igual y por el oráculo:
+      que la hoja reproduzca la línea base de la ley al 0,75% es evidencia de que ES la
+      serie que el legislador usó, cualquiera sea la nota que la describe mal. La auditoría
+      atribuía esa nota a un arrastre desde el vintage 2021 ausente en las hojas hermanas;
+      se comprobó y esa parte NO se sostiene — la hoja 2.37a sí tiene Nota 2, distinta, y
+      las hojas 2.38, 2.39, 2.41 y 2.42 no existen en el libro.
   - indicador: "2.35"
-    serie: "wdi.SH.H2O.BASW.ZS"
-    fuente: wdi
+    serie: "social_dev:public_network_water_access"
+    fuente: mhe
     mejor: mayor
-    estado: descartado
-    origen: estimacion_de_tercero_sobre_dato_del_evaluado
+    periodo_verificado: "2025"
+    estado: verificado
+    verificado_por: oraculo
+    origen: declarado_por_el_evaluado
     productor: >-
-      Programa Conjunto OMS/UNICEF (JMP): estimación con definiciones propias sobre
-      encuestas de hogares dominicanas.
-    motivo_descarte: >-
-      Acceso a agua. La ley pide «agua de la red pública» y la serie mide «al menos agua
-      potable básica», que incluye pozos protegidos y otras fuentes fuera de red. La brecha
-      lo confirma: 86,1 de la ley contra 93,68 de la serie en el mismo 2007. Son
-      poblaciones distintas y la diferencia crece con la meta, que es del 100%.
-
-  # llevó a buscar la magnitud correcta, que existía en otra serie.
+      SISDOM — «Indicadores Área Especial END», la hoja que el propio Estado publica para su
+      propia ley. Total del país.
+    nota: >-
+      ══ REABIERTO Y CERRADO 2026-08-24 ══ Estaba clasificado «de tercero». La ficha y la
+      hoja del emisor lo desmienten.
+      ORÁCULO: la ley fija 86.1 para 2007 y la serie da 86.1048 — Δ 0.0%.
+      Coincidencia EXACTA: la ley fija 86,1 y la hoja del emisor da 86,1048. El legislador tomó su cifra de acá. Y el término es literalmente el mismo —«agua de la red pública dentro o fuera de la vivienda»—, que es lo que separa esta serie de la de agua «al menos básica»: esa incluye pozos protegidos y la ley pide red pública. El descarte anterior se apoyaba justamente en esa confusión.
+      INSTRUMENTO: la serie cruza el cambio de ENFT a ENCFT en 2016 y el instrumento viaja
+      con cada observación. La línea base es ENFT; compararla contra un año posterior sin
+      decirlo mezcla dos encuestas.
+      Supera al descarte anterior, correcto sobre SU serie: `wdi.SH.H2O.BASW.ZS` es la estimación del Programa Conjunto OMS/UNICEF de agua «al menos básica», que incluye pozos protegidos y fuentes fuera de red, y daba 93,68 contra 86,1.
+      Metas de la ley: 2015:97.2 2020:100.0 2025:100.0 2030:100.0.
+  - indicador: "2.37"
+    serie: "social_dev:broad_unemployment_rate"
+    fuente: mhe
+    mejor: menor
+    periodo_verificado: "2025"
+    estado: verificado
+    verificado_por: oraculo
+    origen: declarado_por_el_evaluado
+    productor: >-
+      SISDOM — «Indicadores Área Especial END», la hoja que el propio Estado publica para su
+      propia ley. Total del país.
+    nota: >-
+      ══ REABIERTO Y CERRADO 2026-08-24 ══ Estaba clasificado «de tercero». La ficha y la
+      hoja del emisor lo desmienten.
+      ORÁCULO: la ley fija 14.3 para 2010 y la serie da 14.5629 — Δ 1.8%.
+      El emisor publica TRES tasas y el oráculo desempata sin que haya que opinar: la AMPLIADA da Δ 1,8% contra la línea base y la ABIERTA se va 63,5%. El motivo de cierre anterior decía que el nivel «se parte casi al medio en el cambio de encuesta»; no se parte — se estaba comparando la ampliada de la ENFT contra la abierta de la ENCFT. Con la definición correcta la ENCFT arranca en 14,09%, no en 7,33%.
+      INSTRUMENTO: la serie cruza el cambio de ENFT a ENCFT en 2016 y el instrumento viaja
+      con cada observación. La línea base es ENFT; compararla contra un año posterior sin
+      decirlo mezcla dos encuestas.
+      Supera a la nota anterior, que decía que el nivel «se parte casi al medio en el momento exacto del cambio de encuesta». No se parte: se estaba comparando la ampliada de la ENFT contra la ABIERTA de la ENCFT. Con la misma definición a los dos lados, la ENCFT arranca en 14,09% y no en 7,33%. `social_dev:unemployment_rate` mide bien la desocupación abierta; simplemente no es la que la ley usó.
+      Metas de la ley: 2015:11.0 2020:7.6 2025:7.0 2030:6.4.
+  - indicador: "2.48"
+    serie: "social_dev:neet_unemployed_15_19"
+    fuente: mhe
+    mejor: menor
+    periodo_verificado: "2025"
+    estado: verificado
+    verificado_por: oraculo
+    origen: declarado_por_el_evaluado
+    productor: >-
+      SISDOM — «Indicadores Área Especial END», la hoja que el propio Estado publica para su
+      propia ley. Total del país.
+    nota: >-
+      ══ REABIERTO Y CERRADO 2026-08-24 ══ Estaba clasificado «de tercero». La ficha y la
+      hoja del emisor lo desmienten.
+      ORÁCULO: la ley fija 6.0 para 2010 y la serie da 5.97742 — Δ 0.4%.
+      Término idéntico al de la ley, palabra por palabra. Estaba clasificado como «requiere cómputo propio» y no lo requiere: el emisor publica exactamente el universo legal.
+      INSTRUMENTO: la serie cruza el cambio de ENFT a ENCFT en 2016 y el instrumento viaja
+      con cada observación. La línea base es ENFT; compararla contra un año posterior sin
+      decirlo mezcla dos encuestas.
+      Supera al descarte anterior, correcto sobre SU serie: `wdi.SL.UEM.NEET.ZS` es NINI de 15 a 24 años y daba 21,0 contra 6,0 — otro tramo etario y sin la condición de estar desempleado.
+      Metas de la ley: 2015:4.4 2020:2.8 2025:2.15 2030:1.5.
+  - indicador: "2.8"
+    serie: "social_dev:preschool_net_coverage"
+    fuente: mhe
+    mejor: mayor
+    periodo_verificado: "2025"
+    estado: verificado
+    verificado_por: oraculo
+    origen: declarado_por_el_evaluado
+    productor: >-
+      SISDOM — «Indicadores Área Especial END», la hoja que el propio Estado publica para su
+      propia ley. Total del país.
+    nota: >-
+      ══ REABIERTO Y CERRADO 2026-08-24 ══ Estaba clasificado «de tercero». La ficha y la
+      hoja del emisor lo desmienten.
+      ORÁCULO: la ley fija 32.6 para 2010 y la serie da 33.21965 — Δ 1.9%.
+      Hoja 2.8a, tasa neta de cobertura de nivel inicial de ENCUESTAS DE HOGARES. El emisor publica TRES hojas para este indicador —2.8b es la neta ajustada y 2.8c usa registros y proyecciones— y elegir mal publica otra magnitud. La ley misma explica la anomalía de su base al escribirla «sin matrícula de 3 y 4 años»: la encuesta de 2010 solo levantaba asistencia desde los 4.
+      INSTRUMENTO: la serie cruza el cambio de ENFT a ENCFT en 2016 y el instrumento viaja
+      con cada observación. La línea base es ENFT; compararla contra un año posterior sin
+      decirlo mezcla dos encuestas.
+      Supera al descarte anterior, que sigue siendo correcto sobre SU serie: `wdi.SE.PRE.ENRR` es matrícula BRUTA —cuenta a todo el que asiste sin importar la edad— y daba 40,5 contra la base legal de 32,6. La hoja de SISDOM publica la NETA, que es la que la ley pide.
+      Metas de la ley: 2015:66.3 2020:100.0 2025:100.0 2030:100.0.
+  - indicador: "2.34"
+    serie: "social_dev:improved_sanitation_access"
+    fuente: mhe
+    mejor: mayor
+    sin_veredicto_por: linea_base_no_reproduce
+    sin_veredicto_desde: "2026-08-24"
+    estado: propuesto
+    origen: declarado_por_el_evaluado
+    productor: >-
+      SISDOM — «Indicadores Área Especial END», total del país.
+    nota_comparabilidad: >-
+      ══ REABIERTO 2026-08-24, NO CERRADO ══ Estaba clasificado «de tercero» y la hoja del
+      propio Estado lo desmiente: el emisor SÍ publica esta magnitud, con el término de la
+      ley. Lo que no cierra es el oráculo.
+      La ley fija 82.7 para 2007 y la serie da 85.2321 — Δ 3.1%, contra una
+      tolerancia de 2,0%. Término idéntico al de la ley, y el emisor es el que la ley designó. No cierra por 1,1 puntos porcentuales sobre una tolerancia de 2,0%.
+      QUÉ FALTARÍA para cerrarlo: el libro declara en sus Notas 3 y 4 que los resultados de
+      2000-2016 se recalcularon con ponderadores calibrados a las estructuras de población
+      del censo, o sea que el emisor REVISÓ su serie después de que la ley fijó su base. Eso
+      es el supuesto de `revision_declarada`, pero su candado pide DOS añadas de la serie y
+      que ninguna reproduzca la base; las dos ediciones publicadas coinciden al dígito y la
+      de Hacienda no llega a estos años. No hay segunda añada que citar.
+      Supera al descarte anterior, correcto sobre SU serie: `wdi.SH.STA.BASS.ZS` es la estimación del Programa Conjunto de saneamiento «al menos básico», con definiciones propias sobre las mismas encuestas dominicanas.
+      Metas de la ley: 2015:88.0 2020:92.0 2025:96.0 2030:100.0.
+  - indicador: "2.47"
+    serie: "social_dev:child_labour_6_14"
+    fuente: mhe
+    mejor: menor
+    sin_veredicto_por: linea_base_no_reproduce
+    sin_veredicto_desde: "2026-08-24"
+    estado: propuesto
+    origen: declarado_por_el_evaluado
+    productor: >-
+      SISDOM — «Indicadores Área Especial END», total del país.
+    nota_comparabilidad: >-
+      ══ REABIERTO 2026-08-24, NO CERRADO ══ Estaba clasificado «de tercero» y la hoja del
+      propio Estado lo desmiente: el emisor SÍ publica esta magnitud, con el término de la
+      ley. Lo que no cierra es el oráculo.
+      La ley fija 1.5 para 2010 y la serie da 1.46368 — Δ 2.4%, contra una
+      tolerancia de 2,0%. Término y tramo etario idénticos —«niños y niñas de 6 a 14 años que trabajan»—. Queda a 0,4 puntos de la tolerancia. La auditoría sostenía que el 1,5 legal «queda sin fuente documentada» porque la ficha no acota a trabajo peligroso ni remunerado; la hoja del emisor da 1,4637 para el año de la base, así que fuente hay — lo que falta es explicar el 2,4%.
+      QUÉ FALTARÍA para cerrarlo: el libro declara en sus Notas 3 y 4 que los resultados de
+      2000-2016 se recalcularon con ponderadores calibrados a las estructuras de población
+      del censo, o sea que el emisor REVISÓ su serie después de que la ley fijó su base. Eso
+      es el supuesto de `revision_declarada`, pero su candado pide DOS añadas de la serie y
+      que ninguna reproduzca la base; las dos ediciones publicadas coinciden al dígito y la
+      de Hacienda no llega a estos años. No hay segunda añada que citar.
+      Supera al descarte anterior, correcto sobre SU serie: `wdi.SL.TLF.0714.ZS` es la estimación de la OIT sobre trabajo infantil, con otro universo y otra periodicidad.
+      Metas de la ley: 2015:0.75 2020:0.0 2025:0.0 2030:0.0.
+  - indicador: "3.10"
+    serie: "social_dev:tertiary_net_enrollment"
+    fuente: mhe
+    mejor: mayor
+    sin_veredicto_por: linea_base_no_reproduce
+    sin_veredicto_desde: "2026-08-24"
+    estado: propuesto
+    origen: declarado_por_el_evaluado
+    productor: >-
+      SISDOM — «Indicadores Área Especial END», total del país.
+    nota_comparabilidad: >-
+      ══ REABIERTO 2026-08-24, NO CERRADO ══ Estaba clasificado «de tercero» y la hoja del
+      propio Estado lo desmiente: el emisor SÍ publica esta magnitud, con el término de la
+      ley. Lo que no cierra es el oráculo.
+      La ley fija 24.8 para 2010 y la serie da 25.8504 — Δ 4.2%, contra una
+      tolerancia de 2,0%. Término idéntico. El descarte anterior comparaba contra la matrícula BRUTA (57,7); la neta de la hoja del emisor está a 4,2% de la base legal, no a 133%.
+      QUÉ FALTARÍA para cerrarlo: el libro declara en sus Notas 3 y 4 que los resultados de
+      2000-2016 se recalcularon con ponderadores calibrados a las estructuras de población
+      del censo, o sea que el emisor REVISÓ su serie después de que la ley fijó su base. Eso
+      es el supuesto de `revision_declarada`, pero su candado pide DOS añadas de la serie y
+      que ninguna reproduzca la base; las dos ediciones publicadas coinciden al dígito y la
+      de Hacienda no llega a estos años. No hay segunda añada que citar.
+      Supera al descarte anterior, correcto sobre SU serie: `wdi.SE.TER.ENRR` es matrícula BRUTA de nivel superior y daba 57,7 contra la base legal de 24,8 — la bruta cuenta a todo el que asiste sin importar la edad.
+      Metas de la ley: 2015:29.2 2020:33.5 2025:43.5 2030:53.5.
+  - indicador: "2.24"
+    serie: "social_dev:malaria_mortality_rate"
+    fuente: mhe
+    mejor: menor
+    periodo_verificado: "2025"
+    estado: verificado
+    verificado_por: oraculo
+    origen: declarado_por_el_evaluado
+    productor: >-
+      SISDOM — «Indicadores Área Especial END», hoja «2.24», total nacional.
+    nota: >-
+      ══ REABIERTO Y CERRADO 2026-08-24 ══ Estaba clasificado «de tercero». La ley fija 0.14
+      para 2010 y la hoja del propio Estado da exactamente esa cifra: Δ 0,0%. El legislador
+      la copió de acá, igual que en el 2.35.
+      Supera al descarte anterior, correcto sobre SU serie: `wdi.SH.STA.MALR` es la estimación de la OMS, con corrección de subregistro sobre el mismo registro nacional.
+      Metas: 2015 0,03 contra 0,1 CUMPLIDA · 2020 0,02 contra 0,0 · 2025 0,00 contra 0,0 CUMPLIDA. Es de los pocos indicadores del eje que el país cumplió.
+  - indicador: "2.31"
+    serie: "social_dev:vertical_hiv_transmission"
+    fuente: mhe
+    mejor: menor
+    periodo_verificado: "2025"
+    estado: verificado
+    verificado_por: oraculo
+    origen: declarado_por_el_evaluado
+    productor: >-
+      SISDOM — «Indicadores Área Especial END», hoja «2.31», total nacional.
+    nota: >-
+      ══ REABIERTO Y CERRADO 2026-08-24 ══ Estaba clasificado «de tercero». La ley fija 10.0
+      para 2010 y la hoja del propio Estado da exactamente esa cifra: Δ 0,0%. El legislador
+      la copió de acá, igual que en el 2.35.
+      Supera al descarte anterior, correcto sobre SU serie: `wdi.SH.HIV.INCD.14` es incidencia de VIH en menores de 14, que es otro fenómeno.
+      Metas: 2015 5,10 contra 5,5 CUMPLIDA · 2020 2,30 contra 1,0 incumplida · 2025 0,60 contra 1,0 CUMPLIDA.
+  - indicador: "2.32"
+    serie: "social_dev:advanced_hiv_on_art"
+    fuente: mhe
+    mejor: mayor
+    periodo_verificado: "2025"
+    estado: verificado
+    verificado_por: oraculo
+    origen: declarado_por_el_evaluado
+    productor: >-
+      SISDOM — «Indicadores Área Especial END», hoja «2.32», total nacional.
+    nota: >-
+      ══ REABIERTO Y CERRADO 2026-08-24 ══ Estaba clasificado «de tercero». La ley fija 71.0
+      para 2009 y la hoja del propio Estado da exactamente esa cifra: Δ 0,0%. El legislador
+      la copió de acá, igual que en el 2.35.
+      Supera al descarte anterior, correcto sobre SU serie: `wdi.SH.HIV.ARTC.ZS` es cobertura antirretroviral sobre TODOS los portadores, no sobre los de infección avanzada.
+      Metas: 2015 74,19 contra 85 · 2020 51,00 contra 90 · 2025 67,80 contra 95 — las TRES incumplidas, y 2020 se desplomó a 51 desde 74 en 2015.
+  - indicador: "2.28"
+    serie: "social_dev:child_underweight_rate"
+    fuente: mhe
+    mejor: menor
+    sin_veredicto_por: instrumento_discontinuado
+    sin_veredicto_desde: "2026-08-24"
+    estado: propuesto
+    origen: declarado_por_el_evaluado
+    productor: >-
+      SISDOM — «Indicadores Área Especial END», hoja «2.28», total nacional. Fuente ENDESA.
+    nota_comparabilidad: >-
+      ══ REABIERTO 2026-08-24, Y EL HALLAZGO ES QUE NO SE PUEDE MEDIR ══ La serie ES la
+      correcta: la ley fija 3.1 para 2007 —desnutrición GLOBAL (peso/edad)— y la hoja del Estado da exactamente esa
+      cifra, Δ 0,0%. La identificación está cerrada.
+      LO QUE NO HAY ES CON QUÉ EVALUARLO. La serie tiene DOS puntos, 2007 y 2013, y ahí
+      termina: el emisor dejó de producir la medición. Las metas de la ley son 2015: 0.0 · 2020: 0.0 · 2025: 0.0 · 2030: 0.0, y
+      para NINGUNA existe observación.
+      Por eso queda en `propuesto` y no en `verificado`. El oráculo cierra, pero contar como
+      cobertura un indicador que no puede producir un veredicto sobre ninguna de sus metas
+      inflaría la cifra que ordena el trabajo — y esa cifra se publica.
+      Y hay una SEGUNDA serie, que es la que este binding reemplaza: las estimaciones conjuntas de UNICEF/OMS/Banco Mundial sobre las mismas rondas de ENDESA. Llegan hasta 2019 —tres años más— pero NO reproducen la línea base: dan 3,4 contra 3,1 para el 2.28, Δ 9,7%. Ninguna de las dos alcanza un año de meta, así que el alcance extra no compra un veredicto; y entre una que reproduce al dígito y otra que no, la que identifica la fuente del legislador es la nacional.
+      ES UN HALLAZGO SOBRE EL ESTADO, no una brecha nuestra: la ley fijó metas de nutrición
+      infantil a 2015, 2020 y 2025 y el instrumento que las mediría se discontinuó en 2013.
+  - indicador: "2.29"
+    serie: "social_dev:child_wasting_rate"
+    fuente: mhe
+    mejor: menor
+    sin_veredicto_por: instrumento_discontinuado
+    sin_veredicto_desde: "2026-08-24"
+    estado: propuesto
+    origen: declarado_por_el_evaluado
+    productor: >-
+      SISDOM — «Indicadores Área Especial END», hoja «2.29», total nacional. Fuente ENDESA.
+    nota_comparabilidad: >-
+      ══ REABIERTO 2026-08-24, Y EL HALLAZGO ES QUE NO SE PUEDE MEDIR ══ La serie ES la
+      correcta: la ley fija 2.2 para 2007 —desnutrición AGUDA (peso/talla)— y la hoja del Estado da exactamente esa
+      cifra, Δ 0,0%. La identificación está cerrada.
+      LO QUE NO HAY ES CON QUÉ EVALUARLO. La serie tiene DOS puntos, 2007 y 2013, y ahí
+      termina: el emisor dejó de producir la medición. Las metas de la ley son 2015: 0.0 · 2020: 0.0 · 2025: 0.0 · 2030: 0.0, y
+      para NINGUNA existe observación.
+      Por eso queda en `propuesto` y no en `verificado`. El oráculo cierra, pero contar como
+      cobertura un indicador que no puede producir un veredicto sobre ninguna de sus metas
+      inflaría la cifra que ordena el trabajo — y esa cifra se publica.
+      Y hay una SEGUNDA serie, que es la que este binding reemplaza: las estimaciones conjuntas de UNICEF/OMS/Banco Mundial sobre las mismas rondas de ENDESA. Llegan hasta 2019 —tres años más— pero NO reproducen la línea base: dan 3,4 contra 3,1 para el 2.28, Δ 9,7%. Ninguna de las dos alcanza un año de meta, así que el alcance extra no compra un veredicto; y entre una que reproduce al dígito y otra que no, la que identifica la fuente del legislador es la nacional.
+      ES UN HALLAZGO SOBRE EL ESTADO, no una brecha nuestra: la ley fijó metas de nutrición
+      infantil a 2015, 2020 y 2025 y el instrumento que las mediría se discontinuó en 2013.
+  - indicador: "2.30"
+    serie: "social_dev:child_stunting_rate"
+    fuente: mhe
+    mejor: menor
+    sin_veredicto_por: instrumento_discontinuado
+    sin_veredicto_desde: "2026-08-24"
+    estado: propuesto
+    origen: declarado_por_el_evaluado
+    productor: >-
+      SISDOM — «Indicadores Área Especial END», hoja «2.30», total nacional. Fuente ENDESA.
+    nota_comparabilidad: >-
+      ══ REABIERTO 2026-08-24, Y EL HALLAZGO ES QUE NO SE PUEDE MEDIR ══ La serie ES la
+      correcta: la ley fija 9.8 para 2007 —desnutrición CRÓNICA (talla/edad)— y la hoja del Estado da exactamente esa
+      cifra, Δ 0,0%. La identificación está cerrada.
+      LO QUE NO HAY ES CON QUÉ EVALUARLO. La serie tiene DOS puntos, 2007 y 2013, y ahí
+      termina: el emisor dejó de producir la medición. Las metas de la ley son 2015: 6.0 · 2020: 1.5 · 2025: 0.0 · 2030: 0.0, y
+      para NINGUNA existe observación.
+      Por eso queda en `propuesto` y no en `verificado`. El oráculo cierra, pero contar como
+      cobertura un indicador que no puede producir un veredicto sobre ninguna de sus metas
+      inflaría la cifra que ordena el trabajo — y esa cifra se publica.
+      Y hay una SEGUNDA serie, que es la que este binding reemplaza: las estimaciones conjuntas de UNICEF/OMS/Banco Mundial sobre las mismas rondas de ENDESA. Llegan hasta 2019 —tres años más— pero NO reproducen la línea base: dan 3,4 contra 3,1 para el 2.28, Δ 9,7%. Ninguna de las dos alcanza un año de meta, así que el alcance extra no compra un veredicto; y entre una que reproduce al dígito y otra que no, la que identifica la fuente del legislador es la nacional.
+      ES UN HALLAZGO SOBRE EL ESTADO, no una brecha nuestra: la ley fijó metas de nutrición
+      infantil a 2015, 2020 y 2025 y el instrumento que las mediría se discontinuó en 2013.
+  - indicador: "3.30"
+    serie: "social_dev:electricity_subsidy_usd_mm"
+    fuente: mem
+    mejor: menor
+    sin_veredicto_por: linea_base_no_reproduce
+    sin_veredicto_desde: "2026-08-24"
+    estado: propuesto
+    origen: declarado_por_el_evaluado
+    productor: >-
+      MEM — anexo del Informe de Desempeño de las Empresas Eléctricas Estatales, hoja de
+      resultados financieros, fila «Aportes del gobierno» del bloque que agrega a las tres
+      distribuidoras. Edición de DICIEMBRE, columna de acumulado del año.
+    nota_comparabilidad: >-
+      ══ MEDIDO 2026-08-24 ══ El indicador estaba como `fuente_no_procesable` con el motivo
+      «la hoja no tiene cabecera de años». El diagnóstico era correcto y la conclusión no:
+      la hoja no tiene años porque sus columnas son MESES —enero a diciembre más el
+      acumulado— y el año no hay que inferirlo, viene del anexo que se abrió. Como solo se
+      leen los de diciembre, ese acumulado ES el año completo.
+      LA SERIE, EN MILLONES DE US$: 2020 578,6 · 2021 740,0 · 2022 1.633,7 · 2023 1.484,1 ·
+      2024 1.554,6 · 2025 1.659,3.
+      DOS METAS VENCIDAS, LAS DOS INCUMPLIDAS POR UN ORDEN DE MAGNITUD.
+      2020: meta 70,0 y observado 578,6 — OCHO VECES la meta.
+      2025: meta 62,5 y observado 1.659,3 — VEINTISÉIS VECES la meta. Y la serie crece: el
+      subsidio de 2025 casi triplica el de 2020.
+      NADA SE LEE POR POSICIÓN, y acá hacía falta: la etiqueta «Aportes del gobierno»
+      aparece CINCO veces en el anexo de 2020 —una por distribuidora, una por el total y
+      otra en un bloque distinto—. Cuál es el total lo dice la aritmética del propio cuadro:
+      es la única cuyo acumulado equivale a la suma de otras tres (217,63 + 148,61 + 212,35
+      = 578,59). Y el acumulado se comprueba contra la suma de los doce meses. Elegir «la
+      primera» habría funcionado hoy y sería una posición disfrazada de regla.
+      POR QUÉ NO PROMUEVE, y no es por la cifra. El anexo XLSX arranca en 2020 —los años
+      2015-2019 solo tienen PDF y antes de 2015 el emisor no publica la sección— así que la
+      línea base de 2008 cae fuera del alcance de la serie. Ese es justo el supuesto de
+      `identidad_de_concepto`, pero el otro candado no cierra: el emisor publica «Aportes
+      del gobierno» y la ley dice «Monto de subsidios del Gobierno». «Aportes» no es
+      «subsidios», y la identidad quedaría colgando de la palabra «gobierno», que es
+      exactamente el parecido de etiqueta que ese camino existe para rechazar.
+      Y LA LÍNEA BASE DE LA LEY ES DUDOSA POR SU CUENTA: nadie reproduce los 530 de 2008. El
+      Banco Mundial (Report 49236-DO, Tabla 4) da para ese año RD$42.723 millones ≈ US$1.240
+      millones, un 134% por encima; el único «530» de ese informe está en su Tabla 3 y es de
+      transferencias corrientes al sector eléctrico de 2009. Familia del 2.47, el 3.14 y el
+      2.33: inconsistencia de la línea base de la Ley 1-12.
+      SALVEDAD DE UNIVERSO: el dato es el aporte a las tres DISTRIBUIDORAS, que es el canal
+      principal del subsidio pero no necesariamente todo lo que el Gobierno transfiere al
+      sector eléctrico.
+  - indicador: "2.33"
+    serie: "social_dev:health_spending_central_gov_pct_gdp"
+    fuente: mhe
+    mejor: mayor
+    sin_veredicto_por: linea_base_no_reproduce
+    sin_veredicto_desde: "2026-08-24"
+    estado: propuesto
+    origen: declarado_por_el_evaluado
+    productor: >-
+      Ministerio de Hacienda — Clasificación de las Erogaciones por Funciones (COFOG) del
+      Gobierno Central Presupuestario, función 7.0.7 Salud, con el % del PIB que el propio
+      emisor computa. Contraste: cuadro de clasificación funcional de los informes de
+      DIGEPRES, leído aparte.
+    nota_comparabilidad: >-
+      ══ MEDIDO 2026-08-24 ══ La serie va de 2008 a 2025 y cubre LAS TRES METAS VENCIDAS.
+      2015: 1,832 contra meta 2,8 — incumplida por 35%.
+      2020: 2,295 contra meta 4,0 — incumplida por 43%.
+      2025: 1,855 contra meta 4,5 — incumplida por 59%.
+      La brecha se ABRE con el tiempo: el máximo de la serie es 2,404 en 2021, el año del
+      COVID, y ya en 2022 había vuelto a 1,882.
+      DOS VÍAS INDEPENDIENTES QUE CIERRAN ENTRE SÍ. La hoja COFOG de Hacienda y el cuadro
+      funcional de los informes de DIGEPRES son dos documentos distintos del mismo Estado, y
+      en nueve de los once años en que las dos existen coinciden dentro del 1,5% (2009 0,2% ·
+      2012 1,4% · 2019 0,6% · 2022 0,3%). Es la comprobación más fuerte que este indicador
+      va a tener, y por eso se conservan las dos.
+      SALVEDADES QUE VIAJAN: los años desde 2021 son PRELIMINARES —el emisor los marca con
+      asterisco— y 2025, que es meta, es uno de ellos. Y el cuadro mide EROGACIÓN, que el
+      archivo define como gasto más inversión bruta en activos no financieros; la ley dice
+      «gasto». Las dos magnitudes coinciden dentro del 1,5% contra DIGEPRES, así que la
+      diferencia no manda sobre el veredicto.
+      POR QUÉ SIGUE EN `propuesto`, Y AHORA EL PROBLEMA NO ES NUESTRO. El oráculo no cierra:
+      la ley fija 1,4 para 2009 y la hoja del emisor da 1,360 — Δ 2,9% contra una tolerancia
+      de 2,0%. Pero el cuadro funcional de DIGEPRES da 1,357 para el mismo año. **Las dos
+      series del Estado coinciden entre sí y las dos quedan ~3% por debajo del número que la
+      ley escribió.** El 1,4 no sale de ninguna de las dos. Dato adicional: 2008 da 1,380,
+      que sí entraría en tolerancia — compatible con que el legislador haya tomado el año
+      anterior, o una estimación preliminar de 2009 que después se revisó.
+      Esto lo pone en la misma familia que el 2.47, el 3.14 y el 3.30: una inconsistencia de
+      la LÍNEA BASE de la Ley 1-12, no una brecha de nuestras fuentes. Promoverlo o no es
+      decisión del dueño; lo que ya no procede es tratarlo como un indicador sin fuente.
+      REFUTADO EL 2026-08-24: la nota anterior decía que faltaba «la segunda añada del PIB,
+      la retropolada base 2007». No existe: los cuatro libros de PIB por gasto del banco
+      central dan el mismo PIB nominal de 2009 (0,08% de diferencia). Un cambio de año base
+      mueve las series a precios CONSTANTES, no los niveles corrientes.
   - indicador: "2.22"
     serie: "social_dev:under5_mortality"
     fuente: wdi
@@ -596,6 +915,8 @@ bindings:
     serie: "social_dev:poverty_extreme_national"
     fuente: mhe
     mejor: menor
+    sin_veredicto_por: termino_legal_sin_fuente
+    sin_veredicto_desde: "2026-08-24"
     estado: propuesto
     origen: declarado_por_el_evaluado
     productor: >-
@@ -651,66 +972,6 @@ bindings:
       Verificado en prod 2026-08-19: **3,6% de subalimentación en 2023**, contra una base legal de 21,0 en 2005. La caída es de las más grandes del expediente.
 
   # Las TRES desnutriciones miden cosas distintas —peso/edad, peso/talla, talla/edad— y
-  # ninguna transformación las convierte. La ley las fija por separado y se atan por
-  # separado. Las tres comparten año base 2007 y emisor.
-  - indicador: "2.28"
-    serie: "social_dev:malnutrition_weight_age"
-    fuente: wdi
-    mejor: menor
-    estado: propuesto
-    origen: estimacion_de_tercero_sobre_dato_del_evaluado
-    productor: >-
-      Estimaciones conjuntas UNICEF/OMS/Banco Mundial sobre las rondas ENDESA dominicanas.
-    nota: >-
-      Desnutrición GLOBAL (peso para la edad) en menores de 5. La ley fija 3,1 para 2007 y
-      la fuente da 3,4 — Δ 9,7%, el mayor del lote. SALVEDAD: compatible con una revisión de
-      la encuesta base (ENDESA), y se declara antes de medir cualquier distancia a la meta.
-      ⚠️ NO PROMUEVE — serie CONGELADA. Producción confirma que la serie existe y que su
-      último dato es de **2019**: la fuente dejó de publicar hace seis años y el motor se
-      niega —bien— a medir el corte de 2025 con eso. Publicarlo como medición vigente sería
-      afirmar cobertura sobre un dato de otra década.
-      Y el hecho es del informe, no un problema nuestro: la ley fija metas de desnutrición
-      infantil hasta 2030 y el Estado dejó de medirla en 2019. La última ENDESA con estos
-      módulos es la de 2019, y no hay reemplazo publicado.
-
-  - indicador: "2.29"
-    serie: "social_dev:malnutrition_weight_height"
-    fuente: wdi
-    mejor: menor
-    estado: propuesto
-    origen: estimacion_de_tercero_sobre_dato_del_evaluado
-    productor: >-
-      Estimaciones conjuntas UNICEF/OMS/Banco Mundial sobre las rondas ENDESA dominicanas.
-    nota: >-
-      Desnutrición AGUDA (peso para la talla) en menores de 5. La ley fija 2,2 para 2007 y
-      la fuente da 2,3 — Δ 4,5%.
-      ⚠️ NO PROMUEVE — serie CONGELADA. Producción confirma que la serie existe y que su
-      último dato es de **2019**: la fuente dejó de publicar hace seis años y el motor se
-      niega —bien— a medir el corte de 2025 con eso. Publicarlo como medición vigente sería
-      afirmar cobertura sobre un dato de otra década.
-      Y el hecho es del informe, no un problema nuestro: la ley fija metas de desnutrición
-      infantil hasta 2030 y el Estado dejó de medirla en 2019. La última ENDESA con estos
-      módulos es la de 2019, y no hay reemplazo publicado.
-
-  - indicador: "2.30"
-    serie: "social_dev:malnutrition_height_age"
-    fuente: wdi
-    mejor: menor
-    estado: propuesto
-    origen: estimacion_de_tercero_sobre_dato_del_evaluado
-    productor: >-
-      Estimaciones conjuntas UNICEF/OMS/Banco Mundial sobre las rondas ENDESA dominicanas.
-    nota: >-
-      Desnutrición CRÓNICA (talla para la edad) en menores de 5. La ley fija 9,8 para 2007 y
-      la fuente da 10,1 — Δ 3,1%.
-      ⚠️ NO PROMUEVE — serie CONGELADA. Producción confirma que la serie existe y que su
-      último dato es de **2019**: la fuente dejó de publicar hace seis años y el motor se
-      niega —bien— a medir el corte de 2025 con eso. Publicarlo como medición vigente sería
-      afirmar cobertura sobre un dato de otra década.
-      Y el hecho es del informe, no un problema nuestro: la ley fija metas de desnutrición
-      infantil hasta 2030 y el Estado dejó de medirla en 2019. La última ENDESA con estos
-      módulos es la de 2019, y no hay reemplazo publicado.
-
   - indicador: "2.7"
     serie: "social_dev:gini_index"
     fuente: wdi
@@ -1328,112 +1589,42 @@ bindings:
       el 4%— y después RETROCEDE a 3,76% en 2023. La ley no se incumplió por inmovilidad sino
       por un avance que se dio vuelta.
   - indicador: "4.2"
-    serie: "social_dev:protected_areas"
-    fuente: wdi
+    serie: "social_dev:protected_area_pct_land"
+    fuente: mhe
     mejor: mayor
-    estado: propuesto
-    origen: estimacion_de_tercero_sobre_dato_del_evaluado
+    periodo_verificado: "2024"
+    estado: verificado
+    verificado_por: oraculo
+    origen: declarado_por_el_evaluado
     productor: >-
-      Banco Mundial sobre el registro de áreas protegidas que declara el propio país a la
-      base mundial de la UICN/PNUMA.
-    nota_comparabilidad: >-
-      ══ ACTUALIZADO 2026-08-21, tras decidir el universo ══ La duda del universo está
-      RESUELTA (ver `nota`); lo que sigue abierto es que este indicador no tiene camino de
-      verificación. El oráculo no lo alcanza —serie desde 2013, línea base de 2009— y la
-      identidad de concepto TAMPOCO aplica, y conviene dejar escrito por qué: la ley dice
-      «áreas protegidas nacionales», sin calificar, y la serie del emisor es «áreas
-      protegidas TERRESTRES». El comprobador de identidad rechaza el término calificado
-      porque «terrestres» no está en el nombre que la ley le puso — y tiene razón: recortar
-      el calificativo para pasar el control sería fabricar la identidad, no comprobarla.
+      ONE — «Áreas Protegidas en República Dominicana, 2007-2024», del catálogo nacional de
+      datos abiertos: superficie por categoría, terrestre y marina. La razón se computa
+      contra el área terrestre del país.
     nota: >-
-      DECISIÓN DEL DUEÑO (2026-08-21) sobre el universo: se mide contra la serie TERRESTRE.
-      La ley no califica —dice «áreas protegidas nacionales»— y la elección cambia el
-      veredicto, así que se declara en vez de resolverse en silencio: terrestre da 26,3% en
-      2025 y CUMPLE la meta plana de 24,4; la marina da 15,3% y no la cumple. El criterio es
-      que la meta se fijó en 24,4 y el registro nacional de áreas protegidas terrestres
-      estaba en ese orden en 2009.
-      La meta de la ley es PLANA: 24,4 en los cuatro cortes. El indicador pide SOSTENER, no
-      crecer, y es de los pocos del expediente con esa forma.
-  # ── Los doce descartes del barrido ──────────────────────────────────────────────────────
-  - indicador: "2.8"
-    serie: "wdi.SE.PRE.ENRR"
-    fuente: wdi
-    mejor: mayor
-    estado: descartado
-    origen: declarado_por_el_evaluado
-    productor: Sistema educativo dominicano vía UNESCO; el WDI republica.
-    motivo_descarte: >-
-      La serie es matrícula BRUTA de preescolar y el indicador pide la tasa NETA de cobertura
-      del nivel inicial. La bruta cuenta a todo el que asiste sin importar la edad, así que
-      supera a la neta por construcción: 40,5 contra una base legal de 32,6 en 2010, un 24%
-      de diferencia que no es desempeño sino definición.
-  - indicador: "2.24"
-    serie: "wdi.SH.STA.MALR"
-    fuente: wdi
-    mejor: menor
-    estado: descartado
-    origen: estimacion_de_tercero_sobre_dato_del_evaluado
-    productor: OMS — estimación del programa mundial de malaria.
-    motivo_descarte: >-
-      Mide INCIDENCIA por 1.000 habitantes en riesgo (2.482 en 2010) y el indicador pide la
-      tasa de MORTALIDAD asociada a malaria (0,14). Son magnitudes distintas por cuatro
-      órdenes de tamaño; ninguna transformación las convierte.
-  - indicador: "2.31"
-    serie: "wdi.SH.HIV.INCD.14"
-    fuente: wdi
-    mejor: menor
-    estado: descartado
-    origen: estimacion_de_tercero_sobre_dato_del_evaluado
-    productor: ONUSIDA vía Banco Mundial.
-    motivo_descarte: >-
-      Es el NÚMERO de nuevas infecciones en menores de 14 años (620 en 2010) y el indicador
-      pide el PORCENTAJE de hijos de madres VIH positivas que resultan positivos (10,0). Un
-      conteo no es una tasa y el denominador que haría falta no está en la serie.
-  - indicador: "2.32"
-    serie: "wdi.SH.HIV.ARTC.ZS"
-    fuente: wdi
-    mejor: mayor
-    estado: descartado
-    origen: estimacion_de_tercero_sobre_dato_del_evaluado
-    productor: ONUSIDA vía Banco Mundial.
-    motivo_descarte: >-
-      La serie es cobertura de antirretrovirales sobre TODAS las personas con VIH (16% en
-      2009) y el indicador acota el universo a las de INFECCIÓN AVANZADA (71% en 2009). Son
-      dos denominadores distintos y el de la ley es el más chico, así que la serie subestima
-      por diseño: 77% de diferencia contra la base legal.
-  - indicador: "2.47"
-    serie: "wdi.SL.TLF.0714.ZS"
-    fuente: wdi
-    mejor: menor
-    estado: descartado
-    origen: declarado_por_el_evaluado
-    productor: Encuestas de hogares dominicanas vía OIT/Banco Mundial.
-    motivo_descarte: >-
-      «Niños ocupados» de 7 a 14 en la serie contra «niños de 6 a 14 que trabajan» en la ley,
-      y con una diferencia de un orden de magnitud: 13,2 en 2014 contra una base legal de 1,5
-      en 2010. La serie tampoco trae el año de la base. Dos motivos independientes.
-  - indicador: "2.48"
-    serie: "wdi.SL.UEM.NEET.ZS"
-    fuente: wdi
-    mejor: menor
-    estado: descartado
-    origen: declarado_por_el_evaluado
-    productor: ENCFT del BCRD vía OIT/Banco Mundial.
-    motivo_descarte: >-
-      La serie es NINI de 15 a 24 años (21,0 en 2010) y el indicador acota a 15-19 y además
-      exige estar DESEMPLEADO, no solo fuera del empleo (6,0 en 2010). Dos recortes distintos
-      del mismo fenómeno; 250% de diferencia contra la base legal.
-  - indicador: "3.10"
-    serie: "wdi.SE.TER.ENRR"
-    fuente: wdi
-    mejor: mayor
-    estado: descartado
-    origen: declarado_por_el_evaluado
-    productor: MESCyT vía UNESCO; el WDI republica.
-    motivo_descarte: >-
-      Matrícula BRUTA de nivel superior contra la tasa NETA de 18-24 que pide la ley. La
-      bruta incluye a los mayores de 24, que en educación superior son muchos: 57,7 en 2024
-      contra una base legal de 24,8 en 2010. La serie tampoco trae 2010.
+      ══ REABIERTO Y CERRADO 2026-08-24 ══ Estaba en `propuesto` con el motivo «no tiene
+      camino de verificación»: el oráculo no lo alcanzaba —la serie del republicador arranca
+      en 2013 y la línea base es de 2009— y la identidad de concepto no aplicaba porque su
+      serie es «áreas protegidas TERRESTRES» y la ley dice «nacionales» sin calificar.
+      Las dos objeciones caen con la fuente NACIONAL, que llega a 2007.
+      ORÁCULO: la ley fija 24,4% para 2009 y el cuadro de la ONE da 11.684 km² protegidos
+      sobre 48.198 km² de área terrestre — 24,24%, Δ 0,7%.
+      LAS DOS METAS VENCIDAS ESTÁN CUMPLIDAS. La ley pide MANTENER el 24,4%: 2015 da 25,81%
+      y 2020 da 25,05%. En 2024 va en 25,59%. Es de los pocos indicadores del expediente que
+      el país sostuvo, y conviene decirlo con la misma claridad que los incumplidos.
+      QUÉ SE SUMA: los SEIS grupos de categoría del cuadro, no sus diecinueve filas. El
+      cuadro anida subcategorías bajo cada grupo y sumarlas todas cuenta cada superficie dos
+      veces —19.484 km² en vez de 9.742 para 2007—.
+      POR QUÉ TERRESTRE Y NO TERRESTRE MÁS MARINA: el informe de avance del propio Estado
+      dice que el indicador «se actualizó tomando en consideración las desagregaciones de
+      superficie terrestre y superficie marina», lo que deja abierto si la razón incluye lo
+      marino. El oráculo lo decide sin que haya que interpretar: solo terrestre da Δ 0,7% y
+      con lo marino sobre el territorio más la zona económica exclusiva da 18,8%, Δ 22,8%.
+      SALVEDAD DEL EMISOR, declarada: en cinco de los catorce años sus subcategorías no suman
+      su grupo —2012, 2014 y 2015 en la superficie marina; 2021 y 2022 en la terrestre—. No
+      afecta a esta razón, que usa los totales de grupo, y viaja en el conector.
+      Supera al binding anterior sobre `social_dev:protected_areas`, que sigue siendo
+      correcto sobre SU serie: el Banco Mundial publica cobertura TERRESTRE pura desde 2013,
+      y el 12mo Informe confirma que el indicador de la ley considera las dos superficies.
   - indicador: "4.1"
     serie: "social_dev:ghg_per_capita"
     fuente: wdi
@@ -1546,6 +1737,8 @@ bindings:
     serie: "social_dev:rural_poverty_total"
     fuente: mhe
     mejor: menor
+    sin_veredicto_por: termino_legal_sin_fuente
+    sin_veredicto_desde: "2026-08-24"
     estado: propuesto
     origen: declarado_por_el_evaluado
     productor: >-
@@ -1676,40 +1869,54 @@ bindings:
 
 # ── 3.24 · DESCARTE CON EVIDENCIA ─────────────────────────────────────────────────────────
   - indicador: "3.24"
-    serie: "wdi.FS.AST.PRVT.GD.ZS"
-    fuente: wdi
+    serie: "bcrd:prestamos_produccion_banca_multiple_pct_pib"
+    fuente: bcrd
     mejor: mayor
     estado: descartado
-    origen: estimacion_de_tercero_sobre_dato_del_evaluado
-    productor: Banco Mundial sobre estadísticas monetarias del BCRD.
+    origen: declarado_por_el_evaluado
+    productor: >-
+      BCRD — Estadísticas Monetarias y Financieras Armonizadas, préstamos por destino,
+      perímetro de BANCOS MÚLTIPLES, que es el que declara el propio evaluado.
     motivo_descarte: >-
-      Ninguno de los tres agregados de crédito del republicador mide «crédito a la
-      producción». Contra la ventana 2005-2010 que la ley promedia, con la base legal en
-      2,24% del PIB: crédito interno al sector privado da 20,68% (Δ 823%), crédito de bancos
-      al sector privado 19,83% (Δ 785%) y crédito interno total 36,88% (Δ 1.546%).
-      LA FUENTE QUE ESTE MOTIVO PEDÍA YA SE PROBÓ, el 2026-08-22, y tampoco cierra. Se trajo
-      el cuadro de préstamos por destino económico del banco central —mensual desde 1996, con
-      trece destinos— y se computó cada destino como stock de diciembre sobre el PIB nominal,
-      convención declarada antes de mirar el resultado y la misma del 2.36. Ningún
-      agrupamiento defendible se acerca: agricultura sola da 4,38%, agricultura más minas más
-      manufactura 4,97%, y los cinco sectores productivos juntos 11,23%. Todos los destinos
-      productivos por separado superan el 2,24% salvo minas (0,15%) y electricidad (0,55%).
-      Y hay un argumento que no depende de elegir bien el agrupamiento: si el universo de la
-      ley fuera cualquier agregado de crédito bancario a la producción, la meta de 8% para
-      2015 ya estaría cumplida en la línea base, lo que vuelve incoherente la trayectoria que
-      la propia ley fija (2,24 en la base y 30 para 2030).
-      NO se eligió por cercanía. Un barrido combinatorio sobre los trece destinos sí encuentra
-      coincidencias —minas más electricidad más servicios comunitarios da 2,31%, Δ 3,3%— y
-      ninguna significa nada: con trece sumandos siempre hay una combinación cerca de
-      cualquier número. Publicar una sería abrir exactamente la puerta que el oráculo cierra.
+      ══ RECOMPUTADO 2026-08-24, POR UN CAMINO REPRODUCIBLE ══ El motivo anterior quedó
+      SUSPENDIDO porque ninguna de sus ocho cifras se podía rehacer: salieron de un barrido
+      que no dejó conector ni script. Ahora existe `shared.data.bcrd_prestamos_destino` y
+      cualquiera puede volver a correr esto.
+      EL UNIVERSO YA NO SE SUPONE, LO DECLARA EL EVALUADO. El 5to Informe de Avance de la END
+      (enero 2018, nota al pie 2, p. 35) dice que la línea base del artículo 26 «corresponde
+      al crédito de la BANCA MÚLTIPLE A LA PRODUCCIÓN DE BIENES Y SERVICIOS / PIB».
+      CONVENCIÓN, declarada antes de mirar: stock de diciembre sobre el PIB nominal del año,
+      y la ventana de la ley —«promedio 2005-2010»— promediada COMPLETA.
+      RESULTADO, con el perímetro que el evaluado declara y contra su base de 2,24:
+      producción de bienes Y servicios 8,46% (Δ 277,5%); solo bienes 2,70% (Δ 20,5%).
+      Y NINGÚN DESTINO SUELTO se acerca: el más próximo es adquisición de viviendas con
+      1,60% (Δ 28,6%) —que no es producción— y después manufactura con 1,14% (Δ 48,9%).
+      QUEDA REFUTADA LA HIPÓTESIS DEL ERROR DE PERÍMETRO, que era la sospecha que motivó la
+      suspensión. Restringir de las Otras Sociedades de Depósito consolidadas a la banca
+      múltiple mueve la cifra de 10,32% a 8,46% —un 18%— y la angosta de 3,90% a 2,70%. No
+      es un factor de cuatro. El cómputo anterior no estaba mal de perímetro.
+      Y CAE UN ARGUMENTO NUESTRO, que conviene decir porque sostenía el descarte anterior. El
+      expediente afirmaba que si el universo fuera cualquier agregado de crédito bancario, la
+      meta de 8% para 2015 «ya estaría cumplida en la línea base», lo que volvía incoherente
+      la trayectoria de la ley. Con el perímetro correcto NO se cumple: la lectura angosta da
+      2,70% en la ventana y 4,37% en 2015 contra una meta de 8. El argumento se computaba
+      sobre el perímetro equivocado.
+      DÓNDE QUEDA: la lectura angosta tiene una trayectoria coherente con la ley —2,70 en la
+      ventana, 4,37 en 2015, 4,59 en 2020, 4,79 en 2024— pero no reproduce la línea base, y
+      la lectura que usa el término literal del evaluado se va casi cuatro veces. Sin oráculo
+      no promueve.
+      SI LA LECTURA ANGOSTA FUERA LA CORRECTA, el indicador estaría incumplido por un margen
+      enorme y creciente: 4,59% en 2020 contra una meta de 16, y 4,79% en 2024 contra 25 para
+      2025. Eso no cambia con la incertidumbre de concepto, y es lo publicable de este caso.
+      QUINTA LÍNEA BASE que no reproduce contra ninguna serie del Estado, junto al 2.33, el
+      2.47, el 3.14 y el 3.30.
     hipotesis_sin_comprobar: >-
-      Que «producción» nombre un universo mucho más angosto que el crédito bancario: crédito
-      de la banca pública de desarrollo, o crédito a tasa preferencial, o un programa
-      concreto. Lo sugiere que la base de la ley esté por debajo de CADA destino productivo
-      del sistema bancario menos dos. No está comprobado y exige identificar primero qué
-      institución publica ese universo.
-
-# ── 2.11 · DESCARTE CON EVIDENCIA ─────────────────────────────────────────────────────────
+      La única que queda viva: que el 5to Informe describa la serie REVISADA de 2017 y no la
+      línea base de 2011. El 9no Informe (2022) advierte que «se realizó una revisión de la
+      metodología de cálculo a partir del 2017», así que puede haber dos series bajo el mismo
+      número. Cerrarla exige la ficha metodológica del 3.24 con la lista exacta de destinos
+      que componen «producción de bienes» y el detalle de esa revisión — y ese documento no
+      está publicado, así que la vía es una solicitud formal al emisor.
   - indicador: "2.11"
     serie: "infotep:participantes_ftp"
     fuente: mhe

@@ -1,0 +1,443 @@
+"""SDQ Banking · Revisión Anual — el producto cuya unidad es el AÑO, no el corte.
+
+**Por qué es un producto APARTE y no una sección del Deep Dive trimestral.** Lo fijó el dueño
+después de que yo propusiera lo contrario: «son dos deep dive / insight diferentes el cuarto
+último del año al Year Review de una entidad». Tiene razón y la razón es de sujeto, no de
+presentación:
+
+- el Deep Dive al 31-dic responde **cómo está** la entidad en esa fecha;
+- la Revisión Anual responde **cómo le fue** en el ejercicio.
+
+Meter la segunda dentro del primero haría que el contenido del producto variara según el
+período —«¿qué estoy comprando?»— y repetiría la confusión que originó todo esto: yo había
+afirmado que el informe de diciembre ERA el informe anual. Es falso: la ventana móvil de doce
+meses toca UNA magnitud (la utilidad neta, o sea ROA y ROE); los otros diecinueve indicadores
+son fotos al 31 de diciembre y el score es una lectura AL CORTE.
+
+**Por qué entra al catálogo como producto propio.** `sector_key` es en realidad la clave de
+PRODUCTO, no la de un sector: el catálogo ya lista «Producto AGREGADO (no un sector)», uno
+sub-nacional y otro cuyo sujeto es un instrumento normativo. Un producto cuya unidad es el año
+entra ahí sin forzar el framework.
+
+**Los tres niveles.** El Pulse anonimizado es el gancho (decisión comercial del dueño): da el
+año del sistema sin nombres, y lo nombrado se vende. Cumple la doctrina de que el Pulse jamás
+emite identificadores — acá se ejerce con `_anio_del_sistema_anonimo`, que DESCARTA las listas
+nominadas del anuario en vez de recortarlas, porque recortar un nombre deja el resto.
+
+**Lo que NO recomputa nada.** El cómputo del año de una entidad vive en `reports/revision_anual`
+y el del sistema en `reports/anuario`; los dos están en producción. Este módulo es el envoltorio
+de producto.
+"""
+from __future__ import annotations
+
+import logging
+from datetime import date
+from typing import Any, Dict, List, Optional
+
+from sqlalchemy import func
+from sqlalchemy.orm import Session
+
+from modules.banking_score.models.models import Bank, ModelType, RatingResult
+from shared.products import (DataHealth, Granularity, ProductSnapshot, ProductTier,
+                             SectorProductManifest, TierLevelSpec, ValidationState)
+from shared.products.contract import EstadoBacktest
+
+logger = logging.getLogger("sdq.banking.year_review")
+
+YEAR_REVIEW_KEY = "banking_year_review"
+
+
+def year_review_manifest() -> SectorProductManifest:
+    """Los tres niveles del producto anual.
+
+    El Pulse es el GANCHO: el año del sistema sin nombres. El Insight da el año de UNA
+    entidad. El Deep Dive agrega lo que responde la pregunta que el nivel no responde —si el
+    movimiento fue suyo o del mercado—, contrastando contra su tipo de entidad y el sistema en
+    el MISMO año.
+    """
+    return SectorProductManifest(
+        sector_key=YEAR_REVIEW_KEY,
+        display_name="SDQ Banking · Revisión Anual",
+        levels={
+            ProductTier.pulse: TierLevelSpec(
+                tier=ProductTier.pulse, granularity=Granularity.system,
+                sections=("anio_del_sistema",),
+                narrative_templates=("anio_del_sistema",),
+                audience="mercado", cadence="periodic",
+                watermark="Vista abierta · SDQMIP", price_band="abierto"),
+            ProductTier.insight: TierLevelSpec(
+                tier=ProductTier.insight, granularity=Granularity.named_entity,
+                sections=("revision_anual",),
+                narrative_templates=("revision_anual",),
+                audience="comite_credito", cadence="recurring",
+                base_report_type="revision_anual", price_band="medio"),
+            ProductTier.deep_dive: TierLevelSpec(
+                tier=ProductTier.deep_dive, granularity=Granularity.named_entity,
+                sections=("revision_anual", "contexto_de_mercado"),
+                narrative_templates=("revision_anual", "revision_anual_mercado"),
+                audience="comite_credito", cadence="on_demand",
+                base_report_type="revision_anual", price_band="alto"),
+        },
+    )
+
+
+def _anio_del_sistema_anonimo(anuario: Dict[str, Any]) -> Dict[str, Any]:
+    """El año del sistema SIN identificadores, para el nivel abierto.
+
+    Se construye por LISTA BLANCA —se copia lo que puede salir— en vez de borrar las claves
+    nominadas. Quitar `cambios_de_banda` y `extremos` de un dict que sigue creciendo es la
+    receta para que el próximo campo con nombres salga solo; acá lo que no está declarado no
+    viaja. `enforce_anonymized` es la red, no el diseño.
+    """
+    sis = anuario.get("sistema") or {}
+    conteo = anuario.get("conteo_direccion") or {}
+    return {
+        "anio": anuario.get("anio"),
+        "cortes": anuario.get("cortes"),
+        "por_corte": sis.get("por_corte"),
+        "cambio_mediana": sis.get("cambio_mediana"),
+        "cambio_media": sis.get("cambio_media"),
+        "estadistico_de_referencia": sis.get("estadistico_de_referencia"),
+        "medias_y_medianas_divergen": sis.get("medias_y_medianas_divergen"),
+        "lectura_del_sistema": sis.get("lectura"),
+        # Cuántas mejoraron / empeoraron / quedaron estables — cifras, no nombres.
+        "conteo_direccion": dict(conteo),
+        "por_tipo": anuario.get("por_tipo"),
+        "entidades_que_cambiaron_de_banda": len(anuario.get("cambios_de_banda") or []),
+        "universo": {
+            "comparables": (anuario.get("universo") or {}).get("comparables"),
+            "vistas_en_el_anio": (anuario.get("universo") or {}).get("vistas_en_el_anio"),
+            "parciales": len((anuario.get("universo") or {}).get("parciales") or []),
+            "regla": (anuario.get("universo") or {}).get("regla"),
+        },
+    }
+
+
+class BankingYearReviewProduct:
+    """``SectorProduct`` del producto anual de banca."""
+
+    ESTADO_BACKTEST = EstadoBacktest(
+        tiene_motor=True, eje_motor="banking_score",
+        desenlace=("el mismo del Banking Score: distress financiero por entidad-trimestre. "
+                   "Este producto NO introduce un motor propio — reencuadra en el AÑO las "
+                   "mismas calificaciones ya validadas"),
+        motivo=("La Revisión Anual no puntúa: describe el año de una calificación que ya "
+                "existe. Su credencial es la del eje que la produce, y se lee de ahí."))
+
+    sector_key = YEAR_REVIEW_KEY
+
+    def __init__(self, db: Optional[Session] = None):
+        self._db = db
+
+    def product_manifest(self) -> SectorProductManifest:
+        return year_review_manifest()
+
+    def _require_db(self) -> Session:
+        if self._db is None:
+            raise RuntimeError(
+                "BankingYearReviewProduct requiere una sesión de DB para esta operación.")
+        return self._db
+
+    # ── Señales de readiness ──
+    def data_signals(self) -> DataHealth:
+        db = self._require_db()
+        anios = self.available_periods()
+        if not anios:
+            return DataHealth(coverage=0.0, freshness_days=None, sources=("SIB", "SIMBAD"),
+                              detail="Ningún año cerrado: falta el corte de diciembre.")
+        ultimo = int(anios[0])
+        n = (db.query(func.count(RatingResult.id))
+             .filter(RatingResult.period_end == date(ultimo, 12, 31),
+                     RatingResult.model_type == ModelType.deterministic).scalar() or 0)
+        return DataHealth(
+            coverage=1.0 if n else 0.0,
+            freshness_days=(date.today() - date(ultimo, 12, 31)).days,
+            sources=("SIB", "SIMBAD"),
+            detail=f"{len(anios)} año(s) cerrado(s); {n} entidades al cierre de {ultimo}.")
+
+    def has_engine(self) -> bool:
+        return bool(self.available_periods())
+
+    def validation_state(self) -> ValidationState:
+        # No es un motor nuevo: reencuadra en el año las calificaciones del eje 1.
+        return ValidationState(approved=True, score=1.0,
+                               notes="Reencuadre anual del Banking Score (eje 1, validado).")
+
+    def available_periods(self) -> List[str]:
+        """Los AÑOS CERRADOS, del más reciente al más antiguo.
+
+        El período de este producto es un año, no un corte, y solo se listan los que tienen su
+        cierre de diciembre: sin él no hay año, hay un tramo — la misma regla que el anuario
+        del sistema y la Revisión Anual, declarada una sola vez y aplicada en las tres.
+        """
+        from modules.banking_score.reports.anuario import _anios_con_cierre
+        return [str(a) for a in reversed(_anios_con_cierre(self._require_db()))]
+
+    def scope_options(self) -> List[Dict[str, str]]:
+        db = self._require_db()
+        filas = (db.query(Bank).filter(Bank.is_active.is_(True))
+                 .order_by(Bank.name).all())
+        return [{"value": str(b.id), "label": str(b.name),
+                 "group": b.bank_type.value if b.bank_type else "otros"} for b in filas]
+
+    def _anio(self, period: str) -> int:
+        """El año del período pedido. Vacío = el último CERRADO (invariante del contrato)."""
+        disponibles = self.available_periods()
+        if not disponibles:
+            raise ValueError("No hay ningún año cerrado: falta el corte de diciembre.")
+        texto = (period or "").strip()
+        if not texto:
+            return int(disponibles[0])
+        # Se acepta "2025" y también "2025-12-31", porque la barra superior manda una fecha.
+        try:
+            return int(texto[:4])
+        except ValueError:
+            raise ValueError(f"Período no reconocido para un producto anual: '{period}'.")
+
+    # ── Snapshot por nivel ──
+    def snapshot(self, tier: ProductTier, period: str,
+                 scope: Optional[str] = None) -> ProductSnapshot:
+        db = self._require_db()
+        anio = self._anio(period)
+
+        if tier == ProductTier.pulse:
+            from modules.banking_score.reports.anuario import anuario_del_sistema
+            datos = anuario_del_sistema(db, anio)
+            if datos is None:
+                raise ValueError(
+                    f"No hay Revisión Anual {anio} del sistema: el año no cerró o el panel no "
+                    "alcanza. Elegí un año ya cerrado.")
+            return ProductSnapshot(tier=tier, period=str(anio),
+                                   payload=_anio_del_sistema_anonimo(datos),
+                                   entity_name=None)
+
+        if not scope:
+            raise ValueError("Se requiere una entidad para la Revisión Anual.")
+        bank = db.query(Bank).filter(Bank.id == scope).first()
+        if bank is None:
+            raise ValueError(f"Entidad no encontrada: {scope}.")
+
+        from modules.banking_score.reports.revision_anual import revision_anual
+        rev = revision_anual(db, bank, anio)
+        if rev is None:
+            raise ValueError(
+                f"No hay Revisión Anual {anio} de {bank.name}: el año no cerró (falta el "
+                "corte de diciembre) o la entidad no tiene panel suficiente.")
+        payload: Dict[str, Any] = {"revision_anual": rev}
+
+        if tier == ProductTier.deep_dive:
+            # El contraste contra el MERCADO: es lo que separa «bajó 4 puntos» de «bajó 4
+            # puntos mientras su tipo subió 1». Ya computado por el anuario del sistema.
+            from modules.banking_score.reports.anuario import anuario_del_sistema
+            sistema = anuario_del_sistema(db, anio)
+            if sistema:
+                tipo = bank.bank_type.value if bank.bank_type else None
+                su_tipo = next((t for t in (sistema.get("por_tipo") or [])
+                                if t.get("tipo") == tipo), None)
+                payload["contexto_de_mercado"] = {
+                    "cambio_mediano_del_sistema": (sistema.get("sistema") or {}).get(
+                        "cambio_mediana"),
+                    "su_tipo_de_entidad": su_tipo,
+                    "conteo_direccion": sistema.get("conteo_direccion"),
+                    "como_leerlo": (
+                        "el movimiento de la entidad se lee CONTRA el de su tipo y el del "
+                        "sistema en el mismo año: sin ese contraste, un cambio de score no "
+                        "distingue lo idiosincrático de lo que hizo todo el mercado"),
+                }
+        return ProductSnapshot(tier=tier, period=str(anio), payload=payload,
+                               entity_name=str(bank.name))
+
+    # ── Narrativa ──
+    async def narratives(self, tier: ProductTier, snapshot: ProductSnapshot,
+                         lang: str = "es") -> Dict[str, str]:
+        from shared.narrative.claude_engine import narrative_engine
+        manifest = self.product_manifest().require_level(tier)
+        out: Dict[str, str] = {}
+        for seccion in manifest.sections:
+            plantilla = ("anio_del_sistema" if seccion == "anio_del_sistema"
+                         else "revision_anual_mercado" if seccion == "contexto_de_mercado"
+                         else "revision_anual")
+            ctx: Dict[str, Any] = {"period": snapshot.period}
+            if snapshot.entity_name:
+                ctx["entity_name"] = snapshot.entity_name
+            ctx.update(snapshot.payload or {})
+            res = await narrative_engine.generate(
+                context=ctx, template=plantilla, mode="deep",
+                axis="banking",
+                audience="inversionista" if tier == ProductTier.pulse else "comite_credito")
+            out[seccion] = res.text
+        return out
+
+    # ── Muestra curada ──
+    def sample_snapshot(self, tier: ProductTier) -> ProductSnapshot:
+        """Datos DEMO sintéticos. La entidad es inventada: usar una real convertiría el
+        material comercial en una opinión publicada sobre ella."""
+        if tier == ProductTier.pulse:
+            return ProductSnapshot(tier=tier, period=SAMPLE_ANIO,
+                                   payload=_sample_payload(tier), entity_name=None,
+                                   entity_roster=(SAMPLE_ENTIDAD,))
+        return ProductSnapshot(tier=tier, period=SAMPLE_ANIO, payload=_sample_payload(tier),
+                               entity_name=SAMPLE_ENTIDAD)
+
+    def sample_narratives(self, tier: ProductTier) -> Dict[str, str]:
+        """Prosa CURADA del exemplar. NO usa el motor: lo que se usa para vender no puede
+        depender de que el modelo tenga un buen día."""
+        secciones = self.product_manifest().require_level(tier).sections
+        return {s: SAMPLE_NARRATIVES[s] for s in secciones}
+
+    # ── Render ──
+    async def render(self, tier: ProductTier, snapshot: ProductSnapshot,
+                     narratives: Dict[str, str], *, sample: bool = False,
+                     lang: str = "es", output_dir: Optional[str] = None,
+                     fmt: str = "pdf") -> str:
+        from modules.banking_score.reports.pdf_generator import generate_pdf_report
+        manifest = self.product_manifest().require_level(tier)
+        payload = snapshot.payload or {}
+        return await generate_pdf_report(
+            report_type="revision_anual",
+            bank_name=snapshot.entity_name or "Sistema Bancario",
+            scoring_result={},
+            period=str(snapshot.period),
+            narratives=narratives,
+            output_dir=output_dir,
+            sections=list(manifest.sections),
+            tier=tier.value,
+            watermark=manifest.watermark,
+            sample=sample,
+            revision=payload.get("revision_anual"),
+        )
+
+
+# ── Muestra curada (exemplar tier-1) ──────────────────────────────────────
+#
+# El framework exige que todo producto del catálogo ofrezca una MUESTRA, y con razón: un
+# producto listado que no puede mostrarse es una vidriera rota. La muestra es un EXEMPLAR
+# CURADO —datos sintéticos + prosa escrita a mano—, nunca una generación al vuelo: lo que se
+# usa para vender no puede depender de que el modelo tenga un buen día.
+#
+# La entidad de la muestra es INVENTADA a propósito. Usar una real convertiría el material
+# comercial en una opinión publicada sobre esa entidad.
+
+SAMPLE_ANIO = "2025"
+SAMPLE_ENTIDAD = "Banco Múltiple Demostración"
+
+#: El año de la muestra tiene un VALLE INTERMEDIO, que es justo el hecho que este producto
+#: existe para mostrar: cierra en 71.8 —casi donde abrió— y en el medio cayó a 63.4. El
+#: informe al corte de diciembre mostraría «prácticamente sin cambio».
+SAMPLE_REVISION = {
+    "anio": 2025, "entidad": SAMPLE_ENTIDAD,
+    "cortes_del_anio": ["2024-12-31", "2025-03-31", "2025-06-30", "2025-09-30", "2025-12-31"],
+    "cortes_faltantes": [],
+    "serie": [{"corte": "2024-12-31", "score": 72.4, "banda": "Sólida"},
+              {"corte": "2025-03-31", "score": 68.1, "banda": "Sólida"},
+              {"corte": "2025-06-30", "score": 63.4, "banda": "Adecuada"},
+              {"corte": "2025-09-30", "score": 67.9, "banda": "Adecuada"},
+              {"corte": "2025-12-31", "score": 71.8, "banda": "Sólida"}],
+    "apertura": {"corte": "2024-12-31", "score": 72.4, "banda": "Sólida"},
+    "cierre": {"corte": "2025-12-31", "score": 71.8, "banda": "Sólida"},
+    "cambio_score": -0.6,
+    "regla_del_score": ("el score del año es el DEL CIERRE; no se promedian los trimestres"),
+    "camino": {"amplitud": 9.0,
+               "pico": {"corte": "2024-12-31", "score": 72.4},
+               "valle": {"corte": "2025-06-30", "score": 63.4},
+               "trimestres_al_alza": 2, "trimestres_a_la_baja": 2,
+               "valle_intermedio": True,
+               "lectura": ("el año se movió en un rango de 9.00 puntos; el peor momento fue "
+                           "2025-06 y NO el cierre, así que el año tuvo una recuperación que "
+                           "la foto de diciembre no muestra")},
+    "cambios_de_banda": [{"corte": "2025-06-30", "desde": "Sólida", "hasta": "Adecuada"},
+                         {"corte": "2025-12-31", "desde": "Adecuada", "hasta": "Sólida"}],
+    "balance": [
+        {"indicador": "solvencia", "apertura": 15.9, "cierre": 14.6, "cambio": -1.3,
+         "subio": False},
+        {"indicador": "morosidad", "apertura": 2.1, "cierre": 2.9, "cambio": 0.8,
+         "subio": True},
+        {"indicador": "liquidez_inmediata", "apertura": 26.4, "cierre": 29.1, "cambio": 2.7,
+         "subio": True},
+    ],
+    "posicion": {"apertura": {"sector": {"percentile": 71}},
+                 "cierre": {"sector": {"percentile": 64}}},
+}
+
+SAMPLE_SISTEMA = {
+    "anio": 2025, "cortes": ["2024-12-31", "2025-12-31"],
+    "por_corte": [{"corte": "2024-12-31", "mediana": 68.34, "media": 64.83, "n": 82},
+                  {"corte": "2025-12-31", "mediana": 67.93, "media": 65.41, "n": 82}],
+    "cambio_mediana": -0.41, "cambio_media": 0.58,
+    "estadistico_de_referencia": "mediana", "medias_y_medianas_divergen": True,
+    "lectura_del_sistema": ("la mediana del sistema cayó 0.41 puntos en 2025, mientras la "
+                            "media subió 0.58"),
+    "conteo_direccion": {"mejora": 30, "deterioro": 40, "estable": 12},
+    "por_tipo": [{"tipo": "banca_multiple", "n": 16, "cambio_mediana": -1.88,
+                  "direccion": "deterioro"}],
+    "entidades_que_cambiaron_de_banda": 16,
+    "universo": {"comparables": 82, "vistas_en_el_anio": 88, "parciales": 6,
+                 "regla": "los agregados se computan solo sobre las entidades comparables"},
+}
+
+SAMPLE_MERCADO = {
+    "cambio_mediano_del_sistema": -0.41,
+    "su_tipo_de_entidad": {"tipo": "banca_multiple", "n": 16, "cambio_mediana": -1.88,
+                           "direccion": "deterioro"},
+    "conteo_direccion": {"mejora": 30, "deterioro": 40, "estable": 12},
+    "como_leerlo": ("el movimiento de la entidad se lee CONTRA el de su tipo y el del sistema "
+                    "en el mismo año"),
+}
+
+#: Prosa CURADA. No sale del motor: es el material con el que se vende.
+SAMPLE_NARRATIVES = {
+    "anio_del_sistema": (
+        "El sistema bancario cerró 2025 prácticamente donde lo abrió, y esa quietud aparente "
+        "esconde el hecho del año: la mediana cayó 0,41 puntos mientras la media subió 0,58. "
+        "Las dos cifras son correctas y dicen lo contrario. A la media la levantan unos pocos "
+        "extremos, así que el año se lee por la mediana — y por la mediana, el sistema "
+        "retrocedió.\n\n"
+        "El movimiento no fue parejo. La banca múltiple, el estrato de mayor peso, retrocedió "
+        "1,88 puntos en su mediana: casi cinco veces el retroceso del sistema. Cuarenta "
+        "entidades se deterioraron, treinta mejoraron y doce quedaron estables, de modo que "
+        "el retroceso mediano es un desplazamiento del centro y no el efecto de unos pocos "
+        "casos.\n\n"
+        "El orden se computa sobre las 82 entidades con los cinco cortes del año, de 88 "
+        "vistas. Las seis restantes tienen el año incompleto y quedan fuera del orden: un año "
+        "parcial no se compara contra uno completo."),
+    "revision_anual": (
+        "El año de esta entidad no se lee en su cierre. Cerró en 71,8 puntos contra 72,4 de "
+        "apertura —seis décimas, ruido— y ese casi-empate es exactamente lo que un informe al "
+        "31 de diciembre habría reportado.\n\n"
+        "Lo que ocurrió en el medio es otra cosa. El score cayó nueve puntos hasta 63,4 en "
+        "junio, perdió la banda Sólida en ese trimestre y la recuperó recién en el cierre. "
+        "Fueron dos cambios de banda en doce meses, no cero.\n\n"
+        "El balance explica de dónde vino la caída y por qué la recuperación no la revierte "
+        "del todo. La solvencia abrió el año en 15,9% y cerró en 14,6%: 1,3 puntos menos de "
+        "colchón, un movimiento de balance que la mejora del segundo semestre no deshizo. La "
+        "morosidad subió de 2,1% a 2,9%. La liquidez inmediata mejoró 2,7 puntos, y es la "
+        "pata que sostiene el cierre.\n\n"
+        "Contra el sistema, la entidad perdió terreno: abrió el año en el percentil 71 y lo "
+        "cerró en el 64. Mejoró contra sí misma en el segundo semestre y aun así quedó más "
+        "abajo en la fila."),
+    "contexto_de_mercado": (
+        "El retroceso de seis décimas de esta entidad es, en apariencia, mejor que el de su "
+        "estrato: la mediana de la banca múltiple cayó 1,88 puntos en el mismo año y la del "
+        "sistema 0,41. Medido contra sus pares, la entidad terminó el año por encima del "
+        "movimiento típico.\n\n"
+        "Pero el contraste tiene un límite que conviene decir. La caída del primer semestre "
+        "—nueve puntos— es muy superior a cualquier movimiento sectorial del período, así que "
+        "no se explica por el mercado: fue idiosincrática. Lo que sí acompañó al sector fue la "
+        "recuperación, en un semestre donde treinta entidades mejoraron.\n\n"
+        "La lectura, entonces, es doble: el año cierra mejor que el estrato, y el episodio "
+        "que lo definió fue propio."),
+}
+
+
+def _sample_payload(tier: ProductTier) -> Dict[str, Any]:
+    if tier == ProductTier.pulse:
+        return dict(SAMPLE_SISTEMA)
+    payload: Dict[str, Any] = {"revision_anual": dict(SAMPLE_REVISION)}
+    if tier == ProductTier.deep_dive:
+        payload["contexto_de_mercado"] = dict(SAMPLE_MERCADO)
+    return payload
+
+
+from shared.products.registry import register_product  # noqa: E402
+
+register_product(YEAR_REVIEW_KEY, lambda db: BankingYearReviewProduct(db))

@@ -374,15 +374,32 @@ class TestMercadoLaboral:
     """Los tres indicadores salen del MISMO libro del BCRD y no tienen la misma calidad de
     evidencia. La diferencia es el hallazgo, no un detalle de implementación."""
 
-    def test_el_NIVEL_de_desocupacion_no_es_evaluable_contra_su_meta(self):
-        """La base legal es ENFT-2010 (14,3%) y la medición es ENCFT, que arranca en 7,33%.
-        El nivel se parte casi al medio en el momento del cambio de encuesta, no de la
-        política. Publicar «meta superada» sería exactamente la mentira que este módulo
-        existe para no cometer."""
+    def test_el_nivel_de_desocupacion_se_mide_con_la_MISMA_definicion_a_los_dos_lados(self):
+        """══ REESCRITO 2026-08-24, porque la creencia que codificaba era falsa ══
+
+        Este test decía: «la base legal es ENFT-2010 (14,3%) y la medición es ENCFT, que
+        arranca en 7,33%; el nivel se parte casi al medio en el cambio de encuesta». Medido
+        contra la hoja del emisor, **no se parte**: el 7,33% es la tasa ABIERTA y la ley fija
+        la AMPLIADA. La ENCFT ampliada arranca en 14,09%, y contra la base legal de 14,3 la
+        serie da Δ 1,8%. Se estaba comparando una definición contra la otra.
+
+        Lo que queda —y es el invariante de verdad, más fuerte que el anterior— es que el
+        nivel se mida con la MISMA definición a los dos lados. El emisor publica tres tasas
+        para este indicador; atarse a la equivocada es lo que produjo el error.
+        """
         b = cargar_bindings(EXPEDIENTE)["2.37"]
-        assert not b.cuenta, "un nivel no comparable no puede contar como cobertura"
-        nota = (b.nota_comparabilidad or "").upper()
-        assert "ENFT" in nota and "ENCFT" in nota, "la nota nombra las dos encuestas"
+        assert b.serie == "social_dev:broad_unemployment_rate", (
+            f"el 2.37 tiene que medirse con la desocupación AMPLIADA y está en {b.serie}. "
+            f"La abierta se va 63,5% de la línea base: no es la que la ley usó.")
+        assert b.cuenta, "el oráculo cierra con Δ 1,8%: el indicador está medido"
+        # Se lee `nota` y no `nota_comparabilidad`: un binding que promueve no puede llevar
+        # una duda de comparabilidad ABIERTA, así que al cerrarse el texto cambia de campo.
+        # Lo que no cambia es la exigencia — el lector tiene que saber que la serie cruza un
+        # cambio de encuesta, porque comparar 2010 contra 2025 mezcla dos instrumentos.
+        nota = ((b.nota or "") + (b.nota_comparabilidad or "")).upper()
+        assert "ENFT" in nota and "ENCFT" in nota, (
+            "la nota tiene que nombrar las DOS encuestas: la línea base es ENFT y todo lo "
+            "posterior a 2016 es ENCFT")
 
     def test_pero_las_RAZONES_si_son_evaluables(self):
         """Una razón entre dos poblaciones medidas con la misma encuesta es robusta al
@@ -602,3 +619,139 @@ def test_ninguna_serie_de_un_binding_que_CUENTA_omite_su_eje():
     assert not sin_eje, (
         f"estos bindings cuentan como cobertura y su serie no declara eje: {sin_eje}. "
         f"El proveedor no la va a encontrar y el indicador saldrá «sin dato» en el informe.")
+
+
+class TestPorQueNoProduceVeredicto:
+    """REGLA: un binding con serie que no promueve tiene que decir POR QUÉ, del vocabulario.
+
+    El estado `propuesto` no distinguía dos cosas que no se parecen: «falta trabajo nuestro»
+    y «el trabajo está hecho y el que no cierra es el instrumento legal». Once indicadores con
+    el hallazgo COMPLETO se leían igual que once pendientes — en el campo salían todos como
+    `candidato_sin_verificar`, o sea «hay una duda abierta», cuando en ocho de ellos la duda
+    estaba resuelta y la respuesta era sobre la ley.
+
+    Un informe que presenta un hallazgo como tarea pendiente regala el hallazgo, y eso lo
+    detectó el dueño leyendo la cifra de cierre, no un test.
+    """
+
+    def test_todo_propuesto_declara_su_motivo(self):
+        from modules.law_intel.bindings import MOTIVOS_SIN_VEREDICTO
+
+        sin = sorted(k for k, b in cargar_bindings(EXPEDIENTE).items()
+                     if b.estado == "propuesto" and not b.sin_veredicto_por)
+        assert not sin, (
+            f"estos bindings están en `propuesto` sin declarar por qué: {sin}. "
+            f"Vocabulario: {sorted(MOTIVOS_SIN_VEREDICTO)}")
+
+    def test_el_motivo_viene_del_vocabulario_CERRADO(self):
+        from modules.law_intel.bindings import MOTIVOS_SIN_VEREDICTO
+
+        usados = {b.sin_veredicto_por for b in cargar_bindings(EXPEDIENTE).values()
+                  if b.sin_veredicto_por}
+        assert usados, "el detector se volvió decorativo: ningún binding declara motivo"
+        assert usados <= set(MOTIVOS_SIN_VEREDICTO), sorted(usados - set(MOTIVOS_SIN_VEREDICTO))
+
+    def test_el_motivo_viaja_con_su_FECHA(self):
+        """«El emisor dejó de medirlo» sin fecha no se puede auditar: nadie sabe si sigue
+        siendo cierto. Va como campo y no en la prosa, que es lo mismo que se exige del
+        período verificado."""
+        import re
+
+        sin_fecha = sorted(k for k, b in cargar_bindings(EXPEDIENTE).items()
+                           if b.sin_veredicto_por
+                           and not re.fullmatch(r"20\d\d-\d\d-\d\d", b.sin_veredicto_desde or ""))
+        assert not sin_fecha, sin_fecha
+
+    def test_los_motivos_sobre_la_LEY_exigen_evidencia_en_el_campo(self):
+        """Son lo más fuerte que este producto afirma —que la línea base de una ley no
+        reproduce contra la serie de su propio Estado—, así que el campo les pide la medición
+        y la fecha igual que a un «no existe la fuente»."""
+        from modules.law_intel.campo import _EXIGEN_EVIDENCIA
+
+        assert {"linea_base_no_reproduce", "termino_legal_sin_fuente"} <= _EXIGEN_EVIDENCIA
+
+
+class TestUnHallazgoNoSeLeeComoSinMedicion:
+    """El 2.33 y el 3.30 salían `sin_medicion` en el semáforo teniendo serie y observaciones.
+
+    «No lo medimos» y «lo medimos, y lo que no cierra es la línea base de la LEY» son cosas
+    distintas, y la segunda es el hallazgo. El 2.33 tiene dieciocho años de serie y el 3.30
+    seis; presentarlos como no medidos regala justamente lo que un evaluador independiente
+    puede decir y el evaluado no.
+    """
+
+    def test_con_serie_y_meta_se_publica_la_DISTANCIA_con_salvedad(self):
+        from modules.law_intel.registro import cargar
+        from modules.law_intel.scoring.semaforo import evaluar
+
+        exp = cargar(EXPEDIENTE)
+        ind = next(i for i in exp.numerados if i.id == "3.30")
+        b = cargar_bindings(EXPEDIENTE)["3.30"]
+        v = evaluar(ind, b, [("2024", 1554.6), ("2025", 1659.319)], corte="2025")
+        assert v.veredicto == "medido_sin_certificar"
+        assert v.observado == 1659.319 and v.meta == 62.5
+        assert v.distancia is not None and v.distancia > 0
+
+    def test_NO_cuenta_como_cumplimiento(self):
+        """Publicar la distancia no es certificar el nivel. Si esto contara como cumplida o
+        como no alcanzada, el veredicto afirmaría una comparabilidad que no se probó."""
+        from modules.law_intel.scoring.semaforo import Veredicto
+
+        assert Veredicto("3.30", "medido_sin_certificar").cumple is None
+
+    def test_sin_observaciones_vuelve_a_sin_medicion(self):
+        """La salvedad no inventa dato: sin observación no hay distancia que publicar."""
+        from modules.law_intel.registro import cargar
+        from modules.law_intel.scoring.semaforo import evaluar
+
+        exp = cargar(EXPEDIENTE)
+        ind = next(i for i in exp.numerados if i.id == "3.30")
+        b = cargar_bindings(EXPEDIENTE)["3.30"]
+        assert evaluar(ind, b, [], corte="2025").veredicto == "sin_medicion"
+
+    def test_los_otros_motivos_NO_publican_distancia(self):
+        """`instrumento_discontinuado` no tiene observación en ningún año de meta —ese ES su
+        motivo— y `termino_legal_sin_fuente` mide otra magnitud que la ley. Publicar su
+        distancia sería compararla contra una meta que no le corresponde."""
+        from modules.law_intel.registro import cargar
+        from modules.law_intel.scoring.semaforo import evaluar
+
+        exp = cargar(EXPEDIENTE)
+        for ind_id in ("2.28", "2.4"):
+            ind = next(i for i in exp.numerados if i.id == ind_id)
+            b = cargar_bindings(EXPEDIENTE)[ind_id]
+            v = evaluar(ind, b, [("2013", 3.8)], corte="2025")
+            assert v.veredicto == "sin_medicion", f"{ind_id} publicó {v.veredicto}"
+            assert b.sin_veredicto_por in (v.motivo or ""), "el motivo declarado tiene que viajar"
+
+    def test_la_cobertura_publica_POR_QUE_no_certifica_cada_uno(self):
+        from modules.law_intel.bindings import cobertura
+
+        c = cobertura(EXPEDIENTE)
+        assert c["propuestos_por_motivo"], "la cifra sola se lee como trabajo pendiente"
+        assert sum(c["propuestos_por_motivo"].values()) == c["propuestos_sin_verificar"]
+        assert "HALLAZGOS" in c["nota"]
+
+
+def test_la_serie_LLEGA_al_semaforo_cuando_el_hallazgo_es_sobre_la_ley():
+    """El guard que faltaba, y sin el cual el veredicto nuevo no se emitía nunca.
+
+    `series_de` traía series solo de los bindings que CUENTAN, con un motivo que era bueno:
+    servirle al semáforo la serie de un propuesto le haría emitir un veredicto sobre una
+    hipótesis. Pero `linea_base_no_reproduce` no es una hipótesis —la serie está medida y
+    comprobada, y lo que no cierra es la línea base de la LEY—, así que negarle la serie
+    dejaba el veredicto `medido_sin_certificar` inalcanzable: el código existía y no corría.
+
+    Los otros dos motivos siguen sin serie, y con razón.
+    """
+    from modules.law_intel.series import series_de
+
+    bs = cargar_bindings(EXPEDIENTE)
+    pedidas = []
+    series_de(bs, lambda s: pedidas.append(s) or [])
+    for ind in ("2.33", "3.30"):
+        assert bs[ind].serie in pedidas, f"{ind}: sin serie, el veredicto nunca se emite"
+    for ind in ("2.28", "2.4"):
+        b = bs[ind]
+        assert not b.cuenta and b.serie not in pedidas, (
+            f"{ind} declara «{b.sin_veredicto_por}» y no debe recibir serie")

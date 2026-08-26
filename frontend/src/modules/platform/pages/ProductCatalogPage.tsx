@@ -15,10 +15,13 @@ import { VigilarButton } from "@/shared/ui/VigilarButton";
 import { Markdown } from "@/shared/ui/Markdown";
 import { useApp, periodToDate } from "@/shared/context/AppContext";
 import { DimensionBars } from "../components/DimensionBars";
+import { AportesAlCambio } from "../components/AportesAlCambio";
 import {
   getProductCatalog,
   getProductReport,
+  reportAportes,
   getProductScopeOptions,
+  cierreDeAnio,
   getProductPeriods,
   downloadProductReport,
   downloadProductSample,
@@ -31,6 +34,7 @@ import {
 } from "../api";
 import { checkoutOrder, checkoutSubscription } from "../billingApi";
 import { CheckoutConfirmModal } from "../components/CheckoutConfirmModal";
+import { mensajeDeError } from "../../../shared/api/errores";
 
 /** Correo de contacto interino para el upsell (se reemplaza por el checkout en Fase B). */
 const SALES_EMAIL = "ventas@sdqconsulting.com.do";
@@ -292,9 +296,7 @@ function ProductReportDrawer({ sector, level, periodEnd, onClose, t }: {
       { period: p || periodEnd, ...(s ? { scope: s } : {}) })
       .then((r) => { setReport(r); setStatus("ready"); })
       .catch((e) => {
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const detail = (e as any)?.response?.data?.detail;
-        setErrMsg(typeof detail === "string" ? detail : t("platform.catalog.reportError"));
+        setErrMsg(mensajeDeError(e, t("platform.catalog.reportError")));
         setStatus("error");
       });
   };
@@ -406,9 +408,20 @@ function ProductReportDrawer({ sector, level, periodEnd, onClose, t }: {
             onChange={(e) => onPeriodChange(e.target.value)}
             className="field"
           >
-            {periods.map((p) => (
-              <option key={p} value={p}>{p}</option>
-            ))}
+            {periods.map((p) => {
+              // El cierre de diciembre ES la lectura anual de la entidad (ROA/ROE con
+              // ventana de doce meses + la columna del año en «qué movió el score»). Sin
+              // rotularlo, había que saberlo de antemano.
+              const anio = cierreDeAnio(p);
+              return (
+                <option key={p} value={p}>
+                  {anio
+                    ? t("platform.catalog.cierreAnual", { p, anio,
+                        defaultValue: "{{p}} · cierre anual {{anio}}" })
+                    : p}
+                </option>
+              );
+            })}
           </select>
         </div>
       )}
@@ -486,6 +499,10 @@ function ProductReportDrawer({ sector, level, periodEnd, onClose, t }: {
               <DimensionBars title={t("platform.catalog.dimensionsTitle")} data={dims} />
             ) : null;
           })()}
+          {/* Las barras muestran el NIVEL de cada dimensión; esto muestra el MOVIMIENTO y de
+              quién fue. La tabla se computaba desde hacía tiempo y se dibujaba SOLO en el PDF:
+              el mismo producto decía cosas distintas en pantalla y al descargarlo. */}
+          <AportesAlCambio ventanas={reportAportes(report)} />
           {(() => { let n = 0; return report.commercial.sections.map((sec) => {
             const text = report.narratives[sec];
             if (!text) return null;

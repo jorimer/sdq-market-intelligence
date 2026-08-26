@@ -14,7 +14,15 @@ from sqlalchemy.orm import Session
 from shared.auth.dependencies import get_current_user
 from shared.auth.models import User
 from shared.database.session import get_db
-from shared.narrative.claude_engine import NarrativeDegradedError, degraded_sections
+from shared.narrative.claude_engine import (NarrativeDegradedError,
+                                           NarrativeRelacionInvertidaError,
+                                           NarrativeSinRespaldoError,
+                                           degraded_sections)
+from shared.narrative.cifras_pendientes import acumulando as acumulando_cifras
+from shared.narrative.relaciones_pendientes import acumulando
+from shared.narrative.mensajes_de_veto import (NARRATIVE_DEGRADED_MSG,
+                                               mensaje_relacion,
+                                               mensaje_sin_respaldo)
 from shared.products.filenames import (
     SUJETO_SISTEMA, content_disposition, report_filename,
 )
@@ -36,19 +44,19 @@ router = APIRouter()
 # Reportes de cliente cuyo VALOR es la narrativa (el "SDQ Rating" / deep dive de la entidad):
 # si el análisis IA se degradó a fallback estático, NO deben marcarse `completed`. Los boletines
 # de sistema (wire/datawatch/sector_outlook/communique/criteria) no se gatean aquí.
-_PREMIUM_REPORT_TYPES = {"full_rating", "scorecard"}
-_NARRATIVE_DEGRADED_MSG = (
-    "El análisis de este informe no está disponible en este momento por un límite temporal "
-    "del servicio de generación. Reintente en unos minutos."
-)
-
+#: Informes que FALLAN CERRADO ante un veto de narrativa (hueca, cifra sin respaldo o relación
+#: invertida). No es la lista de lo que se cobra —no toca precios ni accesos, solo los tres
+#: gates de entrega—: se llamaba `_NO_SE_ENTREGAN_HUECOS` y ese nombre invitaba a leerla como
+#: comercial. El ANUARIO entra porque es el documento más público que la firma produce: uno
+#: hueco daña más que uno no entregado.
+_NO_SE_ENTREGAN_HUECOS = {"full_rating", "scorecard", "anuario"}
 # Informes de SISTEMA: no cuelgan de una entidad (``bank_id`` NULL). Describen la
 # metodología (criteria) o el sistema entero (wire/datawatch/sector_outlook).
-_SYSTEM_REPORT_TYPES = {"criteria", "wire", "datawatch", "sector_outlook"}
+_SYSTEM_REPORT_TYPES = {"criteria", "wire", "datawatch", "sector_outlook", "anuario"}
 
 # Boletines de sistema que se NARRAN con IA y cuyo único insumo son las cifras del sector.
 # `criteria` no está: es determinista, se genera del motor y no consume benchmarks.
-_NARRATED_SYSTEM_TYPES = {"wire", "datawatch", "sector_outlook"}
+_NARRATED_SYSTEM_TYPES = {"wire", "datawatch", "sector_outlook", "anuario"}
 
 
 def _attach_pdf(report: Report, file_path: str, narratives: dict,
@@ -122,6 +130,37 @@ async def _generate_system_report(
     # y no en cada endpoint para que el próximo boletín no pueda nacer con el mismo hueco.
     if benchmarks is None and report_type in _NARRATED_SYSTEM_TYPES:
         benchmarks = panel_benchmarks(db, pe)
+    # El ANUARIO trae además los hechos del año, computados del panel (ver `reports/anuario`):
+    # mediana por corte, cambio por tipo, cambios de banda y el universo con sus parciales.
+    anuario_datos = None
+    if report_type == "anuario":
+        if pe is None:
+            raise HTTPException(
+                status_code=400,
+                detail="El anuario requiere un período: indique el cierre del año (YYYY-12-31).")
+        from modules.banking_score.reports.anuario import (anuario_del_sistema,
+                                                            estado_del_anio)
+        anuario_datos = anuario_del_sistema(db, pe.year)
+        if anuario_datos is None:
+            # La negativa NOMBRA la causa y dice qué SÍ se puede pedir. Un 422 genérico
+            # obliga a adivinar, y acá la causa habitual no es «faltan datos» sino «el año
+            # no cerró todavía»: el período por defecto de la aplicación es el corte más
+            # reciente, así que apretar el botón sin tocar el selector pedía el anuario del
+            # año EN CURSO.
+            est = estado_del_anio(db, pe.year)
+            if not est["tiene_cierre"]:
+                motivo = (f"el año {pe.year} no ha cerrado: falta el corte de diciembre "
+                          f"(hay {est['cortes_presentes']} de {est['cortes_esperados']} "
+                          "cortes). Un anuario compara cierre contra cierre, así que un año "
+                          "en curso daría un tramo con el encabezado de un año")
+            else:
+                motivo = (f"el panel de {pe.year} tiene {est['cortes_presentes']} de "
+                          f"{est['cortes_esperados']} cortes y se necesitan al menos dos")
+            disponible = est["ultimo_anio_completo"]
+            sugerencia = (f" El último año completo es {disponible}: elegí un período de "
+                          f"{disponible} en la barra superior." if disponible else "")
+            raise HTTPException(status_code=422,
+                                detail=f"No se emite el anuario {pe.year}: {motivo}.{sugerencia}")
     try:
         if report_type == "criteria":
             # El documento de criterios es la METODOLOGÍA: determinista, no varía por
@@ -136,10 +175,12 @@ async def _generate_system_report(
             narratives = await generate_report_narratives(
                 report_type=report_type, bank_name=scope_name,
                 scoring_result=scoring_result, period=period, benchmarks=benchmarks,
+                anuario=anuario_datos,
             )
         file_path = await generate_pdf_report(
             report_type=report_type, bank_name=scope_name,
             scoring_result=scoring_result, period=period, narratives=narratives,
+            anuario=anuario_datos,
         )
         _attach_pdf(report, file_path, narratives,
                     model="deterministic" if report_type == "criteria" else None)
@@ -408,6 +449,29 @@ async def generate_wire(
     )
 
 
+# ─── Anuario del sistema ─────────────────────────────────────────
+
+@router.post(
+    "/anuario/generate",
+    summary="Generar el Anuario del sistema",
+    description=("Genera el anuario de un AÑO del sistema bancario: mediana por corte, cambio "
+                 "por tipo de entidad, cambios de banda y universo declarado. El período es el "
+                 "cierre del año (YYYY-12-31); se usa su AÑO."),
+)
+async def generate_anuario(
+    period_end: str = Query(..., description="Cierre del año a resumir (YYYY-12-31)"),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """El anuario necesita su propia ruta: los demás boletines resumen un CORTE y éste resume
+    un AÑO, así que su período se lee como el cierre del ejercicio, no como la fecha del
+    documento. Sin esta ruta el tipo estaba registrado pero era inalcanzable."""
+    return await _generate_system_report(
+        report_type="anuario", scope_name="Sistema Bancario", period=period_end,
+        db=db, current_user=current_user,
+    )
+
+
 # ─── DataWatch ───────────────────────────────────────────────────
 
 @router.post(
@@ -553,37 +617,93 @@ async def generate_report(
             "indicators": {},
         }
 
+    # REVISIÓN ANUAL: sujeto de entidad, unidad de AÑO. Se computa antes de narrar y se exige
+    # el año CERRADO por el mismo motivo que el anuario del sistema — sin diciembre esto es un
+    # tramo, no un año, y saldría con el encabezado de un año.
+    revision = None
+    if report_type == "revision_anual":
+        from modules.banking_score.reports.revision_anual import revision_anual
+        revision = revision_anual(db, bank, pe.year)
+        if revision is None:
+            report.status = ReportStatus.error  # type: ignore[assignment]
+            db.commit()
+            raise HTTPException(
+                status_code=422,
+                detail=(f"No se emite la Revisión Anual {pe.year} de {bank.name}: el año no "
+                        "cerró (falta el corte de diciembre) o la entidad no tiene panel "
+                        "suficiente. Elegí un período de un año ya cerrado."))
+
     try:
         from modules.banking_score.reports.narrative import generate_report_narratives
         from modules.banking_score.reports.pdf_generator import generate_pdf_report
         # Benchmarks MEDIDOS del panel en el MISMO corte del informe: comparar un Q1
         # contra una constante ANUAL invertía la conclusión (ver scoring/benchmarks).
         benchmarks = panel_benchmarks(db, pe)
-        narratives = await generate_report_narratives(
-            report_type=report_type,
-            bank_name=bank.name,
-            scoring_result=scoring_result,
-            period=period_end,
-            benchmarks=benchmarks,
-        )
+        # El acumulador se abre alrededor de la generación: el motor deposita ahí las
+        # relaciones invertidas que sobrevivieron a la reparación (ver
+        # `shared/narrative/relaciones_pendientes`), y la política se decide abajo.
+        with acumulando() as relaciones_pendientes, \
+                acumulando_cifras() as sin_respaldo:
+            narratives = await generate_report_narratives(
+                report_type=report_type,
+                bank_name=bank.name,
+                scoring_result=scoring_result,
+                period=period_end,
+                benchmarks=benchmarks,
+                revision=revision,
+            )
         # GATE DE DEGRADACIÓN: en un reporte premium (SDQ Rating / deep dive de la entidad)
         # una sola sección de análisis caída a fallback estático produce un PDF hueco. Se
         # detecta ANTES de renderizar (no se desperdicia el render) y se aborta como `error`
         # con un mensaje de reintento — nunca `completed`. La causa (outage/429 o presupuesto)
         # es indistinta: el marcador `static_fallback` la cubre por igual.
         degraded = degraded_sections(narratives, list(narratives.keys()))
-        if degraded and report_type in _PREMIUM_REPORT_TYPES:
+        if degraded and report_type in _NO_SE_ENTREGAN_HUECOS:
             from shared.narrative.degradation_events import emit_narrative_degraded
             emit_narrative_degraded(
                 surface="banking_legacy", sector_key="banking", tier=report_type,
                 sections=degraded, blocked=True, scope=bank.name, period=period_end)
             raise NarrativeDegradedError(degraded)
+
+        # GATE DE CIFRA SIN RESPALDO y GATE DE RELACIÓN INVERTIDA — los dos hermanos del de
+        # arriba, que vivían SOLO en la ruta de productos. Esta ruta emite el mismo documento
+        # de cliente (`full_rating` es el SDQ Rating) y estaba llegando con uno de los tres
+        # gates: es el patrón "un guard existe en un motor y falta en el otro", y esta ruta ya
+        # acumulaba historial por eso mismo.
+        #
+        # Misma política que allá y que el gate de degradación de acá: los tipos PREMIUM
+        # fallan cerrado; los boletines de sistema solo se registran.
+        # El hallazgo lo trae el MOTOR por su canal, no se re-juzga acá. Esta ruta vetaba
+        # contra `scoring_result`, que es aún MÁS pobre que el snapshot de productos: ni
+        # siquiera trae los promedios del sistema, así que cualquier cifra comparada contra
+        # el panel se leía como inventada. Ver `shared/narrative/hallazgos_pendientes`.
+        premium = report_type in _NO_SE_ENTREGAN_HUECOS
+        if sin_respaldo:
+            logger.warning(
+                "Reporte %s para %s (%s) afirma cifras sin respaldo en %d sección(es): %s — %s",
+                report_type, bank.name, period_end, len(sin_respaldo), sin_respaldo,
+                "NO se entrega" if premium else "boletín de sistema: solo se registra")
+            if premium:
+                raise NarrativeSinRespaldoError(sin_respaldo)
+        if relaciones_pendientes:
+            logger.warning(
+                "Reporte %s para %s (%s) afirma relaciones que el dato contradice en %d "
+                "sección(es): %s — %s",
+                report_type, bank.name, period_end, len(relaciones_pendientes),
+                relaciones_pendientes,
+                "NO se entrega" if premium else "boletín de sistema: solo se registra")
+            if premium:
+                raise NarrativeRelacionInvertidaError(relaciones_pendientes)
+
         file_path = await generate_pdf_report(
             report_type=report_type,
             bank_name=bank.name,
             scoring_result=scoring_result,
             period=period_end,
             narratives=narratives,
+            # Las tablas del año viajan al PDF: sin ellas la Revisión Anual sería la misma
+            # foto de diciembre con otro título, que es exactamente lo que vino a corregir.
+            revision=revision,
         )
         _attach_pdf(report, file_path, narratives)
     except NarrativeDegradedError as d:
@@ -598,7 +718,21 @@ async def generate_report(
         db.commit()
         logger.warning("Reporte %s premium para %s con %d sección(es) degradada(s): "
                        "no se completa (%s).", report_type, bank.name, len(d.sections), d.sections)
-        raise HTTPException(status_code=503, detail=_NARRATIVE_DEGRADED_MSG)
+        raise HTTPException(status_code=503, detail=NARRATIVE_DEGRADED_MSG)
+    except NarrativeSinRespaldoError as v:
+        # Va ANTES del `except Exception`, que si no se la traga y devuelve 200 con el reporte
+        # marcado `error`: quien pidió el PDF vería un éxito con estado raro en vez del motivo.
+        report.status = ReportStatus.error  # type: ignore[assignment]
+        report.error_message = mensaje_sin_respaldo(v.hallazgos)  # type: ignore[assignment]
+        report.completed_at = None  # type: ignore[assignment]
+        db.commit()
+        raise HTTPException(status_code=503, detail=mensaje_sin_respaldo(v.hallazgos))
+    except NarrativeRelacionInvertidaError as v:
+        report.status = ReportStatus.error  # type: ignore[assignment]
+        report.error_message = mensaje_relacion(v.hallazgos)  # type: ignore[assignment]
+        report.completed_at = None  # type: ignore[assignment]
+        db.commit()
+        raise HTTPException(status_code=503, detail=mensaje_relacion(v.hallazgos))
     except Exception as e:
         logger.error("PDF generation failed: %s", e)
         report.status = ReportStatus.error

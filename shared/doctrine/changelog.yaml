@@ -15,7 +15,16 @@
 #     entero o una lista — un cambio puede entrar repartido en varios PRs, y el registro
 #     tiene que poder decirlo en vez de elegir uno y perder el rastro del otro.
 #  4. Una entrada NO se edita después de publicada. Si estaba mal, se agrega otra que la
-#     corrija y se enlaza con `corrige`.
+#     corrija y se enlaza con `corrige`. La excepción es reemplazar una PROYECCIÓN por la
+#     medición del mismo día: el campo se llama `medido_al_publicar` y una estimación ahí es
+#     un rótulo falso, que es peor que una entrada incompleta.
+#  5. Un nombre de entidad se COPIA del catálogo, nunca se completa de memoria. Al escribir
+#     la entrada del 2026-08-26 tomé uno de una salida truncada a 32 caracteres y completé el
+#     resto; acerté por casualidad y solo lo supe al comprobarlo. En un registro que existe
+#     para responderle a un cliente por qué cambió su cifra, un nombre inventado es peor que
+#     no nombrar a nadie. No hay test que lo vigile: la comprobación es contra producción, y
+#     una heurística de texto sobre el nombre NO detecta el caso — se probó y no tenía
+#     dientes.
 #
 # `sectores` usa las claves de producto (banking, insurance, pension), no nombres de módulo.
 
@@ -206,3 +215,39 @@ cambios:
         Contra intensidad de inversión el índice da −0,321 y el tamaño solo −0,323; contra
         nivel, el índice da 0,287 y el tamaño solo 0,377.
     pr: [814, 815, 816]
+
+  - id: 2026-08-26-solidez-un-hecho-un-voto
+    fecha_efectiva: "2026-08-26"
+    sectores: [banking]
+    titulo: "Solidez pondera por FAMILIA de indicador, no por indicador"
+    que_cambio: >-
+      El score de Solidez Financiera deja de ser el promedio simple de sus cinco indicadores y
+      pasa a promediar TRES familias: adecuación de capital (solvencia, solvencia de capital
+      primario y capital primario/activos ponderados), cobertura de provisiones, y capital
+      sobre activos sin ponderar. Los cinco indicadores se siguen calculando y publicando; lo
+      que cambia es que los tres primeros aportan un voto entre los tres en vez de uno cada
+      uno. Se corrige además el rótulo de `leverage`, que decía «Apalancamiento (Basilea)»
+      para un ratio cuyo denominador está PONDERADO por riesgo — el de Basilea es, por
+      definición, no ponderado.
+    por_que: >-
+      Los tres ratios de capital miden el mismo hecho: capital sobre activos ponderados por
+      riesgo, cambiando el numerador entre patrimonio técnico y capital primario. El promedio
+      simple le daba a ese único hecho el 60% de la dimensión, y cuando la entidad no tiene
+      capital secundario dos de ellos son EXACTAMENTE el mismo número — 9 de 43 entidades
+      calificadas al corte 2026-03. Un lector razonable los leía como tres evidencias
+      independientes de solidez.
+    impacto:
+      medido_al_publicar: >-
+        Medido sobre el panel COMPLETO tras aplicar el recálculo (22 períodos, 1.785 ratings
+        reescritos): el score de Solidez cambia en promedio -0,94 puntos sobre las 89
+        entidades calificadas (mínimo -8,74, máximo +4,97; p10 -4,96, p90 +0,71), y el score
+        global -0,37 en promedio (mínimo -3,33, máximo +1,99). 46 de las 89 no se mueven:
+        son las que no tienen los tres ratios de capital o ya los tenían iguales. CINCO
+        entidades cambian de banda: Asociación Cibao de Ahorros y Préstamos, Asociación La
+        Vega Real de Ahorros y Préstamos y Corporación de Crédito Monumental pasan de Sólida
+        a Adecuada; Banesco Banco Múltiple de Adecuada a En vigilancia; y Banco de Ahorros y
+        Créditos Bancotui de Adecuada a Sólida. El backtest
+        se revalidó en la misma cascada: Gini 0,155 sobre 1.693 observaciones y 301 eventos.
+        Ninguna cifra de cliente se ve afectada: los informes distribuidos hasta esta fecha
+        fueron muestras.
+    pr: [968]

@@ -285,6 +285,11 @@ export const SYSTEM_REPORT_TYPES = [
   "wire",
   "datawatch",
   "sector_outlook",
+  // El ANUARIO resume un AÑO, no un corte: el backend lee el AÑO del período que se le
+  // manda. Llegó a producción sin esta línea —endpoint, plantilla y etiqueta de portada
+  // sí, registro del frontend no— y el resultado fue un producto que no se podía pedir
+  // desde la interfaz. Lo vigila `systemReportTypes.paridad.test.ts`.
+  "anuario",
 ] as const;
 
 export type SystemReportType = (typeof SYSTEM_REPORT_TYPES)[number];
@@ -295,6 +300,7 @@ export const SYSTEM_REPORT_NEEDS_PERIOD: Record<SystemReportType, boolean> = {
   wire: true,
   datawatch: true,
   sector_outlook: true,
+  anuario: true,
 };
 
 const SYSTEM_REPORT_PATH: Record<SystemReportType, string> = {
@@ -302,7 +308,25 @@ const SYSTEM_REPORT_PATH: Record<SystemReportType, string> = {
   wire: "wire",
   datawatch: "datawatch",
   sector_outlook: "sector-outlook",
+  anuario: "anuario",
 };
+
+/**
+ * Los informes que resumen un AÑO y no un corte: el backend lee el AÑO del período que se le
+ * manda y descarta el trimestre. El botón tiene que decirlo, porque la relación entre lo que
+ * se elige arriba y lo que sale no está a la vista: con 2025-Q2 seleccionado sale el anuario
+ * de 2025 ENTERO, y con el período por defecto —el corte más reciente— se pediría el del año
+ * en curso.
+ */
+export const SYSTEM_REPORT_ES_ANUAL: Partial<Record<SystemReportType, boolean>> = {
+  anuario: true,
+};
+
+/** El año que un informe anual va a resumir, a partir del período del topbar. */
+export function anioDelInforme(periodEnd: string): string | null {
+  const m = /^(\d{4})-\d{2}-\d{2}$/.exec(periodEnd);
+  return m ? m[1] : null;
+}
 
 export async function listSystemReports(): Promise<ReportItem[]> {
   const { data } = await client.get<{ reports: ReportItem[] }>(

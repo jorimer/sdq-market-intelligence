@@ -51,6 +51,8 @@ REPORT_SECTIONS: Dict[str, list] = {
     "wire": ["executive_summary"],
     "criteria": ["risk_assessment"],
     "sector_outlook": ["sector_outlook"],
+    "anuario": ["anuario"],
+    "revision_anual": ["revision_anual"],
 }
 
 # Map each section to the NarrativeEngine template name
@@ -68,6 +70,8 @@ _SECTION_TO_TEMPLATE: Dict[str, str] = {
     "soporte_soberano": "banking_support_context",
     "trend_analysis": "trend_analysis",
     "sector_outlook": "sector_outlook",
+    "anuario": "anuario_sistema",
+    "revision_anual": "revision_anual",
 }
 
 # Plantillas de banking que van por la RUTA CEREBRO (axis="banking"): obtienen la Barra de
@@ -77,6 +81,14 @@ _CEREBRO_TEMPLATES = frozenset({
     "subcomponent_focus", "banking_summary", "banking_comparative",
     "banking_risk", "banking_recommendation", "banking_operating_env",
     "banking_support_context",
+    # El anuario vive en `THIN_TEMPLATES` (ruta cerebro) y faltaba acá, así que el motor lo
+    # mandaba por la ruta LEGACY —donde esa plantilla no existe— y caía al relleno estático
+    # EN SILENCIO. El primer anuario de producción salió con las tablas correctas y la sección
+    # de análisis diciendo «el análisis cualitativo ampliado se incorpora en la versión
+    # completa del producto». Registrado pero inalcanzable, igual que su endpoint.
+    "anuario_sistema",
+    # Misma trampa, mismo remedio: sin esta línea la Revisión Anual saldría hueca.
+    "revision_anual",
 })
 
 # Profundidad POR SECCIÓN (alineada con shared.products.section_mode), para que el deep dive
@@ -88,7 +100,8 @@ _CEREBRO_TEMPLATES = frozenset({
 # `sector_outlook` se suma tras un PDF entregado TRUNCADO a mitad de oración: su plantilla
 # pide hasta 800 palabras y corría con el presupuesto `standard` (1024 tokens), que en
 # español no alcanza (~1.120). `trend_analysis` ya estaba acá por lo mismo.
-_DEEP_SECTIONS = frozenset({"risk_assessment", "trend_analysis", "sector_outlook"})
+_DEEP_SECTIONS = frozenset({"risk_assessment", "trend_analysis", "sector_outlook",
+                            "anuario", "revision_anual"})
 
 
 def _section_mode(section: str, base_mode: str) -> str:
@@ -103,11 +116,12 @@ def _section_mode(section: str, base_mode: str) -> str:
 
 # Boletines cuyo sujeto es el SISTEMA, no una entidad. `criteria` no está: no se narra en
 # absoluto (se genera del motor, ver criteria_doc).
-_SYSTEM_REPORT_TYPES = frozenset({"wire", "datawatch", "sector_outlook"})
+_SYSTEM_REPORT_TYPES = frozenset({"wire", "datawatch", "sector_outlook", "anuario"})
 
 
 def _build_system_context(report_type: str, scope_name: str, period: str,
-                          benchmarks: Optional[Dict]) -> Dict:
+                          benchmarks: Optional[Dict],
+                          anuario: Optional[Dict] = None) -> Dict:
     """Contexto de un boletín de SISTEMA: promedios sectoriales y de grupos de pares.
 
     Deliberadamente NO incluye `overall_score`, `sub_components` ni `indicators`: un reporte
@@ -152,6 +166,13 @@ def _build_system_context(report_type: str, scope_name: str, period: str,
         for k, v in benchmarks.items():
             if k not in ("sector_averages", "peer_groups", "regulatory_limits") and v:
                 ctx.setdefault(k, v)
+    # Los hechos del AÑO, ya computados (ver `reports/anuario`). Van enteros: la mediana por
+    # corte, el cambio por tipo, los cambios de banda y el universo con sus parciales. El
+    # modelo no calcula nada de esto — y el campo `medias_y_medianas_divergen` existe para que
+    # no pueda titular el año con la media cuando ambas dicen lo contrario.
+    if anuario:
+        ctx["anuario"] = anuario
+
     return ctx
 
 
@@ -186,6 +207,7 @@ def _comparaciones_resueltas(all_indicators: Dict, benchmarks: Optional[Dict],
     """
     from shared.data.sib_client import INDICATOR_TO_BENCHMARK
     from shared.narrative.derived import comparaciones_vs_referencia
+    from modules.banking_score.scoring.indicator_detail import INDICATOR_META
 
     if not isinstance(benchmarks, dict):
         return []
@@ -215,7 +237,84 @@ def _comparaciones_resueltas(all_indicators: Dict, benchmarks: Optional[Dict],
         if refs:
             valores[ind] = raw
             referencias[ind] = refs
-    return comparaciones_vs_referencia(valores, referencias)
+    # La UNIDAD viaja con la comparación: el HHI es un índice de 0 a 10.000, y sin esto su
+    # brecha salía enunciada en "puntos porcentuales" — cifra correcta, unidad imposible.
+    unidades = {ind: (INDICATOR_META.get(ind) or {}).get("unit") for ind in valores}
+    # El SENTIDO DE LA ESCALA viaja con la comparación para que el veredicto —¿esta posición
+    # es fortaleza o debilidad?— se compute acá y no lo tenga que deducir el modelo uniendo
+    # dos hechos que hasta ahora llegaban en lugares distintos del contexto.
+    direcciones = {ind: (INDICATOR_META.get(ind) or {}).get("direction") for ind in valores}
+    return comparaciones_vs_referencia(valores, referencias, unidades=unidades,
+                                       direcciones=direcciones)
+
+
+def _razones_resueltas(all_indicators: Dict, benchmarks: Optional[Dict],
+                       entity_type: Optional[str] = None) -> list:
+    """Razones (cuántas VECES) contra las MISMAS referencias que las comparaciones.
+
+    Hermana de ``_comparaciones_resueltas``: aquélla sirve la dirección y la brecha en
+    puntos, ésta el múltiplo. El modelo derivaba la razón a mano y la erraba — «un ROA de
+    0.39% que triplica el promedio de 1.61%» cuando es 0.24×.
+
+    Las direcciones del registro viajan para que los indicadores de ÓPTIMO INTERMEDIO
+    (`ltd`, `exposicion_re`, `migracion`) no reciban una razón: estar al doble del promedio
+    ahí no es mejor ni peor.
+    """
+    from shared.data.sib_client import INDICATOR_TO_BENCHMARK
+    from shared.narrative.derived import razones_vs_referencia
+    from modules.banking_score.scoring.indicator_detail import INDICATOR_META
+
+    if not isinstance(benchmarks, dict):
+        return []
+    sector = benchmarks.get("sector_averages") or {}
+    peers = benchmarks.get("peer_groups") or {}
+    valores, referencias = {}, {}
+    for ind, bkey in INDICATOR_TO_BENCHMARK.items():
+        blob = all_indicators.get(ind)
+        raw = blob.get("raw") if isinstance(blob, dict) else None
+        if raw is None:
+            continue
+        refs: Dict[str, Optional[float]] = {}
+        if sector.get(bkey) is not None:
+            refs["promedio del sistema"] = sector[bkey]
+        for gname, grp in peers.items():
+            if entity_type and gname != entity_type and gname in _PEER_GROUP_LABEL:
+                continue
+            if isinstance(grp, dict) and grp.get(f"{bkey}_avg") is not None:
+                etiqueta = grp.get("label")
+                refs[f"promedio de {etiqueta}" if etiqueta
+                     else _PEER_GROUP_LABEL.get(gname, f"promedio {gname}")] = grp[f"{bkey}_avg"]
+        if refs:
+            valores[ind] = raw
+            referencias[ind] = refs
+    direcciones = {ind: (INDICATOR_META.get(ind) or {}).get("direction") for ind in valores}
+    return razones_vs_referencia(valores, referencias, direcciones=direcciones)
+
+
+def _factores_hasta_umbral(scoring_result: Dict) -> list:
+    """Cuánto debe multiplicarse cada indicador para alcanzar el umbral de sensibilidad.
+
+    Relación DISTINTA de la razón contra el mercado —"dónde deberías estar" no es "dónde
+    está el mercado"— y por eso viaja aparte. Fundirlas en una cláusula fue el error de §12.
+    Se sirve porque da contexto: cuán lejos está la entidad de la frontera que el modelo
+    reconoce.
+    """
+    from shared.narrative.derived import factores_hasta_umbral
+
+    sens = scoring_result.get("sensibilidades") or {}
+    inds = scoring_result.get("indicators") or {}
+    umbrales, valores = {}, {}
+    for fila in (sens.get("palancas_alza") or []):
+        ind, u = fila.get("indicador"), fila.get("umbral_raw")
+        blob = inds.get(ind) if ind else None
+        raw = blob.get("raw") if isinstance(blob, dict) else None
+        if ind and u is not None and raw is not None:
+            umbrales[ind], valores[ind] = u, raw
+    if not umbrales:
+        return []
+    return factores_hasta_umbral(
+        valores, umbrales,
+        que_es="umbral de sensibilidad (mejorar hasta ahí sube el score)")
 
 
 _SENTIDO = {
@@ -402,6 +501,11 @@ def _build_section_context(
                  if c["indicador"] in ind]
         if comps:
             ctx["comparaciones"] = comps
+        razones = [r for r in _razones_resueltas(
+            all_indicators, benchmarks, scoring_result.get("entity_type"))
+            if r["indicador"] in ind]
+        if razones:
+            ctx["razones"] = razones
         return ctx
 
     # Overview sections (executive summary, comparative, recommendation…) keep the
@@ -448,8 +552,18 @@ def _build_section_context(
     # modelo también le sirven — explican por qué una dimensión mueve más que otra.
     try:
         from modules.banking_score.scoring.weights import get_sub_component_weights
-        ctx["pesos_sub_componentes"] = get_sub_component_weights(
-            scoring_result.get("entity_type"))
+        pesos_sub = get_sub_component_weights(scoring_result.get("entity_type"))
+        ctx["pesos_sub_componentes"] = pesos_sub
+        # QUÉ MOVIÓ el score, ya descompuesto. La dimensión que más se movió NO es la que más
+        # movió el resultado —los pesos difieren— y esa cuenta el modelo la hacía a ojo: un
+        # informe entregado atribuyó el deterioro de un semestre al «colapso de eficiencia»
+        # cuando en ese semestre la eficiencia MEJORÓ y aportó a favor. Las cifras estaban
+        # todas bien; la atribución era una derivación.
+        if traj.get("sub"):
+            from shared.narrative.derived import aportes_al_cambio
+            aportes = aportes_al_cambio(traj["sub"], pesos_sub)
+            if aportes:
+                ctx["aportes_al_cambio"] = aportes
     except Exception:  # noqa: BLE001 — el contexto nunca depende de esto
         pass
     if pct.get("overall"):
@@ -478,6 +592,15 @@ def _build_section_context(
                                          scoring_result.get("entity_type"))
         if comps:
             ctx["comparaciones"] = comps
+        razones = _razones_resueltas(all_indicators, benchmarks,
+                                     scoring_result.get("entity_type"))
+        if razones:
+            ctx["razones"] = razones
+    # El factor hasta el umbral no depende de los benchmarks (sale de las sensibilidades),
+    # así que va fuera del bloque: el Deep Dive lo trae aunque el panel no dé referencias.
+    factores = _factores_hasta_umbral(scoring_result)
+    if factores:
+        ctx["factores_hasta_umbral"] = factores
     return ctx
 
 
@@ -487,6 +610,8 @@ async def generate_report_narratives(
     scoring_result: Dict,
     period: str,
     benchmarks: Optional[Dict] = None,
+    anuario: Optional[Dict] = None,
+    revision: Optional[Dict] = None,
 ) -> Dict[str, str]:
     """Generate all narrative sections required for *report_type*.
 
@@ -511,7 +636,24 @@ async def generate_report_narratives(
     is_system = report_type in _SYSTEM_REPORT_TYPES
 
     for section in sections:
-        if is_system and section == "executive_summary":
+        if section == "anuario":
+            # El anuario tiene su propio sujeto —el sistema en un AÑO— y su contexto son los
+            # hechos ya computados. Va antes del caso general de sistema porque no es un
+            # boletín de corte: su unidad es el año.
+            template = "anuario_sistema"
+            context = _build_system_context(report_type, bank_name, period, benchmarks,
+                                            anuario=anuario)
+        elif section == "revision_anual":
+            # La Revisión Anual tiene sujeto de ENTIDAD pero unidad de AÑO, así que no entra
+            # ni por el caso de sistema ni por el de sección de corte: su contexto son los
+            # hechos del año ya computados (ver `reports/revision_anual`), con el telón de
+            # pares del cierre para que la posición relativa tenga contra qué leerse.
+            template = "revision_anual"
+            context = {"entity_name": bank_name, "period": period,
+                       "revision_anual": revision or {}}
+            if benchmarks:
+                context["benchmarks"] = benchmarks
+        elif is_system and section == "executive_summary":
             template = "system_summary"
             context = _build_system_context(report_type, bank_name, period, benchmarks)
         else:

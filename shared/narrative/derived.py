@@ -112,8 +112,30 @@ def derived_figures(
 # y, sobre todo, no informa nada. "en línea con" es la lectura honesta.
 MATERIALIDAD_PP = 0.1
 
+# La UNIDAD viaja con la brecha. Sin esto, `_lectura` decía siempre "puntos porcentuales" y
+# una comparación de HHI —un ÍNDICE de 0 a 10.000, no un porcentaje— salía narrada como
+# «412,30 puntos porcentuales por encima del promedio del sistema»: una cifra correcta con una
+# unidad imposible. Es la misma familia de defecto que el sujeto que no viaja con el número.
+UNIDAD_DE_BRECHA = {
+    "%": "puntos porcentuales",
+    "índice": "puntos del índice",
+}
+_UNIDAD_POR_DEFECTO = "%"
 
-def _lectura(direccion: str, etiqueta: str, brecha: float) -> str:
+# Piso de RUIDO por unidad, no umbral de significancia. En %, 0.1 pp nace del caso real
+# (16.44 vs 16.5 difieren 0.06 pp: forzar un lado ahí no informa nada). En un índice HHI la
+# escala es otra —los valores viven en cientos o miles— y 0.1 punto es ruido de redondeo; 10
+# puntos es lo primero que se distingue de eso. NO es el umbral antimonopolio de 100 puntos:
+# ése mide si un cambio de concentración es SIGNIFICATIVO, y acá solo se decide si vale
+# afirmar un lado.
+MATERIALIDAD_POR_UNIDAD = {
+    "%": MATERIALIDAD_PP,
+    "índice": 10.0,
+}
+
+
+def _lectura(direccion: str, etiqueta: str, brecha: float,
+             unidad_brecha: str = "puntos porcentuales") -> str:
     """La comparación como CLÁUSULA ya redactada, lista para copiar.
 
     Reincidencia 2026-08-13 (Rating Completo BPD §5): el contexto traía
@@ -127,16 +149,58 @@ def _lectura(direccion: str, etiqueta: str, brecha: float) -> str:
     pero la frase se sirve armada para que copiar sea más fácil que redactar.
     """
     if direccion == "en línea":
-        return (f"en línea con el {etiqueta} (brecha de {brecha:+.2f} puntos "
-                "porcentuales, materialmente nula)")
-    return f"{direccion} del {etiqueta} en {abs(brecha):.2f} puntos porcentuales"
+        return (f"en línea con el {etiqueta} (brecha de {brecha:+.2f} {unidad_brecha}, "
+                "materialmente nula)")
+    return f"{direccion} del {etiqueta} en {abs(brecha):.2f} {unidad_brecha}"
+
+
+#: Posición + sentido de la escala → VEREDICTO. La unión que faltaba.
+#:
+#: El contexto servía los dos hechos por separado —"por debajo del promedio en 3.70 pp" en un
+#: lado, "un valor MÁS ALTO es MEJOR" en otro— y dejaba que el modelo los UNIERA. Esa unión es
+#: una derivación, que es exactamente la operación que este módulo entero existe para evitar.
+#:
+#: Huella del defecto en un informe real (Deep Dive de banca, §7 «Análisis Comparativo»): con
+#: patrimonio/activos en 7.41% contra una mediana de grupo de 11.11%, la sección escribió que
+#: «SUPERA en 3.70 puntos porcentuales al promedio de su grupo» y dos líneas después que el
+#: margen de absorción es «estructuralmente MÁS DELGADO que el del par típico». No es un
+#: desliz de una palabra: son DOS uniones distintas del mismo par de hechos, una bien y otra
+#: al revés. Un error de tipeo no se comporta así.
+_VEREDICTO = {
+    ("higher", "por encima"): "favorable", ("higher", "por debajo"): "desfavorable",
+    ("lower", "por encima"): "desfavorable", ("lower", "por debajo"): "favorable",
+}
+_POR_QUE = {"higher": "en este indicador un valor más alto es mejor",
+            "lower": "en este indicador un valor más bajo es mejor"}
+
+
+def _veredicto(direccion_escala: Optional[str], posicion: str) -> tuple:
+    """``(veredicto, por_qué)`` de una posición dada el sentido de la escala.
+
+    ``no_aplica`` en los indicadores de ÓPTIMO INTERMEDIO, y no por no saber: ahí la vara NO
+    es el promedio sino el óptimo, así que estar por encima o por debajo del grupo no tiene
+    lectura de bueno o malo. Esa la da ``posicion_vs_optimo``. Se declara el motivo — un campo
+    ausente se lee como que nadie miró.
+    """
+    if posicion == "en línea":
+        return "en línea", "la brecha no es material"
+    if direccion_escala == "target":
+        return "no_aplica", ("indicador de óptimo intermedio: la vara es el óptimo, no el "
+                             "promedio — leé 'posicion_vs_optimo'")
+    escala = direccion_escala or ""
+    v = _VEREDICTO.get((escala, posicion))
+    if v is None:
+        return "no_aplica", "no se declaró el sentido de la escala de este indicador"
+    return v, _POR_QUE[escala]
 
 
 def comparaciones_vs_referencia(
     valores: Dict[str, Optional[float]],
     referencias: Dict[str, Dict[str, Optional[float]]],
     *,
-    materialidad_pp: float = MATERIALIDAD_PP,
+    unidades: Optional[Dict[str, Optional[str]]] = None,
+    direcciones: Optional[Dict[str, Optional[str]]] = None,
+    materialidad_pp: Optional[float] = None,
 ) -> List[Dict[str, Any]]:
     """Dirección y brecha de cada (indicador, referencia), ya resueltas.
 
@@ -147,12 +211,21 @@ def comparaciones_vs_referencia(
             "promedio de pares grandes"): nombrar CONTRA QUÉ se compara es la mitad del
             problema, porque un indicador puede estar bajo el sistema y sobre su grupo de
             pares a la vez.
+        unidades: ``{indicador: unidad}`` (``"%"`` | ``"índice"``). Decide en qué unidad se
+            ENUNCIA la brecha y qué piso de ruido se le aplica. Por defecto ``"%"``, que es
+            lo que asumía el módulo entero cuando solo había porcentajes.
+        materialidad_pp: fuerza un piso de ruido único para todos los indicadores. Sin él,
+            cada uno usa el de SU unidad (``MATERIALIDAD_POR_UNIDAD``).
 
     Returns:
         Lista de ``{indicador, valor, referencia, valor_referencia, direccion, brecha_pp,
-        lectura}`` con ``direccion`` ∈ {"por encima", "por debajo", "en línea"} y ``lectura``
-        la cláusula ya redactada (ver ``_lectura``). Agnóstica de eje: el llamador arma el
-        mapeo indicador→referencias con el vocabulario de su dominio.
+        unidad_brecha, lectura}`` con ``direccion`` ∈ {"por encima", "por debajo", "en línea"}
+        y ``lectura`` la cláusula ya redactada (ver ``_lectura``). Agnóstica de eje: el
+        llamador arma el mapeo indicador→referencias con el vocabulario de su dominio.
+
+        ``brecha_pp`` conserva el nombre aunque la unidad no sea siempre pp: es el campo que
+        leen el chequeo determinista de dirección (``numeric_guard``) y la instrucción del
+        cerebro. La unidad viaja al lado, en ``unidad_brecha``, y ya redactada en ``lectura``.
     """
     out: List[Dict[str, Any]] = []
     for indicador, refs in (referencias or {}).items():
@@ -170,11 +243,17 @@ def comparaciones_vs_referencia(
                 r = float(ref)
             except (TypeError, ValueError):
                 continue
+            unidad = (unidades or {}).get(indicador) or _UNIDAD_POR_DEFECTO
+            unidad_brecha = UNIDAD_DE_BRECHA.get(unidad, UNIDAD_DE_BRECHA[_UNIDAD_POR_DEFECTO])
+            piso = (materialidad_pp if materialidad_pp is not None
+                    else MATERIALIDAD_POR_UNIDAD.get(unidad, MATERIALIDAD_PP))
             brecha = round(v - r, 2)
-            if abs(brecha) < materialidad_pp:
+            if abs(brecha) < piso:
                 direccion = "en línea"
             else:
                 direccion = "por encima" if brecha > 0 else "por debajo"
+            veredicto, por_que = _veredicto(
+                (direcciones or {}).get(indicador), direccion)
             out.append({
                 "indicador": indicador,
                 "valor": round(v, 4),
@@ -182,7 +261,13 @@ def comparaciones_vs_referencia(
                 "valor_referencia": round(r, 4),
                 "direccion": direccion,
                 "brecha_pp": brecha,
-                "lectura": _lectura(direccion, str(etiqueta), brecha),
+                "unidad_brecha": unidad_brecha,
+                # `lectura` se COPIA literal (así lo pide el prompt), así que el veredicto NO
+                # va adentro: terminaría impreso en el informe. Viaja aparte, es INTERNO — el
+                # modelo lo usa para orientarse y redacta con su propio criterio.
+                "lectura": _lectura(direccion, str(etiqueta), brecha, unidad_brecha),
+                "veredicto": veredicto,
+                "veredicto_por_que": por_que,
             })
     return out
 
@@ -393,3 +478,295 @@ def rank_comparable(slug: Optional[str], universo: Dict[str, Any],
                      f"medidas; {universo['n_parciales']} quedan fuera del orden por cobertura "
                      f"parcial y se listan aparte con lo que les falta"),
     }
+
+
+# ── Razones contra referencia (la relación que faltaba servir) ────────────────
+#
+# `comparaciones_vs_referencia` sirve la DIRECCIÓN y la BRECHA en puntos. Faltaba la tercera
+# forma de relacionar dos cifras —cuántas VECES una es la otra— y el modelo la seguía
+# derivando a mano. Defecto real (Deep Dive de banca, 2026-03-31, §12): «una rentabilidad
+# sobre activos (0.39%) que TRIPLICA el umbral de alerta respecto al promedio de bancos
+# múltiples (1.61%)». Las dos cifras eran correctas y estaban servidas; la razón es 0.24×, y
+# la §10 del mismo informe lo decía bien («una cuarta parte de la velocidad de sus pares»).
+#
+# La prosa de razón es frecuente, no marginal: en ese único informe hay cinco afirmaciones de
+# ese tipo. Y ningún chequeo determinista las miraba —«triplica» no tiene dígitos que parear—,
+# así que la única red era el juez semántico, que corrió sobre ese texto y lo dejó pasar.
+
+#: Debajo de este valor absoluto, un denominador vuelve la razón inestable: con una mora de
+#: 0.00% (Citibank, corte 2026-03) o un ROA de 0.06% (Banesco), dividir produce un número que
+#: cambia de orden de magnitud con el último decimal.
+PISO_DENOMINADOR = 0.10
+
+#: Fracciones que un analista SÍ escribe. Se sirven ya redactadas para que copiar sea más
+#: fácil que derivar — es toda la tesis de este módulo.
+_FRACCIONES = [
+    (0.25, "una cuarta parte"), (0.33, "un tercio"), (0.50, "la mitad"),
+    (0.75, "tres cuartas partes"), (2.0, "el doble"), (3.0, "el triple"),
+    (4.0, "el cuádruple"),
+]
+_TOLERANCIA_FRACCION = 0.04
+
+
+def _frase_de_razon(r: float) -> tuple:
+    """``(frase, conector)`` de la razón.
+
+    La tolerancia es RELATIVA a la fracción, no absoluta: con un margen fijo, un 0.29 se
+    redondeaba a «una cuarta parte» —un 16% de error en una frase que suena exacta—. Relativa,
+    0.25 admite ±0.01 y 2.0 admite ±0.08, que es lo que hace correcto llamar «el doble» a un
+    2.05 y no a un 2.4.
+    """
+    for valor, nombre in _FRACCIONES:
+        if abs(r - valor) <= _TOLERANCIA_FRACCION * valor:
+            return nombre, "del"
+    return f"{r:.2f} veces", "el"
+
+
+def _lectura_de_razon(razon: float, etiqueta: str, ambos_neg: bool) -> str:
+    """La razón como CLÁUSULA lista para copiar — misma tesis que ``_lectura`` para la
+    dirección: si copiar es más fácil que derivar, el modelo copia."""
+    frase, conector = _frase_de_razon(razon)
+    if ambos_neg:
+        # Con ambos en pérdida la razón se lee sobre MAGNITUDES y en clave de pérdida: decir
+        # "es el doble" de un número negativo invierte la gravedad al oído.
+        puente = "de lo que pierde el" if conector == "del" else "lo que pierde el"
+        return f"pierde {frase} {puente} {etiqueta} ({razon:.2f}× esa pérdida)"
+    return f"es {frase} {conector} {etiqueta} ({razon:.2f}× su nivel)"
+
+
+def razones_vs_referencia(
+    valores: Dict[str, Optional[float]],
+    referencias: Dict[str, Dict[str, Optional[float]]],
+    *,
+    direcciones: Optional[Dict[str, Optional[str]]] = None,
+) -> List[Dict[str, Any]]:
+    """Cuántas VECES el valor de la entidad es su referencia, con la relación ya resuelta.
+
+    Hermana de ``comparaciones_vs_referencia`` y se sirve junto a ella: la brecha ordena
+    magnitudes, la razón las hace sentir. Tres relaciones posibles, y la que NO es una razón
+    es la más importante:
+
+    ``razon``
+        Ambos valores del mismo signo. Se sirve ``razon_vs_referencia`` y la cláusula.
+        Con ambos negativos la razón se computa sobre magnitudes y se dice en clave de
+        pérdida ("pierde 2.3 veces lo que pierde el grupo").
+
+    ``cruce_de_cero``
+        Signos opuestos. **No se publica razón, y no porque haya que ocultarla: porque la
+        razón informa MAL.** En el corte 2026-03 hay 24 casos reales; dos de ellos: JMMB con
+        ROA −0.26 contra una mediana de +1.52 da −0.17×, y Banco Activo con −13.76 da −9.04×.
+        El hecho es el mismo en los dos —la entidad pierde mientras su grupo gana— y la razón
+        los hace parecer de naturaleza distinta, además de leerse "−0.17×" como una diferencia
+        menor cuando es un cambio de signo. El cruce de cero es EL hallazgo, viaja marcado
+        (``cruza_cero``), y la magnitud la sigue dando la brecha en puntos, que sí ordena
+        (−15.28 pp contra −1.78 pp).
+
+    ``no_procede``
+        Denominador por debajo de ``PISO_DENOMINADOR``, o indicador de ÓPTIMO INTERMEDIO
+        (``direcciones[ind] == "target"``), donde estar al doble del promedio no es mejor ni
+        peor y la lectura correcta ya la da ``posicion_vs_optimo``. Se DECLARA el motivo: un
+        campo ausente se lee como que nadie miró.
+
+    Los nombres de campo llevan su sujeto (``razon_vs_referencia``, no ``razon``) a propósito:
+    el defecto de §12 fue exactamente reatribuir una razón a la referencia equivocada.
+    """
+    out: List[Dict[str, Any]] = []
+    for indicador, refs in (referencias or {}).items():
+        val = (valores or {}).get(indicador)
+        if val is None or not isinstance(refs, dict):
+            continue
+        try:
+            v = float(val)
+        except (TypeError, ValueError):
+            continue
+        es_target = (direcciones or {}).get(indicador) == "target"
+        for etiqueta, ref in refs.items():
+            if ref is None:
+                continue
+            try:
+                r = float(ref)
+            except (TypeError, ValueError):
+                continue
+            fila: Dict[str, Any] = {
+                "indicador": indicador, "valor": round(v, 4),
+                "referencia": etiqueta, "valor_referencia": round(r, 4),
+                "cruza_cero": False,
+            }
+            if es_target:
+                fila.update(relacion="no_procede", lectura=None, motivo=(
+                    "indicador de óptimo intermedio: una razón contra el promedio no dice si "
+                    "mejora o empeora — la lectura válida es la posición vs el óptimo"))
+            elif (v < 0) != (r < 0):
+                gana, pierde = ("la referencia", "la entidad") if v < 0 else ("la entidad", "la referencia")
+                fila.update(
+                    relacion="cruce_de_cero", cruza_cero=True,
+                    brecha=round(v - r, 2),
+                    lectura=(
+                        f"no hay razón que valga: {pierde} está en terreno negativo "
+                        f"({(v if v < 0 else r):.2f}) y {gana} en positivo "
+                        f"({(r if v < 0 else v):.2f}) — es un cambio de SIGNO, no de magnitud; "
+                        f"la distancia es de {abs(v - r):.2f} puntos"),
+                    motivo="signos opuestos: la razón se lee como una diferencia menor")
+            elif abs(r) < PISO_DENOMINADOR:
+                fila.update(relacion="no_procede", lectura=None, motivo=(
+                    f"la referencia ({r:.2f}) está demasiado cerca de cero: la razón cambia de "
+                    "orden de magnitud con el último decimal — usá la brecha en puntos"))
+            else:
+                razon = abs(v) / abs(r)
+                ambos_neg = v < 0 and r < 0
+                fila.update(
+                    relacion="razon",
+                    razon_vs_referencia=round(razon, 2),
+                    # La MISMA razón como porcentaje del referente. Un analista escribe
+                    # indistintamente «1.32 veces» y «el 132% del promedio», y las dos son
+                    # correctas — pero el guard determinista compara contra los números del
+                    # contexto, y ahí solo estaba el 1.32: un Deep Dive REAL se vetó por un
+                    # «132%» que era exactamente la razón servida.
+                    #
+                    # Se sirve el número en la forma que el modelo va a usar, en vez de
+                    # aflojar el guard para que acepte cualquier valor multiplicado por cien:
+                    # eso dejaría pasar un «500%» inventado porque el contexto tiene un 5.0
+                    # en cualquier parte. Es la doctrina de siempre — dejar el hueco es lo que
+                    # lo llena mal.
+                    razon_como_pct_del_referente=round(razon * 100, 1),
+                    factor_para_igualar_referencia=(round(1 / razon, 2) if razon else None),
+                    lectura=_lectura_de_razon(razon, etiqueta, ambos_neg),
+                )
+            out.append(fila)
+    return out
+
+
+def factores_hasta_umbral(
+    valores: Dict[str, Optional[float]],
+    umbrales: Dict[str, Optional[float]],
+    *,
+    que_es: str,
+) -> List[Dict[str, Any]]:
+    """Cuánto debe multiplicarse cada indicador para ALCANZAR su umbral.
+
+    Es una relación DISTINTA de la razón contra una referencia —"dónde deberías estar" no es
+    "dónde está el mercado"— y por eso viaja en su propia lista, con su propio nombre de
+    campo y su propia glosa. Fundirlas en una cláusula fue el error literal de §12: «una
+    rentabilidad sobre activos (0.39%) que triplica el umbral de alerta respecto al promedio
+    de bancos múltiples (1.61%)» mezcla el umbral con el promedio y sale falsa contra los dos.
+
+    Se sirve porque da contexto de mercado —cuán lejos está la entidad de la frontera que el
+    modelo de scoring reconoce—, no para reemplazar la comparación contra pares.
+    """
+    out: List[Dict[str, Any]] = []
+    for indicador, umbral in (umbrales or {}).items():
+        val = (valores or {}).get(indicador)
+        if val is None or umbral is None:
+            continue
+        try:
+            v, u = float(val), float(umbral)
+        except (TypeError, ValueError):
+            continue
+        fila: Dict[str, Any] = {"indicador": indicador, "valor": round(v, 4),
+                                "umbral": round(u, 4), "que_es": que_es}
+        if (v < 0) != (u < 0) or abs(v) < PISO_DENOMINADOR:
+            fila.update(factor_para_alcanzar_umbral=None, lectura=(
+                f"la distancia al umbral ({u:.2f}) es de {abs(u - v):.2f} puntos; no se "
+                "expresa como múltiplo porque el valor actual no lo admite"))
+        else:
+            f = abs(u) / abs(v)
+            fila.update(
+                factor_para_alcanzar_umbral=round(f, 2),
+                lectura=(f"debería multiplicarse por {f:.2f} para alcanzar el {que_es} "
+                         f"({u:.2f}); hoy está en {v:.2f}"))
+        out.append(fila)
+    return out
+
+
+# ── Qué MOVIÓ el score entre dos cortes ───────────────────────────────────────
+#
+# `derived_figures` sirve el aporte de cada componente al NIVEL (score × peso). Faltaba el
+# aporte al CAMBIO —qué explica que el score haya subido o bajado—, y es una relación distinta:
+# la dimensión que más se movió no es necesariamente la que más movió el resultado, porque los
+# pesos difieren.
+#
+# Defecto real en un informe ENTREGADO (Insight de Asociación Bonao, 2025-12-31): la §1 afirmó
+# que el deterioro del segundo semestre estuvo «impulsado precisamente por el colapso de
+# eficiencia». En ese semestre la eficiencia MEJORÓ (+0.96) y aportó +0.12 al score; la caída
+# la causaron solidez (−2.24) y calidad (−1.34), el 97% del total. El colapso de eficiencia
+# había sido en el PRIMER semestre (−8.77).
+#
+# Todas las cifras del informe eran correctas: el contexto servía las cinco series. Lo que el
+# modelo tuvo que hacer —multiplicar cinco deltas por sus pesos y ordenar— es una DERIVACIÓN,
+# y eligió la dimensión del mayor salto crudo del año en vez de la de mayor aporte en la
+# ventana de la que estaba hablando.
+
+#: Ventanas que una narrativa enuncia de verdad, en número de cortes hacia atrás. La etiqueta
+#: viaja con el número: sin nombrar la ventana, «lo que movió el score» no significa nada.
+VENTANAS_DE_CAMBIO = (("el último trimestre", 1), ("el último semestre", 2),
+                      ("el último año", 4))
+
+
+def aportes_al_cambio(
+    trayectoria: Dict[str, List[Dict[str, Any]]],
+    pesos: Dict[str, float],
+    *,
+    ventanas: Any = VENTANAS_DE_CAMBIO,
+    campo_score: str = "score",
+) -> List[Dict[str, Any]]:
+    """Descomposición del cambio del score por componente, para cada ventana.
+
+    Args:
+        trayectoria: ``{componente: [{..., "score": float}, ...]}`` en orden cronológico.
+        pesos: ``{componente: peso}`` — los del TIPO de entidad, no la constante base.
+
+    Returns:
+        Una entrada por ventana con ``cambio_total``, ``aportes`` (ordenados del que más
+        empuja hacia abajo al que más empuja hacia arriba) y ``principal`` ya resuelto, más la
+        ``lectura`` redactada. La suma de los aportes reconstruye ``cambio_total`` — esa
+        identidad es lo que hace verificable la afirmación.
+
+    Solo se emiten las ventanas que la serie SOPORTA: con seis cortes no se habla del último
+    año si el año pide más. Una ventana inventada es peor que una ventana ausente.
+    """
+    out: List[Dict[str, Any]] = []
+    comunes = [c for c in pesos if isinstance(trayectoria.get(c), list) and trayectoria[c]]
+    if not comunes:
+        return out
+    largo = min(len(trayectoria[c]) for c in comunes)
+    for etiqueta, atras in ventanas:
+        if largo < atras + 1:
+            continue
+        aportes: List[Dict[str, Any]] = []
+        for c in comunes:
+            serie = trayectoria[c]
+            crudo_desde = serie[-1 - atras].get(campo_score)
+            crudo_hasta = serie[-1].get(campo_score)
+            if crudo_desde is None or crudo_hasta is None:
+                continue
+            try:
+                delta = round(float(crudo_hasta) - float(crudo_desde), 2)
+            except (TypeError, ValueError):
+                continue
+            aportes.append({
+                "componente": c, "delta_score": delta, "peso": pesos[c],
+                "aporte_al_cambio": round(delta * pesos[c], 2),
+            })
+        if not aportes:
+            continue
+        aportes.sort(key=lambda a: float(a["aporte_al_cambio"]))
+        total = round(sum(float(a["aporte_al_cambio"]) for a in aportes), 2)
+        # El PRINCIPAL es el de mayor aporte en la dirección del cambio: si el score cayó, el
+        # que más lo hundió; si subió, el que más lo empujó. Tomar siempre el mínimo daría, en
+        # un score que sube, "el principal responsable" a quien menos ayudó.
+        principal = aportes[0] if total < 0 else aportes[-1]
+        aporte_principal = float(principal["aporte_al_cambio"])
+        cuota = (abs(aporte_principal) / abs(total) * 100) if total else 0.0
+        out.append({
+            "ventana": etiqueta,
+            "cambio_total": total,
+            "aportes": aportes,
+            "principal": principal["componente"],
+            "cuota_del_principal_pct": round(cuota, 1),
+            "lectura": (
+                f"en {etiqueta} el score {'cayó' if total < 0 else 'subió'} "
+                f"{abs(total):.2f} puntos, y {principal['componente']} explica "
+                f"{cuota:.0f}% de ese movimiento "
+                f"(aporta {aporte_principal:+.2f} puntos)"),
+        })
+    return out

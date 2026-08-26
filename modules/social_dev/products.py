@@ -374,6 +374,42 @@ class SocialDevProduct:
         # Indicadores 2.20 y 4.2 de la END. Las dos llevan su salvedad en la nota: el año
         # de la línea base legal NO está en la serie del emisor, así que el contraste con
         # la ley se hace contra el año más cercano y eso se declara antes de medir.
+        # Registro Único de trámites (Ley 167-21). Alcance NACIONAL y período MENSUAL: es
+        # un catálogo vivo, no una estadística anual, y el mes es lo que deja ver si la
+        # cifra se mueve. La clave del porcentaje nombra su denominador porque acá conviven
+        # dos poblaciones —los catalogados y los que declaran— y `pct_con_tiempo` a secas se
+        # reatribuye al que quede más cerca.
+        "tramites_catalogados": (
+            "tramites_catalogados", HEALTH_ENTITY,
+            "Trámites publicados en el catálogo del Estado", "institutional",
+            "Portal Único de Servicios (gob.do). Cuántos procedimientos administrativos "
+            "publica el Estado. La Ley 167-21 (art. 39) obliga a publicarlos TODOS, y su "
+            "art. 40 le pone consecuencia: solo se puede exigir lo registrado. No alimenta "
+            "el índice de desarrollo."),
+        "tramites_con_tiempo_declarado": (
+            "tramites_con_tiempo_declarado", HEALTH_ENTITY,
+            "Trámites que declaran su tiempo de respuesta", "institutional",
+            "Cuántas fichas del catálogo dicen cuánto tarda el trámite. Lo exige la "
+            "Resolución 142-2024 del MAP —NO la Ley 167-21, que no nombra el tiempo de "
+            "respuesta—; la resolución se dicta al amparo del art. 42, que manda al "
+            "ministerio emitir los lineamientos. El dato se extrae de la PROSA de la ficha "
+            "con una gramática anclada: la API no tiene campo para esto."),
+        "tramites_pct_con_tiempo_sobre_los_catalogados": (
+            "tramites_pct_con_tiempo_sobre_los_catalogados", HEALTH_ENTITY,
+            "Trámites que declaran su tiempo, sobre los catalogados (%)", "institutional",
+            "La razón, servida y no derivada. Una cifra baja acá NO dice que los trámites "
+            "sean lentos — dice que no se sabe cuánto tardan, que es otra afirmación y es "
+            "la que el dato sostiene. El valor vigente lo sirve la serie: escribirlo acá lo "
+            "vuelve falso en la próxima corrida sin que nadie se entere."),
+        "tramites_mencionan_cifra_de_tiempo_sin_anclar": (
+            "tramites_mencionan_cifra_de_tiempo_sin_anclar", HEALTH_ENTITY,
+            "Fichas con alguna cifra de tiempo sin anclar al plazo del trámite",
+            "institutional",
+            "El CONTRAFACTUAL del criterio de extracción, y no una medición del plazo de los "
+            "trámites: son multas, vigencias de documentos y condiciones de agenda. Se "
+            "publica para poder decir cuánto más grande sería la cifra que sí se publica si "
+            "se aceptara cualquier número de tiempo de la prosa, computando la razón en vez "
+            "de afirmarla. No alimenta el índice de desarrollo."),
         "public_education_spending": (
             "public_education_spending", HEALTH_ENTITY,
             "Gasto público en educación (% del PIB)", "education",
@@ -454,6 +490,113 @@ class SocialDevProduct:
         # que el eje sectorial ingiere por actividad: son el mismo dato con alcances
         # distintos, y confundirlos publicaría la inversión de un rubro contra la meta del
         # país.
+        # Indicador 2.33 de la END. El SUJETO viaja en la etiqueta: es el gasto del Gobierno
+        # CENTRAL, no el del gobierno general que republica el organismo internacional —ese
+        # incluye la seguridad social y da un 66% más. La razón se computa contra UNA sola
+        # serie de PIB para los trece años; el emisor publica la suya en cuatro de ellos y
+        # queda 6-8% por encima, porque dividió por el PIB de su añada.
+        "health_spending_central_gov_pct_gdp": (
+            "health_spending_central_gov_pct_gdp", HEALTH_ENTITY,
+            "Gasto en salud del Gobierno Central (% del PIB)", "living_standards",
+            "Línea de Salud del cuadro de clasificación funcional de DIGEPRES, monto "
+            "devengado, sobre el PIB nominal. No alimenta el índice de desarrollo."),
+        # Indicador 2.40 de la END. El SUJETO va en la etiqueta: es INGRESO, no ocupación
+        # —`employment_gender_ratio` mide otra cosa y las dos son razones F/M—. Y la etiqueta
+        # dice «razón» porque un 0,91 a secas se lee como un porcentaje.
+        # Indicador 3.30 de la END. La etiqueta nombra a las DISTRIBUIDORAS porque el dato
+        # es el aporte a ellas: llamarlo «subsidio eléctrico» a secas lo haría leer como el
+        # subsidio del Gobierno a todo el sector, que es un universo mayor.
+        "electricity_subsidy_usd_mm": (
+            "electricity_subsidy_usd_mm", HEALTH_ENTITY,
+            "Aporte del Gobierno a las distribuidoras eléctricas (millones de US$)",
+            "living_standards",
+            "Anexo del Informe de Desempeño del MEM, edición de diciembre, acumulado del "
+            "año. No alimenta el índice de desarrollo."),
+        # Indicador 2.34 de la END, hoja «END 2.34» de SISDOM.
+        "improved_sanitation_access": (
+            "improved_sanitation_access", HEALTH_ENTITY,
+            "Acceso a servicios sanitarios mejorados (%)", "inclusion",
+            "Término idéntico al de la ley. Serie del propio Estado para su ley; el instrumento "
+            "(ENFT/ENCFT) viaja en la desagregación. No alimenta el índice."),
+        # Indicador 2.35 de la END, hoja «END 2.35» de SISDOM.
+        "public_network_water_access": (
+            "public_network_water_access", HEALTH_ENTITY,
+            "Acceso a agua de la red pública (%)", "inclusion",
+            "RED PÚBLICA dentro o fuera de la vivienda — no «al menos básica», que incluye pozos. Serie del propio Estado para su ley; el instrumento "
+            "(ENFT/ENCFT) viaja en la desagregación. No alimenta el índice."),
+        # Indicador 2.37 de la END, hoja «END 2.37a» de SISDOM.
+        "broad_unemployment_rate": (
+            "broad_unemployment_rate", HEALTH_ENTITY,
+            "Tasa de desocupación ampliada (%)", "inclusion",
+            "AMPLIADA, no abierta: es la que reproduce la línea base de la ley. Serie del propio Estado para su ley; el instrumento "
+            "(ENFT/ENCFT) viaja en la desagregación. No alimenta el índice."),
+        # Indicador 2.47 de la END, hoja «END 2.47» de SISDOM.
+        "child_labour_6_14": (
+            "child_labour_6_14", HEALTH_ENTITY,
+            "Niños de 6 a 14 años que trabajan (%)", "inclusion",
+            "Término y tramo etario idénticos a los de la ley. Serie del propio Estado para su ley; el instrumento "
+            "(ENFT/ENCFT) viaja en la desagregación. No alimenta el índice."),
+        # Indicador 2.48 de la END, hoja «END 2.48» de SISDOM.
+        "neet_unemployed_15_19": (
+            "neet_unemployed_15_19", HEALTH_ENTITY,
+            "Jóvenes de 15 a 19 que no estudian y están desempleados (%)", "inclusion",
+            "Término idéntico al de la ley. Serie del propio Estado para su ley; el instrumento "
+            "(ENFT/ENCFT) viaja en la desagregación. No alimenta el índice."),
+        # Indicador 2.8 de la END, hoja «END 2.8a» de SISDOM.
+        "preschool_net_coverage": (
+            "preschool_net_coverage", HEALTH_ENTITY,
+            "Cobertura neta de nivel inicial (%)", "inclusion",
+            "Tasa neta de cobertura de nivel inicial, de encuestas de hogares. Serie del propio Estado para su ley; el instrumento "
+            "(ENFT/ENCFT) viaja en la desagregación. No alimenta el índice."),
+        # Indicador 3.10 de la END, hoja «END 3.10» de SISDOM.
+        "tertiary_net_enrollment": (
+            "tertiary_net_enrollment", HEALTH_ENTITY,
+            "Matrícula neta de nivel superior, 18-24 años (%)", "inclusion",
+            "Término idéntico al de la ley. Serie del propio Estado para su ley; el instrumento "
+            "(ENFT/ENCFT) viaja en la desagregación. No alimenta el índice."),
+        # Indicador 2.24 de la END, hoja «END 2.24» de SISDOM.
+        "malaria_mortality_rate": (
+            "malaria_mortality_rate", HEALTH_ENTITY,
+            "Mortalidad asociada a malaria (por 100.000 hab.)", "inclusion",
+            "Registro del CENCET. Serie del propio Estado para su ley. No alimenta el índice."),
+        # Indicador 2.28 de la END, hoja «END 2.28» de SISDOM.
+        "child_underweight_rate": (
+            "child_underweight_rate", HEALTH_ENTITY,
+            "Desnutrición global en menores de 5 años (%)", "inclusion",
+            "ENDESA. La serie TERMINA en 2013. Serie del propio Estado para su ley. No alimenta el índice."),
+        # Indicador 2.29 de la END, hoja «END 2.29» de SISDOM.
+        "child_wasting_rate": (
+            "child_wasting_rate", HEALTH_ENTITY,
+            "Desnutrición aguda en menores de 5 años (%)", "inclusion",
+            "ENDESA. La serie TERMINA en 2013. Serie del propio Estado para su ley. No alimenta el índice."),
+        # Indicador 2.30 de la END, hoja «END 2.30» de SISDOM.
+        "child_stunting_rate": (
+            "child_stunting_rate", HEALTH_ENTITY,
+            "Desnutrición crónica en menores de 5 años (%)", "inclusion",
+            "ENDESA. La serie TERMINA en 2013. Serie del propio Estado para su ley. No alimenta el índice."),
+        # Indicador 2.31 de la END, hoja «END 2.31» de SISDOM.
+        "vertical_hiv_transmission": (
+            "vertical_hiv_transmission", HEALTH_ENTITY,
+            "Transmisión vertical del VIH (%)", "inclusion",
+            "Hijos de madres VIH positivas que resultan seropositivos. Serie del propio Estado para su ley. No alimenta el índice."),
+        # Indicador 2.32 de la END, hoja «END 2.32» de SISDOM.
+        "advanced_hiv_on_art": (
+            "advanced_hiv_on_art", HEALTH_ENTITY,
+            "Portadores de VIH avanzado con antirretrovirales (%)", "inclusion",
+            "Cobertura de tratamiento. Serie del propio Estado para su ley. No alimenta el índice."),
+        # Indicador 4.2 de la END. La etiqueta dice TERRESTRE porque el denominador lo es:
+        # llamarlo «área protegida» a secas se leería como sobre todo el territorio.
+        "protected_area_pct_land": (
+            "protected_area_pct_land", HEALTH_ENTITY,
+            "Superficie protegida (% del área terrestre)", "living_standards",
+            "Suma de los seis grupos de categoría del cuadro de la ONE sobre el área "
+            "terrestre del país. No alimenta el índice de desarrollo."),
+        "income_gender_ratio": (
+            "income_gender_ratio", HEALTH_ENTITY,
+            "Razón de ingreso laboral femenino/masculino", "inclusion",
+            "SISDOM, hoja de la END. La serie cruza un cambio de encuesta en 2016 (ENFT → "
+            "ENCFT) y el instrumento viaja en la desagregación de cada año. No alimenta el "
+            "índice de desarrollo."),
         "fdi_total_usd_mm": (
             "fdi_total_usd_mm", HEALTH_ENTITY,
             "Inversión extranjera directa — país (millones de US$)", "living_standards",

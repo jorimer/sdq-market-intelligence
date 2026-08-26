@@ -102,6 +102,20 @@ WDI_NACIONALES_FUERA_DEL_INDICE = {
     "NY.GNP.PCAP.CD": ("gni_per_capita_atlas", "US$ corrientes"),           # 3.26 Δ 5,4%
 }
 HEALTH_ENTITY = "nacional"
+
+#: Indicador 2.40 de la END. El SUJETO va en el nombre: es una razón de INGRESO, no de
+#: ocupación — `employment_gender_ratio` ya existe y mide otra cosa.
+_TEMA_BRECHA_INGRESO = "income_gender_ratio"
+
+#: Indicador 4.2. El SUJETO en el nombre: es sobre el área TERRESTRE, no sobre el
+#: territorio con la zona marina — meter lo marino manda la razón a un dígito.
+_TEMA_AREAS_PROTEGIDAS = "protected_area_pct_land"
+
+#: Indicador 3.30. El SUJETO va en el nombre: es el aporte a las DISTRIBUIDORAS estatales,
+#: que es el canal principal del subsidio eléctrico pero no necesariamente todo el subsidio
+#: del Gobierno al sector.
+_TEMA_SUBSIDIO_ELECTRICO = "electricity_subsidy_usd_mm"
+
 _WDI_HEALTH_YEARS = 30
 
 # Informalidad nacional (ENCFT del BCRD) → aplicada a todas las regiones, como la salud
@@ -638,6 +652,104 @@ def _sync_ied_total(db: Session, set_phase: Callable[[str], None]) -> int:
     return synced
 
 
+
+
+def _sync_areas_protegidas(db: Session, set_phase: Callable[[str], None]) -> int:
+    """Indicador 4.2 de la END: superficie protegida como % del área del país.
+
+    El emisor publica los km² por categoría —terrestre y marina— y NO la razón, así que la
+    razón se computa acá contra el área terrestre del país, que viene de su propia fuente.
+
+    **UN solo denominador para los catorce años.** El área nacional se revisa de tanto en
+    tanto y usar la de cada año haría que una revisión del denominador se leyera como un
+    cambio en la superficie protegida — la misma lección que dejó el PIB en el 2.33.
+    """
+    from shared.data.one_areas_protegidas import (SOURCE, fetch, fetch_area_terrestre,
+                                                  razon_terrestre)
+
+    set_phase("áreas protegidas (indicador 4.2 de la END)")
+    serie = fetch()                       # la excepción sube a _best_effort
+    area = fetch_area_terrestre()
+    if not area:
+        raise RuntimeError("sin el área terrestre del país no hay razón que computar")
+    synced = 0
+    for s in serie:
+        _upsert_indicator(db, theme=_TEMA_AREAS_PROTEGIDAS, entity=HEALTH_ENTITY,
+                          period=str(s.anio), value=razon_terrestre(s, area), source=SOURCE,
+                          disagg="nacional", unit="% del área terrestre")
+        synced += 1
+    con_desajuste = [s.anio for s in serie if s.desajustes]
+    if con_desajuste:
+        logger.info("[social] 4.2: %d años en que el emisor no cuadra con sus "
+                    "subcategorías: %s", len(con_desajuste), con_desajuste)
+    logger.info("[social] 4.2 áreas protegidas: %d años sobre %.0f km²", synced, area)
+    return synced
+
+
+def _sync_sisdom_end(db: Session, set_phase: Callable[[str], None]) -> int:
+    """Los indicadores de la END que el propio Estado publica en SISDOM, en UN solo bucle.
+
+    Sale de la hoja que el evaluado publica para su propia ley —«Indicadores Área Especial
+    END»— y de las DOS ediciones, porque cubren tramos distintos: la del MEPyD llega a las
+    líneas base de 2007-2010 y la de Hacienda trae el año corriente. Coinciden al dígito en
+    los años que comparten.
+
+    **Es una tabla y no ocho funciones a propósito.** Ocho copias de este bucle se
+    desincronizan —una gana un guard, las otras no— y era el defecto que ya apareció en las
+    listas de sub-syncs de este mismo archivo. Qué hoja sirve a qué indicador, y POR QUÉ esa
+    hoja, vive en `shared.data.sisdom_end.INDICADORES`, que es donde se puede leer la
+    decisión: varios indicadores se desdoblan en la publicación —el 2.8 en tres hojas, el
+    2.37 en tres— y elegir mal no rompe nada, publica otra magnitud contra la meta de la ley.
+
+    **La serie cruza un cambio de INSTRUMENTO en 2016** y por eso el instrumento viaja en la
+    desagregación de cada fila. La ENFT se sustituyó por la ENCFT y el emisor marca con
+    asterisco las columnas de la nueva; 2016 tiene DOS mediciones. Una serie que cruce ese
+    año sin decir con qué encuesta se midió cada tramo se compara contra una línea base que
+    es de la otra, y el escalón se lee como cambio del fenómeno.
+
+    Se persiste la unión en el orden del propio emisor —ENFT hasta 2015, ENCFT desde 2016—,
+    que es una CONVENCIÓN declarada y no un empalme: no hay factor publicado y fabricarlo
+    sería inventarlo.
+    """
+    from shared.data.sisdom_end import (INDICADORES, INSTRUMENTO_CON_ASTERISCO,
+                                        INSTRUMENTO_SIN_ASTERISCO, SOURCE, fetch, serie_de)
+
+    synced = 0
+    fallidos: List[str] = []
+    for indicador, fuente in sorted(INDICADORES.items()):
+        set_phase(f"SISDOM · indicador {indicador} de la END")
+        try:
+            obs = fetch(indicador)
+        except Exception as e:  # noqa: BLE001 — un indicador ilegible no se lleva a los otros
+            logger.warning("[social] SISDOM %s: %s", indicador, e)
+            fallidos.append(indicador)
+            continue
+        enft = serie_de(obs, INSTRUMENTO_SIN_ASTERISCO)
+        encft = serie_de(obs, INSTRUMENTO_CON_ASTERISCO)
+        for anio in sorted(set(enft) | set(encft)):
+            # Desde 2016 manda la encuesta nueva, que es la que continúa. Es la convención
+            # del emisor y queda escrita acá, que es el único lugar donde se aplica.
+            usa_nueva = anio >= 2016 and anio in encft
+            valor = encft[anio] if usa_nueva else enft.get(anio)
+            if valor is None:
+                continue
+            instrumento = (INSTRUMENTO_CON_ASTERISCO if usa_nueva
+                           else INSTRUMENTO_SIN_ASTERISCO)
+            _upsert_indicator(db, theme=fuente.tema, entity=HEALTH_ENTITY,
+                              period=str(anio), value=round(valor, 5),
+                              source=SOURCE,
+                              disagg=f"nacional · {instrumento}",
+                              unit=fuente.unidad)
+            synced += 1
+        db.commit()
+    if fallidos:
+        logger.warning("[social] SISDOM: %d indicadores sin serie: %s",
+                       len(fallidos), ", ".join(fallidos))
+    logger.info("[social] SISDOM END: %d filas de %d indicadores",
+                synced, len(INDICADORES) - len(fallidos))
+    return synced
+
+
 def _sync_confianza_partidos(db: Session, set_phase: Callable[[str], None]) -> int:
     """Indicador 1.1 de la END: confianza en los partidos políticos.
 
@@ -731,11 +843,20 @@ def _sync_mem_electrico(db: Session, set_phase: Callable[[str], None]) -> int:
     indicador estacional: es otro número. El cliente lo hace cumplir y rechaza el anexo que no
     declara un año completo.
     """
-    from shared.data.mem_client import series_anuales
+    from shared.data.mem_client import series_anuales, subsidios_anuales
 
     set_phase("sector eléctrico (MEM · anexo del Informe de Desempeño)")
     series = series_anuales(MEM_INFORMES)
     synced = 0
+    # Indicador 3.30, del MISMO anexo pero de otra hoja. Estaba declarado como brecha —«la
+    # hoja no tiene cabecera de años»— y la conclusión estaba mal: no tiene años porque sus
+    # columnas son MESES, y el año viene del anexo de diciembre que se abrió. La fila se
+    # ubica por su etiqueta y se comprueba con las cuentas del propio cuadro.
+    for anio, valor in subsidios_anuales(MEM_INFORMES):
+        _upsert_indicator(db, theme=_TEMA_SUBSIDIO_ELECTRICO, entity=HEALTH_ENTITY,
+                          period=str(anio), value=float(valor), source=FUENTE_MEM,
+                          disagg="nacional", unit="millones de US$")
+        synced += 1
     for clave, (tema, unidad) in MEM_TEMAS.items():
         for periodo, valor in series.get(clave, []):
             _upsert_indicator(db, theme=tema, entity=HEALTH_ENTITY, period=periodo,
@@ -1145,6 +1266,12 @@ def one_social_sync(db: Session, set_phase: Optional[Callable[[str], None]] = No
     ied_synced = _best_effort(
         "IED total del país (3.23)",
         lambda: _sync_ied_total(db, set_phase), errors)
+    areas_synced = _best_effort(
+        "áreas protegidas (4.2)",
+        lambda: _sync_areas_protegidas(db, set_phase), errors)
+    sisdom_end_synced = _best_effort(
+        "indicadores de la END en SISDOM (ocho)",
+        lambda: _sync_sisdom_end(db, set_phase), errors)
     salud_synced = _best_effort(
         "cobertura del Seguro Familiar de Salud (2.36)",
         lambda: _sync_cobertura_salud(db, set_phase), errors)
@@ -1211,6 +1338,8 @@ def one_social_sync(db: Session, set_phase: Optional[Callable[[str], None]] = No
         "gei_per_capita_synced": gei_synced,
         "confianza_partidos_synced": partidos_synced,
         "ied_total_synced": ied_synced,
+        "sisdom_end_synced": sisdom_end_synced,
+        "areas_protegidas_synced": areas_synced,
         "cobertura_salud_synced": salud_synced,
         "participacion_export_synced": export_synced,
         "mem_electrico_synced": mem_synced,

@@ -18,6 +18,7 @@ import {
   setFiscalRegime, upsertFiscalSequence,
   type FiscalDocument, type FiscalOverview, type FiscalSequence,
 } from "../billingApi";
+import { mensajeDeError } from "../../../shared/api/errores";
 
 /** Mes actual en AAAA-MM, para el selector del 607. */
 function currentPeriod(): string {
@@ -115,8 +116,7 @@ export function ComprobantesPage() {
       await reload();
       setMsg({ ok: true, text: tr("ncf.ok.saved", "Rango cargado.") });
     } catch (e: unknown) {
-      const detail = (e as { response?: { data?: { detail?: string } } })?.response?.data?.detail;
-      setMsg({ ok: false, text: detail || tr("ncf.err.saved", "No se pudo cargar el rango.") });
+      setMsg({ ok: false, text: mensajeDeError(e, tr("ncf.err.saved", "No se pudo cargar el rango.")) });
     } finally {
       setBusy(false);
     }

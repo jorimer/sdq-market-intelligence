@@ -217,14 +217,32 @@ def test_guardrail_regenerates_once_when_flagged(monkeypatch):
 
 
 def test_guardrail_serves_flagged_when_persists(monkeypatch):
-    """Si tras regenerar el juez sigue marcando, se sirve igual (best-effort) con el flag."""
+    """Si tras AGOTAR los reintentos el juez sigue marcando, se sirve igual (best-effort) con
+    el flag. La cifra sin respaldo no veta acá —eso lo decide el ensamblador, que sabe el
+    nivel—; el motor solo marca."""
+    from shared.narrative.claude_engine import _MAX_REINTENTOS_GUARD
+
     eng, calls = _engine_capturing(
-        monkeypatch, judge_replies=['{"unsupported": ["X"]}', '{"unsupported": ["X"]}'])
+        monkeypatch, judge_replies=['{"unsupported": ["X"]}'] * (_MAX_REINTENTOS_GUARD + 1))
     res = asyncio.run(eng.generate(
         {"x": 1}, template="entity_rating", axis="banking", audience="comite_credito"))
-    assert len(_gen_calls(calls)) == 2
+    # Una generación original + un intento de corrección por cada reintento permitido. Se lee
+    # de la constante y no de un número fijo: el defecto que motivó subirla fue justamente que
+    # UN solo intento no alcanzaba.
+    assert len(_gen_calls(calls)) == 1 + _MAX_REINTENTOS_GUARD
     assert res.text == "INSIGHT"                # nunca se vacía el insight
     assert res.guard_unsupported == ["X"]       # marcado para monitoreo
+
+
+def test_el_guardrail_DEJA_de_reintentar_apenas_queda_limpio(monkeypatch):
+    """No se gastan los reintentos por deporte: si la primera corrección sale limpia, no hay
+    segunda. Con `_MAX_REINTENTOS_GUARD` llamadas de más por sección, un informe de 13
+    secciones pagaría el doble de modelo sin necesidad."""
+    eng, calls = _engine_capturing(
+        monkeypatch, judge_replies=['{"unsupported": ["X"]}', '{"unsupported": []}'])
+    asyncio.run(eng.generate(
+        {"x": 1}, template="entity_rating", axis="banking", audience="comite_credito"))
+    assert len(_gen_calls(calls)) == 2, "reintentó de más tras quedar limpio"
 
 
 def test_parse_unsupported_tolerant():

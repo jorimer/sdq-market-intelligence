@@ -20,6 +20,20 @@ export interface SectorApi {
   lastTestDetail: string;
 }
 
+/** Correo saliente. La contraseña NUNCA viaja de vuelta: sólo `passwordSet`. */
+export interface SmtpSettings {
+  host: string;
+  port: number;
+  user: string;
+  fromAddress: string;
+  starttls: boolean;
+  passwordSet: boolean;
+  /** Lo computa el emisor, no la pantalla: una sola autoridad sobre si el canal existe. */
+  configurado: boolean;
+  /** Qué falta, en palabras de esta pantalla (no nombres de variables de entorno). */
+  falta: string[];
+}
+
 export interface AppSettings {
   claudeApiKeySet: boolean;
   defaultLanguage: string;
@@ -30,6 +44,7 @@ export interface AppSettings {
   cloudflareProxyUrl: string;
   cloudflareProxySecretSet: boolean;
   sectorApis: SectorApi[];
+  smtp: SmtpSettings;
 }
 
 /** Secret fields: omit to keep unchanged, send "" to clear. */
@@ -47,6 +62,16 @@ export interface SectorApiInput {
   proxySecret?: string;
 }
 
+/** Omitir la contraseña (o mandar MASK) la conserva; "" la borra. */
+export interface SmtpInput {
+  host?: string;
+  port?: number;
+  user?: string;
+  fromAddress?: string;
+  starttls?: boolean;
+  password?: string;
+}
+
 export interface SettingsInput {
   claudeApiKey?: string;
   defaultLanguage?: string;
@@ -55,6 +80,7 @@ export interface SettingsInput {
   cloudflareProxyUrl?: string;
   cloudflareProxySecret?: string;
   sectorApis?: SectorApiInput[];
+  smtp?: SmtpInput;
 }
 
 export interface TestResult {
@@ -62,6 +88,12 @@ export interface TestResult {
   detail: string;
   httpStatus: number | null;
   viaProxy: boolean;
+}
+
+export interface SmtpTestResult {
+  status: string;
+  detail: string;
+  destinatario: string;
 }
 
 export const settingsApi = {
@@ -72,4 +104,8 @@ export const settingsApi = {
     client.delete(`/settings/sector-apis/${provider}`).then((r) => r.data),
   test: (payload: { provider: string } & Partial<SectorApiInput>) =>
     client.post<TestResult>("/settings/test", payload).then((r) => r.data),
+  // Sin destinatario a propósito: el backend manda a la casilla de quien pide la prueba.
+  // Un endpoint que acepta destinatario es un relay abierto con credenciales de la casa.
+  testSmtp: () =>
+    client.post<SmtpTestResult>("/settings/smtp/test").then((r) => r.data),
 };

@@ -87,6 +87,8 @@ class ReportType(str, enum.Enum):
     wire = "wire"
     criteria = "criteria"
     sector_outlook = "sector_outlook"
+    anuario = "anuario"
+    revision_anual = "revision_anual"
 
 
 class ReportStatus(str, enum.Enum):

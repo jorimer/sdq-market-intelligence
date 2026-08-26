@@ -91,24 +91,31 @@ fuentes_admitidas:
       evaluado. Además NO produce el dato sino que lo recoge del organismo electoral de
       cada país — para RD, de la propia JCE. Es la vía abierta a una fuente nacional que no
       publica API ni dataset (verificado contra datos.gob.do).
+    exige_atribucion: true
+    atribucion: >-
+      Fuente: Junta Central Electoral (JCE) de la República Dominicana, productora del dato;
+      recogido y publicado por el Observatorio de Igualdad de Género de la CEPAL.
     nota_de_uso: >-
-      LICENCIA CORREGIDA EL 2026-08-23, y acá la corrección pesa MÁS que en la UIP. El
-      conector declaraba «uso público con cita». Los términos que el propio servicio
-      declara —el `termsOfService` del `apispec_1.json` de `api-cepalstat.cepal.org`, que
-      es el endpoint que leemos— conceden bajar y copiar el material «para su uso personal,
-      sin fines comerciales, sin ningún derecho a revender, redistribuir, o crear otros
-      trabajos a partir de los mismos». No hay licencia Creative Commons de por medio: la
-      CEPAL no concede una, concede un permiso de uso personal.
-      NO se declara `exige_atribucion`. Sería engañoso: la atribución arregla una cláusula
-      BY, y acá no hay BY que satisfacer — lo que los términos niegan es el uso comercial,
-      la redistribución y la obra derivada, y nombrar la fuente no levanta ninguna de las
-      tres. Poner el interruptor daría la sensación de que el asunto quedó resuelto.
-      DECISIÓN DEL DUEÑO, abierta: los indicadores 2.45 y 2.46 salen de acá y viajan en
-      informes que se venden. Lo que se publica es UNA cifra por año, no la base de
-      CEPALSTAT, y el dato lo produce la JCE —la CEPAL lo recoge—; si eso cae dentro o
-      fuera de «revender o crear otros trabajos», o si conviene pedirlo a la JCE
-      directamente, no lo resuelve este archivo. La declaración canónica vive en
-      `shared.data.cepalstat_client.LICENSE` y su verificación en `shared.data.licenses`.
+      LICENCIA REVISADA EL 2026-08-23, en dos pasos, y el segundo corrigió al primero.
+      El conector declaraba «uso público con cita». Los términos que el propio servicio
+      declara en su OpenAPI conceden bajar y copiar «para su uso personal, sin fines
+      comerciales, sin ningún derecho a revender, redistribuir, o crear otros trabajos a
+      partir de los mismos». Eso llevó a marcar los indicadores 2.45 y 2.46 como decisión
+      pendiente, porque los informes de este eje se venden.
+      LO QUE ESA LECTURA OMITÍA: quién PRODUCE el dato. Lo produce la JCE — la nota de
+      admisibilidad de esta misma fuente ya lo decía: «NO produce el dato sino que lo recoge
+      del organismo electoral de cada país». Los términos de la CEPAL gobiernan SU
+      compilación, no los hechos que compila. Una cifra electoral oficial dominicana es
+      información pública, y su régimen lo fija el marco nacional —Ley 200-04, Decreto
+      103-22 sobre datos abiertos, Ley 65-00 art. 41—, no el portal que la reexpone. Además
+      una cifra es un hecho, y los hechos no son obra protegible.
+      CONCLUSIÓN: los indicadores 2.45 y 2.46 se publican, atribuyendo a la JCE como
+      productora y a la CEPAL como vía. La atribución deja de depender de que el redactor se
+      acuerde: `exige_atribucion` la vuelve obligatoria y la computa
+      `modules.law_intel.ai_context.atribuciones_obligatorias`.
+      LO QUE SIGUE FUERA DE ALCANCE: reexportar la compilación de la CEPAL como tal. Se
+      publica la cifra atribuida, no su base.
+
   - id: uip
     nombre: Unión Interparlamentaria (Parline)
     del_evaluado: false

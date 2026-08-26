@@ -6,6 +6,7 @@ import { useAuth } from "@/shared/auth/AuthContext";
 import { DataSourcesSection } from "../components/DataSourcesSection";
 import { SeriesMaintenanceSection } from "../components/SeriesMaintenanceSection";
 import { PresupuestoLlmSection } from "../components/PresupuestoLlmSection";
+import { CorreoSalienteSection } from "../components/CorreoSalienteSection";
 
 export function ConfiguracionPage() {
   const { t } = useTranslation();
@@ -27,6 +28,7 @@ export function ConfiguracionPage() {
           <>
             <DataSourcesSection />
             <PresupuestoLlmSection />
+            <CorreoSalienteSection />
             <SeriesMaintenanceSection />
           </>
         ) : (

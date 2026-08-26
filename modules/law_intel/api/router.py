@@ -12,6 +12,7 @@ import logging
 from typing import Any, Callable, Dict, List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi.responses import FileResponse
 from sqlalchemy.orm import Session
 
 from modules.law_intel.agente_fuentes import MAX_POR_CORRIDA, barrer
@@ -46,6 +47,11 @@ from modules.law_intel.scoring.coherencia_proceso import VEREDICTOS as VEREDICTO
 from modules.law_intel.scoring.coherencia_proceso import resumen as resumen_coherencia
 from modules.law_intel.scoring.coherencia_proceso import revisar
 from modules.law_intel.scoring.brecha import resumen as resumen_brecha
+from modules.law_intel.scoring.fines import ESTADOS, por_fin
+from modules.law_intel.scoring.fines import publicable as fines_publicable
+from modules.law_intel.scoring.pendiente import horizonte_de
+from modules.law_intel.scoring.pendiente import panel as panel_pendiente
+from modules.law_intel.scoring.pendiente import publicable as pendiente_publicable
 from modules.law_intel.scoring.semaforo import VEREDICTOS, panel
 from modules.law_intel.scoring.semaforo import resumen as resumen_semaforo
 from shared.auth.dependencies import get_current_user, require_role
@@ -242,6 +248,89 @@ def semaforo_(expediente_id: str,
     }
 
 
+@router.get("/{expediente_id}/fines")
+def fines_(expediente_id: str,
+           corte: str = Query(..., pattern=r"^\d{4}$"),
+           db: Session = Depends(get_db),
+           _: User = Depends(get_current_user)) -> Dict[str, Any]:
+    """El veredicto agregado por FIN de la ley, que es la unidad de lectura del informe.
+
+    El semáforo contesta indicador por indicador; esta ruta contesta lo que trae el lector:
+    *¿está la ley consiguiendo lo que se propuso?* Los fines que la evaluación no cubre lo
+    suficiente salen igual, con `estado = no_caracterizable` y el motivo — que un fin de la
+    ley no se pueda juzgar es de las cosas más informativas que este producto tiene para
+    decir, y esconderlo se leería como que ese fin no tiene problemas.
+    """
+    e = _expediente(expediente_id)
+    bs = cargar_bindings(expediente_id)
+    veredictos = panel(e.numerados, bs, series_de(bs, proveedor_registro(db)), corte)
+    fines = por_fin(e.numerados, veredictos, e.meta.get("ejes") or {})
+    return {"instrumento": {"id": e.id, "norma": e.norma}, "corte": corte,
+            **fines_publicable(fines), "estados": ESTADOS}
+
+
+@router.get("/{expediente_id}/pendiente")
+def pendiente_(expediente_id: str,
+               db: Session = Depends(get_db),
+               _: User = Depends(get_current_user)) -> Dict[str, Any]:
+    """Las metas que TODAVÍA NO vencen, proyectadas al horizonte que declara la ley.
+
+    El horizonte sale de `vigencia_hasta` del expediente y no de un año escrito en el código:
+    la END vence en 2030 y el Decreto 337-24 en 2036.
+
+    **Ningún estado de esta ruta afirma incumplimiento.** Una meta que no venció no se puede
+    incumplir, y lo que se computa es si al ritmo OBSERVADO se llega — que es una
+    extrapolación lineal declarada, no un pronóstico.
+    """
+    e = _expediente(expediente_id)
+    horizonte = horizonte_de(e.meta)
+    if not horizonte:
+        raise HTTPException(status_code=422,
+                            detail=(f"El expediente '{expediente_id}' no declara "
+                                    f"`vigencia_hasta`: sin horizonte no hay proyección que "
+                                    f"computar, y suponerlo sería inventar el plazo."))
+    bs = cargar_bindings(expediente_id)
+    pendientes = panel_pendiente(e.numerados, bs, series_de(bs, proveedor_registro(db)),
+                                 horizonte)
+    return {"instrumento": {"id": e.id, "norma": e.norma},
+            **pendiente_publicable(pendientes, horizonte)}
+
+
+def _hoy() -> str:
+    import datetime as _d
+    return _d.date.today().isoformat()
+
+
+@router.get("/{expediente_id}/informe-abierto",
+            summary="Informe ABIERTO de una ley (PDF o Word) — se comparte sin destinatario")
+def informe_abierto_(expediente_id: str,
+                     fmt: str = Query("pdf", pattern="^(pdf|docx)$"),
+                     db: Session = Depends(get_db),
+                     _: User = Depends(get_current_user)) -> FileResponse:
+    """El tercer entregable del producto, y el único que se comparte.
+
+    Dice qué ordena la norma, qué se mide de ella y de dónde sale cada cifra. **No publica
+    el veredicto de cumplimiento**: ese análisis se prepara por encargo y va en el dictamen.
+
+    Casi todo se computa del expediente y del registro, así que no consume generación de IA
+    y dos descargas del mismo día dan lo mismo salvo que el dato haya cambiado.
+    """
+    e = _expediente(expediente_id)
+    from modules.law_intel.informe_abierto import render
+
+    ruta = render(expediente_id, db=db, fmt=fmt)
+    # El nombre sale del constructor único del repo, con la NORMA como sujeto. Sin eso, dos
+    # leyes distintas producían el mismo archivo —`law_sdq_evaluacion_de_leyes_<sello>`— y la
+    # segunda descarga pisaba a la primera: el sujeto es lo que las distingue.
+    from shared.products.filenames import report_filename
+    nombre = report_filename(naturaleza="Informe-Abierto", sector_key="law",
+                             sujeto=e.norma, periodo=_hoy(), fmt=fmt)
+    return FileResponse(
+        path=ruta, filename=nombre,
+        media_type=("application/pdf" if fmt == "pdf" else
+                    "application/vnd.openxmlformats-officedocument.wordprocessingml.document"))
+
+
 @router.get("/{expediente_id}/campo")
 def campo_(expediente_id: str, _: User = Depends(get_current_user)) -> Dict[str, Any]:
     """Por qué cada indicador de la ley que no tiene veredicto no lo tiene.
@@ -333,6 +422,14 @@ def obligaciones_(expediente_id: str, _: User = Depends(get_current_user)) -> Di
             "estado": o.estado, "consecuencia": o.consecuencia, "plazo": o.plazo,
             "periodicidad": o.periodicidad, "evidencia": o.evidencia,
             "exigible": o.exigible, "produce": o.produce,
+            # Si es un HITO DE MEDICIÓN de la propia ley: el momento en que la norma manda
+            # evaluarse a sí misma. Es la respuesta a «cuándo se mide esta ley», y no la
+            # cadencia de nuestros conectores — que es un detalle nuestro y no es exigible.
+            "hito_de_medicion": o.hito_de_medicion,
+            # La serie que sigue el cumplimiento, cuando existe. Un deber CONTINUO —publicar
+            # los procedimientos, mantenerlos actualizados— no se verifica una vez: se
+            # verifica mirando si la cifra se mueve, y esto dice dónde mirar.
+            "serie_de_seguimiento": o.serie_de_seguimiento,
             "habilita_exigir": o.habilita_exigir,
             "verificacion_pendiente": o.requiere_verificacion_antes_de_publicar,
             # El ALCANCE de verificación viaja: o qué se consulta contra la base normativa, o

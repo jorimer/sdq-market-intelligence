@@ -12,6 +12,7 @@ import {
   type CatalogSku,
   type Tariff,
 } from "../billingApi";
+import { mensajeDeError } from "../../../shared/api/errores";
 
 const INTERVAL_LABEL: Record<string, string> = {
   once: "Único", monthly: "Mensual", annual: "Anual",
@@ -119,8 +120,7 @@ export function TarifarioPage() {
       if (openSku === sku) setOpenSku(null);
       await load();
     } catch (e) {
-      const detail = (e as { response?: { data?: { detail?: string } } })?.response?.data?.detail;
-      setErr(detail || tr("tariff.err.publish", "No se pudo publicar el precio."));
+      setErr(mensajeDeError(e, tr("tariff.err.publish", "No se pudo publicar el precio.")));
     } finally {
       setBusy(false);
     }

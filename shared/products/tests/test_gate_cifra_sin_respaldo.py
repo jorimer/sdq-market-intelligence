@@ -23,8 +23,8 @@ from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
 
 from shared.database.base import Base
-from shared.narrative.claude_engine import (NarrativeSinRespaldoError,
-                                            secciones_con_cifra_sin_respaldo)
+from shared.narrative.claude_engine import NarrativeSinRespaldoError
+from shared.narrative.cifras_pendientes import registrar as registrar_cifras
 from shared.products import (Granularity, ProductTier, SectorProductManifest, TierLevelSpec)
 from shared.products.assembler import _content_from_snapshot, _narratives_cached
 from shared.products.contract import ProductSnapshot
@@ -42,6 +42,10 @@ _CON_RESPALDO = "La cobertura de provisiones del sistema es 185,0% al cierre."
 class _Product:
     sector_key = "banking_score"
 
+    #: Qué marcó el guard del motor para cada texto. La clave es el TEXTO porque los tests
+    #: se leen mejor así: `_SIN_RESPALDO` viene marcado, `_CON_RESPALDO` no.
+    _marcas = {_SIN_RESPALDO: ["152,1%: no coincide con ningún valor servido"]}
+
     def __init__(self, granularity, tier, textos, db=None):
         self._gran, self._tier, self._textos, self._db = granularity, tier, textos, db
         self.calls = 0
@@ -55,7 +59,16 @@ class _Product:
                     price_band="x")})
 
     async def narratives(self, tier, snapshot, lang="es"):
+        """Hace lo que hace el motor REAL: genera y DEPOSITA lo que su guard marcó.
+
+        El fake deposita porque el motor deposita. Antes este fake solo devolvía texto y la
+        superficie lo re-juzgaba: eso es justamente lo que se eliminó, porque la superficie
+        juzgaba con el snapshot y no con el contexto que produjo el texto.
+        """
         self.calls += 1
+        for seccion, texto in self._textos.items():
+            if self._marcas.get(texto):
+                registrar_cifras(seccion, list(self._marcas[texto]))
         return dict(self._textos)
 
 
@@ -80,17 +93,24 @@ def db():
 
 
 class TestElDetector:
+    """El detector ya NO vive en la superficie: vive en el motor, que tiene el contexto.
+
+    Estos casos fijan que el chequeo determinista sigue distinguiendo lo mismo — pero contra
+    el contexto REAL de la sección, que es la corrección de 2026-08-26.
+    """
+
     def test_marca_la_cifra_que_el_contexto_no_sostiene(self):
-        h = secciones_con_cifra_sin_respaldo(_todas(_SIN_RESPALDO), _SECTIONS, _CTX)
-        assert set(h) == set(_SECTIONS)
-        assert any("152,1" in f for f in h["assessment"])
+        from shared.narrative.numeric_guard import deterministic_uncited_figures
+        assert deterministic_uncited_figures(_CTX, _SIN_RESPALDO)
 
     def test_la_cifra_que_SI_esta_en_el_contexto_pasa(self):
         """El contrapeso: sin él, el gate bloquearía todo informe con números."""
-        assert secciones_con_cifra_sin_respaldo(_todas(_CON_RESPALDO), _SECTIONS, _CTX) == {}
+        from shared.narrative.numeric_guard import deterministic_uncited_figures
+        assert deterministic_uncited_figures(_CTX, _CON_RESPALDO) == []
 
     def test_una_seccion_vacia_no_es_un_hallazgo(self):
-        assert secciones_con_cifra_sin_respaldo({"assessment": ""}, ["assessment"], _CTX) == {}
+        from shared.narrative.numeric_guard import deterministic_uncited_figures
+        assert deterministic_uncited_figures(_CTX, "") == []
 
 
 class TestElGatePremium:
@@ -174,4 +194,86 @@ def test_el_motor_no_propaga_a_la_cache_compartida_lo_que_el_mismo_marco(monkeyp
     antes = len(escrituras)
     motor._set_cache("k-marcada", marcado)
     assert len(escrituras) == antes, "el texto marcado no puede llegar a la caché compartida"
-    assert "k-marcada" in motor._cache, "sí queda en L1: no hay que re-pagar la generación"
+    # Ni a L1. La versión anterior de este test exigía lo contrario —«sí queda en L1: no hay
+    # que re-pagar la generación»— y esa decisión volvía INSERVIBLE el reintento que el propio
+    # mensaje de veto promete. Ver `test_lo_marcado_no_queda_NI_en_L1_...` más abajo.
+    assert "k-marcada" not in motor._cache
+
+
+def test_lo_marcado_no_queda_NI_en_L1_para_que_el_reintento_regenere(monkeypatch):
+    """El veto promete «reintente, el texto se regenera». Con L1 guardándolo, mentía.
+
+    Medido en producción contra el SDQ Rating de Asociación Bonao al 2025-03-31: la primera
+    generación tardó 264 s y se vetó; el reintento devolvió **el mismo veto en 4,7 s** —un HIT
+    de L1—. El informe quedaba muerto hasta que expirara el TTL o el request cayera en otro
+    worker, o sea al azar, y cada reintento del usuario era un no-op disfrazado de espera.
+
+    La justificación vieja de conservarlo en L1 —«no re-pagar la generación dentro de la misma
+    corrida»— no compraba nada: la clave incluye contexto y plantilla, así que dentro de una
+    corrida se pide una sola vez.
+    """
+    from shared.narrative import claude_engine as ce
+
+    monkeypatch.setattr(ce, "cache_set", lambda k, v, ttl: None)
+    motor = ce.NarrativeEngine.__new__(ce.NarrativeEngine)
+    motor._cache = {}
+
+    marcado = ce.NarrativeResult(text="38%", model_used="claude-sonnet-4-6",
+                                 guard_unsupported=["38%: no coincide con ningún valor servido"],
+                                 guard_cifras=["38%: no coincide con ningún valor servido"])
+    motor._set_cache("k", marcado)
+    assert "k" not in motor._cache, (
+        "el texto marcado quedó en L1: el reintento devolverá el mismo veto sin regenerar")
+    assert motor._get_cached("k") is None
+
+
+def test_lo_limpio_SI_queda_en_L1():
+    """El contrapeso: sin él, la regla de arriba se satisface tirando la caché entera —y esa
+    caché existe para que la descarga no espere 15-90 s."""
+    from shared.narrative import claude_engine as ce
+
+    motor = ce.NarrativeEngine.__new__(ce.NarrativeEngine)
+    motor._cache = {}
+    motor._set_cache("k", ce.NarrativeResult(text="ok", model_used="claude-sonnet-4-6"))
+    assert "k" in motor._cache
+
+
+def test_un_ensamblado_que_excede_el_techo_responde_503_y_no_muere_en_el_proxy(monkeypatch):
+    """Sin techo, una generación larga muere en el PROXY con un 502 SIN CUERPO.
+
+    El frontend lee `detail` para mostrar el motivo; un 502 no lo trae, así que el usuario ve
+    «No se pudo cargar el producto» — un producto roto en vez de una explicación. Pasó con la
+    Revisión Anual, donde el guard reintentaba sobre umbrales prospectivos y la petición
+    llegaba a 16 llamadas al modelo para dos secciones.
+
+    El 503 de degradación es la respuesta correcta porque es lo que de verdad ocurrió: el
+    servicio de análisis no entregó a tiempo, y reintentar sirve.
+    """
+    import asyncio as _asyncio
+
+    from shared.narrative.claude_engine import NarrativeDegradedError
+    from shared.products import assembler as A
+
+    monkeypatch.setattr(A, "PRESUPUESTO_DE_ENSAMBLADO_S", 0.05)
+
+    async def _eterna(*a, **kw):
+        await _asyncio.sleep(5)
+        return {}
+
+    monkeypatch.setattr(A, "_narratives_cached", _eterna)
+    p = _Product(Granularity.named_entity, ProductTier.deep_dive, _todas(_CON_RESPALDO))
+    with pytest.raises(NarrativeDegradedError):
+        asyncio.run(_content_from_snapshot(
+            p, ProductTier.deep_dive, _snap(ProductTier.deep_dive, "Banco X"),
+            "es", scope="bx"))
+
+
+def test_un_ensamblado_NORMAL_no_se_corta():
+    """El contrapeso: sin él, la regla se satisface poniendo el techo en cero."""
+    from shared.products import assembler as A
+    assert A.PRESUPUESTO_DE_ENSAMBLADO_S >= 120, (
+        "un techo bajo convertiría informes buenos en 503; el límite del proxy son ~300 s")
+    p = _Product(Granularity.named_entity, ProductTier.deep_dive, _todas(_CON_RESPALDO))
+    c = asyncio.run(_content_from_snapshot(
+        p, ProductTier.deep_dive, _snap(ProductTier.deep_dive, "Banco X"), "es", scope="bx"))
+    assert c.narratives["assessment"] == _CON_RESPALDO

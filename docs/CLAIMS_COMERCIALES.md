@@ -177,14 +177,13 @@ exactamente cómo empezó lo de abajo.
   CC-BY cubre **su procesamiento**, no el dato de abajo. Hoy solo alimenta el backtest interno
   del IRC, que no se redistribuye — si ese insumo pasa a material de venta, hay que resolverlo
   antes.
-- ⚠️ **CEPALSTAT (CEPAL) — la más estrecha de todas, y NO es Creative Commons.** Sus
-  términos —los que el propio servicio declara en el `termsOfService` de su OpenAPI—
-  conceden bajar y copiar «para su uso personal, sin fines comerciales, sin ningún derecho
-  a revender, redistribuir, o crear otros trabajos a partir de los mismos». Alimenta los
-  indicadores **2.45 y 2.46** de la END. El conector decía «uso público con cita».
-  **Atribuir no alcanza**: no hay cláusula BY que satisfacer, hay un permiso de uso personal.
-  Decisión abierta del dueño — y hay una salida limpia a mano: el dato lo produce la **JCE**
-  y la CEPAL solo lo recoge.
+- ✅ **CEPALSTAT — resuelto por el PRODUCTOR, no por sus términos.** Los términos de la CEPAL
+  son estrechos —uso personal, no comercial, sin reventa ni obra derivada— y siguen siéndolo.
+  Pero gobiernan **su compilación**, no los hechos que compila: los indicadores **2.45 y 2.46**
+  los produce la **JCE**, y una cifra electoral oficial dominicana es información pública cuyo
+  régimen fija el marco nacional, no el portal que la reexpone. **Se publican, atribuyendo a la
+  JCE como productora y a la CEPAL como vía** — la atribución la computa la plataforma.
+  Lo que sigue fuera de alcance: reexportar la compilación de la CEPAL como tal.
 - ⚠️ **UN Comtrade — no es dato libre.** Es propiedad intelectual de Naciones Unidas, cedida
   para **uso interno**; re-diseminar el dato **original** exige permiso escrito de la UNSD, y
   por encima de 100.000 registros una «license to distribute» paga sobre suscripción premium.
@@ -210,6 +209,39 @@ exactamente cómo empezó lo de abajo.
   pueden dar por concedidos mientras tanto: si mostrar cifras individuales de la UIT dentro de
   un informe queda cubierto, y si el permiso alcanza a los informes ya entregados. No son una
   negativa: es alcance sin confirmar. Estado vigente en `shared.data.licenses`.
+- ✅ **datos.gob.do — ODbL, y el share-alike NO nos alcanza.** Los datasets del portal se
+  publican bajo **Open Database License v1.0**, verificado dataset por dataset contra su CKAN:
+  zonas francas (CNZFE), generación y llegadas aéreas (ONE), licencias de construcción
+  (MIVHED), potencia instalada y PROTECOM (SIE), y el padrón del SIUBEN. La cadena decía
+  «Datos Abiertos RD», que no nombra ninguna cláusula. **El matiz que decide:** la ODbL
+  distingue *Derivative Database* de *Produced Work* (§4.5). **Un informe o un gráfico es
+  Produced Work y no dispara share-alike** — solo exige el aviso de atribución, que la
+  plataforma ya computa e inserta sola. Lo que sí sería distribuir una base es servir la serie
+  cruda a un consumidor **externo**, y para eso está la cuarentena verbatim — que **no aplica
+  hoy**: la única llave viva de la Data API es SDQ-PMS, declarada `internal`, que interpreta el
+  dato y no lo reexpide. El gate es de la llave, no del catálogo.
+- ✅ **SISALRIL / CNSS — ODbL por decisión del dueño** (2026-08-23). Mismo tratamiento que el
+  resto del portal: aviso de atribución sí, share-alike no sobre un informe. Queda registrado
+  que la decisión NO se apoya en los términos del canal que el conector usa (`cnss.gob.do`,
+  `redatam.sisalril.gob.do`) sino en el criterio del dueño.
+- ✅ **SIS (primas y ramos) — ODbL verificado.** Los dos archivos que consumimos son, carácter
+  por carácter, los **recursos CKAN** de los datasets `odc-odbl` «Primas Netas Cobradas según
+  Ramo» y «Ramos de Compañías de Seguros»; el `sis.gob.do/wp-content` es sólo dónde el portal
+  aloja el recurso. Aviso de atribución sí, share-alike no sobre un informe.
+- ✅ **SIS (transparencia) — información pública dominicana, reutilizable con atribución.** Los
+  estados financieros auditados y los índices de solvencia no están entre los cinco datasets
+  ODbL del portal, pero eso no los deja sin régimen: **Ley 200-04**, **Decreto 103-22**
+  (Política Nacional de Datos Abiertos, obligatoria para el Ejecutivo), **NORTIC A3** —que rige
+  los sub-portales de transparencia— y **Ley 65-00 art. 41** para los actos administrativos. Y
+  una cifra es un hecho: los hechos no son obra protegible. El «Todos los Derechos Reservados»
+  del pie de `sis.gob.do` es plantilla de portal y **no fija el régimen del dato público** —
+  contradice a un decreto que obliga a esa misma institución. Citar la fuente, sí; pedir
+  permiso, no. Vale para el ISF y la solvencia por compañía.
+
+> **Regla general para emisores públicos dominicanos.** La carga se invierte: **se presume
+> reutilizable con atribución**, y lo que hay que declarar es la excepción. Un texto genérico
+> de portal no es una excepción. No confundir con emisores extranjeros —UIT, CEPAL, Parline,
+> EM-DAT, Comtrade—, donde sí rige lo que su licencia diga.
 - ❌ **Nunca** describir una licencia restrictiva en prosa («uso público con cita») en un
   contrato, un deck o un informe. El texto de la licencia es además una entrada de máquina:
   `shared.data_api.manifest.license_restricts_redistribution` decide si el dato se reexporta
@@ -219,7 +251,7 @@ exactamente cómo empezó lo de abajo.
 **Estado de la verificación:** `shared.data.licenses.deuda_de_verificacion()` lista las fuentes
 cuya licencia **nadie contrastó todavía** contra el emisor. La lista se computa; no se
 escribe. Una fuente que figure ahí no está autorizada por omisión — y tampoco se puede
-presumir que esté bien: de las **siete** resueltas hasta ahora, **cuatro estaban
+presumir que esté bien: de las **catorce** resueltas hasta ahora, **diez estaban
 subdeclaradas** y **una sobre-declarada**. Antes de comprometer una fuente en una propuesta,
 mirá si está verificada — y en las dos direcciones: la subdeclarada te expone, la
 sobre-declarada te hace regalar un dato que sí podías usar.

@@ -26,6 +26,33 @@ restrictiva tiene que NOMBRAR su cláusula, no describirla.
 
 Lo vigila ``shared/data/tests/test_regla_licencia_declarada.py``, que lee el código con
 ``ast`` y exige que toda licencia declarada esté acá.
+
+**REGLA PARA LAS FUENTES PÚBLICAS DOMINICANAS, y salió de equivocarme.** Declaré que los
+estados financieros y los índices de solvencia del SIS «no tienen licencia de reutilización»
+porque el pie de `sis.gob.do` dice «Todos los Derechos Reservados» y sus Términos de Uso
+reservan la propiedad intelectual. Es una lectura incorrecta: **un pie de página de WordPress
+no fija el régimen legal del dato público**, y menos cuando contradice normas que obligan a la
+propia institución.
+
+El marco dominicano va en el sentido opuesto:
+
+  · **Ley 200-04** — el acceso a la información pública es un derecho, y su finalidad incluye
+    facilitar la reutilización del dato del sector público.
+  · **Decreto 103-22** (Política Nacional de Datos Abiertos) — de aplicación OBLIGATORIA para
+    los organismos del Poder Ejecutivo, y su objeto es facilitar el «acceso, uso,
+    **reutilización y redistribución**» de los datos públicos. La SIS es uno de ellos.
+  · **NORTIC A3** — la norma que rige justamente los sub-portales de transparencia y datos
+    abiertos, que es de donde se raspa.
+  · **Ley 65-00, art. 41** — los actos administrativos y demás textos oficiales pueden
+    reproducirse indicando la fuente.
+  · Y con independencia de todo lo anterior: **una cifra es un hecho**, y los hechos no son
+    obra protegible. Lo que podría estarlo es la maquetación de un informe, no sus números.
+
+Así que la carga de la prueba se invierte para un emisor público dominicano: **se presume
+reutilizable con atribución**, y lo que hay que declarar es la excepción, no el permiso. El
+texto genérico de un portal no es esa excepción. (No somos abogados: si alguna vez hay un
+caso de borde, lo confirma la asesoría legal — pero el default correcto es el marco, no el
+boilerplate.)
 """
 from __future__ import annotations
 
@@ -130,6 +157,9 @@ LICENCIAS: Dict[str, Licencia] = {
         terminos_url=("https://www.cepal.org/es/terminos-y-condiciones-sobre-el-uso-del-"
                       "sitio-web-entre-la-cepal-y-el-usuario"),
         verificado_el="2026-08-23",
+        atribucion=("Fuente: Junta Central Electoral (JCE) de la República Dominicana, "
+                    "productora del dato; recogido y publicado por el Observatorio de "
+                    "Igualdad de Género de la CEPAL."),
         nota=("La TERCERA instancia de la misma forma, y la más estrecha de las tres. "
               "Decía «uso público con cita». Los términos que el propio servicio declara "
               "en su `termsOfService` (apispec_1.json de api-cepalstat.cepal.org, que es "
@@ -137,10 +167,18 @@ LICENCIAS: Dict[str, Licencia] = {
               "fines comerciales, sin ningún derecho a revender, redistribuir, o crear "
               "otros trabajos a partir de los mismos». No hay CC de por medio. Alimenta "
               "los indicadores 2.45 y 2.46 de la END, que se venden. "
-              "`atribucion` queda VACÍA a propósito: acá nombrar la fuente no habilita "
-              "nada —no hay cláusula BY que satisfacer— y ponerle un texto daría a "
-              "entender que citándola el asunto queda resuelto. Lo que restringe es el "
-              "uso comercial, la redistribución y la obra derivada."),
+              "RESUELTO EL 2026-08-23, y no relajando los términos de la CEPAL —que siguen "
+              "diciendo lo mismo— sino mirando quién PRODUCE el dato. Los indicadores 2.45 "
+              "y 2.46 los produce la JCE; la CEPAL los recoge y los republica, y su propia "
+              "nota de admisibilidad en el expediente ya lo decía. Lo que estos términos "
+              "gobiernan es la COMPILACIÓN de la CEPAL, no los hechos que compila: una "
+              "cifra electoral oficial dominicana es información pública, y su régimen lo "
+              "fija el marco nacional (Ley 200-04, Decreto 103-22, Ley 65-00 art. 41), no "
+              "el portal que la reexpone. Lo que publicamos es UNA cifra por año atribuida "
+              "a su productor, no la base de CEPALSTAT. "
+              "Por eso ahora SÍ lleva `atribucion`, y nombra a la JCE primero: no es "
+              "cortesía, es lo que hace correcta la publicación. Lo que seguiría fuera de "
+              "alcance es reexportar la compilación de la CEPAL como tal."),
     ),
     ("World Bank Open Data CC-BY 4.0 (por defecto; el catálogo tiene datasets con "
      "otras licencias) + UN Comtrade, que NO es libre: propiedad de Naciones "
@@ -160,6 +198,52 @@ LICENCIAS: Dict[str, Licencia] = {
               "`modules/trade_intel/partner_chapters_sync.LICENCIA` ya apuntaba al lado "
               "correcto: cuando dos declaraciones de una fuente discrepan, gobierna la "
               "que alguien lee."),
+    ),
+
+    ("datos.gob.do — Open Database License (ODbL) v1.0, declarada POR DATASET en el "
+     "portal: exige el aviso de atribución, y el share-alike alcanza a las bases "
+     "DERIVADAS. Un informe o un gráfico es «Produced Work» y NO lo dispara "
+     "(§4.5) — https://opendatacommons.org/licenses/odbl/1-0/"): Licencia(
+        terminos_url="https://opendatacommons.org/licenses/odbl/1-0/",
+        verificado_el="2026-08-23",
+        atribucion=("Fuente: datos.gob.do (Portal de Datos Abiertos del Estado "
+                    "dominicano). Contiene información disponible bajo la Open Database "
+                    "License (ODbL)."),
+        nota=("Verificado dataset POR dataset contra el CKAN del portal (`package_show` → "
+              "`license_id`), no contra el portal en general — declara licencia por "
+              "dataset y una sola cadena para cinco conectores era una suposición. Los "
+              "seis consultados dan `odc-odbl`: zonas francas (CNZFE), generación (ONE), "
+              "licencias de construcción (MIVHED), potencia instalada y PROTECOM (SIE), y "
+              "llegadas vía aérea (ONE). Decía «Datos Abiertos RD (datos.gob.do)», que no "
+              "nombra ninguna cláusula. "
+              "EL MATIZ QUE CAMBIA LA LECTURA COMERCIAL: la ODbL distingue «Derivative "
+              "Database» de «Produced Work» (§4.5). Nuestros informes son lo segundo — no "
+              "disparan share-alike, solo exigen el aviso de atribución, que es lo que "
+              "lleva el campo `atribucion` y que la propia licencia sugiere redactar así. "
+              "Servir la serie CRUDA por la Data API sí sería distribuir una base, y para "
+              "eso está la cuarentena verbatim del manifiesto."),
+    ),
+    ("SIUBEN vía datos.gob.do — Open Database License (ODbL) v1.0: exige el aviso "
+     "de atribución, y el share-alike alcanza a las bases DERIVADAS. Un informe o "
+     "un gráfico es «Produced Work» y NO lo dispara (§4.5) — "
+     "https://opendatacommons.org/licenses/odbl/1-0/"): Licencia(
+        terminos_url="https://opendatacommons.org/licenses/odbl/1-0/",
+        verificado_el="2026-08-23",
+        atribucion=("Fuente: SIUBEN (Sistema Único de Beneficiarios), vía datos.gob.do. "
+                    "Contiene información disponible bajo la Open Database License "
+                    "(ODbL)."),
+        nota=("Entrada propia y no compartida con el resto del portal, porque su "
+              "verificación es de SUS datasets: los cuatro de la organización "
+              "`sistema-unico-de-beneficiarios-siuben` dan `odc-odbl` (2026-08-23). "
+              "Decía «uso público con cita». "
+              "SIN EFECTO EN PRODUCCIÓN, y la primera lectura fue equivocada: parecía que "
+              "el padrón provincial pasaba a cuarentena en la Data API por la marca «odbl». "
+              "No pasa. El gate no es del catálogo sino de la LLAVE — "
+              "`build_manifest(allow_restricted=…)` levanta la retención para un consumidor "
+              "que declaró uso `internal`, y la única llave viva (SDQ-PMS) lo es: interpreta "
+              "el dato, no lo reexpide. Es el caso que `ApiKey.usage` documenta con ese "
+              "nombre. La cuarentena queda reservada a una llave `external`, que es cuando "
+              "servir la serie cruda sí sería distribuir una base."),
     ),
 
     # ── Deuda: heredadas de quien escribió el conector, sin contrastar ────────────────
@@ -201,6 +285,13 @@ LICENCIAS: Dict[str, Licencia] = {
               "Mientras no contesten, esos dos puntos son NO CONFIRMADOS: no son una "
               "negativa, pero tampoco se pueden dar por concedidos."),
     ),
+    "DIGEPRES — informe oficial de ejecucion presupuestaria (Ley 423-06)": Licencia(
+        terminos_url=None, verificado_el=None,
+        nota=("El informe se publica en cumplimiento del articulo 59 de la Ley Organica de "
+              "Presupuesto 423-06 — el propio documento lo dice en su introduccion — y su "
+              "sitio no declara terminos de reutilizacion. Que un documento sea de "
+              "publicacion obligatoria no es lo mismo que sea de reutilizacion libre, y esa "
+              "distincion es la deuda: falta leer si el portal fija condiciones.")),
     "CC-BY-3.0 (University of Notre Dame)": Licencia(
         terminos_url=None, verificado_el=None,
         nota=("ND-GAIN se anuncia como «free and open-access» y da una cita sugerida; en "
@@ -210,10 +301,6 @@ LICENCIAS: Dict[str, Licencia] = {
         terminos_url=None, verificado_el=None, nota="Sin contrastar contra Ember."),
     "Datos Abiertos RD (INDOTEL)": Licencia(
         terminos_url=None, verificado_el=None, nota="Sin contrastar."),
-    "Datos Abiertos RD (datos.gob.do)": Licencia(
-        terminos_url=None, verificado_el=None,
-        nota=("El portal declara licencia por dataset; esta cadena la comparten cinco "
-              "conectores, así que puede no ser la misma para los cinco.")),
     "Datos abiertos ONE (one.gob.do)": Licencia(
         terminos_url=None, verificado_el=None, nota="Sin contrastar."),
     "Datos públicos DGA — estadísticas de comercio exterior": Licencia(
@@ -241,8 +328,6 @@ LICENCIAS: Dict[str, Licencia] = {
               "lo que hoy se lee; no vale como salvoconducto para cualquier serie del "
               "Banco Mundial que se agregue mañana."),
     ),
-    "datos abiertos del Estado dominicano (datos.gob.do) — uso público con cita": Licencia(
-        terminos_url=None, verificado_el=None, nota="Sin contrastar."),
     "datos oficiales BCRD — uso público con cita": Licencia(
         terminos_url=None, verificado_el=None, nota="Sin contrastar."),
     "datos oficiales ONE — uso público con cita": Licencia(
@@ -269,13 +354,89 @@ LICENCIAS: Dict[str, Licencia] = {
         verificado_el=None,
         nota=("La cadena ES la URL de los términos, que es más honesto que una glosa — "
               "pero nadie registró qué dicen, y contradice a `comtrade_client`.")),
-    "https://opendatacommons.org/licenses/odbl/": Licencia(
-        terminos_url="https://opendatacommons.org/licenses/odbl/", verificado_el=None,
-        nota=("ODbL: share-alike sobre bases derivadas. La cadena la nombra y el "
-              "manifiesto la retiene. Falta confirmar que el SIS la declare hoy.")),
-    "https://sis.gob.do (público)": Licencia(
-        terminos_url=None, verificado_el=None,
-        nota="«público» no es una licencia: es dónde está el archivo. Sin contrastar."),
+    ("SISALRIL / CNSS — Open Database License (ODbL) v1.0: exige el aviso de atribución, "
+     "y el share-alike alcanza a las bases DERIVADAS. Un informe o un gráfico es "
+     "«Produced Work» y NO lo dispara (§4.5) — "
+     "https://opendatacommons.org/licenses/odbl/1-0/"): Licencia(
+        terminos_url="https://opendatacommons.org/licenses/odbl/1-0/",
+        verificado_el="2026-08-23",
+        atribucion=("Fuente: SISALRIL / CNSS (Seguro Familiar de Salud). Contiene "
+                    "información disponible bajo la Open Database License (ODbL)."),
+        nota=("PROMOVIDA POR DECISIÓN DEL DUEÑO el 2026-08-23, y conviene registrar en qué "
+              "se apoya y en qué no. NO se estableció leyendo los términos del canal que "
+              "el conector usa: `sisalril_client` baja de `cnss.gob.do` y "
+              "`sisalril_ars_client` de `redatam.sisalril.gob.do`, no del portal. Lo que "
+              "hay es (a) la organización del sector en datos.gob.do publicando bajo ODbL "
+              "y (b) la decisión del dueño de tratar el dato del SFS bajo esos términos. "
+              "Se separa de la cadena del SIS a propósito: compartían una sola y promover "
+              "las dos juntas habría hecho pasar por verificado algo que no se decidió. "
+              "Si alguna vez el CNSS declara otra cosa para su canal, esta entrada es el "
+              "lugar donde se corrige."),
+    ),
+    ("SIS — Open Database License (ODbL) v1.0: los archivos que este conector baja SON "
+     "los recursos CKAN de datasets `odc-odbl` del portal, alojados en sis.gob.do. "
+     "Exige el aviso de atribución; el share-alike alcanza a las bases DERIVADAS y "
+     "no a un informe (§4.5) — https://opendatacommons.org/licenses/odbl/1-0/"): Licencia(
+        terminos_url="https://opendatacommons.org/licenses/odbl/1-0/",
+        verificado_el="2026-08-23",
+        atribucion=("Fuente: Superintendencia de Seguros (SIS), vía datos.gob.do. Contiene "
+                    "información disponible bajo la Open Database License (ODbL)."),
+        nota=("Promovida POR EVIDENCIA y no por decisión, y el camino importa porque yo "
+              "mismo había objetado esta cadena. No alcanza con que la organización del SIS "
+              "declare `odc-odbl` en el portal: el conector no llama al CKAN, baja dos "
+              "archivos de `sis.gob.do/wp-content`. Se comprobó que esas dos URL son, "
+              "carácter por carácter, los recursos XLSX de «Primas Netas Cobradas según "
+              "Ramo, 2020–2025» y «Ramos de Compañías de Seguros, 2018–2025», ambos "
+              "`odc-odbl`. El `wp-content` es sólo dónde CKAN aloja el recurso — el propio "
+              "nombre `_CKAN_PRIMAS_XLSX` lo decía. La objeción era razonable y resultó "
+              "falsa: se resolvió mirando, no discutiendo."),
+    ),
+    ("SIS — estados financieros auditados del portal de transparencia. Información "
+     "pública dominicana: reutilizable con atribución por Ley 200-04, Decreto 103-22 "
+     "(datos abiertos, obligatorio para el Ejecutivo), NORTIC A3 y Ley 65-00 art. 41. El "
+     "«Todos los Derechos Reservados» del pie del portal es plantilla y no fija el "
+     "régimen del dato."): Licencia(
+        terminos_url="https://sis.gob.do/terminos-de-uso/",
+        verificado_el="2026-08-23",
+        atribucion=("Fuente: Superintendencia de Seguros (SIS), portal de transparencia. "
+                    "Información pública de la República Dominicana."),
+        nota=("`insurance_intel.financials_sync`. Decía ser ODbL, y no lo es: los cinco "
+              "datasets `odc-odbl` de la SIS en datos.gob.do no incluyen los estados "
+              "financieros. Pero la corrección que escribí primero —«el sitio reserva "
+              "derechos, no hay licencia de reutilización»— era PEOR que el error: tomaba "
+              "el pie de un WordPress como régimen legal del dato público. No lo es. Ver "
+              "la regla del encabezado de este módulo: para un emisor público dominicano "
+              "se presume reutilizable con atribución, y lo que se declara es la "
+              "excepción. Acá no hay excepción — hay una plantilla de portal que "
+              "contradice al Decreto 103-22, que obliga a esa misma institución."),
+    ),
+    ("gob.do (OGTIC) — catálogo de trámites del Portal Único de Servicios. Información "
+     "pública dominicana: reutilizable con atribución por Ley 200-04, Decreto 103-22 y "
+     "NORTIC A3. `robots.txt` permite el rastreo completo (Allow: /)."): Licencia(
+        terminos_url="https://www.gob.do/politica-de-privacidad-y-condiciones-de-uso",
+        verificado_el="2026-08-25",
+        atribucion=("Fuente: Portal Único de Servicios del Gobierno Dominicano (gob.do), "
+                    "OGTIC. Información pública de la República Dominicana."),
+        nota=("`shared.data.gobdo_tramites`. La API (`gob-do-api.www.gob.do/api`) responde "
+              "sin autenticación y NO declara términos propios; el portal publica una "
+              "política de privacidad y condiciones de uso del sitio, no una licencia del "
+              "dato. `robots.txt` dice `User-agent: * / Allow: /`, o sea que el emisor no "
+              "restringe el rastreo. Se aplica la regla del encabezado de este módulo: para "
+              "un emisor público dominicano se presume reutilizable con atribución y lo que "
+              "se declara es la excepción. Acá no hay excepción — el catálogo de trámites y "
+              "la institución responsable de cada uno son actos de la Administración."),
+    ),
+    ("SIS — índices de solvencia y liquidez del portal de transparencia. Información "
+     "pública dominicana: reutilizable con atribución por Ley 200-04, Decreto 103-22, "
+     "NORTIC A3 y Ley 65-00 art. 41."): Licencia(
+        terminos_url="https://sis.gob.do/terminos-de-uso/",
+        verificado_el="2026-08-23",
+        atribucion=("Fuente: Superintendencia de Seguros (SIS), portal de transparencia. "
+                    "Información pública de la República Dominicana."),
+        nota=("`sis_solvency_client`. Decía «https://sis.gob.do (público)», que es dónde "
+              "está el archivo y no un régimen de uso. Ahora dice cuál es. Misma base "
+              "legal que los estados financieros auditados."),
+    ),
     "open-data": Licencia(
         terminos_url=None, verificado_el=None,
         nota=("Dos palabras sin emisor ni cláusula, en el conector de IED del BCRD. La "

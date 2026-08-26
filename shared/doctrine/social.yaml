@@ -76,7 +76,31 @@ variable_scopes:
   # leyes— deciden con esto si una variable puede medir una meta NACIONAL.
   unemployment_rate: national            # BCRD ENCFT, promedio 4 trimestres, país
   employment_gender_ratio: national      # BCRD ENCFT, razón F/M, país
+  improved_sanitation_access: national
+  public_network_water_access: national
+  broad_unemployment_rate: national
+  child_labour_6_14: national
+  neet_unemployed_15_19: national
+  preschool_net_coverage: national
+  tertiary_net_enrollment: national
+  malaria_mortality_rate: national
+  child_underweight_rate: national
+  child_wasting_rate: national
+  child_stunting_rate: national
+  vertical_hiv_transmission: national
+  advanced_hiv_on_art: national
+  protected_area_pct_land: national      # ONE END 4.2, sobre área TERRESTRE
+  income_gender_ratio: national          # SISDOM END 2.40, razón F/M de INGRESO
+  electricity_subsidy_usd_mm: national   # MEM END 3.30, aporte a las EDE
   unemployment_gender_ratio: national    # BCRD ENCFT, razón F/M, país
+  # Registro Único de trámites (Ley 167-21). NACIONAL, y el alcance no es un formalismo acá:
+  # son conteos del catálogo del Estado entero, no de una institución. Publicarlas como
+  # `per_subject` haría que un consumidor leyera «710 trámites» como el número de UNA
+  # entidad, que es la misma falla que publicó la pobreza de una región como cifra del país.
+  tramites_catalogados: national
+  tramites_con_tiempo_declarado: national
+  tramites_pct_con_tiempo_sobre_los_catalogados: national
+  tramites_mencionan_cifra_de_tiempo_sin_anclar: national
   secondary_coverage_pais: national      # MINERD SIIE, fila TOTAL PAIS
   primary_coverage_pais: national        # MINERD SIIE, fila TOTAL PAIS
   schooling_years_pais: national         # SISDOM 05 3 007, fila «Total»
@@ -113,6 +137,7 @@ variable_scopes:
   regional_unemployment_gap: national     # dispersión ENTRE regiones: el sujeto es el país
   trust_political_parties: national       # encuesta nacional del Latinobarómetro
   fdi_total_usd_mm: national              # suma de las actividades del cuadro del BCRD
+  health_spending_central_gov_pct_gdp: national   # Gobierno Central sobre PIB del país
   poverty_extreme_national: national      # SISDOM 03 3 003a, columna NACIONAL
   poverty_rate_national: national         # idem, línea de pobreza total
   # Cifras de la ZONA rural, no de una demarcación: son del país, desagregadas por zona.

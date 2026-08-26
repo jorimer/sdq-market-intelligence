@@ -64,6 +64,8 @@ REPORT_TYPE_LABELS = {
     "wire": "Wire",
     "criteria": "Criterios de Calificación",
     "sector_outlook": "Perspectiva Sectorial",
+    "anuario": "Anuario",
+    "revision_anual": "Revisión Anual",
 }
 
 # Nivel comercial (metadato de portada/header) → etiqueta ES. Sin este mapeo, el valor
@@ -94,6 +96,8 @@ NARRATIVE_SECTION_TITLES = {
     "recommendation": "Recomendación",
     "trend_analysis": "Análisis de Tendencias",
     "sector_outlook": "Perspectiva Sectorial",
+    "anuario": "Anuario",
+    "revision_anual": "Revisión Anual",
     "system_overview": "Panorama del Sistema",
     "scenario_analysis": "Análisis de Escenarios",
     "limitations": "Limitaciones",
@@ -284,12 +288,29 @@ def generate_radar_chart(sub_scores: Dict[str, float], output_path: str) -> str:
 # watermark) los provee el shell de marca compartido (shared.products.render.build_branded_pdf);
 # este módulo solo arma el CUERPO (radar + tablas + narrativa) y la calificación va como headline.
 
-def _build_sub_scores_table(sub_scores: Dict[str, float], styles) -> List:
+def _build_sub_scores_table(sub_scores: Dict[str, float], styles,
+                            entity_type: Optional[str] = None) -> List:
+    """Tabla de sub-componentes con los pesos DEL TIPO DE ENTIDAD.
+
+    Iteraba `SUB_COMPONENT_WEIGHTS` —la constante base, que es la de Banca Múltiple— para
+    TODAS las entidades. Cinco de los seis tipos tienen perfil propio, así que la tabla salía
+    mal en 75 de las 92 entidades calificadas, y contradecía el número de portada del propio
+    informe: en un Insight real de una asociación de ahorros y préstamos (Bonao, 2025-12) la
+    tabla decía 40/30/15/10/5 —que dan un score global de 60.07— mientras la portada mostraba
+    61.24, que es lo que dan los pesos reales de una AAP (38/34/13/10/5). La narrativa, que sí
+    recibe los pesos del tipo, decía 38% y 34%: el texto tenía razón y la tabla mentía.
+
+    El motor de scoring nunca estuvo mal —`run_scoring` usa `get_sub_component_weights`—; el
+    defecto era de las superficies que lo MUESTRAN.
+    """
     elements: List = []
     elements.append(Paragraph("Sub-componentes", styles["SDQHeading"]))
 
+    from modules.banking_score.scoring.weights import get_sub_component_weights
+    pesos = get_sub_component_weights(entity_type)
+
     rows = [["Sub-componente", "Peso", "Score"]]
-    for key, weight in SUB_COMPONENT_WEIGHTS.items():
+    for key, weight in pesos.items():
         score = sub_scores.get(key, 0)
         rows.append([
             SUB_COMPONENT_LABELS.get(key, key),
@@ -316,6 +337,44 @@ def _trend_arrow(series: Optional[List[Dict]]) -> str:
     return f"{arrow} {delta:+.0f}"
 
 
+#: Decimales con que se imprime el valor de un indicador, por unidad. Un HHI con cuatro
+#: decimales ("2091.6781") no informa más que "2,092": la precisión sobrante lee como ruido
+#: en un documento de calificación.
+_DECIMALES_POR_UNIDAD = {"%": 2, "índice": 0}
+
+
+def _rotulo_y_valor(clave: str, crudo) -> tuple:
+    """Etiqueta legible y valor CON SU UNIDAD, tomados del registro de indicadores.
+
+    Sin esto la tabla salía con el fallback ``clave.replace("_", " ").title()`` —"Hhi
+    Sectorial", "Pct Cartera A", "Roa", "Cost To Income"— y el valor crudo sin unidad y con
+    todos sus decimales ("49.3813"). Es el MISMO fallback que este archivo ya documenta como
+    "bug real detectado en producción" para los títulos de sección: se corrigió allá y quedó
+    vivo acá, en la tabla que el comité mira primero.
+
+    El registro (`INDICATOR_META`) ya tenía `label` y `unit` para los 20 indicadores; solo
+    faltaba leerlos.
+    """
+    try:
+        from modules.banking_score.scoring.indicator_detail import INDICATOR_META
+        meta = INDICATOR_META.get(clave) or {}
+    except Exception:  # noqa: BLE001 — el informe nunca se cae por el rótulo
+        meta = {}
+    rotulo = str(meta.get("label") or clave.replace("_", " ").title())
+    unidad = meta.get("unit") or ""
+    if crudo is None:
+        return rotulo, "N/D"
+    try:
+        v = float(crudo)
+    except (TypeError, ValueError):
+        return rotulo, str(crudo)
+    dec = _DECIMALES_POR_UNIDAD.get(unidad, 2)
+    texto = f"{v:,.{dec}f}"
+    if unidad == "%":
+        texto += "%"
+    return rotulo, texto
+
+
 def _build_indicators_table(indicators: Dict[str, Dict], styles,
                             percentiles: Optional[Dict] = None,
                             trajectories: Optional[Dict] = None) -> List:
@@ -335,11 +394,8 @@ def _build_indicators_table(indicators: Dict[str, Dict], styles,
     for name, data in indicators.items():
         if not isinstance(data, dict):
             continue
-        row = [
-            name.replace("_", " ").title(),
-            f"{data.get('raw', 'N/A')}",
-            f"{data.get('score', 0):.1f}",
-        ]
+        rotulo, valor = _rotulo_y_valor(name, data.get("raw"))
+        row = [rotulo, valor, f"{data.get('score', 0):.1f}"]
         if has_amplitude:
             sector = (pct_ind.get(name) or {}).get("sector") or {}
             p = sector.get("percentile")
@@ -359,7 +415,33 @@ def _build_indicators_table(indicators: Dict[str, Dict], styles,
                 "calificadas en el período (p50 = mediana). Tendencia = variación del score "
                 "entre el primer y el último trimestre disponible.", styles["SDQSmall"]))
 
+        # Tres de los cinco indicadores de Solidez —solvencia, solvencia de capital primario
+        # y capital primario/activos ponderados— miden capital sobre activos ponderados por
+        # riesgo. Cuando la entidad no tiene capital secundario, dos de ellos COINCIDEN
+        # exactamente, y un lector razonable los leería como tres evidencias independientes.
+        # Se declara en vez de esconderse: la alternativa —recomponer la dimensión— mueve el
+        # score de todas las entidades y es una decisión de metodología, no una nota al pie.
+        nota = _nota_de_capital_redundante(indicators)
+        if nota:
+            elements.append(Spacer(1, 0.06 * inch))
+            elements.append(Paragraph(nota, styles["SDQSmall"]))
+
     return elements
+
+
+def _nota_de_capital_redundante(indicators: Dict) -> Optional[str]:
+    """La advertencia cuando dos ratios de capital dan el MISMO número, o ninguna."""
+    def _raw(clave):
+        blob = (indicators or {}).get(clave)
+        return blob.get("raw") if isinstance(blob, dict) else None
+
+    sol, lev = _raw("solvencia"), _raw("leverage")
+    if sol is None or lev is None or abs(float(sol) - float(lev)) > 0.005:
+        return None
+    return ("Nota: «Índice de solvencia» y «Capital primario / activos ponderados» coinciden "
+            "en este período porque la entidad no registra capital secundario — comparten "
+            "numerador y denominador. Son el mismo hecho medido dos veces, no dos evidencias "
+            "independientes de solidez.")
 
 
 def _build_trajectory_table(trajectories: Dict, styles) -> List:
@@ -542,6 +624,228 @@ def _md_to_flowables(text: str, styles) -> List:
     return out
 
 
+def _build_aportes_table(trajectories: Dict, entity_type: Optional[str], styles) -> List:
+    """QUÉ MOVIÓ el score, en la página — no solo en la prosa.
+
+    La descomposición ya viaja al modelo (`derived.aportes_al_cambio`), pero si no se imprime,
+    la afirmación «el deterioro lo impulsó X» le queda al lector como un acto de fe. Es la
+    misma lección que la tabla de trayectoria documenta arriba: si la narrativa razona sobre
+    una cifra, esa cifra tiene que estar en la página.
+
+    Y acá la verificación es especialmente barata: **cada columna SUMA el cambio total**. El
+    lector puede comprobar la atribución con la mesa, que es exactamente lo que no pudo hacer
+    con el informe donde la §1 adjudicó a la eficiencia un semestre en el que la eficiencia
+    había mejorado.
+
+    Se imprimen las ventanas que la serie soporta; con menos de dos cortes, nada.
+    """
+    from shared.narrative.derived import aportes_al_cambio
+    from modules.banking_score.scoring.weights import get_sub_component_weights
+
+    sub = trajectories.get("sub") or {}
+    if not sub:
+        return []
+    ventanas = aportes_al_cambio(sub, get_sub_component_weights(entity_type))
+    if not ventanas:
+        return []
+
+    elements: List = [Paragraph("Qué movió el score", styles["SDQHeading"])]
+    cols = [v["ventana"].replace("el último ", "").capitalize() for v in ventanas]
+    rows = [["Sub-componente"] + cols]
+    for key in SUB_COMPONENT_LABELS:
+        fila = [SUB_COMPONENT_LABELS[key]]
+        visto = False
+        for v in ventanas:
+            ap = next((a for a in v["aportes"] if a["componente"] == key), None)
+            fila.append(f"{ap['aporte_al_cambio']:+.2f}" if ap else "—")
+            visto = visto or ap is not None
+        if visto:
+            rows.append(fila)
+    if len(rows) == 1:
+        return []
+    rows.append([Paragraph("<b>Cambio total</b>", styles["SDQTableCellBold"])]
+                + [Paragraph(f"<b>{v['cambio_total']:+.2f}</b>", styles["SDQTableCellBold"])
+                   for v in ventanas])
+
+    ancho = [2.5 * inch] + [1.15 * inch] * len(cols)
+    elements.append(_branded_table(rows, ancho, styles, font_size=9.5, padding=5))
+    elements.append(Spacer(1, 0.08 * inch))
+    elements.append(Paragraph(
+        "Aporte = variación del score del sub-componente × su peso. Cada columna SUMA el "
+        "cambio total del período, de modo que la atribución es verificable contra esta "
+        "tabla: la dimensión que más se mueve no es necesariamente la que más mueve el "
+        "resultado.", styles["SDQSmall"]))
+    return elements
+
+
+def _build_banda_del_periodo(trajectories: Dict, styles) -> List:
+    """Una línea: en qué banda abrió y cerró la ventana, y si cambió.
+
+    El cambio de banda es el hecho que un comité recuerda del año, y hasta ahora había que
+    deducirlo comparando la portada con la tabla de trayectoria. En 2025, 18 de 86 entidades
+    del panel cambiaron de banda.
+    """
+    overall = trajectories.get("overall") or []
+    if len(overall) < 2:
+        return []
+    ini, fin = overall[0], overall[-1]
+    b0, b1 = ini.get("banda_resiliencia"), fin.get("banda_resiliencia")
+    if not b0 or not b1:
+        return []
+    lapso = f"{ini['period_end'][:7]} → {fin['period_end'][:7]}"
+    texto = (f"Banda de resiliencia en la ventana ({lapso}): <b>{b0}</b> → <b>{b1}</b>"
+             + ("" if b0 == b1 else " — <b>cambió de banda en el período</b>"))
+    return [Paragraph(texto, styles["SDQSmall"]), Spacer(1, 0.12 * inch)]
+
+
+def _build_revision_anual_tables(rev: Dict, styles) -> List:
+    """Las tablas del AÑO de una entidad: el camino, las bandas y el balance apertura/cierre.
+
+    Se imprimen porque son el hecho que la foto de diciembre NO da. Dos entidades con el mismo
+    score de cierre —una estable, otra que cayó y se recuperó— tienen el mismo informe al
+    corte y años distintos; la tabla del camino es lo que las separa.
+
+    El balance lleva la APERTURA al lado del cierre a propósito: solvencia, apalancamiento y
+    liquidez son STOCKS, y su valor de diciembre no dice nada del año sin el nivel del que
+    partió. Es el dato que hasta ahora no existía en ningún informe.
+    """
+    if not rev:
+        return []
+    elements: List = []
+
+    serie = rev.get("serie") or []
+    if serie:
+        elements.append(Paragraph(f"El año {rev.get('anio', '')}", styles["SDQHeading"]))
+        rows = [["Corte", "Score", "Banda"]]
+        rows += [[str(p.get("corte", ""))[:7],
+                  f"{p['score']:.2f}" if isinstance(p.get("score"), (int, float)) else "—",
+                  str(p.get("banda") or "—")] for p in serie]
+        elements.append(_branded_table(rows, [1.4 * inch, 1.1 * inch, 2.3 * inch],
+                                       styles, font_size=9.5, padding=5))
+        ap, ci = rev.get("apertura") or {}, rev.get("cierre") or {}
+        nota = (f"Apertura {ap.get('score', '—')} → cierre {ci.get('score', '—')} "
+                f"({rev.get('cambio_score', 0):+.2f} puntos). "
+                "El score del año es el DEL CIERRE: no se promedian los trimestres.")
+        cam = rev.get("camino") or {}
+        if cam.get("lectura"):
+            nota += " " + str(cam["lectura"]) + "."
+        elements.append(Spacer(1, 0.08 * inch))
+        elements.append(Paragraph(nota, styles["SDQSmall"]))
+        elements.append(Spacer(1, 0.25 * inch))
+
+    cambios = rev.get("cambios_de_banda") or []
+    if cambios:
+        elements.append(Paragraph("Cambios de banda durante el año", styles["SDQHeading"]))
+        rows = [["Corte", "Desde", "Hasta"]]
+        rows += [[str(c.get("corte", ""))[:7], str(c.get("desde") or "—"),
+                  str(c.get("hasta") or "—")] for c in cambios]
+        elements.append(_branded_table(rows, [1.4 * inch, 1.9 * inch, 1.9 * inch],
+                                       styles, font_size=9.5, padding=5))
+        elements.append(Spacer(1, 0.25 * inch))
+
+    bal = rev.get("balance") or []
+    if bal:
+        elements.append(Paragraph("Balance: apertura contra cierre", styles["SDQHeading"]))
+        rows = [["Indicador", "Apertura", "Cierre", "Cambio"]]
+        for f in bal:
+            rotulo, cierre_txt = _rotulo_y_valor(str(f.get("indicador", "")), f.get("cierre"))
+            _, apertura_txt = _rotulo_y_valor(str(f.get("indicador", "")), f.get("apertura"))
+            cambio = f.get("cambio")
+            rows.append([rotulo, apertura_txt, cierre_txt,
+                         f"{cambio:+.2f}" if isinstance(cambio, (int, float)) else "—"])
+        elements.append(_branded_table(rows, [2.3 * inch, 1.2 * inch, 1.2 * inch, 1.1 * inch],
+                                       styles, font_size=9.5, padding=5))
+        elements.append(Spacer(1, 0.08 * inch))
+        elements.append(Paragraph(
+            "Los indicadores de balance son fotos a cada corte: el nivel de diciembre no "
+            "describe el año sin el nivel del que partió.", styles["SDQSmall"]))
+        elements.append(Spacer(1, 0.25 * inch))
+
+    faltantes = rev.get("cortes_faltantes") or []
+    if faltantes:
+        # Se DECLARA: el pico de una serie con huecos es el pico de lo que se vio, no el del
+        # año, y ocultarlo haría pasar una lectura parcial por completa.
+        elements.append(Paragraph(
+            "Cortes ausentes en el año: " + ", ".join(str(c) for c in faltantes)
+            + ". Las anclas del camino son de los cortes disponibles, no del año completo.",
+            styles["SDQSmall"]))
+        elements.append(Spacer(1, 0.2 * inch))
+    return elements
+
+
+def _build_anuario_tables(anuario: Dict, styles) -> List:
+    """Las tablas del ANUARIO: el año del sistema, por tipo y los cambios de banda.
+
+    Todas las cifras vienen computadas (`reports/anuario`). Se imprimen porque un anuario que
+    afirma «la banca múltiple se deterioró» sin la tabla al lado es una opinión: con ella, es
+    una lectura que el lector audita.
+
+    La MEDIANA es el titular y la media va al lado. Cuando divergen —caso real de 2025: la
+    media sube y la mediana baja— la nota lo dice, porque titular con la media estaría
+    técnicamente respaldado y sería falso como lectura.
+    """
+    if not anuario:
+        return []
+    elements: List = []
+    sis = anuario.get("sistema") or {}
+
+    por_corte = sis.get("por_corte") or []
+    if por_corte:
+        elements.append(Paragraph(f"El sistema en {anuario.get('anio', '')}",
+                                  styles["SDQHeading"]))
+        rows = [["Corte", "Mediana", "Media", "n"]]
+        rows += [[c["corte"][:7], f"{c['mediana']:.2f}", f"{c['media']:.2f}", str(c["n"])]
+                 for c in por_corte]
+        elements.append(_branded_table(rows, [1.6 * inch, 1.2 * inch, 1.2 * inch, 0.8 * inch],
+                                       styles, font_size=9.5, padding=5))
+        nota = ("Mediana = la lectura del sistema; la media se muestra al lado por "
+                "transparencia.")
+        if sis.get("medias_y_medianas_divergen"):
+            nota += (" <b>En este período media y mediana se mueven en sentidos opuestos</b>: "
+                     "a la media la levantan unos pocos extremos, así que el año se lee por la "
+                     "mediana.")
+        elements.append(Spacer(1, 0.08 * inch))
+        elements.append(Paragraph(nota, styles["SDQSmall"]))
+        elements.append(Spacer(1, 0.25 * inch))
+
+    tipos = anuario.get("por_tipo") or []
+    if tipos:
+        elements.append(Paragraph("Cambio del año por tipo de entidad", styles["SDQHeading"]))
+        rows = [["Tipo de entidad", "Entidades", "Cambio mediano", "Lectura"]]
+        rows += [[_TIPO_LABEL.get(t["tipo"], t["tipo"]), str(t["n"]),
+                  f"{t['cambio_mediana']:+.2f}", t["direccion"]] for t in tipos]
+        elements.append(_branded_table(rows, [2.1 * inch, 0.9 * inch, 1.3 * inch, 1.1 * inch],
+                                       styles, font_size=9.5, padding=5))
+        elements.append(Spacer(1, 0.25 * inch))
+
+    bandas = anuario.get("cambios_de_banda") or []
+    if bandas:
+        elements.append(Paragraph("Entidades que cambiaron de banda", styles["SDQHeading"]))
+        rows = [["Entidad", "Desde", "Hasta", "Δ Score"]]
+        rows += [[b["entidad"], str(b["desde"]), str(b["hasta"]),
+                  f"{b['cambio_score']:+.2f}"] for b in bandas]
+        elements.append(_branded_table(rows, [2.5 * inch, 1.1 * inch, 1.1 * inch, 0.8 * inch],
+                                       styles, font_size=9, padding=4))
+        elements.append(Spacer(1, 0.25 * inch))
+
+    uni = anuario.get("universo") or {}
+    if uni:
+        # El universo se DECLARA y las parciales se NOMBRAN. Ocultarlas sería peor que
+        # excluirlas: desaparecerían sin aviso.
+        texto = (f"Universo: {uni.get('comparables')} entidades con todos los cortes del año "
+                 f"(de {uni.get('vistas_en_el_anio')} vistas). Los agregados y el orden se "
+                 "computan solo sobre ellas.")
+        parc = uni.get("parciales") or []
+        if parc:
+            detalle = "; ".join(f"{x['entidad']} ({x['cortes_presentes']}/{x['de']})"
+                                for x in parc)
+            texto += (f" Quedan fuera del orden, por año incompleto: {detalle}. No se ocultan: "
+                      "un año parcial no se rankea contra uno completo.")
+        elements.append(Paragraph(texto, styles["SDQSmall"]))
+        elements.append(Spacer(1, 0.2 * inch))
+    return elements
+
+
 def _build_narrative_sections(narratives: Dict[str, str], styles) -> List:
     elements: List = []
     n = 0
@@ -599,6 +903,13 @@ def _build_peer_block(peer_block: Dict, styles) -> List:
     elements.append(table)
     return elements
 
+
+_TIPO_LABEL = {
+    "banca_multiple": "Banca múltiple", "aap": "Asociaciones de ahorros y préstamos",
+    "banco_ahorro_credito": "Bancos de ahorro y crédito",
+    "corporacion_credito": "Corporaciones de crédito", "cambiaria": "Agentes de cambio",
+    "fiduciaria": "Fiduciarias",
+}
 
 _MACRO_DIR_LABEL = {"favorable": "Favorable", "adverso": "Adverso", "neutral": "Neutral"}
 
@@ -764,6 +1075,8 @@ async def generate_pdf_report(
     sample: bool = False,
     band_distribution: Optional[Dict[str, int]] = None,
     peer_block: Optional[Dict] = None,
+    anuario: Optional[Dict] = None,
+    revision: Optional[Dict] = None,
 ) -> str:
     """Generate a branded PDF report and return the file path.
 
@@ -822,7 +1135,8 @@ async def generate_pdf_report(
 
     # 2. Sub-scores table
     if sub_scores:
-        body.extend(_build_sub_scores_table(sub_scores, styles))
+        body.extend(_build_sub_scores_table(
+            sub_scores, styles, scoring_result.get("entity_type")))
         body.append(Spacer(1, 0.3 * inch))
 
     # Amplitud (Fase 4): trayectoria multi-período + percentil vs el sistema. Vienen en
@@ -840,7 +1154,24 @@ async def generate_pdf_report(
         traj_els = _build_trajectory_table(trajectories, styles)
         if traj_els:
             body.extend(traj_els)
+            body.extend(_build_banda_del_periodo(trajectories, styles))
             body.append(Spacer(1, 0.3 * inch))
+        # Qué movió el score: la descomposición que la narrativa ya recibe, ahora también
+        # impresa — sin ella la atribución le queda al lector como acto de fe.
+        ap_els = _build_aportes_table(trajectories, scoring_result.get("entity_type"), styles)
+        if ap_els:
+            body.extend(ap_els)
+            body.append(Spacer(1, 0.3 * inch))
+
+    # 3a-ter. ANUARIO — las tablas del año del sistema. Van arriba porque son el SUJETO del
+    # documento, no un anexo: el anuario no analiza una entidad, analiza el año.
+    if anuario:
+        body.extend(_build_anuario_tables(anuario, styles))
+
+    # 3a-quater. REVISIÓN ANUAL — el año de la ENTIDAD. Mismo criterio que el anuario: son
+    # el sujeto del documento, no un anexo.
+    if revision:
+        body.extend(_build_revision_anual_tables(revision, styles))
 
     # 3b. Pulse — distribución del sistema por banda (opt-in, anonimizado).
     if band_distribution:
