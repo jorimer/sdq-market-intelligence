@@ -74,18 +74,41 @@ PREFIJO_OBLIGATORIO = "/api"
 #: los tres: ninguna institución usa el mismo.
 CAMPOS_CON_PROSA = ("info_process", "info_requirement", "description")
 
-#: Las señales de que la cifra que sigue es el tiempo DEL TRÁMITE y no otra cosa. Es una
-#: lista cerrada: una cifra sin ancla no se extrae, se descarta. Ampliarla es una decisión
-#: que se toma acá y se mide, no algo que se hace al pasar.
-ANCLAS = (
-    r"tiempo\s+de\s+(?:entrega|respuesta|procesamiento)",
+#: Las señales de que la cifra que sigue es el tiempo DEL TRÁMITE y no otra cosa, en DOS
+#: NIVELES. Una cifra sin ancla no se extrae, se descarta.
+#:
+#: **Por qué dos niveles y no una lista.** Una ficha puede nombrar el campo con todas las
+#: letras —«el tiempo de entrega es de 5 días laborables»— y además mencionar otro plazo en
+#: una condición de agenda —«si quedan 5 días laborables o menos de la reunión»—. Con una
+#: lista plana gana el que aparece primero en el texto, que no es el que nombra el campo. Se
+#: buscan primero las FUERTES sobre todo el texto y solo si ninguna aparece se prueban las
+#: DÉBILES; el nivel que acertó viaja con el dato.
+#:
+#: **Y las débiles existen porque la primera versión se perdía 19 de 22.** Medido el
+#: 2026-08-25 sobre los 710 trámites del catálogo: detectaba 3 y había 22. Lo que faltaba era
+#: cómo escribe la gente —«se LE entrega en 3 horas», «este proceso tiene una DURACIÓN de
+#: cinco días», «la preaprobación TOMA 1 día hábil», «dentro de un PLAZO DE quince días»—.
+#: Publicar 3 habría sido publicar una cifra siete veces menor que la real.
+ANCLAS_FUERTES = (
+    # La ficha NOMBRA el campo que la Resolución 142-2024 exige.
+    r"tiempo\s+de\s+(?:entrega|respuesta|procesamiento|espera)",
     r"plazo\s+de\s+(?:respuesta|entrega)",
-    r"ser[áa]\s+entregad",
-    r"se\s+entrega\s+en",
-    r"estar[áa]\s+list",
-    r"tiempo\s+estimad",
-    r"se\s+completa\s+en",
+    r"tiempo\s+estimad\w*",
 )
+
+ANCLAS_DEBILES = (
+    # Perífrasis: dicen lo mismo sin nombrar el campo.
+    r"se\s+(?:le\s+)?entrega\s+(?:en|dentro)",
+    r"ser[áa]\s+entregad\w*\s+(?:en|dentro)",
+    r"estar[áa]\s+list\w*\s+(?:en|dentro)",
+    r"(?:este\s+)?(?:proceso|tr[áa]mite|procedimiento)[^.]{0,40}?(?:toma|tarda|tiene\s+una\s+duraci[óo]n\s+de)",
+    r"(?:respuesta|resoluci[óo]n|entrega)[^.]{0,30}?dentro\s+de\s+los",
+    r"se\s+(?:completa|resuelve|responde)\s+en",
+    r"dentro\s+de\s+un\s+plazo\s+(?:m[áa]ximo\s+)?de",
+)
+
+#: Se conserva el nombre anterior: es la unión, para quien solo quiera saber qué se busca.
+ANCLAS = ANCLAS_FUERTES + ANCLAS_DEBILES
 
 #: Los números que la prosa usa, en cifra o en palabra. La ley y las fichas escriben las dos
 #: formas —«tres (3) días»— y quedarse con una pierde la mitad.
@@ -109,12 +132,23 @@ _TIMEOUT = 60.0
 _PAUSA_ENTRE_LLAMADAS = 0.05
 
 _NUM = r"(?:\d{1,3}|" + "|".join(NUMEROS_ESCRITOS) + r")"
+
+#: El calificador que puede seguir a la unidad, en lista CERRADA. Antes se capturaban «16
+#: caracteres de lo que venga» y salían jirones —«1 día h», «3 horas si es solicitad»— que
+#: después se publican tal cual en una tabla. Una cifra que se imprime se recorta a palabras
+#: enteras o no se recorta.
+_CALIF = r"(?:laborables?|h[áa]bil(?:es)?|calendario|corridos?|continuos?|natural(?:es)?)"
 _UNI = r"(?:d[ií]as?|horas?|semanas?|meses?)"
-_PATRON = re.compile(
-    r"(?:" + "|".join(ANCLAS) + r")"
-    r"[^.<]{0,60}?"
-    r"(" + _NUM + r"\s*(?:\(\d+\)\s*)?" + _UNI + r"[a-zé ]{0,14})",
-    re.IGNORECASE)
+def _compilar(anclas):
+    return re.compile(
+        r"(?:" + "|".join(anclas) + r")"
+        r"[^.<]{0,60}?"
+        r"(" + _NUM + r"\s*(?:\(\d+\)\s*)?" + _UNI + r"(?:\s+" + _CALIF + r")?)",
+        re.IGNORECASE)
+
+
+_PATRON_FUERTE = _compilar(ANCLAS_FUERTES)
+_PATRON_DEBIL = _compilar(ANCLAS_DEBILES)
 
 
 class TramitesError(RuntimeError):
@@ -133,6 +167,10 @@ class Tiempo:
     unidad: str
     laborables: bool
     texto_original: str
+    #: `explicito` si la ficha NOMBRA el campo («tiempo de respuesta es de…»); `perifrasis`
+    #: si lo dice sin nombrarlo («se le entrega en 3 horas»). No es lo mismo para el informe:
+    #: lo primero cumple el campo que la resolución exige, lo segundo lo suple en prosa.
+    como_lo_dice: str = "explicito"
 
     @property
     def dias(self) -> Optional[float]:
@@ -213,7 +251,12 @@ def tiempo_declarado(prosa: str) -> Optional[Tiempo]:
     `None` es la respuesta correcta y frecuente: 707 de los 710 trámites del catálogo no lo
     declaran. No se busca un sustituto ni se estima: la ausencia ES la medición.
     """
-    m = _PATRON.search(prosa)
+    # Primero las FUERTES sobre todo el texto: una ficha que nombra el campo y además
+    # menciona otro plazo en una condición de agenda tiene que devolver el que nombra el
+    # campo, no el que aparece antes. Con una lista plana ganaba el orden del texto.
+    m, nivel = _PATRON_FUERTE.search(prosa), "explicito"
+    if not m:
+        m, nivel = _PATRON_DEBIL.search(prosa), "perifrasis"
     if not m:
         return None
     bruto = m.group(1).strip()
@@ -223,7 +266,7 @@ def tiempo_declarado(prosa: str) -> Optional[Tiempo]:
         return None
     t = Tiempo(valor=valor, unidad=unidad,
                laborables=bool(re.search(r"laborabl|h[áa]bil", _norm(bruto))),
-               texto_original=bruto)
+               texto_original=bruto, como_lo_dice=nivel)
     dias = t.dias
     if dias is not None and not (BANDA_DIAS[0] <= dias <= BANDA_DIAS[1]):
         logger.info("[gobdo] tiempo fuera de banda, descartado: %r (%s días)", bruto, dias)
@@ -282,6 +325,13 @@ def resumen(tramites: Sequence[Tramite]) -> Dict[str, Any]:
         "tramites_en_el_catalogo": total,
         "instituciones_en_el_catalogo": len({t.institucion_sigla for t in tramites}),
         "declaran_su_tiempo_de_respuesta": len(con),
+        # Cómo lo dicen, que no es un matiz: la Resolución 142-2024 exige un CAMPO, y una
+        # perífrasis en la prosa lo suple sin cumplirlo. El catálogo no expone ese campo, así
+        # que hoy ninguna ficha puede cumplirlo en forma — solo decirlo.
+        "lo_nombran_explicitamente": sum(1 for t in con if t.tiempo
+                                         and t.tiempo.como_lo_dice == "explicito"),
+        "lo_dicen_en_perifrasis": sum(1 for t in con if t.tiempo
+                                      and t.tiempo.como_lo_dice == "perifrasis"),
         "no_declaran_su_tiempo_de_respuesta": total - len(con),
         "pct_declaran_sobre_los_del_catalogo": (
             round(100.0 * len(con) / total, 1) if total else None),

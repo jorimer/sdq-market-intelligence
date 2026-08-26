@@ -6,7 +6,8 @@ tumbó la primera versión del extractor.
 """
 import pytest
 
-from shared.data.gobdo_tramites import (ANCLAS, BANDA_DIAS, CAMPOS_CON_PROSA,
+from shared.data.gobdo_tramites import (ANCLAS, ANCLAS_DEBILES, ANCLAS_FUERTES,
+                                        BANDA_DIAS, CAMPOS_CON_PROSA,
                                         PREFIJO_OBLIGATORIO, Tiempo, TramitesError,
                                         leer_listado, limpiar_prosa, resumen, tiempo_declarado,
                                         tramite_de)
@@ -164,3 +165,84 @@ class TestLaFormaDeLaAPI:
                 "is_person_mode": 1, "visited": 3}
         t = tramite_de(fila, {})
         assert set(t.canales) == {"en_linea", "presencial"}
+
+
+
+class TestLasProsasQueSePerdian:
+    """La primera versión detectaba 3 de 22 sobre los 710 trámites del catálogo.
+
+    Lo que faltaba no era rigor: era cómo escribe la gente. Estas cinco prosas son REALES,
+    capturadas del portal el 2026-08-25, y cada una tumbaba el extractor por un motivo
+    distinto. Publicar 3 habría sido publicar una cifra siete veces menor que la real.
+    """
+
+    @pytest.mark.parametrize("institucion,prosa,esperado", [
+        ("DGP",
+         "<p>Se le entrega en 3 horas si es solicitado antes del mediodía.</p>",
+         "3 horas"),                                    # el «le» rompía `se entrega en`
+        ("PGR",
+         "<p>Este proceso tiene una duración de cinco días laborables.</p>",
+         "cinco días laborables"),                      # no había ancla para «duración»
+        ("IDAC",
+         "<p>Este proceso de preaprobación toma 1 día hábil.</p>",
+         "1 día hábil"),                                # no había ancla para «toma N días»
+        ("INDOTEL",
+         "<p>Dentro de un plazo de quince (15) días calendario contados a partir.</p>",
+         "quince (15) días calendario"),                # ni para «dentro de un plazo de»
+        ("MICM",
+         "<p>procesada con tiempo estimado de 48 horas laborables, debe cumplir.</p>",
+         "48 horas laborables"),
+    ])
+    def test_detecta_las_cinco_formas_reales(self, institucion, prosa, esperado):
+        t = tiempo_declarado(limpiar_prosa(prosa))
+        assert t is not None, f"{institucion}: no detecta «{esperado}»"
+        assert t.texto_original == esperado
+
+    def test_el_calificador_admite_SINGULAR_y_plural(self):
+        """`h[áa]biles?` exigía una «e»: casaba «hábiles» y no «hábil». Un trámite de un
+        solo día es justo el que más importa y era el que se perdía."""
+        for prosa, esperado in [
+            ("<p>El tiempo de respuesta es de 1 día hábil.</p>", "1 día hábil"),
+            ("<p>El tiempo de respuesta es de 5 días hábiles.</p>", "5 días hábiles"),
+            ("<p>El tiempo de respuesta es de 30 días naturales.</p>", "30 días naturales"),
+        ]:
+            assert tiempo_declarado(limpiar_prosa(prosa)).texto_original == esperado
+
+    def test_el_texto_capturado_termina_en_palabra_ENTERA(self):
+        """Se publica en una tabla: «1 día h» o «3 horas si es solicitad» son jirones."""
+        t = tiempo_declarado(limpiar_prosa(
+            "<p>Se le entrega en 3 horas si es solicitado antes del mediodía.</p>"))
+        assert t.texto_original == "3 horas"
+        assert not t.texto_original.endswith((" h", " s", " cont", "solicitad"))
+
+
+class TestElNivelDelAnclaVIAJA:
+    """Nombrar el campo y suplirlo en prosa no son lo mismo para el informe."""
+
+    def test_gana_la_que_NOMBRA_el_campo_aunque_aparezca_despues(self):
+        """La ficha del CNZFE menciona antes una condición de agenda con la misma cifra. Con
+        una lista plana ganaba el orden del texto, no el que nombra el campo."""
+        t = tiempo_declarado(limpiar_prosa(
+            "<p>Si cuando realiza el pago quedan 5 días laborables o menos de la reunión "
+            "del Consejo. REGULAR: el tiempo de entrega es de 5 días laborables.</p>"))
+        assert t.como_lo_dice == "explicito"
+
+    def test_una_perifrasis_se_marca_como_tal(self):
+        t = tiempo_declarado(limpiar_prosa(
+            "<p>Este proceso tiene una duración de cinco días laborables.</p>"))
+        assert t.como_lo_dice == "perifrasis"
+
+    def test_los_dos_niveles_son_DISJUNTOS(self):
+        assert not set(ANCLAS_FUERTES) & set(ANCLAS_DEBILES)
+        assert set(ANCLAS) == set(ANCLAS_FUERTES) | set(ANCLAS_DEBILES)
+
+    def test_el_resumen_separa_los_dos_niveles(self):
+        from shared.data.gobdo_tramites import Tiempo, Tramite, resumen
+        def _t(nivel):
+            return Tramite(slug="x", nombre="N", institucion="I", institucion_sigla="I",
+                           area="A", canales=(), costo_declarado=False, visitas=0,
+                           actualizado=None,
+                           tiempo=Tiempo(5, "dia", True, "5 días", como_lo_dice=nivel))
+        r = resumen([_t("explicito"), _t("perifrasis"), _t("perifrasis")])
+        assert r["lo_nombran_explicitamente"] == 1
+        assert r["lo_dicen_en_perifrasis"] == 2
