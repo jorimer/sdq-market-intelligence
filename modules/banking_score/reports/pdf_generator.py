@@ -64,6 +64,7 @@ REPORT_TYPE_LABELS = {
     "wire": "Wire",
     "criteria": "Criterios de Calificación",
     "sector_outlook": "Perspectiva Sectorial",
+    "anuario": "Anuario",
 }
 
 # Nivel comercial (metadato de portada/header) → etiqueta ES. Sin este mapeo, el valor

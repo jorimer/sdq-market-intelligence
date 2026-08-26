@@ -617,6 +617,18 @@ def razones_vs_referencia(
                 fila.update(
                     relacion="razon",
                     razon_vs_referencia=round(razon, 2),
+                    # La MISMA razón como porcentaje del referente. Un analista escribe
+                    # indistintamente «1.32 veces» y «el 132% del promedio», y las dos son
+                    # correctas — pero el guard determinista compara contra los números del
+                    # contexto, y ahí solo estaba el 1.32: un Deep Dive REAL se vetó por un
+                    # «132%» que era exactamente la razón servida.
+                    #
+                    # Se sirve el número en la forma que el modelo va a usar, en vez de
+                    # aflojar el guard para que acepte cualquier valor multiplicado por cien:
+                    # eso dejaría pasar un «500%» inventado porque el contexto tiene un 5.0
+                    # en cualquier parte. Es la doctrina de siempre — dejar el hueco es lo que
+                    # lo llena mal.
+                    razon_como_pct_del_referente=round(razon * 100, 1),
                     factor_para_igualar_referencia=(round(1 / razon, 2) if razon else None),
                     lectura=_lectura_de_razon(razon, etiqueta, ambos_neg),
                 )
