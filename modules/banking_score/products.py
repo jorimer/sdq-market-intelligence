@@ -74,14 +74,10 @@ SECTOR_KEY = "banking"
 #: son el `pesos_sub_componentes` del contexto. Estaban fuera, así que corregir la descripción
 #: de un indicador no habría invalidado ninguna narrativa — el defecto exacto que esta lista
 #: existe para cerrar. Lo vigila `test_regla_contexto_declarado.py`.
-AI_CONTEXT_FILES = ("reports/narrative.py", "products.py", "products_year_review.py",
-                    "etiquetas.py",
-                    "early_warning.py", "propension_quiebra.py",
-                    "scoring/indicator_detail.py", "scoring/weights.py",
-                    "scoring/benchmarks.py", "scoring/sensitivity.py",
-                    "scoring/support.py", "scoring/market_concentration.py",
-                    "scoring/system_aggregate.py",
-                    "reports/anuario.py", "reports/revision_anual.py")
+# La lista vive en `ai_context_files.py` porque la comparten los DOS productos de banca y
+# `products.py` ya importa del anual — duplicarla es cómo una lista se desincroniza.
+from modules.banking_score.ai_context_files import AI_CONTEXT_FILES  # noqa: E402,F401
+
 SYSTEM_LABEL = "Sistema Bancario Dominicano"
 
 # Datos demo SINTÉTICOS de la muestra de conversión (sin DB, sin entidad real). KPIs del

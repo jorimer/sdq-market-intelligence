@@ -40,6 +40,9 @@ NO_APORTAN_CONTEXTO = {
     "reports.criteria_doc": "genera el documento de metodología, que NO se narra",
     "reports.pdf_generator": "renderiza el PDF; no arma contexto",
     "scoring.amplitude": "solo series de números (período, score); sin prosa — verificado",
+    "ai_context_files": ("DECLARA la lista, no aporta contexto. Vive aparte porque la "
+                         "comparten los DOS productos de banca y `products.py` ya importa "
+                         "del anual: duplicarla es cómo una lista se desincroniza."),
 }
 
 

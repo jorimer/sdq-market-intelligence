@@ -46,6 +46,12 @@ logger = logging.getLogger("sdq.banking.year_review")
 
 YEAR_REVIEW_KEY = "banking_year_review"
 
+# La huella del CONTEXTO. Sin esta línea `_contexto_ia_version` no encuentra dónde se arma lo
+# que ve el modelo, devuelve "" y **ningún arreglo de contexto invalida la caché** — que no
+# tiene TTL. Este producto vivió así desde que lo construí: solo se invalidaba cuando algo
+# tocaba la RECETA (prompts, modelo, `GUARD_VERSION`), o sea por casualidad.
+from modules.banking_score.ai_context_files import AI_CONTEXT_FILES  # noqa: E402,F401
+
 
 def year_review_manifest() -> SectorProductManifest:
     """Los tres niveles del producto anual.
