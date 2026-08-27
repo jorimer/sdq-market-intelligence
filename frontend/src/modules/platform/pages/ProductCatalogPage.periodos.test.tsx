@@ -52,9 +52,10 @@ const vaciar = () => act(async () => { await Promise.resolve(); });
 
 const PERIODOS_TRIMESTRALES = [
   "2026-03-31", "2025-12-31", "2025-09-30", "2025-06-30", "2025-03-31", "2024-12-31",
+  "2025", "2024",
 ];
-/** Los de `banking_year_review`, el producto anual: AÑOS, no fechas. */
-const PERIODOS_ANUALES = ["2025", "2024"];
+/** Sin años: un producto cuyo calendario son solo cortes. */
+const SOLO_CORTES = ["2026-03-31", "2025-12-31", "2025-09-30"];
 
 const NIVEL = {
   tier: "pulse", unlocked: true, staff_preview: false, required_tier: "free",
@@ -73,13 +74,9 @@ const CATALOGO = {
   ],
 };
 
-async function abrirElDrawer(periodos: string[], conAnual = true) {
-  getProductCatalog.mockResolvedValue(
-    conAnual
-      ? CATALOGO
-      : { ...CATALOGO, sectors: [{ ...CATALOGO.sectors[0], annual_companion: null }] });
-  getProductPeriods.mockImplementation((s: string) =>
-    Promise.resolve(s === "banking_year_review" ? PERIODOS_ANUALES : periodos));
+async function abrirElDrawer(periodos: string[]) {
+  getProductCatalog.mockResolvedValue(CATALOGO);
+  getProductPeriods.mockResolvedValue(periodos);
   getProductScopeOptions.mockResolvedValue([]);
   getProductReport.mockImplementation((sk: string, _t: string, o: { period?: string }) =>
     Promise.resolve({
@@ -102,33 +99,35 @@ describe("el selector de período del catálogo", () => {
 
   it("ofrece el AÑO y el cuarto trimestre — los dos", async () => {
     const select = await abrirElDrawer(PERIODOS_TRIMESTRALES);
-    const rotulos = within(select).getAllByRole("option").map((o) => o.textContent);
-    expect(rotulos).toEqual([
+    expect(within(select).getAllByRole("option").map((o) => o.textContent)).toEqual([
       "2026-03-31",
-      "2025 · Revisión Anual", "2025-12-31", "2025-09-30", "2025-06-30", "2025-03-31",
-      "2024 · Revisión Anual", "2024-12-31",
+      "2025 · año completo", "2025-12-31", "2025-09-30", "2025-06-30", "2025-03-31",
+      "2024 · año completo", "2024-12-31",
     ]);
   });
 
-  it("ningún corte se PIERDE al agregar el anual", async () => {
-    // La afirmación literal del pedido: agregar, no sustituir.
+  it("ningún corte se PIERDE al agregar el año", async () => {
     const select = await abrirElDrawer(PERIODOS_TRIMESTRALES);
     const rotulos = within(select).getAllByRole("option").map((o) => o.textContent);
-    for (const corte of PERIODOS_TRIMESTRALES) expect(rotulos).toContain(corte);
+    for (const p of PERIODOS_TRIMESTRALES.filter((x) => x.includes("-"))) {
+      expect(rotulos).toContain(p);
+    }
   });
 
-  it("elegir el año pide el PRODUCTO ANUAL con el año, no el trimestral con diciembre", async () => {
+  it("el año se le pide al MISMO producto, no al anual", async () => {
+    // Enrutarlo al producto anual fue lo que hizo que los dos sirvieran el mismo informe.
+    // Acá el año es una lectura del panel trimestral: la sirve quien se está mirando.
     const select = await abrirElDrawer(PERIODOS_TRIMESTRALES);
     getProductReport.mockClear();
-    await userEvent.selectOptions(select, "anual:2025");
+    await userEvent.selectOptions(select, "2025");
     await waitFor(() => expect(getProductReport).toHaveBeenCalled());
     const llamadas = getProductReport.mock.calls;
     const [sectorPedido, , opts] = llamadas[llamadas.length - 1];
-    expect(sectorPedido).toBe("banking_year_review");
+    expect(sectorPedido).toBe("banking");
     expect((opts as { period?: string }).period).toBe("2025");
   });
 
-  it("elegir un corte sigue pidiendo el producto TRIMESTRAL con la fecha", async () => {
+  it("elegir un corte sigue pidiendo la fecha", async () => {
     const select = await abrirElDrawer(PERIODOS_TRIMESTRALES);
     getProductReport.mockClear();
     await userEvent.selectOptions(select, "2025-12-31");
@@ -139,13 +138,14 @@ describe("el selector de período del catálogo", () => {
     expect((opts as { period?: string }).period).toBe("2025-12-31");
   });
 
-  it("el encabezado dice cuál de los dos estás viendo", async () => {
+  it("el encabezado NO se contradice con el título", async () => {
+    // Llegó a decir «SDQ Banking · Revisión Anual» sobre un título que decía «SDQ Banking
+    // Intelligence». Esa contradicción era el síntoma del ruteo cruzado.
     const select = await abrirElDrawer(PERIODOS_TRIMESTRALES);
-    // Sin esto el mismo panel mostraría dos informes distintos bajo el mismo título, que es
-    // la confusión que originó toda esta línea de trabajo.
+    await userEvent.selectOptions(select, "2025");
+    await vaciar();
+    expect(screen.queryByText(/Revisión Anual ·/)).not.toBeInTheDocument();
     expect(screen.getByText(/SDQ Banking Intelligence ·/)).toBeInTheDocument();
-    await userEvent.selectOptions(select, "anual:2025");
-    await screen.findByText(/SDQ Banking · Revisión Anual ·/);
   });
 
   it("al elegir diciembre, apunta al año que está en ESTA misma lista", async () => {
@@ -153,12 +153,12 @@ describe("el selector de período del catálogo", () => {
     await userEvent.selectOptions(select, "2025-12-31");
     const aviso = await screen.findByText(/en esta misma lista/i);
     expect(aviso.textContent).toMatch(/31 de diciembre de 2025/);
-    expect(aviso.textContent).toMatch(/2025 · Revisión Anual/);
+    expect(aviso.textContent).toMatch(/2025 · año completo/);
   });
 
   it("sobre el AÑO no aparece el aviso: ya estás en la lectura que nombra", async () => {
     const select = await abrirElDrawer(PERIODOS_TRIMESTRALES);
-    await userEvent.selectOptions(select, "anual:2025");
+    await userEvent.selectOptions(select, "2025");
     await vaciar();
     expect(screen.queryByText(/en esta misma lista/i)).not.toBeInTheDocument();
   });
@@ -170,31 +170,25 @@ describe("el selector de período del catálogo", () => {
     expect(screen.queryByText(/en esta misma lista/i)).not.toBeInTheDocument();
   });
 
-  it("la DESCARGA sale del producto que estás viendo, no del de la tarjeta", async () => {
-    // El riesgo concreto: el mismo botón entregando otro documento. Se ve el año en
-    // pantalla y el archivo sería el informe al corte, con el mismo nombre de entidad.
+  it("sin años en el calendario, la lista y el aviso quedan como antes", async () => {
+    const select = await abrirElDrawer(SOLO_CORTES);
+    expect(within(select).getAllByRole("option").map((o) => o.textContent))
+      .toEqual(SOLO_CORTES);
+    await userEvent.selectOptions(select, "2025-12-31");
+    await vaciar();
+    expect(screen.queryByText(/en esta misma lista/i)).not.toBeInTheDocument();
+  });
+
+  it("la DESCARGA usa el período que estás viendo", async () => {
     const select = await abrirElDrawer(PERIODOS_TRIMESTRALES);
-    await userEvent.selectOptions(select, "anual:2025");
-    await screen.findByText(/SDQ Banking · Revisión Anual ·/);
-    // La tarjeta del catálogo tiene su propio «Descargar PDF» (que solo abre el panel), así
-    // que se busca DENTRO del panel — el de la tarjeta no descarga nada.
+    await userEvent.selectOptions(select, "2025");
+    await vaciar();
     const panel = select.closest("aside, div[class*=fixed]") as HTMLElement;
     const enPanel = within(panel ?? document.body).getAllByRole("button", { name: /pdf/i });
     await userEvent.click(enPanel[enPanel.length - 1]);
     const bajadas = descargar.mock.calls;
-    const [claveDescarga, , , opts] = bajadas[bajadas.length - 1];
-    expect(claveDescarga).toBe("banking_year_review");
+    const [clave, , , opts] = bajadas[bajadas.length - 1];
+    expect(clave).toBe("banking");
     expect((opts as { period?: string }).period).toBe("2025");
-  });
-
-  it("sin producto anual declarado, la lista y el aviso quedan como antes", async () => {
-    // Un producto sin hermano anual no debe insinuar una lectura que no existe: prometer a
-    // dónde ir cuando no hay a dónde es peor que callar.
-    const select = await abrirElDrawer(PERIODOS_TRIMESTRALES, false);
-    expect(within(select).getAllByRole("option").map((o) => o.textContent))
-      .toEqual(PERIODOS_TRIMESTRALES);
-    await userEvent.selectOptions(select, "2025-12-31");
-    await vaciar();
-    expect(screen.queryByText(/en esta misma lista/i)).not.toBeInTheDocument();
   });
 });

@@ -55,15 +55,20 @@ def _contextos():
     `products.py`; el glob es el caso por defecto.
     """
     rutas = set(RAIZ.glob("modules/*/ai_context.py"))
-    for prod in RAIZ.glob("modules/*/products.py"):
-        m = re.search(r"^AI_CONTEXT_FILES\s*=\s*\(([^)]*)\)", prod.read_text(encoding="utf-8"),
-                      re.M | re.S)
-        if not m:
-            continue
-        for rel in re.findall(r'"([^"]+)"', m.group(1)):
-            ruta = prod.parent / rel
-            if ruta.exists():
-                rutas.add(ruta)
+    # La declaración se busca en CUALQUIER archivo del módulo, no solo en `products.py`: banca
+    # la mudó a `ai_context_files.py` porque la comparten sus DOS productos, y este lector
+    # —anclado al nombre del archivo— dejó de encontrarla y sacó a banca entera de la regla
+    # sin que nada fallara por el motivo real. Se ancla al SÍMBOLO, que es lo que importa.
+    for carpeta in sorted(RAIZ.glob("modules/*/")):
+        for fuente in sorted(carpeta.glob("*.py")):
+            m = re.search(r"^AI_CONTEXT_FILES\s*=\s*\(([^)]*)\)",
+                          fuente.read_text(encoding="utf-8"), re.M | re.S)
+            if not m:
+                continue
+            for rel in re.findall(r'"([^"]+)"', m.group(1)):
+                ruta = carpeta / rel
+                if ruta.exists():
+                    rutas.add(ruta)
     return sorted(rutas)
 
 

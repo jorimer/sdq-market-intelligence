@@ -76,6 +76,20 @@ def _contexto_ia_version(modulo_producto: Optional[str]) -> str:
         return ""
     partes = modulo_producto.split(".")
     if len(partes) < 2 or partes[0] != "modules":
+        # Un producto que NO vive bajo `modules/` —hoy `macro` y `monetary_policy`, en
+        # `app/`— devolvía "" y quedaba SIN huella de contexto: un arreglo de lo que el
+        # modelo lee no invalidaba nada, y esta caché no tiene TTL. Se hashea su propio
+        # archivo, que es exactamente donde arma su contexto.
+        #
+        # No es tan bueno como la lista declarada —no cubre los ayudantes que importe— pero
+        # es infinitamente mejor que la cadena vacía, que no cubre NADA y no avisa.
+        try:
+            import importlib
+            propio = pathlib.Path(importlib.import_module(modulo_producto).__file__ or "")
+            if propio.is_file():
+                return hashlib.sha256(propio.read_bytes()).hexdigest()[:12]
+        except Exception:  # noqa: BLE001 — la huella nunca debe tumbar la entrega
+            pass
         return ""
     raiz = pathlib.Path(__file__).resolve().parents[2] / "modules" / partes[1]
 
@@ -377,7 +391,13 @@ async def _content_from_snapshot(
                                     time.monotonic() - _t0, corto=False)
 
     from shared.narrative.claude_engine import NarrativeDegradedError, degraded_sections
-    degraded = degraded_sections(narratives, level.sections)
+    # Se juzgan las secciones DECLARADAS **y** las que el producto haya producido de más. Un
+    # producto puede servir una sección que el manifiesto no lista —banca sirve el año por
+    # dentro cuando el período es un AÑO— y el ensamblador ya las anexa al render. Mirando
+    # solo `level.sections`, esa sección podía caer a texto estático y salir HUECA sin que
+    # ningún gate la viera: el modo de fallo exacto que estos gates existen para cerrar.
+    degraded = degraded_sections(narratives, list(dict.fromkeys(
+        list(level.sections) + list(narratives or {}))))
     if degraded:
         blocked = level.granularity is not Granularity.system
         logger.warning(

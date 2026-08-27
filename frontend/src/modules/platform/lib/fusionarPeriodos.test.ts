@@ -14,60 +14,54 @@ import { describe, expect, it } from "vitest";
 
 import { fusionarPeriodos, nombreCortoDeProducto } from "../api";
 
-/** Lo que producción devuelve hoy para cada producto. */
-const CORTES = ["2026-03-31", "2025-12-31", "2025-09-30", "2025-06-30", "2025-03-31",
-                "2024-12-31", "2024-09-30"];
-const ANIOS = ["2025", "2024"];
-const ANUAL = { sector: "banking_year_review", periods: ANIOS };
+/** Lo que producción devuelve hoy para `banking`: cortes MÁS años cerrados. */
+const PERIODOS = ["2026-03-31", "2025", "2025-12-31", "2025-09-30", "2025-06-30",
+                  "2025-03-31", "2024", "2024-12-31", "2024-09-30"];
 
 describe("fusionarPeriodos", () => {
   it("el año y sus cortes conviven, el año PRIMERO", () => {
-    const out = fusionarPeriodos("banking", CORTES, ANUAL);
-    expect(out.map((o) => o.value)).toEqual([
+    expect(fusionarPeriodos("banking", PERIODOS).map((o) => o.value)).toEqual([
       "2026-03-31",
-      "anual:2025", "2025-12-31", "2025-09-30", "2025-06-30", "2025-03-31",
-      "anual:2024", "2024-12-31", "2024-09-30",
+      "2025", "2025-12-31", "2025-09-30", "2025-06-30", "2025-03-31",
+      "2024", "2024-12-31", "2024-09-30",
     ]);
   });
 
-  it("NINGÚN corte desaparece al agregar el anual", () => {
-    const out = fusionarPeriodos("banking", CORTES, ANUAL);
-    const cortesQueQuedaron = out.filter((o) => !o.esAnual).map((o) => o.period);
-    // Es la afirmación literal del defecto: agregar, no sustituir.
-    expect(cortesQueQuedaron).toEqual(CORTES);
+  it("NINGÚN corte desaparece al agregar el año", () => {
+    // La afirmación literal del pedido: agregar, no sustituir.
+    const cortes = PERIODOS.filter((p) => p.includes("-"));
+    const quedaron = fusionarPeriodos("banking", PERIODOS)
+      .filter((o) => !o.esAnual).map((o) => o.period);
+    expect(quedaron).toEqual(cortes);
   });
 
-  it("cada opción dice QUIÉN la sirve y con QUÉ período", () => {
-    const out = fusionarPeriodos("banking", CORTES, ANUAL);
-    const anual = out.find((o) => o.esAnual)!;
-    const corte = out.find((o) => o.period === "2025-12-31")!;
-    // El anual se pide POR AÑO al producto anual…
-    expect(anual).toMatchObject({ sector: "banking_year_review", period: "2025" });
-    // …y el corte por FECHA al trimestral. Cruzarlos es el error que esto impide.
-    expect(corte).toMatchObject({ sector: "banking", period: "2025-12-31" });
+  it("el año lo sirve el MISMO producto, no otro", () => {
+    // Enrutarlo al producto anual fue lo que hizo que los dos sirvieran el mismo informe.
+    // Acá el año es una lectura del panel trimestral: la sirve quien se está mirando.
+    const out = fusionarPeriodos("banking", PERIODOS);
+    for (const o of out) expect(o.sector).toBe("banking");
+    expect(out.find((o) => o.esAnual)).toMatchObject({ period: "2025", esAnual: true });
   });
 
-  it("sin producto anual la lista queda EXACTAMENTE como antes", () => {
-    const out = fusionarPeriodos("banking", CORTES, null);
-    expect(out.map((o) => o.value)).toEqual(CORTES);
-    expect(out.every((o) => !o.esAnual && o.sector === "banking")).toBe(true);
+  it("un producto que solo sirve AÑOS queda entero como anual", () => {
+    // Es el caso de «SDQ Banking · Revisión Anual», cuyos períodos son años.
+    const out = fusionarPeriodos("banking_year_review", ["2025", "2024", "2023"]);
+    expect(out.map((o) => o.value)).toEqual(["2025", "2024", "2023"]);
+    expect(out.every((o) => o.esAnual)).toBe(true);
   });
 
-  it("un año sin cortes propios igual aparece", () => {
-    // El anual puede tener años que el trimestral ya no lista (paneles con distinta
-    // profundidad). Descartarlos escondería lecturas que sí se pueden pedir.
-    const out = fusionarPeriodos("banking", ["2025-12-31"],
-                                 { sector: "x", periods: ["2025", "2019"] });
-    expect(out.map((o) => o.value)).toEqual(["anual:2025", "2025-12-31", "anual:2019"]);
+  it("sin años la lista queda EXACTAMENTE como antes", () => {
+    const cortes = ["2026-03-31", "2025-12-31", "2025-09-30"];
+    const out = fusionarPeriodos("banking", cortes);
+    expect(out.map((o) => o.value)).toEqual(cortes);
+    expect(out.every((o) => !o.esAnual)).toBe(true);
   });
 
   it("un período con forma desconocida se CONSERVA al final, no se descarta", () => {
-    // Un producto puede servir «2025-H1» o algo que este código no sabe agrupar. Tirarlo
-    // haría desaparecer una lectura sin aviso — la regla de siempre: declarar, no rellenar.
-    const out = fusionarPeriodos("banking", ["2025-12-31", "ultimo"], ANUAL);
-    expect(out.map((o) => o.value)).toEqual([
-      "anual:2025", "2025-12-31", "anual:2024", "ultimo",
-    ]);
+    // Tirar lo que no se entiende haría desaparecer una lectura sin aviso: la regla de
+    // siempre — declarar, no rellenar.
+    const out = fusionarPeriodos("banking", ["2025", "2025-12-31", "ultimo"]);
+    expect(out.map((o) => o.value)).toEqual(["2025", "2025-12-31", "ultimo"]);
   });
 });
 

@@ -1866,9 +1866,8 @@
         "pro": "Pro",
         "enterprise": "Enterprise"
       },
-      "cierreEjercicioNota": "Este informe es la lectura AL 31 de diciembre de {{anio}}: cómo está la entidad en esa fecha. Cómo le fue durante el ejercicio lo responde «{{anio}} · {{producto}}», en esta misma lista.",
-      "opcionAnual": "{{anio}} · {{producto}}",
-      "anualGenerico": "año completo",
+      "cierreEjercicioNota": "Este informe es la lectura AL 31 de diciembre de {{anio}}: cómo está la entidad en esa fecha. El año completo, trimestre a trimestre, lo responde «{{anio}} · año completo», en esta misma lista.",
+      "opcionAnual": "{{anio}} · año completo",
       "errorPista": "Detalle técnico: {{pista}}"
     },
     "smtp": {
