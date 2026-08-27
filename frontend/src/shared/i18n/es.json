@@ -1866,7 +1866,8 @@
         "pro": "Pro",
         "enterprise": "Enterprise"
       },
-      "cierreAnual": "{{p}} · cierre anual {{anio}}"
+      "cierreEjercicioNota": "Este informe es la lectura AL 31 de diciembre de {{anio}}: cómo está la entidad en esa fecha. Cómo le fue durante el ejercicio es la Revisión Anual, un producto aparte del catálogo.",
+      "errorPista": "Detalle técnico: {{pista}}"
     },
     "smtp": {
       "title": "Correo saliente",

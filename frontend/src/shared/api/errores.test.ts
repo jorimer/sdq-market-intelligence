@@ -9,7 +9,7 @@
  */
 import { describe, expect, it } from "vitest";
 
-import { detalleDeError, estadoDeError, mensajeDeError } from "./errores";
+import { detalleDeError, estadoDeError, mensajeDeError, pistaTecnica } from "./errores";
 
 const err = (status: number, detail: unknown) => ({ response: { status, data: { detail } } });
 
@@ -80,5 +80,26 @@ describe("detalleDeError / estadoDeError", () => {
 
   it("estadoDeError es undefined en un fallo de red", () => {
     expect(estadoDeError(new Error("Network Error"))).toBeUndefined();
+  });
+});
+
+describe("pistaTecnica", () => {
+  /**
+   * El caso real: un Deep Dive falló y la pantalla solo dijo «No se pudo cargar el producto».
+   * Eso pasa cuando NO hay `detail` — un corte del proxy o un fallo de red— y son cosas que
+   * se arreglan de maneras opuestas. Sin la pista, las dos se ven iguales.
+   */
+  it("da el código cuando el backend no mandó motivo", () => {
+    expect(pistaTecnica(err(502, undefined))).toBe("HTTP 502");
+    expect(pistaTecnica(err(504, undefined))).toBe("HTTP 504");
+  });
+
+  it("distingue «el servidor respondió mal» de «no respondió»", () => {
+    expect(pistaTecnica(new Error("Network Error"))).toBe("sin respuesta del servidor");
+  });
+
+  it("calla cuando el backend SÍ explicó: ahí la pista es ruido", () => {
+    expect(pistaTecnica(err(400, "Período inválido."))).toBeNull();
+    expect(pistaTecnica(err(402, { message: "Requiere plan enterprise" }))).toBeNull();
   });
 });

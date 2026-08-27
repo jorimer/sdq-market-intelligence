@@ -1866,7 +1866,8 @@
         "pro": "Pro",
         "enterprise": "Enterprise"
       },
-      "cierreAnual": "{{p}} · {{anio}} annual close"
+      "cierreEjercicioNota": "This report reads the entity AS OF December 31, {{anio}}: how it stands on that date. How it fared over the financial year is the Annual Review, a separate product in the catalogue.",
+      "errorPista": "Technical detail: {{pista}}"
     },
     "smtp": {
       "title": "Outgoing email",

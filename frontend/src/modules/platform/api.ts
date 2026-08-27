@@ -472,18 +472,24 @@ export function componentesDeAportes(ventanas: VentanaDeCambio[]): string[] {
 }
 
 /**
- * ¿Este corte es el CIERRE DE UN AÑO? Los informes de una entidad al 31 de diciembre son su
- * lectura anual, y nada en el selector lo decía.
+ * ¿Este corte cae en el CIERRE DEL EJERCICIO (31 de diciembre)? Devuelve el año, o `null`.
  *
- * No hay —ni debe haber— un SKU «informe anual» aparte: el año de la entidad se sirve como
- * el informe AL CIERRE, porque la rentabilidad ya usa ventana móvil de doce meses (ROA/ROE
- * de diciembre SON los del año) y la tabla «qué movió el score» trae su columna del año.
- * Inventar un producto anual paralelo daría dos respuestas legítimas a «¿cuál es el score de
- * X en 2025?», que es exactamente lo que se decidió no hacer.
+ * **Para qué sirve, y para qué NO.** Sirve para OFRECER el producto anual desde el selector
+ * trimestral. NO sirve para rotular el corte de diciembre como si fuera el informe del año:
+ * esa fue exactamente la afirmación que el dueño refutó, y este archivo la sostuvo por
+ * escrito («no hay —ni debe haber— un SKU informe anual aparte») mientras el backend ya
+ * servía el producto anual. El resultado en pantalla fue que el cuarto trimestre pareció
+ * DESAPARECER, sustituido por un «cierre anual» que no entrega el año.
  *
- * Lo que faltaba era DECIRLO: la capacidad estaba y no se podía descubrir desde la pantalla.
+ * Por qué es falso: la ventana móvil de doce meses toca UNA magnitud —la utilidad neta, o
+ * sea ROA y ROE—; los otros diecinueve indicadores son fotos al 31 de diciembre y el score
+ * es una lectura AL CORTE. El informe de diciembre dice cómo ESTÁ la entidad ese día; cómo
+ * le FUE en el ejercicio lo dice `banking_year_review`, que es un producto aparte, está en
+ * producción y se pide por AÑO (`2025`), no por fecha.
+ *
+ * Diciembre es un corte trimestral como los otros tres, y se rotula como tal.
  */
-export function cierreDeAnio(periodEnd: string): string | null {
+export function cierreDeEjercicio(periodEnd: string): string | null {
   const m = /^(\d{4})-12-31$/.exec(periodEnd);
   return m ? m[1] : null;
 }
