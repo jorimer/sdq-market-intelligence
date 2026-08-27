@@ -162,15 +162,16 @@ def marcas_del_guard(db: Session, desde: Optional[date] = None,
         "regla_de_dos_capas": {
             "por_capa": por_capa,
             "marcas_con_capa_registrada": medidas,
-            "habrian_pasado_solo_det": por_capa.get("det", 0),
-            "seguirian_bloqueando": por_capa.get("ambos", 0) + por_capa.get("juez", 0),
+            "publicadas_pese_a_la_marca": por_capa.get("det", 0),
+            "bloquearon_la_entrega": por_capa.get("ambos", 0) + por_capa.get("juez", 0),
             "como_leerlo": (
                 "«det» = solo el detector mecánico; «juez» = solo el semántico; «ambos» = "
-                "los dos. Con la regla de dos capas únicamente «ambos» bloquearía, así que "
-                "«habrian_pasado_solo_det» son los informes que hoy mueren por el regex y "
-                "que se entregarían. «(sin registrar)» son marcas anteriores a esta "
-                "medición: NO se reparten, porque suponerles una capa sería inventar el "
-                "dato que se está midiendo."),
+                "los dos. La regla VIGENTE bloquea solo lo que el juez confirma, así que "
+                "«publicadas_pese_a_la_marca» son informes que SÍ se entregaron y que "
+                "señalan un hueco de contexto por cerrar — ésta es la lista de trabajo, no "
+                "una alarma. «(sin registrar)» son marcas anteriores al registro de capas: "
+                "NO se reparten, porque suponerles un origen sería inventar el dato que "
+                "decide."),
         },
         "cifras": orden,
         "truncado": len(filas) >= MAX_FILAS,

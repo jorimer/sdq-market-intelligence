@@ -1651,6 +1651,49 @@ def degraded_sections(narratives: dict, sections) -> list:
     return [s for s in sections if is_static_fallback_text(n.get(s))]
 
 
+#: Capas cuyo hallazgo BLOQUEA la entrega. La `det` —el detector mecánico— no está.
+#:
+#: **La regla de dos capas, decidida con datos el 2026-08-27.** El detector mecánico pregunta
+#: «¿este número está en lo que servimos?», no «¿este número está mal». La diferencia vive en
+#: un solo caso —la cifra es CORRECTA y nosotros no la servimos— y ahí cayeron las siete
+#: familias documentadas, sin una sola alucinación:
+#:
+#:   69 % (redondeo) · 132 % (razón en porcentaje) · 38 % (peso en un contenedor) ·
+#:   100 % (umbral prospectivo) · 100 % (nivel de referencia que no servíamos) ·
+#:   1,82 % (0,01819 dicho en porcentaje, CON su base nombrada en la misma oración) ·
+#:   2,5 % (umbral en rango, con la palabra «umbral» DESPUÉS de la cifra)
+#:
+#: La medición en sombra sobre las marcas reales dio 2 de 2 puestas por el regex SOLO: el juez
+#: semántico —que lee el contexto entero— no marcó ninguna. Con esta regla ese informe se
+#: entregaba.
+#:
+#: **Qué sigue bloqueando.** Lo que el juez confirma, solo o junto al detector. El juez lee
+#: significado y es la capa que puede distinguir una invención de una forma de decir un
+#: número; el regex, por construcción, no puede.
+#:
+#: **El riesgo, aceptado por el dueño:** una cifra que se le escape a las DOS capas se
+#: publica. Se cambió sabiendo eso, contra el costo medido del error contrario: informes
+#: correctos muertos, uno por generación de ~100 s.
+CAPAS_QUE_BLOQUEAN = frozenset({"ambos", "juez"})
+
+
+def hallazgos_que_bloquean(result: "NarrativeResult") -> list:
+    """Los hallazgos del guard que, por la regla de dos capas, impiden la entrega.
+
+    Un solo lugar lo decide, y a propósito: la decisión se consulta desde el depósito al canal
+    y desde la caché, y duplicar el criterio es cómo terminan divergiendo —bloquear una cosa y
+    cachear otra dejaría un texto vetado sirviéndose desde L1—.
+
+    Ante un origen DESCONOCIDO se bloquea. Es el lado conservador: no debilita la entrega por
+    un dato que no tenemos. En la práctica no se alcanza —el origen se registra siempre desde
+    que existe la regla— pero suponer «era solo el regex» sobre una marca sin origen sería
+    fabricar justo el dato que decide.
+    """
+    origen = result.guard_origen or {}
+    return [h for h in (result.guard_cifras or [])
+            if origen.get(str(h), "ambos") in CAPAS_QUE_BLOQUEAN]
+
+
 def _depositar_cifras(template: str, result: "NarrativeResult") -> None:
     """Deja en el canal las cifras que el motor marcó y que sobrevivieron a la reparación.
 
@@ -1663,7 +1706,11 @@ def _depositar_cifras(template: str, result: "NarrativeResult") -> None:
     para el log, y separarlas por el texto del hallazgo es frágil — el de dirección dice
     «pero es al revés», no «invertida».
     """
-    marcas = [str(h) for h in (result.guard_cifras or [])]
+    # REGLA DE DOS CAPAS: al canal del VETO va solo lo que el juez semántico confirma. Lo
+    # que marcó el regex solo NO se deposita —no bloquea— pero SÍ queda en el registro con
+    # su capa (ver `record_call`), que es de donde salen los huecos a cerrar. Dejar de vetar
+    # no es dejar de mirar.
+    marcas = [str(h) for h in hallazgos_que_bloquean(result)]
     if not marcas:
         return
     from shared.narrative.cifras_pendientes import registrar
@@ -1931,7 +1978,18 @@ class NarrativeEngine:
         return None
 
     def _set_cache(self, key: str, result: NarrativeResult):
-        if result.guard_unsupported:
+        # Se cachea lo que se ENTREGA. Con la regla de dos capas, un texto marcado solo por
+        # el regex se publica: no cachearlo obligaría a regenerarlo —~100 s y varias llamadas
+        # al modelo— en cada pedido del mismo informe, pagando el costo de un veto que ya no
+        # ocurre. Lo que el juez confirma sigue sin cachearse, por el motivo de abajo.
+        # Las RELACIONES INVERTIDAS son el otro gate y siguen bloqueando enteras: viven en
+        # `guard_unsupported` y no en `guard_cifras`, así que se recuperan por diferencia.
+        # La regla de dos capas es sobre CIFRAS; una dirección invertida no es una forma de
+        # decir un número, es una afirmación al revés.
+        cifras = {str(h) for h in (result.guard_cifras or [])}
+        direcciones = [h for h in (result.guard_unsupported or []) if str(h) not in cifras]
+        bloqueantes = hallazgos_que_bloquean(result) + direcciones
+        if bloqueantes:
             # Lo que el guard marcó NO SE CACHEA EN NINGÚN NIVEL, ni siquiera en L1.
             #
             # En la caché compartida es evidente: no tiene TTL, así que el texto sobreviviría
@@ -1949,10 +2007,10 @@ class NarrativeEngine:
             # corrida») no compraba nada: la clave incluye contexto y plantilla, así que
             # dentro de una corrida se pide UNA vez. Lo único que compraba era volver
             # inservible el reintento.
-            logger.warning("Narrativa con %d hallazgo(s) del guard: NO se cachea (ni L1 ni "
-                           "compartida) para que el reintento regenere de verdad (%s)",
-                           len(result.guard_unsupported),
-                           "; ".join(map(str, result.guard_unsupported))[:200])
+            logger.warning("Narrativa con %d hallazgo(s) BLOQUEANTES del guard: NO se cachea "
+                           "(ni L1 ni compartida) para que el reintento regenere de verdad "
+                           "(%s)", len(bloqueantes),
+                           "; ".join(map(str, bloqueantes))[:200])
             return
         self._cache[key] = (result, time.time())
         if result.model_used == STATIC_FALLBACK_MODEL:
