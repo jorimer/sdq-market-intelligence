@@ -108,3 +108,69 @@ def test_el_balance_por_indicador_lleva_referencia_Y_score():
     fila = _balance(indicadores, CORTES)[0]
     assert fila["nivel_de_referencia"] == 100.0
     assert (fila["score_apertura"], fila["score_cierre"]) == (66.6, 52.9)
+
+
+# ── El PANEL en los dos cortes ─────────────────────────────────────────
+
+#: Claves REALES del benchmark (`INDICATOR_TO_BENCHMARK`), no inventadas: mi primera fixture
+#: usó `cobertura_avg` y el lector devolvió `{}` — el test habría pasado sin haber medido nada
+#: si solo hubiese afirmado ausencias.
+_BENCH_AP = {"sector_averages": {"coverage_ratio": 160.0},
+             "peer_groups": {"aap": {"coverage_ratio_avg": 150.0, "label": "AAyP", "n": 9}}}
+_BENCH_CI = {"sector_averages": {"coverage_ratio": 155.0},
+             "peer_groups": {"aap": {"coverage_ratio_avg": 148.0, "label": "AAyP", "n": 9}}}
+_IND = {"cobertura_provisiones": [
+    {"period_end": "2024-12-31", "raw": 147.82, "score": 66.6},
+    {"period_end": "2025-12-31", "raw": 108.36, "score": 52.9}]}
+
+
+def _fila_con_panel():
+    return _balance(_IND, CORTES, bench_apertura=_BENCH_AP, bench_cierre=_BENCH_CI,
+                    tipo="aap")[0]
+
+
+def test_cada_brecha_se_mide_contra_la_referencia_de_SU_MISMO_corte():
+    """Comparar el cierre contra la mediana de apertura mezclaría el movimiento de la entidad
+    con el del sistema. Medida a cada lado, la estacionalidad se cancela."""
+    f = _fila_con_panel()
+    assert f["brecha_vs_sistema_apertura"] == round(147.82 - 160.0, 4)
+    assert f["brecha_vs_sistema_cierre"] == round(108.36 - 155.0, 4)
+
+
+def test_dice_si_la_brecha_se_AMPLIO_o_se_cerró():
+    """La pregunta del año, y una RELACIÓN: se computa y el modelo la copia. Sin esto, «cayó
+    39 puntos» se lee como catástrofe propia aunque el sistema hubiera caído lo mismo."""
+    f = _fila_con_panel()
+    assert f["brecha_vs_su_tipo_como_se_movio"]["veredicto"] == "se amplió"
+    # Estaba 2 puntos bajo su tipo y cerró 40 abajo: la separación creció ~37.
+    assert f["brecha_vs_su_tipo_como_se_movio"]["cambio_de_la_brecha"] > 37
+
+
+def test_acercarse_a_la_referencia_DESDE_ARRIBA_tambien_es_converger():
+    """El signo se mide sobre el VALOR ABSOLUTO: si no, una entidad que deja de estar
+    excepcionalmente bien figuraría como que «se separó», que es lo contrario de lo que pasó."""
+    from modules.banking_score.reports.revision_anual import _como_se_movio_la_brecha
+    assert _como_se_movio_la_brecha(40.0, 10.0, 0.5)["veredicto"] == "se redujo"
+    assert _como_se_movio_la_brecha(-40.0, -10.0, 0.5)["veredicto"] == "se redujo"
+
+
+def test_un_movimiento_INMATERIAL_de_la_brecha_no_se_narra_como_cambio():
+    from modules.banking_score.reports.revision_anual import _como_se_movio_la_brecha
+    assert _como_se_movio_la_brecha(10.0, 10.2, 0.5)["veredicto"] == "estable"
+
+
+def test_la_referencia_NOMBRA_su_poblacion():
+    """«El SUJETO viaja con el número»: `sistema` y `su_tipo` son poblaciones distintas y el
+    modelo reatribuye al sujeto más cercano si no se las nombra."""
+    f = _fila_con_panel()
+    assert f["panel_cierre"]["su_tipo_label"] == "AAyP"
+    assert f["panel_cierre"]["su_tipo_n"] == 9
+    assert "sistema" in f["panel_cierre"] and "su_tipo" in f["panel_cierre"]
+
+
+def test_sin_panel_la_fila_NO_inventa_una_brecha():
+    """Un benchmark ausente es `None`, nunca cero: una brecha de 0.0 se lee como «está
+    exactamente en la referencia», que es una afirmación y no un hueco."""
+    f = _balance(_IND, CORTES)[0]
+    assert "brecha_vs_sistema_cierre" not in f
+    assert "panel_cierre" not in f
