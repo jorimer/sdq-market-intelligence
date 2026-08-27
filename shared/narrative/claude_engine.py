@@ -1781,6 +1781,11 @@ class NarrativeResult:
     #: al revés», no «invertida», y filtrar por la palabra equivocada mandaba una relación
     #: invertida por el canal de las cifras—. Cada hallazgo viaja por su canal con su política.
     guard_cifras: list = field(default_factory=list)
+    #: Por cifra, QUÉ CAPA la marcó: "det" (el detector mecánico), "juez" (el semántico) o
+    #: "ambos". El lazo las fusiona para repararlas juntas y el origen se perdía — con lo
+    #: cual no se podía contestar la única pregunta que decide la calibración: cuántos
+    #: informes murió por el regex SOLO. Se registra para MEDIR; no cambia ninguna política.
+    guard_origen: dict = field(default_factory=dict)
     # True cuando el modelo se quedó SIN PRESUPUESTO de tokens: el texto está cortado, no
     # terminado. Un PDF entregado a mitad de oración —pasó con Perspectiva Sectorial— es
     # peor que un error visible: parece el documento final.
@@ -1883,6 +1888,7 @@ class NarrativeEngine:
                     from_cache=True,
                     guard_unsupported=list(data.get("guard_unsupported") or []),
                     guard_cifras=list(data.get("guard_cifras") or []),
+                    guard_origen=dict(data.get("guard_origen") or {}),
                 )
                 self._cache[key] = (result, time.time())  # promover a L1
                 return result
@@ -2068,15 +2074,22 @@ class NarrativeEngine:
             # igual que la de la narrativa que verifica.
             llm = verify_figures(client, guard_model, context_str, text,
                                  module=axis, template=template)
+            # El ORIGEN de cada hallazgo se conserva. Se fusionan para repararlos juntos
+            # —eso no cambia— pero saber cuál capa marcó qué es lo que permite medir si la
+            # regla de «bloquear solo cuando las dos coinciden» habría dejado pasar informes
+            # correctos. Sin esto la pregunta solo se puede contestar con una opinión.
+            en_det, en_llm = set(det), set(llm)
             seen, merged = set(), []
             for f in det + llm:
                 if f not in seen:
                     seen.add(f)
                     merged.append(f)
-            return merged, deterministic_direction_errors(context or {}, text)
+            origen = {f: ("ambos" if f in en_det and f in en_llm
+                          else "det" if f in en_det else "juez") for f in merged}
+            return merged, deterministic_direction_errors(context or {}, text), origen
 
         result = _gen(user)
-        bad, wrong_dir = _check(result.text)
+        bad, wrong_dir, origen = _check(result.text)
         if bad or wrong_dir:
             try:
                 for intento in range(1, _MAX_REINTENTOS_GUARD + 1):
@@ -2095,12 +2108,13 @@ class NarrativeEngine:
                     # acumula tokens/costo de TODAS las llamadas (transparencia)
                     corrected.tokens_used += result.tokens_used
                     corrected.cost_estimate += result.cost_estimate
-                    bad, wrong_dir = _check(corrected.text)
+                    bad, wrong_dir, origen = _check(corrected.text)
                     result = corrected
                     if not (bad or wrong_dir):
                         break
                 result.guard_unsupported = bad + wrong_dir
                 result.guard_cifras = list(bad)
+                result.guard_origen = dict(origen)
                 if result.guard_unsupported:
                     logger.warning(
                         "Guardrail (%s): persisten hallazgos tras %d reintento(s): %s",
@@ -2116,6 +2130,7 @@ class NarrativeEngine:
                 logger.error("Regeneración del guardrail falló: %s", e)
                 result.guard_unsupported = bad + wrong_dir
                 result.guard_cifras = list(bad)
+                result.guard_origen = dict(origen)
         _depositar_cifras(template, result)
         self._set_cache(cache_key, result)
         logger.info("Narrative (cerebro) template=%s tokens=%d guard_flags=%d",
@@ -2146,7 +2161,16 @@ class NarrativeEngine:
                             # intento de diagnóstico.
                             "guard_fragmentos": [
                                 {"cifra": str(h)[:40],
-                                 "frase": fragmento_alrededor(result.text, str(h))[:220]}
+                                 "frase": fragmento_alrededor(result.text, str(h))[:220],
+                                 # QUÉ CAPA marcó esta cifra: el detector mecánico, el juez
+                                 # semántico, o los dos. Es lo único que permite contestar
+                                 # con datos si bloquear debería exigir que las DOS
+                                 # coincidan — hoy el regex solo alcanza para matar un
+                                 # informe, y es la capa que produjo las cinco familias de
+                                 # falso positivo. Va acá y NO en el canal del veto: el
+                                 # canal alimenta el mensaje al cliente, y «100 % [capa:
+                                 # det]» es diagnóstico interno filtrándose al producto.
+                                 "capa": (result.guard_origen or {}).get(str(h), "det")}
                                 for h in result.guard_unsupported[:4]],
                             "truncada": result.truncated})
         return result

@@ -133,3 +133,56 @@ def test_una_fila_sin_fragmento_no_rompe(db):
     """Las filas anteriores a este cambio no tienen `guard_fragmentos`."""
     _fila(db, marcas=["55%: x"])
     assert marcas_del_guard(db)["cifras"][0]["frases"] == []
+
+
+# ── La regla de DOS CAPAS, medida en sombra ────────────────────────────
+
+def _con_capa(db, cifra="100%", capa="det", modulo="banking", template="revision_anual"):
+    from shared.observability.models import LLMCall
+    f = LLMCall(purpose="narrativa", model="m", cost_usd=0.0, module=modulo,
+                template=template, cache_hit=False,
+                detail={"guard_flags": 1, "guard_marcas": [cifra],
+                        "guard_fragmentos": [{"cifra": cifra, "frase": "…texto…",
+                                              "capa": capa}]})
+    db.add(f)
+    db.commit()
+    return f
+
+
+def test_separa_las_marcas_del_REGEX_de_las_que_confirma_el_juez(db):
+    """La pregunta que decide la calibración, y que el registro no podía contestar.
+
+    El lazo fusiona `det + llm` para repararlos juntos y el origen se perdía; sin él, «cuántos
+    informes murieron por el detector mecánico solo» solo se podía responder con una opinión.
+    """
+    _con_capa(db, capa="det")
+    _con_capa(db, capa="det")
+    _con_capa(db, cifra="38%", capa="ambos")
+    _con_capa(db, cifra="72%", capa="juez")
+
+    r = marcas_del_guard(db)["regla_de_dos_capas"]
+    assert r["habrian_pasado_solo_det"] == 2
+    assert r["seguirian_bloqueando"] == 2
+    assert r["marcas_con_capa_registrada"] == 4
+
+
+def test_las_marcas_VIEJAS_no_se_reparten_entre_capas(db):
+    """Suponerles una capa sería fabricar el dato que se está midiendo — y el número que sale
+    de ahí se usa para decidir si se afloja un guard que protege documentos que se venden."""
+    from shared.observability.models import LLMCall
+    db.add(LLMCall(purpose="narrativa", model="m", cost_usd=0.0, module="banking",
+                   template="banking_summary", cache_hit=False,
+                   detail={"guard_flags": 1, "guard_marcas": ["69%"]}))
+    db.commit()
+    _con_capa(db, capa="ambos")
+
+    r = marcas_del_guard(db)["regla_de_dos_capas"]
+    assert r["por_capa"].get("(sin registrar)") == 1
+    assert r["marcas_con_capa_registrada"] == 1
+    assert r["habrian_pasado_solo_det"] == 0
+
+
+def test_sin_marcas_la_regla_no_finge_un_veredicto(db):
+    r = marcas_del_guard(db)["regla_de_dos_capas"]
+    assert r["por_capa"] == {}
+    assert r["marcas_con_capa_registrada"] == 0
