@@ -141,6 +141,21 @@ def cambiaria_display_name(code: str) -> str:
     return f"{code.title()} (Agente de Cambio)"
 
 
+#: Devuelto por `_get_with_retry` cuando la SIB rechazó la petición con un 4xx: el error es
+#: PERMANENTE y reintentarlo no puede funcionar.
+#:
+#: Existe porque `None` colapsaba dos causas opuestas —«se cayó, probá de nuevo» y «está mal
+#: pedido, nunca va a andar»— y el bucle de paginación, que solo veía `None`, reintentaba las
+#: dos. Medido el 2026-08-27 con una sonda a un período viejo: la SIB respondía 400 («tipo de
+#: entidad incorrecto») y el bucle insistía tres veces más con 5, 10 y 15 s de espera, por
+#: página y por tipo de entidad. La petición tardaba MINUTOS en morir y Sentry recibía ~60
+#: avisos idénticos del mismo error que el propio log ya llamaba «not retryable».
+#:
+#: Es el mismo defecto que el techo de tiempo indistinguible de la degradación del servicio:
+#: dos causas que exigen respuestas opuestas no pueden compartir un valor de retorno.
+RECHAZO_PERMANENTE = object()
+
+
 class SIBDataClient:
     """
     Client for the Superintendencia de Bancos REST API v2.
@@ -407,6 +422,21 @@ class SIBDataClient:
             page_params = {**params, "paginas": page, "registros": self.PAGE_SIZE}
             data = self._get_with_retry(httpx, url, page_params, endpoint, page)
 
+            if data is RECHAZO_PERMANENTE:
+                # La SIB rechazó la petición (4xx). No se reintenta: el resultado sería
+                # idéntico y cada vuelta cuesta 30 s de esperas y un aviso más en Sentry.
+                # Se declara igual que la truncación transitoria —el dataset queda
+                # incompleto— pero nombrando la causa, que es la que decide qué arreglar:
+                # acá no hay que esperar a que la fuente se recupere, hay que corregir la
+                # petición.
+                logger.error(
+                    "SIB %s: RECHAZADA en página %d (4xx) — %d filas obtenidas; el dataset "
+                    "queda INCOMPLETO para este endpoint. No se reintenta: el error es "
+                    "permanente y la petición hay que corregirla, no repetirla.",
+                    endpoint, page, len(all_results),
+                )
+                break
+
             if data is None:
                 # A transient page failure (504/timeout) must NOT silently truncate
                 # the dataset. Truncation here dropped deep income rows mid-period,
@@ -416,7 +446,7 @@ class SIBDataClient:
                 for _retry in range(3):
                     self._sleep(5.0 * (_retry + 1))
                     data = self._get_with_retry(httpx, url, page_params, endpoint, page)
-                    if data is not None:
+                    if data is RECHAZO_PERMANENTE or data is not None:
                         break
                 if data is None:
                     logger.error(
@@ -447,6 +477,7 @@ class SIBDataClient:
             page += 1
 
         return all_results
+
 
     def _get_with_retry(
         self, httpx, url: str, params: Dict, endpoint: str, page: int
@@ -548,7 +579,7 @@ class SIBDataClient:
                     f"SIB {resp.status_code} on {endpoint} p{page} — "
                     f"not retryable | body: {err_body}"
                 )
-                return None
+                return RECHAZO_PERMANENTE
 
             except Exception as e:
                 last_error = e
@@ -727,18 +758,26 @@ class SIBDataClient:
 
         return working
 
-    def _fetch_for_all_types(self, endpoint: str, period_start: str, period_end: str) -> List[Dict]:
+    def _fetch_for_all_types(self, endpoint: str, period_start: str, period_end: str,
+                             tipos: Optional[List[str]] = None) -> List[Dict]:
         """
-        Fetch data from an endpoint for ALL entity types by making one call
-        per tipoEntidad (3 calls total per endpoint).
+        Fetch data from an endpoint for the given entity types, one call per
+        ``tipoEntidad``.
 
-        With max_pages=200 (20,000 records per call), this handles all data
-        without needing yearly chunking. Previous 50-page limit caused
-        truncation; the fix was raising max_pages, not chunking.
+        *tipos* — LOS CÓDIGOS QUE ESTE ENDPOINT ACEPTA. Es obligatorio pasarlos cuando el
+        endpoint no es el de bancos, y no es un detalle: cada familia de entidad tiene su
+        propio código y su propio endpoint. Los `estados/.../eic` (casas de cambio) aceptan
+        ARC y AC; los `estados/.../eif` (intermediación financiera) aceptan BM, BAyC, AAyP…
 
-        Uses auto-discovered working codes, or falls back to candidates.
+        Sin este parámetro, la extracción cambiaria pedía el endpoint `eic` con los códigos
+        de BANCOS y la SIB respondía `400 — "Se introdujo un tipo de entidad incorrecto"`,
+        siempre. `_extract_eic_bulk` incluso CALCULABA el código correcto y después no lo
+        usaba: llamaba acá, que lo ignoraba.
+
+        Con max_pages=200 (20.000 registros por llamada) no hace falta trocear por año.
         """
-        codes_to_use = self._discovered_tipo_codes or self.SIB_TIPO_ENTIDAD_CANDIDATES[:3]
+        codes_to_use = (tipos if tipos is not None
+                        else self._discovered_tipo_codes or self.SIB_TIPO_ENTIDAD_CANDIDATES[:3])
 
         all_records: List[Dict] = []
         for tipo in codes_to_use:
@@ -1476,8 +1515,15 @@ class SIBDataClient:
         active = [t for t in (self._discovered_tipo_codes or []) if t in EIC_TIPOS]
         tipo_code = active[0] if active else "AC"
 
-        balance = self._fetch_for_all_types("estados/situacion/eic", period_start, period_end)
-        income = self._fetch_for_all_types("estados/resultados/eic", period_start, period_end)
+        # LOS TIPOS DE **ESTE** ENDPOINT. Antes acá no se pasaba nada y `_fetch_for_all_types`
+        # caía a los códigos de BANCOS (BM, BAyC, AAyP), que el endpoint de casas de cambio
+        # rechaza con un 400 en todas las páginas. Y el descubrimiento automático nunca podía
+        # corregirlo: prueba los candidatos contra `estados/resultados/eif` —el endpoint de
+        # BANCOS— así que ARC y AC jamás aparecen como «códigos que funcionan».
+        balance = self._fetch_for_all_types("estados/situacion/eic", period_start,
+                                            period_end, tipos=list(EIC_TIPOS))
+        income = self._fetch_for_all_types("estados/resultados/eic", period_start,
+                                           period_end, tipos=list(EIC_TIPOS))
         logger.info(f"  EIC: {len(balance)} balance, {len(income)} income records")
 
         by_ent: Dict[str, Dict[str, List]] = {}
