@@ -102,6 +102,8 @@ def _anio_del_sistema_anonimo(anuario: Dict[str, Any]) -> Dict[str, Any]:
         "lectura_del_sistema": sis.get("lectura"),
         # Cuántas mejoraron / empeoraron / quedaron estables — cifras, no nombres.
         "conteo_direccion": dict(conteo),
+        # `por_tipo` trae `tipo_label` al lado de la clave; las dos pasan la anonimización
+        # porque nombran un ESTRATO, no una entidad.
         "por_tipo": anuario.get("por_tipo"),
         "entidades_que_cambiaron_de_banda": len(anuario.get("cambios_de_banda") or []),
         "universo": {
@@ -111,6 +113,78 @@ def _anio_del_sistema_anonimo(anuario: Dict[str, Any]) -> Dict[str, Any]:
             "regla": (anuario.get("universo") or {}).get("regla"),
         },
     }
+
+
+#: Por debajo de esto la entidad y su referencia se movieron "igual". Mismo criterio que el
+#: resto del eje: forzar un lado sobre ruido no informa nada.
+UMBRAL_CONTRASTE = 0.5
+
+
+def _contraste_con_el_mercado(cambio_entidad, su_tipo, sistema, tipo) -> Dict[str, Any]:
+    """El contraste, COMPUTADO. Es la sección entera del Deep Dive anual.
+
+    Antes se servían tres números sueltos —el cambio de la entidad, el de su tipo y el del
+    sistema— y una instrucción de cómo leerlos. La comparación la hacía el modelo, y comparar
+    es exactamente la relación que la doctrina obliga a computar: «bajó 4 puntos» no dice nada
+    hasta saber qué hizo su estrato.
+
+    `es_idiosincratico` es el veredicto de la sección y por eso se computa, no se insinúa: la
+    entidad se movió en sentido CONTRARIO a su tipo, o mucho más que él.
+    """
+    from modules.banking_score.etiquetas import etiqueta_de_tipo
+
+    ce = None if cambio_entidad is None else float(cambio_entidad)
+    ct = None if not su_tipo else _f(su_tipo.get("cambio_mediana"))
+    cs = _f((sistema.get("sistema") or {}).get("cambio_mediana"))
+
+    def _vs(ref, etiqueta):
+        if ce is None or ref is None:
+            return None
+        d = round(ce - ref, 2)
+        if abs(d) < UMBRAL_CONTRASTE:
+            lectura = f"se movió en línea con {etiqueta}"
+            sentido = "en línea"
+        else:
+            sentido = "mejor" if d > 0 else "peor"
+            lectura = (f"se movió {abs(d):.2f} puntos {'por encima' if d > 0 else 'por debajo'} "
+                       f"de {etiqueta}")
+        return {"referencia": etiqueta, "cambio_de_la_referencia": ref,
+                "brecha_pp": d, "sentido": sentido, "lectura": lectura}
+
+    etiqueta_tipo = etiqueta_de_tipo(tipo)
+    vs_tipo = _vs(ct, f"la mediana de {etiqueta_tipo}")
+    vs_sistema = _vs(cs, "la mediana del sistema")
+
+    # Idiosincrático = se movió CONTRA su estrato, o mucho más que él. Las dos condiciones
+    # importan: caer mientras el tipo sube es propio, y caer cinco veces más que el tipo
+    # también lo es aunque el signo coincida.
+    idio = None
+    if ce is not None and ct is not None:
+        signo_opuesto = (ce > 0) != (ct > 0) and abs(ce - ct) >= UMBRAL_CONTRASTE
+        mucho_mas = abs(ce - ct) >= max(2.0, abs(ct))
+        idio = bool(signo_opuesto or mucho_mas)
+
+    return {
+        "cambio_de_la_entidad": ce,
+        "vs_su_tipo": vs_tipo,
+        "vs_el_sistema": vs_sistema,
+        "tipo_de_entidad": etiqueta_tipo,
+        "es_idiosincratico": idio,
+        "es_idiosincratico_por_que": (
+            None if idio is None else
+            ("se movió en sentido contrario a su estrato, o mucho más que él: el movimiento "
+             "es propio de la entidad" if idio else
+             "acompañó a su estrato: el movimiento es sectorial, no propio")),
+        "conteo_direccion": sistema.get("conteo_direccion"),
+    }
+
+
+def _f(x):
+    """`float` o `None` — nunca 0.0 por defecto: un cero fabricado se lee como «no se movió»."""
+    try:
+        return None if x is None else round(float(x), 2)
+    except (TypeError, ValueError):
+        return None
 
 
 class BankingYearReviewProduct:
@@ -234,16 +308,8 @@ class BankingYearReviewProduct:
                 tipo = bank.bank_type.value if bank.bank_type else None
                 su_tipo = next((t for t in (sistema.get("por_tipo") or [])
                                 if t.get("tipo") == tipo), None)
-                payload["contexto_de_mercado"] = {
-                    "cambio_mediano_del_sistema": (sistema.get("sistema") or {}).get(
-                        "cambio_mediana"),
-                    "su_tipo_de_entidad": su_tipo,
-                    "conteo_direccion": sistema.get("conteo_direccion"),
-                    "como_leerlo": (
-                        "el movimiento de la entidad se lee CONTRA el de su tipo y el del "
-                        "sistema en el mismo año: sin ese contraste, un cambio de score no "
-                        "distingue lo idiosincrático de lo que hizo todo el mercado"),
-                }
+                payload["contexto_de_mercado"] = _contraste_con_el_mercado(
+                    rev.get("cambio_score"), su_tipo, sistema, tipo)
         return ProductSnapshot(tier=tier, period=str(anio), payload=payload,
                                entity_name=str(bank.name))
 

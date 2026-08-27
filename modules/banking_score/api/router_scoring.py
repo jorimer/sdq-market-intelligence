@@ -637,14 +637,9 @@ async def get_rating_history(
 
 # Etiquetas legibles para la prosa de metodología. Un tipo sin etiqueta usa su propio
 # valor: preferimos un nombre feo a omitir un tipo del texto.
-_TIPO_LABEL = {
-    "banca_multiple": "banca múltiple",
-    "cambiaria": "intermediación cambiaria",
-    "banco_ahorro_credito": "bancos de ahorro y crédito",
-    "corporacion_credito": "corporaciones de crédito",
-    "aap": "asociaciones de ahorros y préstamos",
-    "fiduciaria": "fiduciarias",
-}
+# Fuente única. Esta copia decía «intermediación cambiaria» donde el PDF decía «Agentes de
+# cambio»: el mismo tipo con dos nombres según la pantalla.
+from modules.banking_score.etiquetas import TIPO_LABEL as _TIPO_LABEL  # noqa: E402
 
 # Bajo este umbral la mediana de un tipo se apoya en muy pocas entidades y no sirve para
 # sostener una afirmación de metodología (§4.2, misma lógica del panel chico).

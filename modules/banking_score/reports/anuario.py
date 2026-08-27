@@ -29,6 +29,7 @@ from typing import Any, Dict, List, Optional
 
 from sqlalchemy.orm import Session
 
+from modules.banking_score.etiquetas import etiqueta_de_tipo
 from modules.banking_score.models.models import Bank, ModelType, RatingResult
 
 logger = logging.getLogger("sdq.banking.anuario")
@@ -165,14 +166,19 @@ def anuario_del_sistema(db: Session, anio: int) -> Optional[Dict[str, Any]]:
     for n in comparables:
         t = panel[fin][n]["tipo"] or "sin tipo"
         por_tipo.setdefault(t, []).append(delta[n])
+    # La ETIQUETA viaja al lado de la clave. La clave cruda (`aap`, `banca_multiple`) llegaba
+    # al contexto del modelo —incluido el nivel ABIERTO del producto anual, que es material de
+    # mercado—, donde el modelo tiene que adivinar qué es «aap» o imprimirlo tal cual.
     tipos: List[Dict[str, Any]] = [
-        {"tipo": t, "n": len(v), "cambio_mediana": round(st.median(v), 2),
+        {"tipo": t, "tipo_label": etiqueta_de_tipo(t), "n": len(v),
+         "cambio_mediana": round(st.median(v), 2),
          "direccion": _direccion(st.median(v))} for t, v in por_tipo.items()]
     tipos.sort(key=lambda x: float(x["cambio_mediana"]))
 
     # ── Cambios de banda ──────────────────────────────────────────────
     bandas = [
         {"entidad": n, "tipo": panel[fin][n]["tipo"],
+         "tipo_label": etiqueta_de_tipo(panel[fin][n]["tipo"]),
          "desde": panel[ini][n]["banda"], "hasta": panel[fin][n]["banda"],
          "cambio_score": round(delta[n], 2)}
         for n in comparables

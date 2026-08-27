@@ -72,6 +72,7 @@ SECTOR_KEY = "banking"
 #: de un indicador no habría invalidado ninguna narrativa — el defecto exacto que esta lista
 #: existe para cerrar. Lo vigila `test_regla_contexto_declarado.py`.
 AI_CONTEXT_FILES = ("reports/narrative.py", "products.py", "products_year_review.py",
+                    "etiquetas.py",
                     "early_warning.py", "propension_quiebra.py",
                     "scoring/indicator_detail.py", "scoring/weights.py",
                     "scoring/benchmarks.py", "scoring/sensitivity.py",

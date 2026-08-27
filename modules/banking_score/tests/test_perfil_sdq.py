@@ -69,7 +69,7 @@ def test_los_cortes_se_calculan_por_TIPO_no_sobre_el_universo():
     La brecha entre familias es del orden de 20 puntos de mediana, medida en producción y
     recomputada en cada corte (el endpoint la expone en `medianas_ejecucion_por_tipo`; no se
     fija acá porque cada recalibración la mueve). Con cortes únicos, casi toda la
-    intermediación cambiaria caería en "Deficiente" y casi toda la banca múltiple en
+    Agentes de cambio caería en "Deficiente" y casi toda la banca múltiple en
     "Sobresaliente" — describiendo la diferencia entre dos modelos de negocio como si fuera
     diferencia de desempeño.
     """
@@ -145,8 +145,8 @@ class TestBrechaMedianasComputada:
         assert med["cambiaria"] == {"mediana": 30.0, "n": 5}
         assert med["banca_multiple"] == {"mediana": 70.0, "n": 5}
         frase = _frase_brecha_medianas(med)
-        assert "30.0 en intermediación cambiaria" in frase
-        assert "70.0 en banca múltiple" in frase
+        assert "30.0 en Agentes de cambio" in frase
+        assert "70.0 en Banca múltiple" in frase
 
     def test_la_frase_sigue_al_dato_cuando_el_dato_cambia(self):
         """Mover el panel debe mover el texto. Si no, el número está clavado."""

@@ -904,12 +904,8 @@ def _build_peer_block(peer_block: Dict, styles) -> List:
     return elements
 
 
-_TIPO_LABEL = {
-    "banca_multiple": "Banca múltiple", "aap": "Asociaciones de ahorros y préstamos",
-    "banco_ahorro_credito": "Bancos de ahorro y crédito",
-    "corporacion_credito": "Corporaciones de crédito", "cambiaria": "Agentes de cambio",
-    "fiduciaria": "Fiduciarias",
-}
+# Fuente única: había otra copia en `api/router_scoring.py` que no coincidía.
+from modules.banking_score.etiquetas import TIPO_LABEL as _TIPO_LABEL  # noqa: E402
 
 _MACRO_DIR_LABEL = {"favorable": "Favorable", "adverso": "Adverso", "neutral": "Neutral"}
 
