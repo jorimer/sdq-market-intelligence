@@ -68,7 +68,15 @@ def _candidatas(texto: str, pos: int) -> Tuple[List[str], str]:
     informe y ninguna señal. Agrupando por la FORMA, un infinitivo que la regla no conoce
     sube solo al tope del ranking.
     """
-    previo = texto[max(0, pos - _VENTANA_PROSPECTIVA):pos]
+    ini_v = max(0, pos - _VENTANA_PROSPECTIVA)
+    # La ventana empieza donde la regla la empieza, pero se ALINEA a un borde de palabra: si
+    # corta «ab|sorber» por la mitad, el ranking inventa un verbo «sorber» que nadie escribió.
+    # Un instrumento que fabrica hallazgos es peor que no tenerlo. (La regla misma no sufre
+    # esto: le da igual dónde empieza, porque solo pregunta si HAY una marca.)
+    if ini_v and texto[ini_v - 1].isalpha():
+        salto = texto.find(" ", ini_v)
+        ini_v = salto + 1 if salto != -1 and salto < pos else ini_v
+    previo = texto[ini_v:pos]
     formas = [m.group(1).lower() for m in _FORMA_IRREALIS.finditer(previo)]
     ini = max(0, pos - 80)
     fin = min(len(texto), pos + 40)
