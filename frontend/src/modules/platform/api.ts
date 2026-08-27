@@ -494,13 +494,31 @@ export function cierreDeEjercicio(periodEnd: string): string | null {
   return m ? m[1] : null;
 }
 
+/**
+ * El informe in-app de un producto.
+ *
+ * *signal* permite ABORTAR la petición. No es un lujo: una generación real de un Deep Dive
+ * tarda ~100 s, y cambiar de período mientras corre encendía otra sin apagar la anterior —
+ * tres generaciones simultáneas del mismo informe, cobradas las tres, entregada ninguna.
+ * Quien llame desde una pantalla que puede cambiar de sujeto TIENE que pasarlo.
+ */
 export async function getProductReport(
   sector: string,
   tier: string,
   opts: { period?: string; scope?: string } = {},
+  signal?: AbortSignal,
 ): Promise<ProductReport> {
-  const { data } = await client.get(`/products/${sector}/${tier}/report`, { params: opts });
+  const { data } = await client.get(`/products/${sector}/${tier}/report`,
+                                    { params: opts, signal });
   return data;
+}
+
+/** ¿Este error es una petición que NOSOTROS abortamos? Axios la rechaza como cualquier
+ *  otra, y mostrarla como fallo pondría un cartel de error por haber cambiado de período. */
+export function esAbortada(e: unknown): boolean {
+  const err = e as { code?: string; name?: string };
+  return err?.code === "ERR_CANCELED" || err?.name === "CanceledError"
+    || err?.name === "AbortError";
 }
 
 /** Entidad elegible de un nivel nombrado (alimenta el selector del catálogo). */

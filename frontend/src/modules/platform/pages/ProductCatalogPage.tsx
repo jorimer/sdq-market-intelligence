@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import type { TFunction } from "i18next";
 import { Boxes, Lock, Eye, Download, Mail, FileText, ShoppingCart } from "lucide-react";
@@ -22,6 +22,7 @@ import {
   reportAportes,
   getProductScopeOptions,
   cierreDeEjercicio,
+  esAbortada,
   getProductPeriods,
   downloadProductReport,
   downloadProductSample,
@@ -289,15 +290,36 @@ function ProductReportDrawer({ sector, level, periodEnd, onClose, t }: {
   const [errPista, setErrPista] = useState<string | null>(null);
   const tierLabel = t(`platform.catalog.tier.${level.tier}`, { defaultValue: level.tier });
 
+  // Cada petición lleva su NÚMERO DE ORDEN y su abortador. Sin esto, cambiar de período
+  // mientras un informe se genera encendía otra generación sin apagar la anterior: el
+  // registro de producción mostró TRES corridas del mismo Deep Dive solapadas, lanzadas con
+  // 22 y 47 s de diferencia, cada una de ~100 s. Se cobraron las tres y no se entregó
+  // ninguna. Y la que volvía última escribía en pantalla aunque ya no fuera la pedida — así
+  // apareció un cartel de error sobre un período que el usuario ya había abandonado.
+  const nOrden = useRef(0);
+  const enVuelo = useRef<AbortController | null>(null);
+
+  // Al cerrar el drawer se aborta lo que quede en vuelo: nadie va a leer esa respuesta.
+  useEffect(() => () => enVuelo.current?.abort(), []);
+
   const runReport = (p: string, s?: string) => {
+    enVuelo.current?.abort();
+    const abortador = new AbortController();
+    enVuelo.current = abortador;
+    const mio = ++nOrden.current;
+    /** ¿Sigue siendo ésta la petición vigente? Si no, su respuesta NO toca la pantalla. */
+    const vigente = () => mio === nOrden.current;
+
     setStatus("loading");
     setErrMsg(null);
     setErrPista(null);
     setActiveScope(s);
     getProductReport(sector.sector_key, level.tier,
-      { period: p || periodEnd, ...(s ? { scope: s } : {}) })
-      .then((r) => { setReport(r); setStatus("ready"); })
+      { period: p || periodEnd, ...(s ? { scope: s } : {}) }, abortador.signal)
+      .then((r) => { if (vigente()) { setReport(r); setStatus("ready"); } })
       .catch((e) => {
+        // Abortar es algo que hicimos NOSOTROS: no es un fallo y no lleva cartel.
+        if (esAbortada(e) || !vigente()) return;
         // La PISTA va al lado del mensaje, no dentro: cuando el backend no manda motivo
         // —un corte del proxy, un fallo de red— el cartel genérico deja el diagnóstico en
         // cero, y «502» y «sin respuesta» se arreglan de maneras opuestas.
