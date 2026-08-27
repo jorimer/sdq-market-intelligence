@@ -164,6 +164,100 @@ def _balance(indicadores: Dict[str, List[Dict[str, Any]]], cortes: List[str],
     return filas
 
 
+def _balance_por_dimension(sub: Dict[str, List[Dict[str, Any]]], cortes: List[str],
+                           entity_type: Optional[str]) -> List[Dict[str, Any]]:
+    """QUÉ DIMENSIÓN hizo el año — y la única descomposición que RECONCILIA con el score.
+
+    **El hueco que cierra.** La Revisión Anual decía «el score cedió 6,02 puntos» y no podía
+    decir por cuál dimensión: la trayectoria trae los cinco sub-componentes por corte
+    (`traj["sub"]`) y este informe los descartaba. El Deep Dive TRIMESTRAL sí los imprime.
+    Otra vez el contexto anual más pobre que el del corte.
+
+    **Por qué el APORTE y no el delta.** Un sub-componente que cae 7,81 puntos con peso 13 %
+    aporta menos que uno que cae 7,33 con peso 38 %. Servir el delta suelto obliga al modelo a
+    hacer la multiplicación, y multiplicar es exactamente lo que hace mal — la doctrina manda
+    computarlo. Medido en Bonao 2025: −2,79 −1,83 −1,02 −0,43 +0,04 = **−6,02**, que es el
+    cambio publicado del score. La tabla se puede auditar sumándola.
+
+    **Los pesos se RENORMALIZAN sobre las dimensiones presentes**, igual que el motor: si una
+    falta, acreditarle su peso a las demás es lo mismo que fabricar el dato que no está.
+    """
+    from modules.banking_score.scoring.weights import get_sub_component_weights
+
+    pesos = get_sub_component_weights(entity_type)
+    apertura, cierre = cortes[0], cortes[-1]
+    crudas: List[Any] = []
+    for dim, serie in (sub or {}).items():
+        por_corte = {str(p.get("period_end")): p for p in (serie or [])
+                     if isinstance(p, dict)}
+        a, c = por_corte.get(apertura), por_corte.get(cierre)
+        if not a or not c or a.get("score") is None or c.get("score") is None:
+            continue
+        crudas.append((dim, float(a["score"]), float(c["score"]), float(pesos.get(dim) or 0.0)))
+    total_peso = sum(w for *_, w in crudas)
+    if not crudas or total_peso <= 0:
+        return []
+
+    filas = []
+    for dim, s0, s1, w in crudas:
+        peso = w / total_peso
+        filas.append({
+            "dimension": dim,
+            "peso": round(peso, 4),
+            "apertura": round(s0, 2), "cierre": round(s1, 2),
+            "cambio": round(s1 - s0, 2),
+            # delta × peso: cuántos puntos del score global movió ESTA dimensión.
+            "aporte_al_cambio": round((s1 - s0) * peso, 2),
+        })
+    # De la que más destruyó a la que más aportó: el lector busca la causa, no el alfabeto.
+    return sorted(filas, key=lambda f: float(f["aporte_al_cambio"]))
+
+
+def _reconciliacion(filas: List[Dict[str, Any]], crudas, total_peso: float,
+                    cambio_score: Optional[float]) -> Dict[str, Any]:
+    """La suma de los aportes contra el cambio publicado del score.
+
+    Un comité de crédito SUMA la columna. Si la suma de las filas redondeadas da −6,03 y el
+    titular dice −6,02, el documento pierde credibilidad por un centésimo — y esconderlo es
+    peor. La suma se computa SIN redondear (reconcilia exacto) y se declara que las filas sí
+    están redondeadas, que es de dónde sale la diferencia.
+    """
+    exacta = sum((s1 - s0) * (w / total_peso) for _, s0, s1, w in crudas)
+    de_filas = sum(float(f["aporte_al_cambio"]) for f in filas)
+    return {
+        "suma_de_aportes": round(exacta, 2),
+        "suma_de_las_filas_redondeadas": round(de_filas, 2),
+        "cambio_score": cambio_score,
+        "reconcilia": (cambio_score is not None
+                       and abs(exacta - float(cambio_score)) <= 0.01),
+        "nota": ("La suma de los aportes reconcilia con el cambio del score. Las filas se "
+                 "muestran redondeadas a dos decimales, así que sumarlas a mano puede diferir "
+                 "en un centésimo."),
+    }
+
+
+def _reconciliacion_publica(sub, cortes, entity_type, cambio_score):
+    """Envoltorio: recompone las crudas para reconciliar sin duplicar la lógica de pesos."""
+    from modules.banking_score.scoring.weights import get_sub_component_weights
+
+    pesos = get_sub_component_weights(entity_type)
+    apertura, cierre = cortes[0], cortes[-1]
+    crudas = []
+    for dim, serie in (sub or {}).items():
+        por_corte = {str(p.get("period_end")): p for p in (serie or [])
+                     if isinstance(p, dict)}
+        a, c = por_corte.get(apertura), por_corte.get(cierre)
+        if not a or not c or a.get("score") is None or c.get("score") is None:
+            continue
+        crudas.append((dim, float(a["score"]), float(c["score"]),
+                       float(pesos.get(dim) or 0.0)))
+    total_peso = sum(w for *_, w in crudas)
+    if not crudas or total_peso <= 0:
+        return None
+    filas = _balance_por_dimension(sub, cortes, entity_type)
+    return _reconciliacion(filas, crudas, total_peso, cambio_score)
+
+
 def _bandas_del_anio(puntos: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
     """Cada cambio de banda DURANTE el año, no solo apertura contra cierre.
 
@@ -213,6 +307,10 @@ def revision_anual(db: Session, bank: Bank, anio: int) -> Optional[Dict[str, Any
                 logger.exception("No se pudo computar el percentil de %s en %s",
                                  bank.name, corte)
 
+    tipo = bank.bank_type.value if bank.bank_type else None
+    dimensiones = _balance_por_dimension(traj.get("sub") or {}, cortes, tipo)
+    reconciliacion = _reconciliacion_publica(traj.get("sub") or {}, cortes, tipo, delta)
+
     return {
         "anio": anio,
         "entidad": bank.name,
@@ -238,5 +336,9 @@ def revision_anual(db: Session, bank: Bank, anio: int) -> Optional[Dict[str, Any
         "camino": _camino(overall),
         "cambios_de_banda": _bandas_del_anio(overall),
         "balance": _balance(traj.get("indicators") or {}, cortes),
+        # Qué DIMENSIÓN hizo el año. La suma de `aporte_al_cambio` reconcilia con
+        # `cambio_score`, así que la tabla es auditable sumándola.
+        "balance_por_dimension": dimensiones,
+        "reconciliacion_del_cambio": reconciliacion,
         "posicion": pos or None,
     }
