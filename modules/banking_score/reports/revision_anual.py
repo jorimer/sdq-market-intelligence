@@ -106,6 +106,7 @@ def _referencia_del_panel(bench: Optional[Dict[str, Any]], clave: str,
     cuatro ramos. Viaja también el `n` y si la referencia fue MEDIDA o declarada: un promedio
     de constantes y uno del panel son cosas distintas y el lector tiene que poder distinguirlas.
     """
+    from modules.banking_score.scoring.benchmarks import SISTEMA_LABEL, SISTEMA_TIPOS
     from shared.data.sib_client import INDICATOR_TO_BENCHMARK
 
     if not bench:
@@ -114,9 +115,24 @@ def _referencia_del_panel(bench: Optional[Dict[str, Any]], clave: str,
     if not bkey:
         return {}
     out: Dict[str, Any] = {}
-    sistema = (bench.get("sector_averages") or {}).get(bkey)
-    if sistema is not None:
-        out["sistema"] = sistema
+    # EL SISTEMA SOLO SI LA ENTIDAD PERTENECE A ÉL. Los agentes de cambio y las fiduciarias
+    # quedan fuera del agregado a propósito —no captan depósitos ni tienen libro de crédito—
+    # y sin embargo comparten TRES claves con el benchmark: `roa`, `roe` y `cost_to_income`.
+    # Sin esta guarda se publicaría «el ROA de esta cambiaria está 1,2 puntos bajo el
+    # sistema» comparándola contra bancos. Son 46 de las 89 entidades del universo: la
+    # MAYORÍA, no un borde.
+    #
+    # No se omite en silencio: se declara el motivo. Una referencia que desaparece se lee
+    # como que no existe, y la verdadera es «existe y no aplica», que es distinto.
+    if (tipo or "") in SISTEMA_TIPOS:
+        sistema = (bench.get("sector_averages") or {}).get(bkey)
+        if sistema is not None:
+            out["sistema"] = sistema
+            out["sistema_label"] = SISTEMA_LABEL
+    else:
+        out["sistema_no_aplica"] = (
+            f"Esta entidad no integra el agregado «{SISTEMA_LABEL}»: no capta depósitos ni "
+            "tiene libro de crédito. La referencia válida es la de su propio grupo.")
     grupo = (bench.get("peer_groups") or {}).get(tipo or "") or {}
     del_tipo = grupo.get(f"{bkey}_avg")
     if del_tipo is not None:
