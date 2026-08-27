@@ -100,3 +100,27 @@ def test_acota_por_sector(db):
     _informe(db, {"s": "podría desbordar 250%"}, sector="law", period="2024-12-31")
     assert barrido_del_guard(db, sector="banking")["informes_leidos"] == 1
     assert barrido_del_guard(db)["informes_leidos"] == 2
+
+
+def test_la_ventana_no_parte_una_palabra_por_la_mitad(db):
+    """Un instrumento que FABRICA hallazgos es peor que no tenerlo.
+
+    La primera corrida contra producción reportó un verbo «sorber» con 5 apariciones. Nadie
+    escribió «sorber»: la ventana de 90 caracteres cortaba «absorber» por la mitad. Cinco
+    minutos de un ranking que no existía.
+    """
+    # El relleno se CALCULA para que el borde de la ventana caiga exactamente en «ab|sorber».
+    # Con un relleno "a ojo" el borde cae en el relleno, el defecto no se reproduce y el test
+    # pasa con el arreglo quitado — que es lo que me pasó al escribirlo la primera vez.
+    from shared.observability.barrido_del_guard import _VENTANA_PROSPECTIVA
+    cabeza = "la entidad puede absorber "
+    corte_deseado = cabeza.index("absorber") + 2          # dentro de la palabra
+    cola = " de "
+    relleno = "x" * (corte_deseado + _VENTANA_PROSPECTIVA - len(cabeza) - len(cola))
+    texto = f"{cabeza}{relleno}{cola}42.5%"
+    assert texto.index("42.5%") - _VENTANA_PROSPECTIVA == corte_deseado, "el corte no cae dentro de la palabra"
+
+    _informe(db, {"s": texto})
+    formas = {f["forma"] for f in barrido_del_guard(db)["formas"]}
+    assert "sorber" not in formas, (
+        "La ventana partió «absorber» y el ranking inventó un verbo que nadie escribió.")
