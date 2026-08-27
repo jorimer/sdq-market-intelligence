@@ -22,8 +22,17 @@ _CORTES = ["2024-12-31", "2025-03-31", "2025-06-30", "2025-09-30", "2025-12-31"]
 
 
 class _Bank:
+    """Stub de `Bank`. `bank_type` NO es opcional en el modelo real (`nullable=False`) y
+    faltaba acá: el balance por dimensión lo necesita para elegir el perfil de pesos, y una
+    fixture que no modela el objeto real hace fallar el test por un motivo que producción no
+    tiene. Se agrega en vez de defenderse con `getattr` — defenderse escondería que el stub
+    miente."""
+
     id = "b1"
     name = "Entidad de Prueba"
+
+    class bank_type:            # noqa: N801 — imita el Enum de SQLAlchemy
+        value = "aap"
 
 
 def _traj(scores, bandas=None, indicadores=None, cortes=None):

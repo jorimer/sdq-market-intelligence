@@ -444,6 +444,34 @@ def _nota_de_capital_redundante(indicators: Dict) -> Optional[str]:
             "independientes de solidez.")
 
 
+#: Rótulos de las cinco dimensiones. Se declaran acá y no se derivan de la clave: `aap` ya
+#: nos enseñó que una clave cruda impresa es material de mercado con jerga interna.
+_DIMENSION_LABEL = {
+    "solidez": "Solidez Financiera", "calidad": "Calidad de Activos",
+    "eficiencia": "Eficiencia y Rentabilidad", "liquidez": "Liquidez",
+    "diversificacion": "Diversificación",
+}
+
+
+def _nota_de_capital_del_balance(balance: List[Dict]) -> Optional[str]:
+    """La misma advertencia del Deep Dive trimestral, leída desde las filas del balance.
+
+    No se reusa `_nota_de_capital_redundante` porque las dos superficies traen formas
+    distintas —allá un dict `{clave: {raw}}`, acá una lista de filas— y adaptar una a la otra
+    escondería la diferencia. Lo que NO se duplica es el TEXTO: es el mismo, y se toma de
+    aquella función para que no puedan divergir.
+    """
+    por_clave = {str(f.get("indicador")): f for f in (balance or [])}
+    sol, lev = por_clave.get("solvencia"), por_clave.get("leverage")
+    if not sol or not lev:
+        return None
+    a, b = sol.get("cierre"), lev.get("cierre")
+    if a is None or b is None or abs(float(a) - float(b)) > 0.005:
+        return None
+    return _nota_de_capital_redundante(
+        {"solvencia": {"raw": a}, "leverage": {"raw": b}})
+
+
 def _build_trajectory_table(trajectories: Dict, styles) -> List:
     """Trayectoria multi-período del score global + sub-componentes (Fase 4).
 
@@ -743,22 +771,65 @@ def _build_revision_anual_tables(rev: Dict, styles) -> List:
                                        styles, font_size=9.5, padding=5))
         elements.append(Spacer(1, 0.25 * inch))
 
+    # QUÉ DIMENSIÓN hizo el año. Va ANTES del detalle por indicador: es la respuesta, y el
+    # balance de veinte indicadores es el sustento. El Deep Dive trimestral imprime los
+    # sub-componentes y el anual no los tenía — el mismo hueco que el nivel de referencia.
+    dims = rev.get("balance_por_dimension") or []
+    if dims:
+        elements.append(Paragraph("Qué dimensión movió el año", styles["SDQHeading"]))
+        rows = [["Dimensión", "Peso", "Apertura", "Cierre", "Aporte al cambio"]]
+        for d in dims:
+            ap, ci = d.get("apertura"), d.get("cierre")
+            rows.append([
+                _DIMENSION_LABEL.get(str(d.get("dimension")), str(d.get("dimension"))),
+                f"{float(d.get('peso') or 0) * 100:.0f}%",
+                f"{ap:.2f}" if isinstance(ap, (int, float)) else "—",
+                f"{ci:.2f}" if isinstance(ci, (int, float)) else "—",
+                (f"{d['aporte_al_cambio']:+.2f}"
+                 if isinstance(d.get("aporte_al_cambio"), (int, float)) else "—")])
+        elements.append(_branded_table(
+            rows, [1.9 * inch, 0.7 * inch, 1.0 * inch, 1.0 * inch, 1.3 * inch],
+            styles, font_size=9.5, padding=5))
+        rec = rev.get("reconciliacion_del_cambio") or {}
+        if rec.get("suma_de_aportes") is not None:
+            elements.append(Spacer(1, 0.08 * inch))
+            elements.append(Paragraph(
+                f"Aporte = variación del sub-componente × su peso. Suman "
+                f"{rec['suma_de_aportes']:+.2f} puntos, el cambio del score del año. "
+                "Las filas se muestran redondeadas, así que sumarlas a mano puede diferir en "
+                "un centésimo.", styles["SDQSmall"]))
+        elements.append(Spacer(1, 0.25 * inch))
+
     bal = rev.get("balance") or []
     if bal:
         elements.append(Paragraph("Balance: apertura contra cierre", styles["SDQHeading"]))
-        rows = [["Indicador", "Apertura", "Cierre", "Cambio"]]
+        # El SCORE al lado del valor: el trimestral lo imprime y acá faltaba, así que una
+        # cobertura que baja de 147,82 % a 108,36 % no dejaba ver que su score cedió 13,72
+        # puntos — que es lo que mueve la calificación.
+        rows = [["Indicador", "Apertura", "Cierre", "Cambio", "Score ap.", "Score ci."]]
         for f in bal:
             rotulo, cierre_txt = _rotulo_y_valor(str(f.get("indicador", "")), f.get("cierre"))
             _, apertura_txt = _rotulo_y_valor(str(f.get("indicador", "")), f.get("apertura"))
             cambio = f.get("cambio")
+            s_ap, s_ci = f.get("score_apertura"), f.get("score_cierre")
             rows.append([rotulo, apertura_txt, cierre_txt,
-                         f"{cambio:+.2f}" if isinstance(cambio, (int, float)) else "—"])
-        elements.append(_branded_table(rows, [2.3 * inch, 1.2 * inch, 1.2 * inch, 1.1 * inch],
-                                       styles, font_size=9.5, padding=5))
+                         f"{cambio:+.2f}" if isinstance(cambio, (int, float)) else "—",
+                         f"{s_ap:.1f}" if isinstance(s_ap, (int, float)) else "—",
+                         f"{s_ci:.1f}" if isinstance(s_ci, (int, float)) else "—"])
+        elements.append(_branded_table(
+            rows, [2.0 * inch, 1.0 * inch, 1.0 * inch, 0.85 * inch, 0.8 * inch, 0.8 * inch],
+            styles, font_size=9, padding=4))
         elements.append(Spacer(1, 0.08 * inch))
         elements.append(Paragraph(
             "Los indicadores de balance son fotos a cada corte: el nivel de diciembre no "
             "describe el año sin el nivel del que partió.", styles["SDQSmall"]))
+        # La MISMA nota que el Deep Dive trimestral. Faltaba acá, y el anual publicaba dos
+        # filas de capital con el número idéntico sin decir por qué — un lector razonable lo
+        # lee como un error nuestro.
+        nota_cap = _nota_de_capital_del_balance(bal)
+        if nota_cap:
+            elements.append(Spacer(1, 0.06 * inch))
+            elements.append(Paragraph(nota_cap, styles["SDQSmall"]))
         elements.append(Spacer(1, 0.25 * inch))
 
     faltantes = rev.get("cortes_faltantes") or []
