@@ -161,8 +161,8 @@ def test_separa_las_marcas_del_REGEX_de_las_que_confirma_el_juez(db):
     _con_capa(db, cifra="72%", capa="juez")
 
     r = marcas_del_guard(db)["regla_de_dos_capas"]
-    assert r["habrian_pasado_solo_det"] == 2
-    assert r["seguirian_bloqueando"] == 2
+    assert r["publicadas_pese_a_la_marca"] == 2
+    assert r["bloquearon_la_entrega"] == 2
     assert r["marcas_con_capa_registrada"] == 4
 
 
@@ -179,7 +179,7 @@ def test_las_marcas_VIEJAS_no_se_reparten_entre_capas(db):
     r = marcas_del_guard(db)["regla_de_dos_capas"]
     assert r["por_capa"].get("(sin registrar)") == 1
     assert r["marcas_con_capa_registrada"] == 1
-    assert r["habrian_pasado_solo_det"] == 0
+    assert r["publicadas_pese_a_la_marca"] == 0
 
 
 def test_sin_marcas_la_regla_no_finge_un_veredicto(db):
