@@ -108,3 +108,141 @@ def test_el_balance_por_indicador_lleva_referencia_Y_score():
     fila = _balance(indicadores, CORTES)[0]
     assert fila["nivel_de_referencia"] == 100.0
     assert (fila["score_apertura"], fila["score_cierre"]) == (66.6, 52.9)
+
+
+# ── El PANEL en los dos cortes ─────────────────────────────────────────
+
+#: Claves REALES del benchmark (`INDICATOR_TO_BENCHMARK`), no inventadas: mi primera fixture
+#: usó `cobertura_avg` y el lector devolvió `{}` — el test habría pasado sin haber medido nada
+#: si solo hubiese afirmado ausencias.
+_BENCH_AP = {"sector_averages": {"coverage_ratio": 160.0},
+             "peer_groups": {"aap": {"coverage_ratio_avg": 150.0, "label": "AAyP", "n": 9}}}
+_BENCH_CI = {"sector_averages": {"coverage_ratio": 155.0},
+             "peer_groups": {"aap": {"coverage_ratio_avg": 148.0, "label": "AAyP", "n": 9}}}
+_IND = {"cobertura_provisiones": [
+    {"period_end": "2024-12-31", "raw": 147.82, "score": 66.6},
+    {"period_end": "2025-12-31", "raw": 108.36, "score": 52.9}]}
+
+
+def _fila_con_panel():
+    return _balance(_IND, CORTES, bench_apertura=_BENCH_AP, bench_cierre=_BENCH_CI,
+                    tipo="aap")[0]
+
+
+def test_cada_brecha_se_mide_contra_la_referencia_de_SU_MISMO_corte():
+    """Comparar el cierre contra la mediana de apertura mezclaría el movimiento de la entidad
+    con el del sistema. Medida a cada lado, la estacionalidad se cancela."""
+    f = _fila_con_panel()
+    assert f["brecha_vs_sistema_apertura"] == round(147.82 - 160.0, 4)
+    assert f["brecha_vs_sistema_cierre"] == round(108.36 - 155.0, 4)
+
+
+def test_dice_si_la_brecha_se_AMPLIO_o_se_cerró():
+    """La pregunta del año, y una RELACIÓN: se computa y el modelo la copia. Sin esto, «cayó
+    39 puntos» se lee como catástrofe propia aunque el sistema hubiera caído lo mismo."""
+    f = _fila_con_panel()
+    assert f["brecha_vs_su_tipo_como_se_movio"]["veredicto"] == "se amplió"
+    # Estaba 2 puntos bajo su tipo y cerró 40 abajo: la separación creció ~37.
+    assert f["brecha_vs_su_tipo_como_se_movio"]["cambio_de_la_brecha"] > 37
+
+
+def test_acercarse_a_la_referencia_DESDE_ARRIBA_tambien_es_converger():
+    """El signo se mide sobre el VALOR ABSOLUTO: si no, una entidad que deja de estar
+    excepcionalmente bien figuraría como que «se separó», que es lo contrario de lo que pasó."""
+    from modules.banking_score.reports.revision_anual import _como_se_movio_la_brecha
+    assert _como_se_movio_la_brecha(40.0, 10.0, 0.5)["veredicto"] == "se redujo"
+    assert _como_se_movio_la_brecha(-40.0, -10.0, 0.5)["veredicto"] == "se redujo"
+
+
+def test_un_movimiento_INMATERIAL_de_la_brecha_no_se_narra_como_cambio():
+    from modules.banking_score.reports.revision_anual import _como_se_movio_la_brecha
+    assert _como_se_movio_la_brecha(10.0, 10.2, 0.5)["veredicto"] == "estable"
+
+
+def test_la_referencia_NOMBRA_su_poblacion():
+    """«El SUJETO viaja con el número»: `sistema` y `su_tipo` son poblaciones distintas y el
+    modelo reatribuye al sujeto más cercano si no se las nombra."""
+    f = _fila_con_panel()
+    assert f["panel_cierre"]["su_tipo_label"] == "AAyP"
+    assert f["panel_cierre"]["su_tipo_n"] == 9
+    assert "sistema" in f["panel_cierre"] and "su_tipo" in f["panel_cierre"]
+
+
+def test_sin_panel_la_fila_NO_inventa_una_brecha():
+    """Un benchmark ausente es `None`, nunca cero: una brecha de 0.0 se lee como «está
+    exactamente en la referencia», que es una afirmación y no un hueco."""
+    f = _balance(_IND, CORTES)[0]
+    assert "brecha_vs_sistema_cierre" not in f
+    assert "panel_cierre" not in f
+
+
+# ── Las OTRAS 46 entidades: las que no integran el sistema ─────────────
+
+_BENCH_ROA = {"sector_averages": {"roa": 1.40},
+              "peer_groups": {"cambiaria": {"roa_avg": 2.10, "label": "Agentes de cambio",
+                                            "n": 42},
+                              "aap": {"roa_avg": 0.90, "label": "AAyP", "n": 10}}}
+_IND_ROA = {"roa": [{"period_end": "2024-12-31", "raw": 0.71, "score": 30.0},
+                    {"period_end": "2025-12-31", "raw": 0.33, "score": 13.3}]}
+
+
+def _fila_roa(tipo):
+    return _balance(_IND_ROA, CORTES, bench_apertura=_BENCH_ROA,
+                    bench_cierre=_BENCH_ROA, tipo=tipo)[0]
+
+
+def test_una_CAMBIARIA_no_se_compara_contra_el_sistema():
+    """46 de las 89 entidades del universo —42 cambiarias y 4 fiduciarias— NO integran el
+    agregado del sistema: no captan depósitos ni tienen libro de crédito, y el módulo de
+    benchmarks las excluye a propósito.
+
+    Y sin embargo comparten claves con el benchmark: `roa` y `roe` las cambiarias, más
+    `cost_to_income` las fiduciarias. Sin esta guarda se publicaría «el ROA de este agente de
+    cambio está 1,07 puntos bajo el sistema», comparándolo contra bancos. Es la MAYORÍA del
+    universo, no un borde — y yo lo verifiqué recién porque el dueño preguntó «¿y las otras
+    entidades?», no porque se me hubiera ocurrido.
+    """
+    f = _fila_roa("cambiaria")
+    # El orden importa: comprobar la ausencia PRIMERO. Al revés, el acceso revienta con
+    # KeyError antes de poder evaluar el `or` — el test falla por su propia redacción y no
+    # por el código, que es una forma barata de perder media hora.
+    assert f.get("brecha_vs_sistema_cierre") is None
+    assert "sistema" not in (f["panel_cierre"] or {})
+
+
+def test_y_el_motivo_se_DECLARA_en_vez_de_desaparecer():
+    """Una referencia que se omite en silencio se lee como que no existe. La verdad es que
+    existe y NO APLICA, que es distinto — y es lo que el lector necesita saber."""
+    f = _fila_roa("cambiaria")
+    assert "no integra el agregado" in f["panel_cierre"]["sistema_no_aplica"]
+
+
+def test_pero_SÍ_contra_su_propio_grupo():
+    """Los grupos de pares cubren todos los tipos justamente para que cualquier entidad
+    encuentre el suyo. Quitarle también esa referencia la dejaría sin ninguna."""
+    f = _fila_roa("cambiaria")
+    assert f["panel_cierre"]["su_tipo_label"] == "Agentes de cambio"
+    assert f["brecha_vs_su_tipo_cierre"] == round(0.33 - 2.10, 4)
+
+
+def test_una_entidad_del_sistema_sigue_teniendo_las_DOS_referencias():
+    f = _fila_roa("aap")
+    assert f["brecha_vs_sistema_cierre"] == round(0.33 - 1.40, 4)
+    assert f["brecha_vs_su_tipo_cierre"] == round(0.33 - 0.90, 4)
+    assert f["panel_cierre"]["sistema_label"]
+
+
+def test_los_tipos_del_universo_estan_TODOS_contemplados():
+    """Barrido con su prueba negativa: cada tipo que existe cae de un lado o del otro, y
+    ninguno queda en un limbo donde el comportamiento no esté decidido."""
+    from modules.banking_score.models.models import BankType
+    from modules.banking_score.scoring.benchmarks import SISTEMA_TIPOS
+
+    tipos = {t.value for t in BankType}
+    assert len(tipos) >= 6, "el barrido no encontró los tipos de entidad"
+    dentro = tipos & set(SISTEMA_TIPOS)
+    fuera = tipos - set(SISTEMA_TIPOS)
+    assert dentro and fuera, "si todos cayeran del mismo lado, esta guarda no probaría nada"
+    for tipo in sorted(fuera):
+        assert "sistema" not in (_fila_roa(tipo)["panel_cierre"] or {}), (
+            f"'{tipo}' no integra el sistema y se le sirvió la referencia del sistema.")

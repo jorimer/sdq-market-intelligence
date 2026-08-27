@@ -97,8 +97,82 @@ def _camino(puntos: List[Dict[str, Any]]) -> Optional[Dict[str, Any]]:
     }
 
 
+def _referencia_del_panel(bench: Optional[Dict[str, Any]], clave: str,
+                          tipo: Optional[str]) -> Dict[str, Any]:
+    """La mediana del SISTEMA y la de SU TIPO para *clave*, en un corte.
+
+    Las dos claves nombran su población —`sistema` y `su_tipo`— porque el modelo reatribuye
+    al sujeto más cercano: así se publicó «cuatro compañías concentran el 87,1 %» cuando eran
+    cuatro ramos. Viaja también el `n` y si la referencia fue MEDIDA o declarada: un promedio
+    de constantes y uno del panel son cosas distintas y el lector tiene que poder distinguirlas.
+    """
+    from modules.banking_score.scoring.benchmarks import SISTEMA_LABEL, SISTEMA_TIPOS
+    from shared.data.sib_client import INDICATOR_TO_BENCHMARK
+
+    if not bench:
+        return {}
+    bkey = INDICATOR_TO_BENCHMARK.get(clave)
+    if not bkey:
+        return {}
+    out: Dict[str, Any] = {}
+    # EL SISTEMA SOLO SI LA ENTIDAD PERTENECE A ÉL. Los agentes de cambio y las fiduciarias
+    # quedan fuera del agregado a propósito —no captan depósitos ni tienen libro de crédito—
+    # y sin embargo comparten TRES claves con el benchmark: `roa`, `roe` y `cost_to_income`.
+    # Sin esta guarda se publicaría «el ROA de esta cambiaria está 1,2 puntos bajo el
+    # sistema» comparándola contra bancos. Son 46 de las 89 entidades del universo: la
+    # MAYORÍA, no un borde.
+    #
+    # No se omite en silencio: se declara el motivo. Una referencia que desaparece se lee
+    # como que no existe, y la verdadera es «existe y no aplica», que es distinto.
+    if (tipo or "") in SISTEMA_TIPOS:
+        sistema = (bench.get("sector_averages") or {}).get(bkey)
+        if sistema is not None:
+            out["sistema"] = sistema
+            out["sistema_label"] = SISTEMA_LABEL
+    else:
+        out["sistema_no_aplica"] = (
+            f"Esta entidad no integra el agregado «{SISTEMA_LABEL}»: no capta depósitos ni "
+            "tiene libro de crédito. La referencia válida es la de su propio grupo.")
+    grupo = (bench.get("peer_groups") or {}).get(tipo or "") or {}
+    del_tipo = grupo.get(f"{bkey}_avg")
+    if del_tipo is not None:
+        out["su_tipo"] = del_tipo
+        out["su_tipo_label"] = grupo.get("label")
+        out["su_tipo_n"] = grupo.get("n")
+    return out
+
+
+def _como_se_movio_la_brecha(be_ap: Optional[float], be_ci: Optional[float],
+                             piso: float) -> Optional[Dict[str, Any]]:
+    """¿La distancia contra la referencia se AMPLIÓ o se cerró durante el año?
+
+    Ésta es la pregunta del año, y es una RELACIÓN: se computa acá y el modelo la copia. Sin
+    esto, «la cobertura cayó 39 puntos» se lee como catástrofe propia aunque el sistema entero
+    haya caído lo mismo — y al revés, una caída chica contra un sistema que subió es peor de
+    lo que parece.
+
+    El signo se mide sobre el VALOR ABSOLUTO de la brecha: acercarse a la referencia desde
+    arriba y desde abajo son la misma noticia —convergencia— y tratarlas por su signo crudo
+    diría que una entidad «empeoró» por dejar de estar excepcionalmente bien.
+    """
+    if be_ap is None or be_ci is None:
+        return None
+    cambio = abs(be_ci) - abs(be_ap)
+    if abs(cambio) < piso:
+        veredicto, lectura = "estable", "la distancia contra la referencia no se movió"
+    elif cambio > 0:
+        veredicto, lectura = "se amplió", "la entidad se separó más de la referencia"
+    else:
+        veredicto, lectura = "se redujo", "la entidad se acercó a la referencia"
+    return {"cambio_de_la_brecha": round(cambio, 4),
+            "veredicto": veredicto, "lectura": lectura}
+
+
 def _balance(indicadores: Dict[str, List[Dict[str, Any]]], cortes: List[str],
-             claves: Optional[List[str]] = None) -> List[Dict[str, Any]]:
+             claves: Optional[List[str]] = None,
+             bench_apertura: Optional[Dict[str, Any]] = None,
+             bench_cierre: Optional[Dict[str, Any]] = None,
+             tipo: Optional[str] = None) -> List[Dict[str, Any]]:
     """Apertura contra cierre de cada indicador: el dato que la foto final no da.
 
     Solvencia, apalancamiento, liquidez y morosidad son STOCKS: su valor en diciembre no dice
@@ -161,6 +235,27 @@ def _balance(indicadores: Dict[str, List[Dict[str, Any]]], cortes: List[str],
             "veredicto": veredicto,
             "veredicto_por_que": por_que,
         })
+        # CONTRA EL PANEL, en los DOS cortes. El trimestral sirve la mediana del sistema y la
+        # del grupo de pares; el anual no servía ninguna, así que el modelo no podía decir si
+        # un deterioro era propio o del sector — la pregunta que un comité hace primero.
+        ref_ap = _referencia_del_panel(bench_apertura, clave, tipo)
+        ref_ci = _referencia_del_panel(bench_cierre, clave, tipo)
+        if ref_ap or ref_ci:
+            fila = filas[-1]
+            fila["panel_apertura"] = ref_ap or None
+            fila["panel_cierre"] = ref_ci or None
+            for poblacion in ("sistema", "su_tipo"):
+                b_ap = (None if ref_ap.get(poblacion) is None
+                        else round(v0 - float(ref_ap[poblacion]), 4))
+                b_ci = (None if ref_ci.get(poblacion) is None
+                        else round(v1 - float(ref_ci[poblacion]), 4))
+                if b_ap is None and b_ci is None:
+                    continue
+                fila[f"brecha_vs_{poblacion}_apertura"] = b_ap
+                fila[f"brecha_vs_{poblacion}_cierre"] = b_ci
+                movida = _como_se_movio_la_brecha(b_ap, b_ci, piso)
+                if movida:
+                    fila[f"brecha_vs_{poblacion}_como_se_movio"] = movida
     return filas
 
 
@@ -308,6 +403,18 @@ def revision_anual(db: Session, bank: Bank, anio: int) -> Optional[Dict[str, Any
                                  bank.name, corte)
 
     tipo = bank.bank_type.value if bank.bank_type else None
+    # El panel en los DOS cortes: cada brecha se mide contra la referencia de SU MISMO corte,
+    # así la estacionalidad se cancela a los dos lados. Comparar el cierre contra la mediana
+    # de apertura mezclaría el movimiento de la entidad con el del sistema.
+    from modules.banking_score.scoring.benchmarks import panel_benchmarks
+    bench_ap: Optional[Dict[str, Any]]
+    bench_ci: Optional[Dict[str, Any]]
+    try:
+        bench_ap = panel_benchmarks(db, date.fromisoformat(cortes[0]))
+        bench_ci = panel_benchmarks(db, cierre)
+    except Exception:  # noqa: BLE001 — el informe nunca se cae por el benchmark
+        logger.exception("Panel de benchmarks no disponible para la Revisión Anual %s", anio)
+        bench_ap = bench_ci = None
     dimensiones = _balance_por_dimension(traj.get("sub") or {}, cortes, tipo)
     reconciliacion = _reconciliacion_publica(traj.get("sub") or {}, cortes, tipo, delta)
 
@@ -335,7 +442,15 @@ def revision_anual(db: Session, bank: Bank, anio: int) -> Optional[Dict[str, Any
                             "entidad en el año»"),
         "camino": _camino(overall),
         "cambios_de_banda": _bandas_del_anio(overall),
-        "balance": _balance(traj.get("indicators") or {}, cortes),
+        "balance": _balance(traj.get("indicators") or {}, cortes,
+                            bench_apertura=bench_ap, bench_cierre=bench_ci, tipo=tipo),
+        # La PROCEDENCIA de cada referencia: medida del panel o declarada por configuración.
+        # Son cosas distintas y el lector tiene que poder distinguirlas — un promedio de
+        # constantes presentado como medición es exactamente lo que la doctrina prohíbe.
+        "procedencia_del_panel": {
+            "apertura": (bench_ap or {}).get("procedencia"),
+            "cierre": (bench_ci or {}).get("procedencia"),
+        },
         # Qué DIMENSIÓN hizo el año. La suma de `aporte_al_cambio` reconcilia con
         # `cambio_score`, así que la tabla es auditable sumándola.
         "balance_por_dimension": dimensiones,
