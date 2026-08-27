@@ -23,6 +23,8 @@ import {
   getProductScopeOptions,
   cierreDeEjercicio,
   esAbortada,
+  fusionarPeriodos,
+  nombreCortoDeProducto,
   getProductPeriods,
   downloadProductReport,
   downloadProductSample,
@@ -32,6 +34,7 @@ import {
   type CatalogLevel,
   type ProductReport,
   type ScopeOption,
+  type OpcionDePeriodo,
 } from "../api";
 import { checkoutOrder, checkoutSubscription } from "../billingApi";
 import { CheckoutConfirmModal } from "../components/CheckoutConfirmModal";
@@ -119,6 +122,13 @@ export function ProductCatalogPage() {
         <ProductReportDrawer
           sector={viewing.sector}
           level={viewing.level}
+          // El nombre del producto anual sale del CATÁLOGO, no de una constante acá: es el
+          // backend quien lo declara, y una copia en la pantalla se desincroniza el día que
+          // se renombre. Si el hermano no está publicado para este usuario, no hay nombre y
+          // tampoco habrá opciones anuales que rotular.
+          annualDisplayName={
+            catalog?.sectors.find((s) => s.sector_key === viewing.sector.annual_companion)
+              ?.display_name}
           periodEnd={periodEnd}
           onClose={() => setViewing(null)}
           t={t}
@@ -261,9 +271,11 @@ function LevelRow({ sector, level, planLabel, onView, onSampleDownloaded, t }: {
   );
 }
 
-function ProductReportDrawer({ sector, level, periodEnd, onClose, t }: {
+function ProductReportDrawer({ sector, level, annualDisplayName, periodEnd, onClose, t }: {
   sector: CatalogSector;
   level: CatalogLevel;
+  /** Nombre del producto anual hermano, tomado del catálogo. */
+  annualDisplayName?: string;
   periodEnd: string;
   onClose: () => void;
   t: TFunction;
@@ -280,9 +292,12 @@ function ProductReportDrawer({ sector, level, periodEnd, onClose, t }: {
   const [scope, setScope] = useState("");
   const [typeFilter, setTypeFilter] = useState("");
   const [options, setOptions] = useState<ScopeOption[]>([]);
-  // Períodos REALES del producto (más reciente primero); "" = usa el período global del topbar.
-  const [periods, setPeriods] = useState<string[]>([]);
+  // Períodos REALES del producto, FUNDIDOS con los de su hermano anual cuando lo hay: el
+  // año y sus cortes en una sola lista. `""` = usa el período global del topbar.
+  const [periods, setPeriods] = useState<OpcionDePeriodo[]>([]);
   const [selPeriod, setSelPeriod] = useState("");
+  /** La opción elegida. Es la que dice QUÉ producto pedir, no solo cuándo. */
+  const elegida = periods.find((o) => o.value === selPeriod) || null;
   const [activeScope, setActiveScope] = useState<string | undefined>(undefined);
   const [report, setReport] = useState<ProductReport | null>(null);
   const [status, setStatus] = useState<"idle" | "loading" | "ready" | "error">(needsScope ? "idle" : "loading");
@@ -302,7 +317,16 @@ function ProductReportDrawer({ sector, level, periodEnd, onClose, t }: {
   // Al cerrar el drawer se aborta lo que quede en vuelo: nadie va a leer esa respuesta.
   useEffect(() => () => enVuelo.current?.abort(), []);
 
-  const runReport = (p: string, s?: string) => {
+  // `lista` se pasa explícitamente porque en la CARGA INICIAL el `setPeriods` todavía no se
+  // reflejó en este closure: buscar en `periods` daría vacío y se pediría «anual:2025» al
+  // producto trimestral, que no entiende ese período.
+  const runReport = (p: string, s?: string, lista: OpcionDePeriodo[] = periods) => {
+    // Qué producto atiende esta lectura. Sin opciones cargadas (el selector todavía no
+    // respondió) se cae al producto de la tarjeta con el período tal cual: es el camino que
+    // ya existía y sigue siendo el correcto.
+    const op = lista.find((o) => o.value === p);
+    const claveDelProducto = op ? op.sector : sector.sector_key;
+    const periodoReal = op ? op.period : p;
     enVuelo.current?.abort();
     const abortador = new AbortController();
     enVuelo.current = abortador;
@@ -314,8 +338,8 @@ function ProductReportDrawer({ sector, level, periodEnd, onClose, t }: {
     setErrMsg(null);
     setErrPista(null);
     setActiveScope(s);
-    getProductReport(sector.sector_key, level.tier,
-      { period: p || periodEnd, ...(s ? { scope: s } : {}) }, abortador.signal)
+    getProductReport(claveDelProducto, level.tier,
+      { period: periodoReal || periodEnd, ...(s ? { scope: s } : {}) }, abortador.signal)
       .then((r) => { if (vigente()) { setReport(r); setStatus("ready"); } })
       .catch((e) => {
         // Abortar es algo que hicimos NOSOTROS: no es un fallo y no lleva cartel.
@@ -338,13 +362,21 @@ function ProductReportDrawer({ sector, level, periodEnd, onClose, t }: {
   };
 
   useEffect(() => {
-    // Períodos del producto (best-effort) → selector; default = el más reciente.
-    getProductPeriods(sector.sector_key)
-      .then((ps) => {
-        setPeriods(ps);
-        const def = ps[0] || "";
+    // Los DOS calendarios: el del producto y el de su hermano anual, si el catálogo lo
+    // declara. El anual es best-effort dentro del best-effort — si falla, la lista queda
+    // como antes (solo cortes) en vez de dejar el selector vacío.
+    const anual = sector.annual_companion
+      ? getProductPeriods(sector.annual_companion)
+          .then((ps) => ({ sector: sector.annual_companion as string, periods: ps }))
+          .catch(() => null)
+      : Promise.resolve(null);
+    Promise.all([getProductPeriods(sector.sector_key), anual])
+      .then(([cortes, delAnio]) => {
+        const opciones = fusionarPeriodos(sector.sector_key, cortes, delAnio);
+        setPeriods(opciones);
+        const def = opciones[0]?.value || "";
         setSelPeriod(def);
-        if (!needsScope) runReport(def);
+        if (!needsScope) runReport(def, undefined, opciones);
       })
       .catch(() => { if (!needsScope) runReport(""); });
     // Si necesita entidad (banca), trae el universo y muestra el selector en dos pasos.
@@ -369,7 +401,10 @@ function ProductReportDrawer({ sector, level, periodEnd, onClose, t }: {
 
   return (
     <InsightDrawerShell
-      eyebrow={`${sector.display_name} · ${tierLabel}`}
+      // El encabezado dice QUÉ estás viendo. Sin esto, el mismo panel mostraría dos
+      // informes distintos bajo el mismo título — que es exactamente la confusión que
+      // originó esta línea de trabajo.
+      eyebrow={`${(elegida?.esAnual && annualDisplayName) || sector.display_name} · ${tierLabel}`}
       title={report?.entity_name || sector.display_name}
       onClose={onClose}
     >
@@ -436,29 +471,42 @@ function ProductReportDrawer({ sector, level, periodEnd, onClose, t }: {
             onChange={(e) => onPeriodChange(e.target.value)}
             className="field"
           >
-            {/* Cada corte se rotula por lo que ES: una fecha. Diciembre llegó a mostrarse
-                como «cierre anual YYYY» y el efecto fue que el cuarto trimestre pareciera
-                sustituido por un informe del año que ese corte no entrega. El año se ofrece
-                abajo, como lo que es: otro producto. */}
-            {periods.map((p) => (
-              <option key={p} value={p}>{p}</option>
+            {/* Cada corte se rotula por su FECHA y cada año por su NOMBRE de producto. Las
+                dos entradas conviven: «era agregar el anual, no sustituir el último cuarto
+                por el anual». Diciembre llegó a mostrarse como «cierre anual YYYY» —una sola
+                entrada que prometía el año y entregaba el corte— y ese es el defecto que
+                esto cierra. */}
+            {periods.map((o) => (
+              <option key={o.value} value={o.value}>
+                {o.esAnual
+                  ? t("platform.catalog.opcionAnual", {
+                      anio: o.period,
+                      producto: annualDisplayName
+                        ? nombreCortoDeProducto(annualDisplayName)
+                        : t("platform.catalog.anualGenerico",
+                            { defaultValue: "año completo" }),
+                      defaultValue: "{{anio}} · {{producto}}" })
+                  : o.period}
+              </option>
             ))}
           </select>
         </div>
       )}
 
-      {/* Diciembre es el cierre del ejercicio, así que es AHÍ donde alguien va a buscar el
-          año. En vez de reetiquetar el corte —que prometería lo que no da—, se nombra el
-          producto que sí lo responde. `cierreDeEjercicio` sólo matchea fechas: el producto
-          anual se pide por año (`2025`), de modo que este aviso no puede aparecer dentro de
-          él diciéndole al lector que vaya donde ya está. */}
-      {cierreDeEjercicio(selPeriod) && (
+      {/* Diciembre es donde la confusión ocurre: es el cierre del ejercicio, y quien lo
+          elige puede estar buscando el año. El aviso sale SOLO ahí y solo si la lectura
+          anual está en esta misma lista — sin producto anual declarado no hay a dónde
+          mandar a nadie, y prometerlo sería peor que callar. */}
+      {!elegida?.esAnual && cierreDeEjercicio(selPeriod) && periods.some((o) => o.esAnual) && (
         <p className="mb-3 text-[11px] leading-snug text-muted">
           {t("platform.catalog.cierreEjercicioNota", {
             anio: cierreDeEjercicio(selPeriod),
+            producto: annualDisplayName
+              ? nombreCortoDeProducto(annualDisplayName)
+              : t("platform.catalog.anualGenerico", { defaultValue: "año completo" }),
             defaultValue: "Este informe es la lectura AL 31 de diciembre de {{anio}}: cómo "
-              + "está la entidad en esa fecha. Cómo le fue durante el ejercicio es la "
-              + "Revisión Anual, un producto aparte del catálogo.",
+              + "está la entidad en esa fecha. Cómo le fue durante el ejercicio lo responde "
+              + "«{{anio}} · {{producto}}», en esta misma lista.",
           })}
         </p>
       )}
@@ -565,17 +613,24 @@ function ProductReportDrawer({ sector, level, periodEnd, onClose, t }: {
           }); })()}
           <div className="pt-2 border-t border-line flex flex-wrap gap-2">
             {/* Descarga con el MISMO período/entidad que el reporte mostrado (selPeriod +
-                activeScope), nunca el período global del topbar. */}
+                activeScope), nunca el período global del topbar. Y con el MISMO producto:
+                si lo que estás viendo es la lectura del año, el archivo tiene que salir del
+                producto anual — bajar el trimestral acá entregaría otro documento con el
+                mismo botón. */}
             <button
-              onClick={() => downloadProductReport(sector.sector_key, level.tier, "pdf",
-                { period: selPeriod || periodEnd, ...(activeScope ? { scope: activeScope } : {}) })}
+              onClick={() => downloadProductReport(
+                elegida?.sector || sector.sector_key, level.tier, "pdf",
+                { period: elegida?.period || selPeriod || periodEnd,
+                  ...(activeScope ? { scope: activeScope } : {}) })}
               className="btn btn-ghost text-sm"
             >
               <Download className="w-4 h-4" /> {t("platform.catalog.downloadPdf")}
             </button>
             <button
-              onClick={() => downloadProductReport(sector.sector_key, level.tier, "docx",
-                { period: selPeriod || periodEnd, ...(activeScope ? { scope: activeScope } : {}) })}
+              onClick={() => downloadProductReport(
+                elegida?.sector || sector.sector_key, level.tier, "docx",
+                { period: elegida?.period || selPeriod || periodEnd,
+                  ...(activeScope ? { scope: activeScope } : {}) })}
               className="btn btn-ghost text-sm"
             >
               <FileText className="w-4 h-4" /> {t("platform.catalog.downloadWord")}

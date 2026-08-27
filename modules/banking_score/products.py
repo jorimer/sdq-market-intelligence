@@ -34,6 +34,9 @@ from shared.products import (
     distinct_periods,
 )
 from modules.banking_score.models.models import Bank, ModelType, RatingResult
+# La clave del producto anual hermano, para declararla en el manifiesto. `products_year_review`
+# no importa este módulo, así que la dirección es de ida y no hay ciclo.
+from modules.banking_score.products_year_review import YEAR_REVIEW_KEY
 from modules.banking_score.reports.narrative import generate_named_narratives
 from modules.banking_score.reports.pdf_generator import generate_pdf_report
 from modules.banking_score.scoring.amplitude import entity_trajectories, period_percentiles
@@ -380,6 +383,12 @@ def banking_manifest() -> SectorProductManifest:
     return SectorProductManifest(
         sector_key=SECTOR_KEY,
         display_name="SDQ Banking Intelligence",
+        # El año de una entidad de banca se pide en «SDQ Banking · Revisión Anual», que es un
+        # producto de catálogo con sus propios tres niveles. Declararlo acá hace que el
+        # selector de períodos de ESTE producto ofrezca las dos lecturas: el corte y el año.
+        # No las mezcla — el corte dice cómo ESTÁ la entidad al 31-dic y el año cómo le FUE
+        # en el ejercicio, y quien elige es el lector.
+        annual_companion=YEAR_REVIEW_KEY,
         levels={
             ProductTier.pulse: TierLevelSpec(
                 tier=ProductTier.pulse, granularity=Granularity.system,

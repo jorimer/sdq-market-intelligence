@@ -1866,7 +1866,9 @@
         "pro": "Pro",
         "enterprise": "Enterprise"
       },
-      "cierreEjercicioNota": "This report reads the entity AS OF December 31, {{anio}}: how it stands on that date. How it fared over the financial year is the Annual Review, a separate product in the catalogue.",
+      "cierreEjercicioNota": "This report reads the entity AS OF December 31, {{anio}}: how it stands on that date. How it fared over the financial year is answered by “{{anio}} · {{producto}}”, in this same list.",
+      "opcionAnual": "{{anio}} · {{producto}}",
+      "anualGenerico": "full year",
       "errorPista": "Technical detail: {{pista}}"
     },
     "smtp": {
