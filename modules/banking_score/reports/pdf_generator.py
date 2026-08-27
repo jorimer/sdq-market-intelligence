@@ -726,6 +726,115 @@ def _build_banda_del_periodo(trajectories: Dict, styles) -> List:
     return [Paragraph(texto, styles["SDQSmall"]), Spacer(1, 0.12 * inch)]
 
 
+def _build_anio_por_trimestres_tables(dentro: Dict, styles) -> List:
+    """Las tablas del año POR DENTRO: la serie de los trimestres y el movimiento de cada tramo.
+
+    Responden CUÁNDO, que es la pregunta de este producto. La serie sola da el nivel de cada
+    corte; la columna de cambio da el tramo, y es lo que distingue «cayó todo el año» de «cayó
+    en el cuarto trimestre» — dos años distintos con el mismo cierre.
+    """
+    if not dentro:
+        return []
+    elementos: List = []
+
+    serie = dentro.get("serie") or []
+    if serie:
+        elementos.append(Paragraph(f"El año {dentro.get('anio', '')} trimestre a trimestre",
+                                   styles["SDQHeading"]))
+        filas = [["Corte", "Score", "Banda", ""]]
+        for p in serie:
+            filas.append([
+                str(p.get("corte", ""))[:7],
+                f"{p['score']:.2f}" if isinstance(p.get("score"), (int, float)) else "—",
+                str(p.get("banda") or "—"),
+                # La línea base se MARCA: sin eso el año parecería tener cinco trimestres.
+                "línea base" if p.get("es_linea_base") else ""])
+        elementos.append(_branded_table(filas, [1.2 * inch, 1.0 * inch, 1.8 * inch, 1.0 * inch],
+                                        styles, font_size=9.5, padding=5))
+        elementos.append(Spacer(1, 0.2 * inch))
+
+    tramos = dentro.get("tramos") or []
+    if tramos:
+        elementos.append(Paragraph("Movimiento de cada trimestre", styles["SDQHeading"]))
+        filas = [["Trimestre", "Desde", "Hasta", "Cambio", "Dirección"]]
+        for t in tramos:
+            filas.append([
+                str(t.get("tramo", "")),
+                f"{t['score_desde']:.2f}" if isinstance(t.get("score_desde"), (int, float)) else "—",
+                f"{t['score_hasta']:.2f}" if isinstance(t.get("score_hasta"), (int, float)) else "—",
+                f"{t['cambio']:+.2f}" if isinstance(t.get("cambio"), (int, float)) else "—",
+                str(t.get("direccion") or "—")])
+        elementos.append(_branded_table(
+            filas, [1.7 * inch, 0.9 * inch, 0.9 * inch, 0.9 * inch, 1.2 * inch],
+            styles, font_size=9.5, padding=5))
+        mayor = dentro.get("tramo_que_mas_movio") or {}
+        if mayor.get("cuota_del_movimiento_pct") is not None:
+            elementos.append(Spacer(1, 0.08 * inch))
+            elementos.append(Paragraph(
+                f"El {mayor['tramo']} concentró el {mayor['cuota_del_movimiento_pct']:.1f} % "
+                "del movimiento del año. La cuota se mide sobre la suma de los movimientos en "
+                "valor absoluto: sobre el neto, un año que baja y sube daría cuotas por encima "
+                "del 100 % sin que nada esté mal.", styles["SDQSmall"]))
+        elementos.append(Spacer(1, 0.25 * inch))
+
+    faltantes = dentro.get("cortes_faltantes") or []
+    if faltantes:
+        elementos.append(Paragraph(
+            "Cortes ausentes en el año: " + ", ".join(str(c) for c in faltantes)
+            + ". Un tramo sin su corte no se puede medir; callarlo haría pasar tres trimestres "
+            "por cuatro.", styles["SDQSmall"]))
+        elementos.append(Spacer(1, 0.2 * inch))
+    return elementos
+
+
+def _build_anio_contra_anios_tables(rev: Dict, styles) -> List:
+    """Las tablas del año CONTRA los años: la serie de cierres y la tendencia.
+
+    «Cerró en 58,71» no dice si es un mal año o el cuarto consecutivo bajando, y son
+    decisiones de exposición distintas. La serie de cierres es lo único que lo separa.
+    """
+    if not rev:
+        return []
+    elementos: List = []
+
+    serie = rev.get("serie_de_cierres") or []
+    if serie:
+        elementos.append(Paragraph("Cierres anuales", styles["SDQHeading"]))
+        filas = [["Año", "Score", "Banda", "vs. año anterior"]]
+        cambios = {v["anio"]: v for v in (rev.get("variaciones") or [])}
+        for p in serie:
+            v = cambios.get(p.get("anio"))
+            filas.append([
+                str(p.get("anio", "")),
+                f"{p['score']:.2f}" if isinstance(p.get("score"), (int, float)) else "—",
+                str(p.get("banda") or "—"),
+                f"{v['cambio']:+.2f}" if v and isinstance(v.get("cambio"), (int, float)) else "—"])
+        elementos.append(_branded_table(filas, [1.0 * inch, 1.1 * inch, 1.9 * inch, 1.3 * inch],
+                                        styles, font_size=9.5, padding=5))
+        t = rev.get("tendencia") or {}
+        if t.get("lectura"):
+            elementos.append(Spacer(1, 0.08 * inch))
+            nota = str(t["lectura"]) + "."
+            # El horizonte se DECLARA: seis cierres no son «siempre», y el límite es NUESTRO
+            # backfill, no el de la fuente.
+            if t.get("por_que_este_horizonte"):
+                nota += " " + str(t["por_que_este_horizonte"])
+            elementos.append(Paragraph(nota, styles["SDQSmall"]))
+        elementos.append(Spacer(1, 0.25 * inch))
+
+    cambios_banda = [v for v in (rev.get("variaciones") or []) if v.get("cambio_de_banda")]
+    if cambios_banda:
+        elementos.append(Paragraph("Cambios de banda entre años", styles["SDQHeading"]))
+        filas = [["Año", "Desde", "Hasta"]]
+        for v in cambios_banda:
+            filas.append([str(v["anio"]), str(v["cambio_de_banda"]["desde"] or "—"),
+                          str(v["cambio_de_banda"]["hasta"] or "—")])
+        elementos.append(_branded_table(filas, [1.4 * inch, 1.9 * inch, 1.9 * inch],
+                                        styles, font_size=9.5, padding=5))
+        elementos.append(Spacer(1, 0.25 * inch))
+    return elementos
+
+
 def _build_revision_anual_tables(rev: Dict, styles) -> List:
     """Las tablas del AÑO de una entidad: el camino, las bandas y el balance apertura/cierre.
 
@@ -740,6 +849,9 @@ def _build_revision_anual_tables(rev: Dict, styles) -> List:
     if not rev:
         return []
     elements: List = []
+
+    # La serie de cierres anuales y la tendencia van primero: son el sujeto del producto.
+    elements.extend(_build_anio_contra_anios_tables(rev, styles))
 
     serie = rev.get("serie") or []
     if serie:
@@ -1144,6 +1256,7 @@ async def generate_pdf_report(
     peer_block: Optional[Dict] = None,
     anuario: Optional[Dict] = None,
     revision: Optional[Dict] = None,
+    anio_dentro: Optional[Dict] = None,
 ) -> str:
     """Generate a branded PDF report and return the file path.
 
@@ -1239,6 +1352,11 @@ async def generate_pdf_report(
     # el sujeto del documento, no un anexo.
     if revision:
         body.extend(_build_revision_anual_tables(revision, styles))
+    # El año POR DENTRO — otro producto, otras tablas. Va aparte de `revision` a propósito:
+    # colapsarlos en un parámetro es cómo los dos productos terminaron sirviendo el mismo
+    # informe en primer lugar.
+    if anio_dentro:
+        body.extend(_build_anio_por_trimestres_tables(anio_dentro, styles))
 
     # 3b. Pulse — distribución del sistema por banda (opt-in, anonimizado).
     if band_distribution:

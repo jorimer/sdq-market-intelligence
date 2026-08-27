@@ -15,6 +15,7 @@ verifica con el roster que ``snapshot`` adjunta).
 from __future__ import annotations
 
 import logging
+import re
 from datetime import date
 from typing import Any, Dict, List, Optional, cast
 
@@ -79,6 +80,9 @@ SECTOR_KEY = "banking"
 from modules.banking_score.ai_context_files import AI_CONTEXT_FILES  # noqa: E402,F401
 
 SYSTEM_LABEL = "Sistema Bancario Dominicano"
+
+#: Un período con forma de AÑO. `2025` sí; `2025-12-31` no — ése es un corte.
+_ES_ANIO = re.compile(r"^\d{4}$")
 
 # Datos demo SINTÉTICOS de la muestra de conversión (sin DB, sin entidad real). KPIs del
 # Anexo del catálogo: CAR ~16.8%, morosidad ~1.9%, ROE ~19.4%, eficiencia ~56%, liquidez
@@ -600,7 +604,22 @@ class BankingProduct:
         return (db.query(func.count(RatingResult.id)).scalar() or 0) > 0
 
     def available_periods(self) -> List[str]:
-        return distinct_periods(self._require_db(), RatingResult.period_end)
+        """Los cortes trimestrales MÁS los años cerrados.
+
+        El año es un período legítimo de ESTE producto: pedirlo devuelve el año leído por
+        dentro —la serie de sus trimestres y el movimiento de cada tramo—, que es una lectura
+        del panel trimestral y no otro producto. Antes el selector ofrecía el año enrutando al
+        producto anual, y los dos terminaban sirviendo el mismo informe.
+        """
+        from modules.banking_score.reports.anuario import _anios_con_cierre
+
+        cortes = distinct_periods(self._require_db(), RatingResult.period_end)
+        try:
+            anios = [str(a) for a in reversed(_anios_con_cierre(self._require_db()))]
+        except Exception:  # noqa: BLE001 — el selector nunca depende de esto
+            logger.exception("No se pudieron listar los años cerrados de banca")
+            anios = []
+        return cortes + anios
 
     def validation_state(self) -> ValidationState:
         # Banca es el eje "Listo" (en producción, metodología de 19 indicadores
@@ -636,6 +655,22 @@ class BankingProduct:
                 or db.query(Bank).filter(Bank.name == scope).one_or_none())
         if bank is None:
             raise ValueError(f"No se encontró la entidad '{scope}'.")
+
+        # EL AÑO POR DENTRO. Un período con forma de AÑO (`2025`) no es un corte: pide la
+        # serie de los trimestres de ese año y el movimiento de cada tramo. Es una lectura
+        # del panel trimestral —de ahí que la sirva ESTE producto— y no la Revisión Anual,
+        # que compara el año contra los años anteriores.
+        if _ES_ANIO.match(str(period or "").strip()):
+            from modules.banking_score.reports.anio_por_trimestres import anio_por_trimestres
+            anio = int(str(period).strip()[:4])
+            dentro = anio_por_trimestres(db, bank, anio)
+            if dentro is None:
+                raise ValueError(
+                    f"No hay año {anio} de {bank.name}: falta el corte de diciembre o la "
+                    "entidad no tiene panel suficiente. Elegí un año ya cerrado.")
+            return ProductSnapshot(tier=tier, period=str(anio),
+                                   payload={"anio_por_trimestres": dentro},
+                                   entity_name=str(bank.name))
         q = db.query(RatingResult).filter(
             RatingResult.bank_id == bank.id,
             RatingResult.model_type == ModelType.deterministic)
@@ -838,6 +873,19 @@ class BankingProduct:
                 axis="banking", audience="inversionista")
             return {"system_overview": res.text}
 
+        # EL AÑO POR DENTRO: una sola sección, con su propia plantilla. El snapshot de un
+        # período con forma de año no trae `scoring_result` —trae la serie del año— así que
+        # esta rama va ANTES de leerlo. La sección no está en el manifiesto y el ensamblador
+        # la anexa; el gate de degradación la cubre igual (ver `assembler`).
+        dentro = snapshot.payload.get("anio_por_trimestres")
+        if dentro:
+            ctx = {"period": snapshot.period, "entity_name": snapshot.entity_name,
+                   "anio_por_trimestres": dentro}
+            res = await narrative_engine.generate(
+                context=ctx, template="anio_por_trimestres", mode="deep",
+                axis="banking", audience="comite_credito")
+            return {"anio_por_trimestres": res.text}
+
         scoring_result = snapshot.payload["scoring_result"]
         peer_block = snapshot.payload.get("peer_block")
         # 'limitations' y 'early_warning' son DETERMINISTAS (no IA): se excluyen del motor.
@@ -933,6 +981,22 @@ class BankingProduct:
                 sections=list(level.sections), tier=tier.value, watermark=level.watermark,
                 sample=sample, band_distribution=snapshot.payload.get("band_distribution"),
             )
+        # EL AÑO POR DENTRO: no hay `scoring_result` —el sujeto es la serie del año, no un
+        # corte— así que se arma el mínimo que el render necesita y las tablas del año van por
+        # `anio_dentro`. Sin esta rama el render reventaría con KeyError.
+        dentro = snapshot.payload.get("anio_por_trimestres")
+        if dentro:
+            cierre = (dentro.get("serie") or [{}])[-1]
+            return await generate_pdf_report(
+                "revision_anual", snapshot.entity_name or "Entidad",
+                {"overall_score": cierre.get("score") or 0,
+                 "banda_ejecucion": None, "banda_resiliencia": cierre.get("banda"),
+                 "sub_components": {}, "indicators": {}},
+                snapshot.period, narratives=narratives, output_dir=output_dir,
+                sections=["anio_por_trimestres"], tier=tier.value,
+                watermark=level.watermark, sample=sample, anio_dentro=dentro,
+            )
+
         scoring_result = snapshot.payload["scoring_result"]
         return await generate_pdf_report(
             level.base_report_type or "full_rating", snapshot.entity_name or "Entidad",

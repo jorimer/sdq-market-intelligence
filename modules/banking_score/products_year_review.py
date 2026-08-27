@@ -385,8 +385,13 @@ class BankingYearReviewProduct:
         if bank is None:
             raise ValueError(f"Entidad no encontrada: {scope}.")
 
-        from modules.banking_score.reports.revision_anual import revision_anual
-        rev = revision_anual(db, bank, anio)
+        # EL AÑO CONTRA LOS AÑOS. Hasta el 2026-08-27 este producto y el trimestral servían
+        # el MISMO informe —los dos llamaban a `revision_anual`, que es un híbrido: trae el
+        # camino dentro del año Y la comparación contra el cierre anterior—. El dueño lo
+        # separó: acá el año TOTAL contra los anteriores y la tendencia; el año por dentro
+        # —la serie de sus trimestres— es «SDQ Banking Intelligence».
+        from modules.banking_score.reports.anio_contra_anios import anio_contra_anios
+        rev = anio_contra_anios(db, bank, anio)
         if rev is None:
             raise ValueError(
                 f"No hay Revisión Anual {anio} de {bank.name}: el año no cerró (falta el "

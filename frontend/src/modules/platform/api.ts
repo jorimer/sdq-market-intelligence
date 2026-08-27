@@ -518,47 +518,34 @@ function anioDe(periodo: string): number | null {
 }
 
 /**
- * Funde el calendario del producto con el de su hermano ANUAL en una sola lista.
+ * Separa el calendario de un producto en AÑOS y CORTES, y los ordena por año.
  *
- * **Por qué las dos juntas y no una tarjeta aparte.** Lo pidió el dueño tres veces: «era
- * agregar el anual, no sustituir el último cuarto por el anual». Quien está mirando una
- * entidad al 31 de diciembre es exactamente quien quiere el año, y mandarlo a otra tarjeta
- * del catálogo es hacer que no lo encuentre.
+ * **Por qué el año lo sirve el MISMO producto.** Al principio el año se enrutaba al producto
+ * anual, y el resultado fue que los dos servían el mismo informe. El dueño lo separó el
+ * 2026-08-27: dentro de «SDQ Banking Intelligence» el año se lee POR DENTRO —la serie de sus
+ * trimestres y el movimiento de cada tramo—; el año contra los años anteriores y la tendencia
+ * son «SDQ Banking · Revisión Anual», otra tarjeta del catálogo.
  *
- * **Lo que NO hace: mezclarlos.** Siguen siendo dos productos, cada uno con su acceso, su
- * precio y su tipo de informe. El corte dice cómo ESTÁ la entidad ese día; el año, cómo le
- * FUE en el ejercicio. La lista los ofrece; no los funde.
+ * Así que no hay ruteo cruzado: cada opción se le pide al producto que se está mirando. Eso
+ * además arregla el encabezado, que decía «Revisión Anual» sobre un título que decía
+ * «Intelligence» — la contradicción era el síntoma del ruteo.
  *
- * El orden es por año descendente, y dentro de cada año el AÑO va primero y después sus
- * cortes: es la lectura más general antes que sus partes. Un período que no empiece por
- * cuatro dígitos se conserva al final en su orden original — no se descarta lo que no se
- * entiende.
+ * Orden: por año descendente y, dentro de cada año, el AÑO primero y después sus cortes — la
+ * lectura más general antes que sus partes. Un período que no empiece por cuatro dígitos se
+ * conserva al final en su orden original: no se descarta lo que no se entiende.
  */
-export function fusionarPeriodos(
-  sector: string,
-  cortes: string[],
-  anual: { sector: string; periods: string[] } | null,
-): OpcionDePeriodo[] {
-  const deCorte = (p: string): OpcionDePeriodo =>
-    ({ value: p, sector, period: p, esAnual: false });
-  const deAnio = (p: string): OpcionDePeriodo =>
-    // El prefijo evita que `2025` (año) colisione con un corte que fuera `2025`. Además
-    // hace que el valor diga QUÉ es, y no solo cuándo.
-    ({ value: `anual:${p}`, sector: anual!.sector, period: p, esAnual: true });
-
-  if (!anual || !anual.periods.length) return cortes.map(deCorte);
+export function fusionarPeriodos(sector: string, periodos: string[]): OpcionDePeriodo[] {
+  const esAnio = (p: string) => /^\d{4}$/.test(p);
+  const opcion = (p: string): OpcionDePeriodo =>
+    ({ value: p, sector, period: p, esAnual: esAnio(p) });
 
   const porAnio = new Map<number, OpcionDePeriodo[]>();
   const sinAnio: OpcionDePeriodo[] = [];
-  for (const p of anual.periods) {
+  for (const p of periodos) {
     const a = anioDe(p);
-    if (a === null) { sinAnio.push(deAnio(p)); continue; }
-    porAnio.set(a, [...(porAnio.get(a) || []), deAnio(p)]);
-  }
-  for (const p of cortes) {
-    const a = anioDe(p);
-    if (a === null) { sinAnio.push(deCorte(p)); continue; }
-    porAnio.set(a, [...(porAnio.get(a) || []), deCorte(p)]);
+    if (a === null) { sinAnio.push(opcion(p)); continue; }
+    const previas = porAnio.get(a) || [];
+    porAnio.set(a, esAnio(p) ? [opcion(p), ...previas] : [...previas, opcion(p)]);
   }
   const anios = [...porAnio.keys()].sort((x, y) => y - x);
   return [...anios.flatMap((a) => porAnio.get(a)!), ...sinAnio];

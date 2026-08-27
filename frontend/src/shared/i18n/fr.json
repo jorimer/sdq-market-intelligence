@@ -1866,9 +1866,8 @@
         "pro": "Pro",
         "enterprise": "Enterprise"
       },
-      "cierreEjercicioNota": "Ce rapport est la lecture AU 31 décembre {{anio}} : la situation de l'entité à cette date. Son parcours sur l'exercice est traité par « {{anio}} · {{producto}} », dans cette même liste.",
-      "opcionAnual": "{{anio}} · {{producto}}",
-      "anualGenerico": "année complète",
+      "cierreEjercicioNota": "Ce rapport est la lecture AU 31 décembre {{anio}} : la situation de l'entité à cette date. L'année complète, trimestre par trimestre, relève de « {{anio}} · année complète », dans cette même liste.",
+      "opcionAnual": "{{anio}} · année complète",
       "errorPista": "Détail technique : {{pista}}"
     },
     "smtp": {

@@ -27,4 +27,8 @@ AI_CONTEXT_FILES = (
     "scoring/support.py", "scoring/market_concentration.py",
     "scoring/system_aggregate.py",
     "reports/anuario.py", "reports/revision_anual.py",
+    # Las DOS lecturas del año, separadas el 2026-08-27: el año por dentro (producto
+    # trimestral) y el año contra los años (producto anual). Las agregó el test estructural,
+    # no yo — que es exactamente para lo que existe.
+    "reports/anio_por_trimestres.py", "reports/anio_contra_anios.py",
 )

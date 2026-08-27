@@ -24,7 +24,6 @@ import {
   cierreDeEjercicio,
   esAbortada,
   fusionarPeriodos,
-  nombreCortoDeProducto,
   getProductPeriods,
   downloadProductReport,
   downloadProductSample,
@@ -122,13 +121,6 @@ export function ProductCatalogPage() {
         <ProductReportDrawer
           sector={viewing.sector}
           level={viewing.level}
-          // El nombre del producto anual sale del CATÁLOGO, no de una constante acá: es el
-          // backend quien lo declara, y una copia en la pantalla se desincroniza el día que
-          // se renombre. Si el hermano no está publicado para este usuario, no hay nombre y
-          // tampoco habrá opciones anuales que rotular.
-          annualDisplayName={
-            catalog?.sectors.find((s) => s.sector_key === viewing.sector.annual_companion)
-              ?.display_name}
           periodEnd={periodEnd}
           onClose={() => setViewing(null)}
           t={t}
@@ -271,11 +263,9 @@ function LevelRow({ sector, level, planLabel, onView, onSampleDownloaded, t }: {
   );
 }
 
-function ProductReportDrawer({ sector, level, annualDisplayName, periodEnd, onClose, t }: {
+function ProductReportDrawer({ sector, level, periodEnd, onClose, t }: {
   sector: CatalogSector;
   level: CatalogLevel;
-  /** Nombre del producto anual hermano, tomado del catálogo. */
-  annualDisplayName?: string;
   periodEnd: string;
   onClose: () => void;
   t: TFunction;
@@ -362,17 +352,12 @@ function ProductReportDrawer({ sector, level, annualDisplayName, periodEnd, onCl
   };
 
   useEffect(() => {
-    // Los DOS calendarios: el del producto y el de su hermano anual, si el catálogo lo
-    // declara. El anual es best-effort dentro del best-effort — si falla, la lista queda
-    // como antes (solo cortes) en vez de dejar el selector vacío.
-    const anual = sector.annual_companion
-      ? getProductPeriods(sector.annual_companion)
-          .then((ps) => ({ sector: sector.annual_companion as string, periods: ps }))
-          .catch(() => null)
-      : Promise.resolve(null);
-    Promise.all([getProductPeriods(sector.sector_key), anual])
-      .then(([cortes, delAnio]) => {
-        const opciones = fusionarPeriodos(sector.sector_key, cortes, delAnio);
+    // UN solo calendario: el del producto que se está mirando. El año es un período legítimo
+    // de este producto —lo sirve él, leído por dentro— y no una puerta al producto anual: eso
+    // fue lo que hizo que los dos sirvieran el mismo informe.
+    getProductPeriods(sector.sector_key)
+      .then((periodos) => {
+        const opciones = fusionarPeriodos(sector.sector_key, periodos);
         setPeriods(opciones);
         const def = opciones[0]?.value || "";
         setSelPeriod(def);
@@ -404,7 +389,10 @@ function ProductReportDrawer({ sector, level, annualDisplayName, periodEnd, onCl
       // El encabezado dice QUÉ estás viendo. Sin esto, el mismo panel mostraría dos
       // informes distintos bajo el mismo título — que es exactamente la confusión que
       // originó esta línea de trabajo.
-      eyebrow={`${(elegida?.esAnual && annualDisplayName) || sector.display_name} · ${tierLabel}`}
+      // El encabezado es el del producto que se está mirando, siempre. Llegó a decir
+      // «SDQ Banking · Revisión Anual» sobre un título que decía «SDQ Banking Intelligence»,
+      // y esa contradicción era el síntoma de que el año se enrutaba al otro producto.
+      eyebrow={`${sector.display_name} · ${tierLabel}`}
       title={report?.entity_name || sector.display_name}
       onClose={onClose}
     >
@@ -481,11 +469,7 @@ function ProductReportDrawer({ sector, level, annualDisplayName, periodEnd, onCl
                 {o.esAnual
                   ? t("platform.catalog.opcionAnual", {
                       anio: o.period,
-                      producto: annualDisplayName
-                        ? nombreCortoDeProducto(annualDisplayName)
-                        : t("platform.catalog.anualGenerico",
-                            { defaultValue: "año completo" }),
-                      defaultValue: "{{anio}} · {{producto}}" })
+                      defaultValue: "{{anio}} · año completo" })
                   : o.period}
               </option>
             ))}
@@ -501,12 +485,9 @@ function ProductReportDrawer({ sector, level, annualDisplayName, periodEnd, onCl
         <p className="mb-3 text-[11px] leading-snug text-muted">
           {t("platform.catalog.cierreEjercicioNota", {
             anio: cierreDeEjercicio(selPeriod),
-            producto: annualDisplayName
-              ? nombreCortoDeProducto(annualDisplayName)
-              : t("platform.catalog.anualGenerico", { defaultValue: "año completo" }),
             defaultValue: "Este informe es la lectura AL 31 de diciembre de {{anio}}: cómo "
-              + "está la entidad en esa fecha. Cómo le fue durante el ejercicio lo responde "
-              + "«{{anio}} · {{producto}}», en esta misma lista.",
+              + "está la entidad en esa fecha. El año completo, trimestre a trimestre, lo "
+              + "responde «{{anio}} · año completo», en esta misma lista.",
           })}
         </p>
       )}

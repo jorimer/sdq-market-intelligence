@@ -391,7 +391,13 @@ async def _content_from_snapshot(
                                     time.monotonic() - _t0, corto=False)
 
     from shared.narrative.claude_engine import NarrativeDegradedError, degraded_sections
-    degraded = degraded_sections(narratives, level.sections)
+    # Se juzgan las secciones DECLARADAS **y** las que el producto haya producido de más. Un
+    # producto puede servir una sección que el manifiesto no lista —banca sirve el año por
+    # dentro cuando el período es un AÑO— y el ensamblador ya las anexa al render. Mirando
+    # solo `level.sections`, esa sección podía caer a texto estático y salir HUECA sin que
+    # ningún gate la viera: el modo de fallo exacto que estos gates existen para cerrar.
+    degraded = degraded_sections(narratives, list(dict.fromkeys(
+        list(level.sections) + list(narratives or {}))))
     if degraded:
         blocked = level.granularity is not Granularity.system
         logger.warning(
