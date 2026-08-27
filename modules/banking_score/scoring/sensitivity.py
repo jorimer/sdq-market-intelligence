@@ -151,6 +151,36 @@ def _recompute_overall(indicators: Dict[str, Any], key: str, new_score: float,
     return calculate_deterministic_score(calculate_sub_components(mod), weights)
 
 
+def nivel_de_referencia(clave: str, raw_actual: float) -> Optional[float]:
+    """El nivel al que *clave* puntúa 50 sobre 100 — su punto de referencia.
+
+    **Por qué existe.** Un ratio no se puede leer sin su referencia. «Cobertura de 96,75 %»
+    no dice nada hasta saber que 100 % es el nivel en que las provisiones cubren exactamente
+    la cartera vencida. El modelo lo sabe —lo escribió solo— pero el contexto no se lo
+    servía, así que la cifra llegaba SIN RESPALDO y el guard vetaba el informe entero. Dos
+    Revisiones Anuales murieron así el 2026-08-27.
+
+    No era un falso positivo del guard: era un HUECO en el dato. La doctrina del repo ya lo
+    decía —«si no tenés la cifra que el modelo va a necesitar, pasásela igual con su nombre
+    real: dejar el hueco es lo que lo llena mal»— y yo lo estaba tratando como un problema de
+    lenguaje, parcheando el detector en vez de servir el número.
+
+    **De dónde sale, y por qué no es una constante nueva.** Se COMPUTA invirtiendo la misma
+    curva que usa el motor: en las de dos tramos, `ref` está fijada en el score 50 por
+    construcción, así que `to_raw(50)` la devuelve exacta. Escribir «100.0» a mano acá sería
+    la tercera copia del mismo número y la primera en desincronizarse.
+
+    ``None`` si el indicador no tiene curva declarada (los derivados no la tienen).
+    """
+    curva = _CURVES.get(clave)
+    if curva is None:
+        return None
+    try:
+        return round(float(curva.to_raw(50.0, float(raw_actual))), 4)
+    except (TypeError, ValueError, ZeroDivisionError):
+        return None
+
+
 def sensitivity_table(indicators: Dict[str, Any], entity_type: Optional[str] = None,
                       top: int = 3) -> Dict[str, Any]:
     """Tabla de sensibilidades simétrica para la entidad.
