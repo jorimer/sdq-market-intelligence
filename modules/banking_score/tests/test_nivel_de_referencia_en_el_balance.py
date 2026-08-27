@@ -137,3 +137,52 @@ def test_un_indicador_sin_score_NO_inventa_un_cero():
         {"period_end": "2025-12-31", "raw": 96.75}]}
     fila = _balance(indicadores, ["2024-12-31", "2025-12-31"])[0]
     assert fila["score_apertura"] is None and fila["cambio_de_score"] is None
+
+
+def test_la_referencia_llega_al_CONTEXTO_QUE_VE_EL_MODELO():
+    """Un test del cómputo NO es un test de lo que recibe el modelo.
+
+    En este repo ya van cinco defectos por probar el motor y dejar la superficie sin probar,
+    y uno de ellos —el guard corriendo con DOS contextos distintos— costó tres informes
+    reales. Que `_balance` emita el campo no prueba que el modelo lo vea: entre los dos está
+    `snapshot.payload` y el armado del contexto por sección.
+
+    Así que se ejercita la ruta real (`narratives`) con el motor interceptado, y se afirma
+    sobre lo que el motor recibió — incluido que el guard, con ESE contexto, ya no marca la
+    frase que vetó el informe.
+    """
+    import asyncio
+    from unittest.mock import patch
+
+    from modules.banking_score.products_year_review import BankingYearReviewProduct
+    from shared.narrative.numeric_guard import context_values
+    from shared.products import ProductSnapshot, ProductTier
+
+    # Sin anotación a propósito: una anotación dentro de una función SIN tipar hace que mypy
+    # emita una nota `annotation-unchecked`, y el baseline la cuenta como violación NUEVA.
+    # Verde en local con caché, rojo en CI — la trampa que ya tengo anotada y que igual me
+    # comí por no correr el gate de tipos después de agregar este test.
+    capturado = {}
+
+    class _Res:
+        text = "texto"
+
+    async def _falso_generate(*, context, template, **kw):
+        capturado[template] = context
+        return _Res()
+
+    rev = {"anio": 2025, "entidad": "X", "balance": [{
+        "indicador": "cobertura_provisiones", "unidad": "%", "apertura": 136.21,
+        "cierre": 96.75, "nivel_de_referencia": 100.0,
+        "contra_la_referencia": "por debajo"}]}
+    snap = ProductSnapshot(tier=ProductTier.insight, period="2025",
+                           payload={"revision_anual": rev}, entity_name="X")
+
+    with patch("shared.narrative.claude_engine.narrative_engine.generate", _falso_generate):
+        asyncio.run(BankingYearReviewProduct().narratives(ProductTier.insight, snap))
+
+    ctx = capturado["revision_anual"]
+    assert ctx["revision_anual"]["balance"][0]["nivel_de_referencia"] == 100.0
+    assert 100.0 in context_values(ctx), "el guard no vería el 100 aunque esté en el dict"
+    assert deterministic_uncited_figures(
+        ctx, "La entidad aún mantiene provisiones por encima del 100% de su cartera") == []
