@@ -28,7 +28,7 @@ logger = logging.getLogger("sdq.narrative.numeric_guard")
 # el CÓDIGO de este módulo —una regla nueva, un umbral distinto— no cambia ningún prompt y
 # pasaría inadvertido: la caché seguiría sirviendo texto que el guard nuevo habría marcado.
 # Es el único bump manual irreducible; por eso vive acá, junto a lo que describe.
-GUARD_VERSION = "11"  # "11": un umbral prospectivo no es una cita (2026-08-26)
+GUARD_VERSION = "12"  # "12": el umbral prospectivo también viaja en INFINITIVO (2026-08-27)
 
 _JUDGE_SYSTEM = (
     "Sos un verificador numérico estricto y preciso. Tu ÚNICA tarea es detectar cifras "
@@ -547,11 +547,45 @@ def formas_derivadas(clave: str, v: float) -> set:
 #: Ventana hacia atrás desde la cifra. Una cláusula, no un párrafo.
 _VENTANA_PROSPECTIVA = 90
 
+#: Conectores que abren una hipótesis. Éstos NO dependen del verbo.
+_CONECTORES_IRREALIS = (r"si|cuando|en\s+caso\s+de|mientras|hasta\s+que|de\s+persistir|"
+                        r"riesgo\s+de\s+que|umbral|sostenid[ao]s?")
+
+#: Verbos de CRUCE DE NIVEL, con sus formas. Dos ejes: el verbo y su FORMA.
+#:
+#: La primera versión de esta regla listó solo el subjuntivo y el futuro —«cruce»,
+#: «supere», «presionarán»— y se comió el INFINITIVO, que es como el español dice una
+#: hipótesis la mayor parte de las veces: «la cobertura **puede cruzar** por debajo del
+#: 100 %». Esa frase, capturada literal en producción el 2026-08-27, mató una Revisión
+#: Anual entera.
+#:
+#: **Por qué el disparador es el VERBO y no el modal.** Eximir por «puede» dejaría pasar
+#: «el indicador puede leerse como 1,40 %», que sí es una cita. El modal no aporta: si el
+#: verbo de cruce está en infinitivo, la construcción ya es irrealis.
+#:
+#: **Y por qué el presente de indicativo casi no está.** «la morosidad supera el 2 %» es
+#: una afirmación sobre HOY y debe seguir vigilada. Se listan el subjuntivo, el futuro, el
+#: condicional y el infinitivo — las formas con las que un texto habla de lo que todavía no
+#: pasó. Las dos excepciones heredadas (`supera`, `acerca`) se conservan porque salieron de
+#: falsos positivos reales; ampliar el indicativo más allá de eso sería abrir la puerta.
+_VERBOS_DE_UMBRAL = (
+    r"cruc[ea]|cruzar[aá]?n?|cruzar[ií]an?|"
+    r"super[ea]|superar[aá]?n?|superar[ií]an?|"
+    r"caiga[n]?|caer[aá]?n?|caer[ií]an?|"
+    r"descienda[n]?|descender[aá]?n?|descender[ií]an?|"
+    r"baje[n]?|bajar[aá]?n?|bajar[ií]an?|"
+    r"alcance[n]?|alcanzar[aá]?n?|alcanzar[ií]an?|"
+    r"llegue[n]?|llegar[aá]?n?|llegar[ií]an?|"
+    r"se\s+ubique[n]?|ubicarse|ubicar[ií]an?|"
+    r"acercarse|acerca|acercar[aá]?n?|"
+    r"presione[n]?|presionar|presionar[aá]?n?|presionar[ií]an?|"
+    r"opere[n]?|operar|operar[aá]?n?|"
+    r"converja[n]?|converger|convergir[aá]?n?|convergir[ií]an?|"
+    r"se\s+sit[uú]e[n]?|situarse|"
+    r"ronde[n]?|rondar")
+
 _PROSPECTIVO = re.compile(
-    r"\b(?:si|cuando|en\s+caso\s+de|mientras|hasta\s+que|de\s+persistir|"
-    r"supere|supera|cruce|caiga|descienda|baje|alcance|llegue|se\s+ubique|"
-    r"acercarse|acerca|presionar[aá]n?|operar[aá]|convergir[aá]|"
-    r"sostenid[ao]s?|riesgo\s+de\s+que|umbral)\b", re.I)
+    rf"\b(?:{_CONECTORES_IRREALIS}|{_VERBOS_DE_UMBRAL})\b", re.I)
 
 
 def _es_umbral_prospectivo(texto: str, pos: int) -> bool:
