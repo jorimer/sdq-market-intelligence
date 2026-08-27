@@ -1866,7 +1866,9 @@
         "pro": "Pro",
         "enterprise": "Enterprise"
       },
-      "cierreEjercicioNota": "Ce rapport est la lecture AU 31 décembre {{anio}} : la situation de l'entité à cette date. Son parcours sur l'exercice relève de la Revue Annuelle, un produit distinct du catalogue.",
+      "cierreEjercicioNota": "Ce rapport est la lecture AU 31 décembre {{anio}} : la situation de l'entité à cette date. Son parcours sur l'exercice est traité par « {{anio}} · {{producto}} », dans cette même liste.",
+      "opcionAnual": "{{anio}} · {{producto}}",
+      "anualGenerico": "année complète",
       "errorPista": "Détail technique : {{pista}}"
     },
     "smtp": {

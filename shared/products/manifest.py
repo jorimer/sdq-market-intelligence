@@ -8,7 +8,7 @@ framework.
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Dict, List
+from typing import Dict, List, Optional
 
 from shared.products.tiers import ProductTier, TierLevelSpec
 
@@ -20,6 +20,22 @@ class SectorProductManifest:
     sector_key: str
     display_name: str
     levels: Dict[ProductTier, TierLevelSpec]
+
+    #: Clave del producto HERMANO cuya unidad de observación es el AÑO, cuando existe.
+    #:
+    #: Sirve para que el selector de períodos de este producto ofrezca **las dos** lecturas
+    #: —el corte y el año— sin que la pantalla tenga que conocer la pareja. Se declara acá y
+    #: no en el frontend porque un producto anual nuevo (seguros, pensiones) tiene que
+    #: aparecer solo: cablear la pareja en la pantalla es cómo al anuario le faltaron cuatro
+    #: registros de a uno y ninguno falló.
+    #:
+    #: NO es una jerarquía ni una sección: son dos productos con su propio acceso, su propio
+    #: precio y su propio tipo de informe. Lo único que declara esta clave es «el año de este
+    #: sujeto se pide allá».
+    #:
+    #: Lo vigila `shared/products/tests/test_producto_anual_declarado.py`: la clave declarada
+    #: tiene que existir en el catálogo y servir períodos con forma de AÑO.
+    annual_companion: Optional[str] = None
 
     def __post_init__(self) -> None:
         for tier, spec in self.levels.items():

@@ -222,7 +222,16 @@ async def get_catalog(db: Session = Depends(get_db),
             })
         if levels:
             sectors.append({"sector_key": entry.sector_key,
-                            "display_name": entry.display_name, "levels": levels})
+                            "display_name": entry.display_name, "levels": levels,
+                            # El producto hermano cuya unidad es el AÑO, si el manifiesto lo
+                            # declara. Se resuelve abajo, cuando ya se sabe qué sectores
+                            # quedaron visibles: un producto no publicado para este usuario
+                            # NO se revela por la puerta de atrás.
+                            "annual_companion": manifest.annual_companion})
+    visibles = {s["sector_key"] for s in sectors}
+    for s in sectors:
+        if s["annual_companion"] not in visibles:
+            s["annual_companion"] = None
     return {"sectors": sectors, "user_tier": user_tier}
 
 

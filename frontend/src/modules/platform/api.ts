@@ -338,6 +338,11 @@ export interface CatalogSector {
   sector_key: string;
   display_name: string;
   levels: CatalogLevel[];
+  /** Clave del producto HERMANO cuya unidad es el AÑO, si el manifiesto lo declara y ese
+   *  producto está publicado para este usuario. `null` si no hay. Lo declara el backend a
+   *  propósito: cablear la pareja acá haría que un anual nuevo (seguros, pensiones) no
+   *  apareciera solo. */
+  annual_companion?: string | null;
 }
 export interface ProductCatalog {
   sectors: CatalogSector[];
@@ -494,6 +499,71 @@ export function cierreDeEjercicio(periodEnd: string): string | null {
   return m ? m[1] : null;
 }
 
+/** Una entrada del selector de períodos: qué producto la sirve y con qué período. */
+export interface OpcionDePeriodo {
+  /** Valor del `<option>`; único entre las dos familias. */
+  value: string;
+  /** Producto que atiende esta lectura. */
+  sector: string;
+  /** Período tal como lo espera ese producto: `2025-12-31` o `2025`. */
+  period: string;
+  /** ¿Es la lectura del AÑO? Cambia el encabezado del panel. */
+  esAnual: boolean;
+}
+
+/** El año de un período, sea corte (`2025-12-31`) o año (`2025`). `null` si no se reconoce. */
+function anioDe(periodo: string): number | null {
+  const m = /^(\d{4})/.exec(periodo);
+  return m ? Number(m[1]) : null;
+}
+
+/**
+ * Funde el calendario del producto con el de su hermano ANUAL en una sola lista.
+ *
+ * **Por qué las dos juntas y no una tarjeta aparte.** Lo pidió el dueño tres veces: «era
+ * agregar el anual, no sustituir el último cuarto por el anual». Quien está mirando una
+ * entidad al 31 de diciembre es exactamente quien quiere el año, y mandarlo a otra tarjeta
+ * del catálogo es hacer que no lo encuentre.
+ *
+ * **Lo que NO hace: mezclarlos.** Siguen siendo dos productos, cada uno con su acceso, su
+ * precio y su tipo de informe. El corte dice cómo ESTÁ la entidad ese día; el año, cómo le
+ * FUE en el ejercicio. La lista los ofrece; no los funde.
+ *
+ * El orden es por año descendente, y dentro de cada año el AÑO va primero y después sus
+ * cortes: es la lectura más general antes que sus partes. Un período que no empiece por
+ * cuatro dígitos se conserva al final en su orden original — no se descarta lo que no se
+ * entiende.
+ */
+export function fusionarPeriodos(
+  sector: string,
+  cortes: string[],
+  anual: { sector: string; periods: string[] } | null,
+): OpcionDePeriodo[] {
+  const deCorte = (p: string): OpcionDePeriodo =>
+    ({ value: p, sector, period: p, esAnual: false });
+  const deAnio = (p: string): OpcionDePeriodo =>
+    // El prefijo evita que `2025` (año) colisione con un corte que fuera `2025`. Además
+    // hace que el valor diga QUÉ es, y no solo cuándo.
+    ({ value: `anual:${p}`, sector: anual!.sector, period: p, esAnual: true });
+
+  if (!anual || !anual.periods.length) return cortes.map(deCorte);
+
+  const porAnio = new Map<number, OpcionDePeriodo[]>();
+  const sinAnio: OpcionDePeriodo[] = [];
+  for (const p of anual.periods) {
+    const a = anioDe(p);
+    if (a === null) { sinAnio.push(deAnio(p)); continue; }
+    porAnio.set(a, [...(porAnio.get(a) || []), deAnio(p)]);
+  }
+  for (const p of cortes) {
+    const a = anioDe(p);
+    if (a === null) { sinAnio.push(deCorte(p)); continue; }
+    porAnio.set(a, [...(porAnio.get(a) || []), deCorte(p)]);
+  }
+  const anios = [...porAnio.keys()].sort((x, y) => y - x);
+  return [...anios.flatMap((a) => porAnio.get(a)!), ...sinAnio];
+}
+
 /**
  * El informe in-app de un producto.
  *
@@ -647,4 +717,21 @@ export async function downloadResearchDeliverable(
   a.download = filename;
   a.click();
   URL.revokeObjectURL(blobUrl);
+}
+
+/**
+ * El nombre CORTO de un producto, para rotular una opción dentro de otro producto.
+ *
+ * Los nombres del catálogo llevan la familia adelante («SDQ Banking · Revisión Anual») y
+ * repetirla dentro del selector de esa misma familia es ruido: la opción quedaría «2025 ·
+ * SDQ Banking · Revisión Anual» dentro del panel de SDQ Banking. Se toma el último tramo.
+ *
+ * Se DERIVA del nombre declarado en vez de escribirlo acá: el día que exista un anual de
+ * seguros, su opción se rotula sola. Una constante en la pantalla se desincroniza del
+ * catálogo y nadie se entera — es el defecto de las etiquetas duplicadas de tipo de entidad,
+ * que ya nos costó dos formas distintas del mismo estrato.
+ */
+export function nombreCortoDeProducto(displayName: string): string {
+  const tramos = displayName.split("\u00b7").map((x) => x.trim()).filter(Boolean);
+  return tramos.length > 1 ? tramos[tramos.length - 1] : displayName.trim();
 }
