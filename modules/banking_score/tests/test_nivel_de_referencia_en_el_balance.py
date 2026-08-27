@@ -158,7 +158,11 @@ def test_la_referencia_llega_al_CONTEXTO_QUE_VE_EL_MODELO():
     from shared.narrative.numeric_guard import context_values
     from shared.products import ProductSnapshot, ProductTier
 
-    capturado: dict = {}
+    # Sin anotación a propósito: una anotación dentro de una función SIN tipar hace que mypy
+    # emita una nota `annotation-unchecked`, y el baseline la cuenta como violación NUEVA.
+    # Verde en local con caché, rojo en CI — la trampa que ya tengo anotada y que igual me
+    # comí por no correr el gate de tipos después de agregar este test.
+    capturado = {}
 
     class _Res:
         text = "texto"
