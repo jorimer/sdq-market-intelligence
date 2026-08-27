@@ -210,3 +210,33 @@ async def tiempos_de_narrativa(
         raise HTTPException(status_code=400,
                             detail="El rango está invertido: 'desde' es posterior a 'hasta'.")
     return tn.tiempos_de_narrativa(db, desde=desde, hasta=hasta, modulo=modulo)
+
+
+@router.get("/barrido-del-guard",
+            summary="Corre la regla del guard sobre la prosa YA generada (sin llamar al modelo)")
+async def barrido_del_guard(
+    sector: Optional[str] = Query(None, description="Acotar a un producto"),
+    limite: int = Query(1500, ge=1, le=1500, description="Tope de informes leídos"),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Encontrar el próximo falso positivo ANTES de que mate un informe.
+
+    El 2026-08-26 se cerró la familia «un umbral prospectivo no es una cita» validándola
+    contra las frases que ya habían fallado. Al día siguiente el modelo escribió «la cobertura
+    PUEDE CRUZAR por debajo del 100 %» y la regla no la reconoció: mismo verbo, otra forma. El
+    hallazgo costó una generación real —cien segundos y varias llamadas al modelo— y apareció
+    de a uno, como los anteriores.
+
+    `ProductReportCache` guarda el texto generado de cada informe, sin caducidad: un corpus
+    real de la prosa de este producto. Barrer la regla contra ese corpus no cuesta ninguna
+    llamada al modelo, y devuelve las FORMAS VERBALES con las que el modelo introduce cifras
+    que la regla todavía no reconoce.
+
+    No emite veredicto de «sin respaldo»: eso exige el contexto de la SECCIÓN, que la caché no
+    guarda, y juzgar contra otro contexto es el defecto que ya costó tres informes reales.
+    """
+    from shared.observability import barrido_del_guard as bg
+
+    _require_admin(current_user)
+    return bg.barrido_del_guard(db, sector=sector, limite=limite)
