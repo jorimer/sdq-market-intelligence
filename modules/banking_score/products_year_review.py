@@ -32,7 +32,7 @@ from __future__ import annotations
 
 import logging
 from datetime import date
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, cast
 
 from sqlalchemy import func
 from sqlalchemy.orm import Session
@@ -187,6 +187,94 @@ def _f(x):
         return None
 
 
+
+def _amplitud_al_cierre(db: Session, bank: Bank, anio: int) -> Dict[str, Any]:
+    """Los cuatro bloques de amplitud del Deep Dive TRIMESTRAL, computados AL CIERRE del año.
+
+    **Por qué estaban afuera, y por qué era un error.** Los dejé fuera argumentando que «son
+    del corte, no del año». El dueño lo refutó en una línea: *«la única diferencia entre un
+    trimestre y un año con estos datos es el período comparado»*. Tiene razón — y el código
+    trimestral lo dice explícitamente, porque los computa **al corte del informe** y no al
+    último disponible. Un año TIENE un corte: su cierre. Excluir hechos no distingue dos
+    productos, empobrece uno.
+
+    Peor: la Revisión Anual traía una sección de «señales a vigilar» donde el MODELO elegía
+    cuáles eran, existiendo un motor de alerta temprana que las computa. Eso es exactamente
+    lo que la doctrina prohíbe — las relaciones se computan, no se derivan.
+
+    Qué se sirve, en paridad EXACTA con el trimestral (mismo nivel, mismo corte):
+
+    * `sensibilidades` — qué palanca mueve el score desde donde cerró el año;
+    * `soporte_soberano` — atributo estructural de la entidad, que no depende del período;
+    * `early_warning` y `propension_quiebra` — las banderas AL CIERRE;
+    * `entorno_macro` — con la MISMA regla de consistencia: un telón fechado después del
+      cierre se OMITE. Sin ella, la Revisión Anual 2020 describiría la macro de 2026.
+
+    Best-effort en bloque: ninguno de estos es el sujeto del informe, y que falte uno no
+    puede tumbar la entrega del año.
+    """
+    from modules.banking_score.models.models import RatingResult
+
+    cierre = date(anio, 12, 31)
+    out: Dict[str, Any] = {}
+    rr = (db.query(RatingResult)
+          .filter(RatingResult.bank_id == bank.id,
+                  RatingResult.period_end == cierre,
+                  RatingResult.model_type == ModelType.deterministic)
+          .first())
+    if rr is None:                       # sin cierre no hay año; ya lo exige `revision_anual`
+        return out
+
+    tipo = bank.bank_type.value if bank.bank_type else None
+    # `Column[...]` en tiempo de tipos, `dict` en ejecución: se estrecha una vez acá en vez
+    # de repetir `cast` en cada llamada.
+    indicadores: Dict[str, Any] = cast(Dict[str, Any], rr.indicator_details or {})
+
+    try:
+        from modules.banking_score.scoring.sensitivity import sensitivity_table
+        if indicadores:
+            out["sensibilidades"] = sensitivity_table(indicadores, tipo)
+    except Exception:  # noqa: BLE001
+        logger.exception("Sensibilidades omitidas en la Revisión Anual %s de %s", anio, bank.name)
+
+    try:
+        from modules.banking_score.scoring.support import support_overlay
+        out["soporte_soberano"] = support_overlay(
+            db, bank, float(rr.overall_score), cast(str, rr.banda_resiliencia), cierre)
+    except Exception:  # noqa: BLE001
+        logger.exception("Soporte soberano omitido en la Revisión Anual %s de %s", anio, bank.name)
+
+    try:
+        from modules.banking_score.early_warning import bank_alerts
+        out["early_warning"] = bank_alerts(db, str(bank.id), cierre)
+    except Exception:  # noqa: BLE001
+        logger.exception("Alerta temprana omitida en la Revisión Anual %s de %s", anio, bank.name)
+
+    try:
+        from modules.banking_score.propension_quiebra import evaluar_entidad
+        prop = evaluar_entidad(db, str(bank.name), cierre)
+        if prop:
+            out["propension_quiebra"] = prop
+    except Exception:  # noqa: BLE001
+        logger.exception("Propensión omitida en la Revisión Anual %s de %s", anio, bank.name)
+
+    try:
+        from shared.contracts import load_macro_contract
+
+        from modules.banking_score.products import _posterior_al_corte
+        macro = load_macro_contract(db)
+        factores = [f for f in (macro.get("factors") or []) if f.get("direction") != "n/d"]
+        if factores and not _posterior_al_corte(macro.get("period"), cierre):
+            out["entorno_macro"] = {"period": macro.get("period"), "factors": factores}
+        elif factores:
+            logger.info("Entorno macro omitido en la Revisión Anual %s: el telón (%s) es "
+                        "posterior al cierre.", anio, macro.get("period"))
+    except Exception:  # noqa: BLE001
+        logger.exception("Entorno macro omitido en la Revisión Anual %s de %s", anio, bank.name)
+
+    return out
+
+
 class BankingYearReviewProduct:
     """``SectorProduct`` del producto anual de banca."""
 
@@ -310,6 +398,7 @@ class BankingYearReviewProduct:
                                 if t.get("tipo") == tipo), None)
                 payload["contexto_de_mercado"] = _contraste_con_el_mercado(
                     rev.get("cambio_score"), su_tipo, sistema, tipo)
+            payload.update(_amplitud_al_cierre(db, bank, anio))
         return ProductSnapshot(tier=tier, period=str(anio), payload=payload,
                                entity_name=str(bank.name))
 
