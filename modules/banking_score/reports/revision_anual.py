@@ -43,6 +43,7 @@ from sqlalchemy.orm import Session
 
 from modules.banking_score.models.models import Bank
 from modules.banking_score.scoring.indicator_detail import INDICATOR_META
+from modules.banking_score.scoring.sensitivity import nivel_de_referencia
 from shared.narrative.derived import (MATERIALIDAD_PP, MATERIALIDAD_POR_UNIDAD,
                                       veredicto_de_movimiento)
 
@@ -113,6 +114,11 @@ def _balance(indicadores: Dict[str, List[Dict[str, Any]]], cortes: List[str],
         if not a or not c or a.get("raw") is None or c.get("raw") is None:
             continue
         v0, v1 = float(a["raw"]), float(c["raw"])
+        # El SCORE ya viaja en la trayectoria y este balance lo tiraba. El contexto del
+        # trimestral sí lo tiene, así que el modelo podía decir «score 34 de 100» al corte y
+        # no en el año: la misma asimetría que dejó fuera el nivel de referencia. Un número
+        # que existe y no se sirve es un número que el modelo va a poner de memoria.
+        s0, s1 = a.get("score"), c.get("score")
         meta = INDICATOR_META.get(clave) or {}
         unidad = meta.get("unit") or ""
         direccion = meta.get("direction")
@@ -121,12 +127,32 @@ def _balance(indicadores: Dict[str, List[Dict[str, Any]]], cortes: List[str],
         piso = MATERIALIDAD_POR_UNIDAD.get(unidad, MATERIALIDAD_PP)
         material = abs(v1 - v0) >= piso
         veredicto, por_que = veredicto_de_movimiento(direccion, v1 > v0, material=material)
+        # El NIVEL DE REFERENCIA del indicador. Sin él, «cobertura de 96,75 %» no se puede
+        # leer: hace falta saber que 100 % es donde las provisiones cubren exactamente la
+        # cartera vencida. El modelo lo sabe y lo escribe igual —«por encima del 100 %»,
+        # «puede cruzar por debajo del 100 %»—, y como el contexto no lo servía, esa cifra
+        # llegaba sin respaldo y el guard vetaba el informe entero. Dos Revisiones Anuales
+        # murieron así el 2026-08-27. No era el detector: era el hueco.
+        referencia = nivel_de_referencia(clave, v1)
         filas.append({
             "indicador": clave,
             "que_mide": meta.get("que", ""),
             "unidad": unidad,
+            "nivel_de_referencia": referencia,
+            "nivel_de_referencia_significa": (
+                None if referencia is None else
+                f"{referencia}{unidad} es el nivel en que este indicador puntúa 50 sobre 100; "
+                "por encima el score mejora y por debajo empeora"),
+            "contra_la_referencia": (
+                None if referencia is None else
+                ("por encima" if v1 > referencia else
+                 "por debajo" if v1 < referencia else "en la referencia")),
             "apertura": round(v0, 4), "cierre": round(v1, 4),
             "cambio": round(v1 - v0, 4),
+            "score_apertura": None if s0 is None else round(float(s0), 2),
+            "score_cierre": None if s1 is None else round(float(s1), 2),
+            "cambio_de_score": (None if s0 is None or s1 is None
+                                else round(float(s1) - float(s0), 2)),
             "subio": v1 > v0,
             # El VEREDICTO se computa acá, no lo deduce el modelo: morosidad de 1,33 a 1,96 y
             # solvencia de 26,8 a 23,3 son las dos deterioros, y sin esto se narran como si
