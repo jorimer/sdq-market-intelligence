@@ -78,10 +78,14 @@ def compute_market_concentration(
         "available": True,
         "n_entities": len(entities),
         "total": round(total, 2),
+        # sujeto-ok: `metric_label` encabeza este mismo dict y nombra la población sobre la
+        # que se computan los tres (activos o cartera bruta). Renombrar las claves rompería
+        # el contrato con la UI y con `system_aggregate`, que las lee por nombre.
         "cr5": cr(5),
-        "cr10": cr(10),
-        "hhi": hhi,
+        "cr10": cr(10),   # sujeto-ok: ver `metric_label` arriba
+        "hhi": hhi,       # sujeto-ok: ver `metric_label` arriba
         "top10": [
+            # sujeto-ok: la fila trae `name`, así que el share está atribuido a SU entidad.
             {"name": name, "value": round(v, 2), "share": round(v / total * 100, 2)}
             for name, v in entities[:10]
         ],

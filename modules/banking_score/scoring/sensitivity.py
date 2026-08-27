@@ -81,6 +81,7 @@ _CURVES: Dict[str, _Curve] = {
     # Calidad
     "morosidad": _lower(lambda s: (100.0 - s) / 10.0),
     "pct_cartera_a": _tramos(90.0, 94.0, 98.7),
+    # sujeto-ok: es la CLAVE del indicador en la curva, no una porción servida
     "concentracion_top10": _lower(lambda s: (100.0 - s) * 57.0 / 100.0),
     "hhi_sectorial": _lower(lambda s: 2500.0 - 10.0 * s),
     "castigos_pct": _lower(lambda s: (100.0 - s) * 3.43 / 100.0),
@@ -99,6 +100,7 @@ _CURVES: Dict[str, _Curve] = {
         lambda s, cur: 80.0 + (1.0 if cur >= 80.0 else -1.0) * math.sqrt(max(0.0, (100.0 - s) * 112.5))),
     "liquidez_ajustada": _higher(80.0),
     # Diversificación
+    # sujeto-ok: es la CLAVE del indicador en la curva, no una porción servida
     "hhi_ingresos": _lower(lambda s: 9000.0 - 60.0 * s),
 }
 

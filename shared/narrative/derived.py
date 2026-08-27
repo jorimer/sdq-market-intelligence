@@ -194,6 +194,25 @@ def _veredicto(direccion_escala: Optional[str], posicion: str) -> tuple:
     return v, _POR_QUE[escala]
 
 
+def veredicto_de_movimiento(direccion_escala: Optional[str], subio: bool,
+                            material: bool = True) -> tuple:
+    """``(veredicto, por_qué)`` de un MOVIMIENTO en el tiempo: apertura → cierre.
+
+    Hermana de :func:`_veredicto`, que juzga una POSICIÓN contra una referencia. La tabla de
+    decisión es la MISMA —en un indicador `higher`, subir es favorable; en uno `lower`, subir
+    es desfavorable; en uno `target` no hay lectura de bueno o malo— así que se reusa en vez
+    de escribir una segunda copia que después se desincronice.
+
+    Sin esto, un balance anual sirve «subió: sí» y el modelo tiene que DEDUCIR el sentido:
+    morosidad de 1,33 a 1,96 y solvencia de 26,8 a 23,3 son las dos deterioros, y sin la
+    dirección se narran como si una fuera mejora. Es la misma relación que la doctrina obliga
+    a computar en las comparaciones al corte.
+    """
+    if not material:
+        return "estable", "el movimiento no es material"
+    return _veredicto(direccion_escala, "por encima" if subio else "por debajo")
+
+
 def comparaciones_vs_referencia(
     valores: Dict[str, Optional[float]],
     referencias: Dict[str, Dict[str, Optional[float]]],

@@ -42,6 +42,9 @@ from typing import Any, Dict, List, Optional
 from sqlalchemy.orm import Session
 
 from modules.banking_score.models.models import Bank
+from modules.banking_score.scoring.indicator_detail import INDICATOR_META
+from shared.narrative.derived import (MATERIALIDAD_PP, MATERIALIDAD_POR_UNIDAD,
+                                      veredicto_de_movimiento)
 
 logger = logging.getLogger("sdq.banking.revision_anual")
 
@@ -110,13 +113,27 @@ def _balance(indicadores: Dict[str, List[Dict[str, Any]]], cortes: List[str],
         if not a or not c or a.get("raw") is None or c.get("raw") is None:
             continue
         v0, v1 = float(a["raw"]), float(c["raw"])
+        meta = INDICATOR_META.get(clave) or {}
+        unidad = meta.get("unit") or ""
+        direccion = meta.get("direction")
+        # MATERIALIDAD por unidad: el mismo criterio que las comparaciones al corte. Sin él,
+        # una décima de ruido se narra como mejora.
+        piso = MATERIALIDAD_POR_UNIDAD.get(unidad, MATERIALIDAD_PP)
+        material = abs(v1 - v0) >= piso
+        veredicto, por_que = veredicto_de_movimiento(direccion, v1 > v0, material=material)
         filas.append({
             "indicador": clave,
+            "que_mide": meta.get("que", ""),
+            "unidad": unidad,
             "apertura": round(v0, 4), "cierre": round(v1, 4),
             "cambio": round(v1 - v0, 4),
-            # La DIRECCIÓN se computa; el sentido (si subir es bueno) lo pone quien conoce el
-            # registro de indicadores, no este módulo.
             "subio": v1 > v0,
+            # El VEREDICTO se computa acá, no lo deduce el modelo: morosidad de 1,33 a 1,96 y
+            # solvencia de 26,8 a 23,3 son las dos deterioros, y sin esto se narran como si
+            # una fuera mejora. `no_aplica` en los de óptimo intermedio, con su motivo.
+            "sentido_de_la_escala": direccion,
+            "veredicto": veredicto,
+            "veredicto_por_que": por_que,
         })
     return filas
 

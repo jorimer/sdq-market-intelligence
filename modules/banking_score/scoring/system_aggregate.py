@@ -141,6 +141,8 @@ def system_pulse_aggregate(
     cola = round((dist.get("Vigilancia", 0) + dist.get("Crítico", 0)) / n * 100, 1)
 
     cifras: Dict[str, Any] = {
+        # sujeto-ok: la clave nombra su población —el reparto POR BANDA del sistema— y el
+        # valor es un dict banda→porcentaje, no una cifra suelta que se pueda reatribuir.
         "share_por_banda_pct": shares,
         "nucleo_solido_pct": nucleo,      # Fuerte + Adecuado
         "cola_de_riesgo_pct": cola,       # Vigilancia + Crítico
@@ -154,7 +156,10 @@ def system_pulse_aggregate(
     conc = compute_market_concentration(db, resolved, "activos")
     if conc.get("available"):
         cifras["concentracion_activos"] = {
+            # sujeto-ok: `metric_label` va primero y nombra la población; además el bloque
+            # entero cuelga de `concentracion_activos`, que ya la declara.
             "metric_label": conc["metric_label"], "cr5": conc["cr5"],
+            # sujeto-ok: ambos cuelgan de `concentracion_activos`, que nombra la población
             "cr10": conc["cr10"], "hhi": conc["hhi"],
         }
 

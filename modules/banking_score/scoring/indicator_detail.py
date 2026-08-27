@@ -54,6 +54,8 @@ INDICATOR_META: Dict[str, Dict[str, Any]] = {
                   "que": "Cartera vencida >90d / cartera bruta (menor es mejor)."},
     "pct_cartera_a": {"label": "Cartera vigente", "sub": "calidad", "unit": "%", "direction": "higher",
                       "que": "Cartera vigente / bruta. Proporción de cartera al día."},
+    # sujeto-ok: la población viaja en `que` («los 10 mayores DEUDORES / cartera»), y el
+    # contexto la sirve como "mide" en el mismo bloque que el valor (_semantica_indicadores).
     "concentracion_top10": {"label": "Concentración top-10", "sub": "calidad", "unit": "%", "direction": "lower",
                             "que": "Suma de los 10 mayores deudores / cartera (menor es mejor)."},
     "hhi_sectorial": {"label": "HHI sectorial de cartera", "sub": "calidad", "unit": "índice", "direction": "lower",
@@ -66,11 +68,33 @@ INDICATOR_META: Dict[str, Dict[str, Any]] = {
     "migracion": {"label": "Migración de cartera A", "sub": "calidad", "unit": "%", "direction": "target",
                   "optimo": 0.0,
                   "que": "Cambio de la cartera categoría A vs el período previo (estabilidad es mejor)."},
+    # NO es un octavo indicador de calidad: es el PROMEDIO de los siete de arriba
+    # (`calc_composite_calidad`). Faltaba en este registro, así que salía con el fallback
+    # —"Composite Calidad", su clave title-cased— y en una fila igual a las demás, como si
+    # fuera evidencia adicional. Un lector cuenta ocho hechos y hay siete.
+    #
+    # Incluirlo en el promedio de la dimensión es matemáticamente NEUTRO —agregar la media de
+    # un conjunto al conjunto no cambia la media—, así que esto NO mueve ningún score: es un
+    # problema de lectura, no de cálculo. Por eso se rotula en vez de removerse.
+    "composite_calidad": {"label": "Calidad de activos (resumen de los 7)", "sub": "calidad",
+                          "unit": "", "direction": "higher",
+                          "que": ("Promedio de los siete indicadores de calidad de activos. "
+                                  "NO es una medición independiente: resume a las anteriores, "
+                                  "así que no debe citarse como evidencia adicional junto a "
+                                  "ellas.")},
     # Eficiencia
-    "roa": {"label": "ROA (anualizado)", "sub": "eficiencia", "unit": "%", "direction": "higher",
-            "que": "Utilidad / activos. Rentabilidad sobre activos."},
-    "roe": {"label": "ROE (anualizado)", "sub": "eficiencia", "unit": "%", "direction": "higher",
-            "que": "Utilidad / patrimonio. Rentabilidad sobre capital."},
+    # NO son «anualizados»: usan la ventana móvil de DOCE MESES, que se adoptó justamente
+    # para NO anualizar. Anualizar multiplicaba un trimestre por 12/mes y el panel refutó ese
+    # supuesto —el Q1 concentra una mediana del 9,9 % de la utilidad del año—, así que el
+    # rótulo viejo describía el método que se abandonó. Ver `scoring/ttm.py`.
+    "roa": {"label": "ROA (12 meses móviles)", "sub": "eficiencia", "unit": "%",
+            "direction": "higher",
+            "que": ("Utilidad de los últimos doce meses / activos promedio. Rentabilidad "
+                    "sobre activos, con ventana móvil: NO es un trimestre anualizado.")},
+    "roe": {"label": "ROE (12 meses móviles)", "sub": "eficiencia", "unit": "%",
+            "direction": "higher",
+            "que": ("Utilidad de los últimos doce meses / patrimonio. Rentabilidad sobre "
+                    "capital, con ventana móvil: NO es un trimestre anualizado.")},
     "margen_financiero": {"label": "Margen de intermediación", "sub": "eficiencia", "unit": "%", "direction": "higher",
                           "que": "Margen de intermediación neto. Spread del negocio de intermediación."},
     "cost_to_income": {"label": "Eficiencia operativa (cost-to-income)", "sub": "eficiencia", "unit": "%", "direction": "lower",
@@ -86,6 +110,7 @@ INDICATOR_META: Dict[str, Dict[str, Any]] = {
     "liquidez_ajustada": {"label": "Liquidez ajustada", "sub": "liquidez", "unit": "%", "direction": "higher",
                           "que": "Activos líquidos / pasivos exigibles."},
     # Diversificación
+    # sujeto-ok: `que` nombra la población (la composición de INGRESOS de la entidad)
     "hhi_ingresos": {"label": "HHI de ingresos", "sub": "diversificacion", "unit": "índice", "direction": "lower",
                      "que": "Concentración de las fuentes de ingreso (menor es más diversificado)."},
 }

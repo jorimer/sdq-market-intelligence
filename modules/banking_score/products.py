@@ -60,8 +60,25 @@ SECTOR_KEY = "banking"
 # (`lectura_de_referencia`) y que se imprime tal cual cuando el motor no responde. Fuera de
 # esta tupla, cambiarle la prosa no mueve la huella y la caché —sin TTL— sigue sirviendo el
 # texto viejo para siempre: el arreglo existe en el código y no en el informe.
-AI_CONTEXT_FILES = ("reports/narrative.py", "products.py", "early_warning.py",
-                    "propension_quiebra.py")
+#: Los archivos que ARMAN lo que ve el modelo. Su contenido entra en la huella de la caché de
+#: narrativas (`_contexto_ia_version`), así que un arreglo de contexto en uno de ellos invalida
+#: y regenera; en uno NO declarado, no invalida nada y la corrección queda muerta en Postgres,
+#: que no tiene TTL.
+#:
+#: `scoring/indicator_detail.py` y `scoring/weights.py` se agregaron el 2026-08-26 porque el
+#: constructor de contexto los IMPORTA y sus valores viajan al modelo: `INDICATOR_META["que"]`
+#: es literalmente lo que el prompt le dice que MIDE cada indicador, y los pesos de la rúbrica
+#: son el `pesos_sub_componentes` del contexto. Estaban fuera, así que corregir la descripción
+#: de un indicador no habría invalidado ninguna narrativa — el defecto exacto que esta lista
+#: existe para cerrar. Lo vigila `test_regla_contexto_declarado.py`.
+AI_CONTEXT_FILES = ("reports/narrative.py", "products.py", "products_year_review.py",
+                    "etiquetas.py",
+                    "early_warning.py", "propension_quiebra.py",
+                    "scoring/indicator_detail.py", "scoring/weights.py",
+                    "scoring/benchmarks.py", "scoring/sensitivity.py",
+                    "scoring/support.py", "scoring/market_concentration.py",
+                    "scoring/system_aggregate.py",
+                    "reports/anuario.py", "reports/revision_anual.py")
 SYSTEM_LABEL = "Sistema Bancario Dominicano"
 
 # Datos demo SINTÉTICOS de la muestra de conversión (sin DB, sin entidad real). KPIs del
