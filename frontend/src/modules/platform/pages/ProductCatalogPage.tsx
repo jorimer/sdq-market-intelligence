@@ -21,7 +21,7 @@ import {
   getProductReport,
   reportAportes,
   getProductScopeOptions,
-  cierreDeAnio,
+  cierreDeEjercicio,
   getProductPeriods,
   downloadProductReport,
   downloadProductSample,
@@ -34,7 +34,7 @@ import {
 } from "../api";
 import { checkoutOrder, checkoutSubscription } from "../billingApi";
 import { CheckoutConfirmModal } from "../components/CheckoutConfirmModal";
-import { mensajeDeError } from "../../../shared/api/errores";
+import { mensajeDeError, pistaTecnica } from "../../../shared/api/errores";
 
 /** Correo de contacto interino para el upsell (se reemplaza por el checkout en Fase B). */
 const SALES_EMAIL = "ventas@sdqconsulting.com.do";
@@ -286,17 +286,23 @@ function ProductReportDrawer({ sector, level, periodEnd, onClose, t }: {
   const [report, setReport] = useState<ProductReport | null>(null);
   const [status, setStatus] = useState<"idle" | "loading" | "ready" | "error">(needsScope ? "idle" : "loading");
   const [errMsg, setErrMsg] = useState<string | null>(null);
+  const [errPista, setErrPista] = useState<string | null>(null);
   const tierLabel = t(`platform.catalog.tier.${level.tier}`, { defaultValue: level.tier });
 
   const runReport = (p: string, s?: string) => {
     setStatus("loading");
     setErrMsg(null);
+    setErrPista(null);
     setActiveScope(s);
     getProductReport(sector.sector_key, level.tier,
       { period: p || periodEnd, ...(s ? { scope: s } : {}) })
       .then((r) => { setReport(r); setStatus("ready"); })
       .catch((e) => {
+        // La PISTA va al lado del mensaje, no dentro: cuando el backend no manda motivo
+        // —un corte del proxy, un fallo de red— el cartel genérico deja el diagnóstico en
+        // cero, y «502» y «sin respuesta» se arreglan de maneras opuestas.
         setErrMsg(mensajeDeError(e, t("platform.catalog.reportError")));
+        setErrPista(pistaTecnica(e));
         setStatus("error");
       });
   };
@@ -408,26 +414,45 @@ function ProductReportDrawer({ sector, level, periodEnd, onClose, t }: {
             onChange={(e) => onPeriodChange(e.target.value)}
             className="field"
           >
-            {periods.map((p) => {
-              // El cierre de diciembre ES la lectura anual de la entidad (ROA/ROE con
-              // ventana de doce meses + la columna del año en «qué movió el score»). Sin
-              // rotularlo, había que saberlo de antemano.
-              const anio = cierreDeAnio(p);
-              return (
-                <option key={p} value={p}>
-                  {anio
-                    ? t("platform.catalog.cierreAnual", { p, anio,
-                        defaultValue: "{{p}} · cierre anual {{anio}}" })
-                    : p}
-                </option>
-              );
-            })}
+            {/* Cada corte se rotula por lo que ES: una fecha. Diciembre llegó a mostrarse
+                como «cierre anual YYYY» y el efecto fue que el cuarto trimestre pareciera
+                sustituido por un informe del año que ese corte no entrega. El año se ofrece
+                abajo, como lo que es: otro producto. */}
+            {periods.map((p) => (
+              <option key={p} value={p}>{p}</option>
+            ))}
           </select>
         </div>
       )}
 
+      {/* Diciembre es el cierre del ejercicio, así que es AHÍ donde alguien va a buscar el
+          año. En vez de reetiquetar el corte —que prometería lo que no da—, se nombra el
+          producto que sí lo responde. `cierreDeEjercicio` sólo matchea fechas: el producto
+          anual se pide por año (`2025`), de modo que este aviso no puede aparecer dentro de
+          él diciéndole al lector que vaya donde ya está. */}
+      {cierreDeEjercicio(selPeriod) && (
+        <p className="mb-3 text-[11px] leading-snug text-muted">
+          {t("platform.catalog.cierreEjercicioNota", {
+            anio: cierreDeEjercicio(selPeriod),
+            defaultValue: "Este informe es la lectura AL 31 de diciembre de {{anio}}: cómo "
+              + "está la entidad en esa fecha. Cómo le fue durante el ejercicio es la "
+              + "Revisión Anual, un producto aparte del catálogo.",
+          })}
+        </p>
+      )}
+
       {status === "loading" && <Skeleton className="h-64" />}
-      {status === "error" && <StateBlock kind="error" message={errMsg || t("platform.catalog.reportError")} />}
+      {status === "error" && (
+        <>
+          <StateBlock kind="error" message={errMsg || t("platform.catalog.reportError")} />
+          {errPista && (
+            <p className="mt-1 text-center text-[11px] text-faint">
+              {t("platform.catalog.errorPista", { pista: errPista,
+                 defaultValue: "Detalle técnico: {{pista}}" })}
+            </p>
+          )}
+        </>
+      )}
 
       {status === "ready" && report && (
         <>

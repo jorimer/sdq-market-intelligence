@@ -16,7 +16,12 @@ entero ella sola. Sin el desglose por sección, ese caso se lee igual que «todo
 
 - qué plantilla tiene la mediana y el p90 más altos — la candidata a mirar;
 - cuánto tardó ARMAR cada informe (`purpose="ensamblado"`), y cuáles se cortaron;
-- si un informe se cortó, cuán lejos del techo estaba.
+- si un informe se cortó, cuán lejos del techo estaba;
+- cuáles fueron los ensamblados más LENTOS que igual terminaron. Esto último distingue las
+  dos formas de morir por tiempo: si el navegador mostró un fallo y acá el mismo informe
+  figura completo, no lo cortó nuestro techo sino el PROXY —que responde sin cuerpo, y por
+  eso la pantalla solo puede decir «no se pudo cargar»—. Un techo propio por encima del
+  límite del proxy no protege a nadie: nunca llega a actuar.
 
 **Lo que NO responde**, y conviene saberlo: los HIT de caché se registran con 0 s y se
 excluyen de los percentiles. Mezclarlos haría parecer que una generación real es mucho más
@@ -97,6 +102,14 @@ def tiempos_de_narrativa(db: Session, desde: Optional[date] = None,
         key=lambda x: -float(x["p90"] or 0))
 
     cortados = [e for e in ensamblados if e["corto_por_tiempo"]]
+    # Los ensamblados MÁS LENTOS que sí terminaron. Es la mitad que faltaba del diagnóstico:
+    # un informe que el navegador vio fallar pero que acá figura completo a los 130 s no lo
+    # cortó nuestro techo —lo cortó el PROXY, que responde 502 sin cuerpo—. Sin esta lista,
+    # «cortados_por_tiempo: 0» se lee como «no hubo problema de tiempo», que es justo la
+    # conclusión equivocada.
+    mas_lentos = sorted((e for e in ensamblados
+                         if not e["corto_por_tiempo"] and e["segundos"] is not None),
+                        key=lambda e: -float(e["segundos"]))[:10]
     return {
         "desde": ini.date().isoformat(), "hasta": fin.date().isoformat(),
         "modulo": modulo,
@@ -105,6 +118,7 @@ def tiempos_de_narrativa(db: Session, desde: Optional[date] = None,
             "n": len(ensamblados),
             "cortados_por_tiempo": len(cortados),
             "ultimos_cortados": cortados[:10],
+            "mas_lentos": mas_lentos,
             "mediana_segundos": (round(st.median([e["segundos"] for e in ensamblados
                                                   if e["segundos"] is not None]), 2)
                                  if any(e["segundos"] is not None for e in ensamblados)
@@ -117,5 +131,8 @@ def tiempos_de_narrativa(db: Session, desde: Optional[date] = None,
             "aproximadamente el de su sección más lenta, no la suma. Dentro de una sección el "
             "trabajo es serial (generar · juez · regenerar…), de modo que una sola con "
             "reparaciones puede consumir el presupuesto entero. Mirá el p90 por plantilla: la "
-            "de arriba es la candidata. Los HIT de caché quedan fuera de los percentiles."),
+            "de arriba es la candidata. Los HIT de caché quedan fuera de los percentiles. "
+            "Y si el navegador vio un fallo que acá figura COMPLETO en `mas_lentos`, el que "
+            "cortó fue el proxy, no nuestro techo: nuestro techo nunca llega a actuar si "
+            "está por encima del límite del proxy."),
     }

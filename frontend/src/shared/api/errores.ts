@@ -75,3 +75,20 @@ export function mensajeDeError(e: unknown, fallback: string): string {
 
   return fallback;
 }
+
+/**
+ * La PISTA TÉCNICA de un error que no trajo motivo: `"HTTP 502"`, `"sin respuesta del
+ * servidor"`. `null` cuando el backend sí explicó qué pasó (ahí la pista sobra).
+ *
+ * **Por qué existe.** Un Deep Dive falló en el navegador y la pantalla solo pudo decir «No se
+ * pudo cargar el producto», que es el respaldo genérico. Eso ocurre justamente cuando NO hay
+ * `detail`: un corte del proxy (502/504 sin cuerpo) o un fallo de red. Y son casos que se
+ * arreglan de maneras opuestas —uno es nuestro, el otro es del borde—, así que ocultarlos
+ * bajo el mismo cartel deja el diagnóstico en cero. `mensajeDeError` no cambia: su contrato
+ * es devolver algo mostrable y nunca vacío. Esto se muestra AL LADO, como pista.
+ */
+export function pistaTecnica(e: unknown): string | null {
+  if (detalleDeError(e) !== undefined && detalleDeError(e) !== null) return null;
+  const estado = estadoDeError(e);
+  return estado ? `HTTP ${estado}` : "sin respuesta del servidor";
+}

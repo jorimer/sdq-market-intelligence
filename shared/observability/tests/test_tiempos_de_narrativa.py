@@ -98,3 +98,31 @@ def test_el_rango_por_defecto_deja_fuera_lo_viejo(db):
     _fila(db, template="reciente", segundos=10.0, dias=0)
     _fila(db, template="vieja", segundos=99.0, dias=30)
     assert {s["plantilla"] for s in tiempos_de_narrativa(db)["por_seccion"]} == {"reciente"}
+
+
+def test_un_ensamblado_LENTO_que_TERMINO_se_puede_encontrar(db):
+    """La mitad que faltaba del diagnóstico.
+
+    El caso real: alguien vio «No se pudo cargar el producto» en el navegador y el endpoint
+    decía `cortados_por_tiempo: 0`. Leído solo, eso se entiende como «no fue un problema de
+    tiempo» — y es falso: el informe había TERMINADO a los 130 s, después de que el proxy ya
+    hubiera cortado la conexión. Un techo propio por encima del límite del proxy nunca llega
+    a actuar, así que la ausencia de cortes no prueba nada por sí sola.
+    """
+    _fila(db, purpose="ensamblado", template="deep_dive", segundos=130.0, corto=False)
+    _fila(db, purpose="ensamblado", template="deep_dive", segundos=12.0, corto=False)
+    out = tiempos_de_narrativa(db)
+    assert out["informes"]["cortados_por_tiempo"] == 0
+    lentos = out["informes"]["mas_lentos"]
+    assert [e["segundos"] for e in lentos] == [130.0, 12.0], "van de más lento a menos"
+
+
+def test_el_ensamblado_CORTADO_no_se_repite_entre_los_mas_lentos(db):
+    """Son dos listas con dos preguntas distintas: `ultimos_cortados` es «¿a quién matamos
+    nosotros?» y `mas_lentos` es «¿a quién mataron por fuera?». Mezclarlas haría que el
+    cortado —siempre el más largo— tapara al que interesa."""
+    _fila(db, purpose="ensamblado", template="deep_dive", segundos=300.0, corto=True)
+    _fila(db, purpose="ensamblado", template="deep_dive", segundos=130.0, corto=False)
+    out = tiempos_de_narrativa(db)["informes"]
+    assert [e["segundos"] for e in out["ultimos_cortados"]] == [300.0]
+    assert [e["segundos"] for e in out["mas_lentos"]] == [130.0]
