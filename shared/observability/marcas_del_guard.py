@@ -103,12 +103,22 @@ def marcas_del_guard(db: Session, desde: Optional[date] = None,
         # ella la única manera de saberlo era regenerar el informe y perderlo otra vez.
         frases = {str(f.get("cifra", ""))[:40]: str(f.get("frase") or "")
                   for f in (det.get("guard_fragmentos") or []) if isinstance(f, dict)}
+        # QUÉ CAPA marcó cada cifra. Es lo que decide la calibración: hoy el detector
+        # MECÁNICO solo alcanza para matar un informe, y es la capa que produjo las cinco
+        # familias de falso positivo. Las marcas anteriores a este registro no la traen y
+        # quedan como "(sin registrar)" — no se les supone "det", que sería inventar el dato
+        # que se está midiendo.
+        capas = {str(f.get("cifra", ""))[:40]: str(f.get("capa") or "(sin registrar)")
+                 for f in (det.get("guard_fragmentos") or []) if isinstance(f, dict)}
         for m in marcas:
             clave = _cifra_de(str(m))
             e = por_cifra.setdefault(clave, {
                 "cifra": clave, "veces": 0, "modulos": set(), "plantillas": set(),
                 "ejemplo": str(m)[:180], "frases": [], "ultima_vez": None,
+                "por_capa": {},
             })
+            capa = capas.get(str(m)[:40], "(sin registrar)")
+            e["por_capa"][capa] = e["por_capa"].get(capa, 0) + 1
             frase = frases.get(str(m)[:40])
             if frase and frase not in e["frases"]:
                 # Se guardan VARIAS: la misma cifra usada en dos frases distintas dice algo
@@ -130,11 +140,38 @@ def marcas_del_guard(db: Session, desde: Optional[date] = None,
          for e in por_cifra.values()),
         key=lambda e: (-int(e["veces"]), str(e["cifra"])))
 
+    # LA REGLA DE DOS CAPAS, EN SOMBRA. Se mide sin cambiar ninguna política: cuántas marcas
+    # las puso el detector mecánico SOLO —y por tanto NO habrían bloqueado si exigiéramos que
+    # el juez semántico coincida— contra cuántas las confirman las dos.
+    #
+    # Va acá y no en una opinión mía porque la pregunta del dueño fue exactamente ésa, y el
+    # registro no la podía contestar: el lazo fusiona `det + llm` para repararlos juntos y el
+    # origen se perdía. Las marcas anteriores a esta medición se cuentan aparte y NO se
+    # reparten: suponerles una capa sería fabricar el dato que se está midiendo.
+    por_capa: Dict[str, int] = {}
+    for e in orden:
+        for capa, n in (e.get("por_capa") or {}).items():
+            por_capa[capa] = por_capa.get(capa, 0) + int(n)
+    medidas = sum(n for c, n in por_capa.items() if c != "(sin registrar)")
+
     return {
         "desde": ini.date().isoformat(), "hasta": fin.date().isoformat(),
         "modulo": modulo,
         "narrativas_generadas": narrativas,
         "narrativas_con_marca": con_marca,
+        "regla_de_dos_capas": {
+            "por_capa": por_capa,
+            "marcas_con_capa_registrada": medidas,
+            "habrian_pasado_solo_det": por_capa.get("det", 0),
+            "seguirian_bloqueando": por_capa.get("ambos", 0) + por_capa.get("juez", 0),
+            "como_leerlo": (
+                "«det» = solo el detector mecánico; «juez» = solo el semántico; «ambos» = "
+                "los dos. Con la regla de dos capas únicamente «ambos» bloquearía, así que "
+                "«habrian_pasado_solo_det» son los informes que hoy mueren por el regex y "
+                "que se entregarían. «(sin registrar)» son marcas anteriores a esta "
+                "medición: NO se reparten, porque suponerles una capa sería inventar el "
+                "dato que se está midiendo."),
+        },
         "cifras": orden,
         "truncado": len(filas) >= MAX_FILAS,
         "como_leerlo": (
