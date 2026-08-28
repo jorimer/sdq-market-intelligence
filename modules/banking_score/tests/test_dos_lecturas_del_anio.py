@@ -135,3 +135,57 @@ def test_cada_lectura_DECLARA_cuál_es_para_que_el_modelo_no_las_mezcle():
 def inspect_texto(mod) -> str:
     import inspect
     return inspect.getsource(mod)
+
+
+# ── Que el DOCUMENTO tampoco las confunda ──────────────────────────────
+
+def test_cada_lectura_tiene_su_propio_ROTULO_en_el_documento():
+    """El cómputo puede estar bien y el documento mentir igual.
+
+    El año por dentro salió a producción rotulado «Revisión Anual» —el nombre del OTRO
+    producto— en la portada y en el encabezado de CADA página, porque el render recibía
+    `report_type="revision_anual"` desde un literal. La separación era correcta y el rótulo
+    la deshacía: exactamente lo que el dueño lleva toda la sesión señalando.
+    """
+    from modules.banking_score.reports.pdf_generator import REPORT_TYPE_LABELS
+
+    assert REPORT_TYPE_LABELS["anio_por_trimestres"] == "Año por Trimestres"
+    assert REPORT_TYPE_LABELS["revision_anual"] == "Revisión Anual"
+    assert REPORT_TYPE_LABELS["anio_por_trimestres"] != REPORT_TYPE_LABELS["revision_anual"]
+
+
+def test_el_producto_trimestral_NO_rotula_con_el_tipo_del_anual():
+    """La ruta, no la tabla: que la etiqueta exista no prueba que el render la reciba.
+
+    Se lee el ARGUMENTO con `ast`, no el texto del fuente. La primera versión de este test
+    buscaba la cadena «revision_anual» en un tramo del código y fallaba por el COMENTARIO que
+    explica el defecto — un test que se rompe con la documentación de su propia causa.
+    """
+    import ast
+    import inspect
+    import textwrap
+
+    from modules.banking_score import products
+
+    arbol = ast.parse(textwrap.dedent(inspect.getsource(products.BankingProduct.render)))
+    tipos = [n.args[0].value for n in ast.walk(arbol)
+             if isinstance(n, ast.Call)
+             and getattr(n.func, "id", "") == "generate_pdf_report"
+             and n.args and isinstance(n.args[0], ast.Constant)]
+    assert "anio_por_trimestres" in tipos, (
+        "el render del año por dentro no pasa su propio tipo de informe")
+    assert "revision_anual" not in tipos, (
+        "el render del producto TRIMESTRAL pasa el tipo de informe del producto ANUAL")
+
+
+def test_ninguna_seccion_de_las_dos_lecturas_cae_al_FALLBACK_del_titulo():
+    """Sin título declarado, el render imprime `clave.replace("_"," ").title()`: «Anio Por
+    Trimestres» —sin eñe, porque la clave no la lleva—. El título de un documento que se
+    vende no se deriva de un nombre de variable."""
+    from modules.banking_score.reports.pdf_generator import NARRATIVE_SECTION_TITLES
+
+    for clave in ("anio_por_trimestres", "revision_anual", "contexto_de_mercado"):
+        titulo = NARRATIVE_SECTION_TITLES.get(clave)
+        assert titulo, f"'{clave}' no declara título de sección"
+        assert titulo != clave.replace("_", " ").title(), f"'{clave}' cae al fallback"
+        assert "Anio" not in titulo
