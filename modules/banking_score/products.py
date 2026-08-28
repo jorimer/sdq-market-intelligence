@@ -988,7 +988,11 @@ class BankingProduct:
         if dentro:
             cierre = (dentro.get("serie") or [{}])[-1]
             return await generate_pdf_report(
-                "revision_anual", snapshot.entity_name or "Entidad",
+                # SU PROPIO tipo, no el del producto anual. Pasar "revision_anual" acá
+                # rotulaba este informe con el nombre del OTRO producto en la portada y en
+                # cada encabezado — la confusión que la separación vino a cerrar, colada por
+                # un literal.
+                "anio_por_trimestres", snapshot.entity_name or "Entidad",
                 {"overall_score": cierre.get("score") or 0,
                  "banda_ejecucion": None, "banda_resiliencia": cierre.get("banda"),
                  "sub_components": {}, "indicators": {}},
