@@ -193,3 +193,42 @@ def test_sin_el_contenedor_declarado_el_guard_no_afloja():
     """Prueba negativa: el mecanismo es el nombre del contenedor, no «cualquier dict»."""
     ctx = {"entity_name": "X", "otros_coeficientes": {"solidez": 0.38}}
     assert deterministic_uncited_figures(ctx, "una ponderación de 38%")
+
+
+# ── Las TASAS del modelo de propensión ─────────────────────────────────
+
+#: Frase LITERAL del registro de marcas del 2026-08-27. No la redacté yo: la escribió el
+#: modelo, y fue una de las DOS marcas con capa registrada tras la regla de dos capas — o sea,
+#: el primer hueco que el instrumento nuevo encontró por su cuenta.
+FRASE_DE_LA_TASA_BASE = (
+    "El modelo de propensión ubica a la entidad en 1.96%, prácticamente en línea con la tasa "
+    "base del sistema (1.82% sobre activos —dato derivado de la tasa base del modelo, "
+    "0,01819, expresada como porcentaje—)")
+
+_CTX_PROPENSION = {"propension_quiebra": {
+    "tasa_base": 0.01819, "propension": 0.01964, "veces_la_base": 1.08}}
+
+
+def test_la_tasa_base_dicha_en_PORCENTAJE_tiene_respaldo():
+    """0,01819 → «1.82 %». El propio repo la formatea así en su resumen del modelo
+    (`tasa base {m.tasa_base*100:.2f}%`): el modelo hizo lo mismo y el guard lo marcó."""
+    assert deterministic_uncited_figures(_CTX_PROPENSION, FRASE_DE_LA_TASA_BASE) == []
+
+
+def test_la_propension_de_la_ENTIDAD_también():
+    """Las dos claves tienen la misma forma. Declarar solo una dejaría la mitad del hueco —
+    y la mitad que queda siempre es la que aparece después."""
+    assert deterministic_uncited_figures(
+        _CTX_PROPENSION, "la propensión de la entidad se ubica en 1.96%") == []
+
+
+def test_el_MÚLTIPLO_sigue_funcionando():
+    """«1.08 veces la base» ya andaba: el arreglo no puede romperlo."""
+    assert deterministic_uncited_figures(
+        _CTX_PROPENSION, "1.08 veces la tasa base del sistema") == []
+
+
+def test_una_cifra_REALMENTE_inventada_se_sigue_marcando():
+    """Declarar un contenedor no es aflojar el guard: es darle el dato que le faltaba."""
+    assert deterministic_uncited_figures(
+        _CTX_PROPENSION, "la morosidad cerró el año en 7.77%") != []

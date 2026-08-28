@@ -28,7 +28,7 @@ logger = logging.getLogger("sdq.narrative.numeric_guard")
 # el CÓDIGO de este módulo —una regla nueva, un umbral distinto— no cambia ningún prompt y
 # pasaría inadvertido: la caché seguiría sirviendo texto que el guard nuevo habría marcado.
 # Es el único bump manual irreducible; por eso vive acá, junto a lo que describe.
-GUARD_VERSION = "12"  # "12": el umbral prospectivo también viaja en INFINITIVO (2026-08-27)
+GUARD_VERSION = "13"  # "13": las tasas de propensión se dicen en PORCENTAJE (2026-08-27)
 
 _JUDGE_SYSTEM = (
     "Sos un verificador numérico estricto y preciso. Tu ÚNICA tarea es detectar cifras "
@@ -449,6 +449,19 @@ FORMAS_POR_CLAVE: Dict[str, Tuple[str, ...]] = {
     "cuota_del_principal_pct": ("entre_cien",),
     # Proporción de la rúbrica (0,25): se dice «pesa un 25 %».
     "peso": ("por_cien",),
+    # TASAS del modelo de propensión a quiebra. Viajan como proporción trimestral —0,01819—
+    # y se dicen en porcentaje, que es como el propio repo las formatea en su resumen
+    # (`tasa base {m.tasa_base*100:.2f}%`). El modelo hizo lo mismo y el guard lo marcó:
+    #
+    #   «…en línea con la tasa base del sistema (1.82 % sobre activos —dato derivado de la
+    #    tasa base del modelo, 0,01819, expresada como porcentaje…)»
+    #
+    # Nombró su base en la misma oración —hizo exactamente lo que el aviso de corrección
+    # pide— y la cifra igual llegó sin respaldo. Es la familia del «132 %», en un contenedor
+    # que nadie había declarado. Encontrado con el instrumento, no adivinado: fue una de las
+    # DOS marcas con capa registrada tras la regla de dos capas.
+    "tasa_base": ("por_cien",),
+    "propension": ("por_cien",),
 }
 
 #: Las magnitudes relacionales viajan de DOS formas y el detector tiene que entender las dos:
