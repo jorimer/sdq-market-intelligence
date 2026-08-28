@@ -75,12 +75,16 @@ def test_la_frescura_concuerda_el_plural():
         sources, cadence, coverage, detail = ("SIS",), "quarterly", None, None
         freshness_days = 1
 
-    md = _methodology_md(_Sig(), None, as_of="2024")
+    # SIN corte: es el único camino que imprime la ANTIGÜEDAD en días, y por tanto el único
+    # donde el plural existe. Con corte la frescura se ancla al corte y deja de contar días
+    # desde hoy —porque contra hoy la cifra envejecía sola dentro de un documento fechado—;
+    # ese lado lo cubre `test_frescura_anclada_al_corte`.
+    md = _methodology_md(_Sig(), None, as_of=None)
     assert "un día." in md and "1 días" not in md
     _Sig.freshness_days = 5
-    assert "5 días." in _methodology_md(_Sig(), None, as_of="2024")
+    assert "5 días." in _methodology_md(_Sig(), None, as_of=None)
     _Sig.freshness_days = 0
-    assert "menos de un día." in _methodology_md(_Sig(), None, as_of="2024")
+    assert "menos de un día." in _methodology_md(_Sig(), None, as_of=None)
 
 
 # ── Cursiva ANIDADA dentro de negrita ─────────────────────────────────────────
