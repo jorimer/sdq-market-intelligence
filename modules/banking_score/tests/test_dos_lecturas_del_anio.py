@@ -189,3 +189,67 @@ def test_ninguna_seccion_de_las_dos_lecturas_cae_al_FALLBACK_del_titulo():
         assert titulo, f"'{clave}' no declara título de sección"
         assert titulo != clave.replace("_", " ").title(), f"'{clave}' cae al fallback"
         assert "Anio" not in titulo
+
+
+def test_el_contraste_de_MERCADO_recibe_el_cambio_del_año():
+    """Un `.get` sobre una clave renombrada no falla: DESAPARECE.
+
+    Al separar las dos lecturas, el snapshot siguió pidiendo `rev.get("cambio_score")` —la
+    clave del cómputo VIEJO— y `anio_contra_anios` no la emite. Devolvía `None`, el contraste
+    entero se apagaba, y el informe salía a producción diciendo que la comparación contra el
+    estrato «no pudo computarse». Nada falló, nada avisó: la sección simplemente se vació.
+
+    Se ejercita la RUTA con la DB stubeada, porque el defecto vivía entre dos funciones que
+    por separado estaban bien.
+    """
+    from modules.banking_score.products_year_review import BankingYearReviewProduct
+    from shared.products import ProductTier
+
+    REV = {"anio": 2025, "entidad": "X",
+           "contra_el_anio_anterior": {"anio": 2025, "cambio": -6.02},
+           "serie_de_cierres": [{"anio": 2025, "score": 58.71}], "balance": []}
+    SISTEMA = {"sistema": {"cambio_mediana": -0.89},
+               "por_tipo": [{"tipo": "aap", "cambio_mediana": -0.81}],
+               "conteo_direccion": {"mejoraron": 32}}
+
+    class _Tipo:
+        value = "aap"
+
+    class _Bank:
+        id, name, bank_type = "b1", "Entidad", _Tipo()
+
+    class _Q:
+        def filter(self, *a, **k):
+            return self
+
+        def first(self):
+            return _Bank()
+
+    class _DB:
+        def query(self, *a, **k):
+            return _Q()
+
+    import modules.banking_score.products_year_review as mod
+    from modules.banking_score.reports import anio_contra_anios as aca
+    from modules.banking_score.reports import anuario as anu
+
+    orig = (aca.anio_contra_anios, anu.anuario_del_sistema, mod._amplitud_al_cierre,
+            anu._anios_con_cierre)
+    aca.anio_contra_anios = lambda *a, **k: REV
+    anu.anuario_del_sistema = lambda *a, **k: SISTEMA
+    mod._amplitud_al_cierre = lambda *a, **k: {}
+    # `_anio()` resuelve el período contra los años cerrados, y eso consulta la DB. Se
+    # stubea para que el test ejercite el CABLEADO —que es donde vivía el defecto— y no la
+    # consulta, que tiene sus propios tests.
+    anu._anios_con_cierre = lambda *a, **k: [2024, 2025]
+    try:
+        snap = BankingYearReviewProduct(_DB()).snapshot(ProductTier.deep_dive, "2025", "b1")
+    finally:
+        (aca.anio_contra_anios, anu.anuario_del_sistema, mod._amplitud_al_cierre,
+         anu._anios_con_cierre) = orig
+
+    contraste = snap.payload["contexto_de_mercado"]
+    assert contraste["cambio_de_la_entidad"] == -6.02, (
+        "el contraste no recibió el cambio del año: la clave que lee no es la que se emite")
+    assert contraste["es_idiosincratico"] is True
+    assert contraste["vs_su_tipo"]["brecha_pp"] is not None

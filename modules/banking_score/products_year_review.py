@@ -407,8 +407,14 @@ class BankingYearReviewProduct:
                 tipo = bank.bank_type.value if bank.bank_type else None
                 su_tipo = next((t for t in (sistema.get("por_tipo") or [])
                                 if t.get("tipo") == tipo), None)
+                # El cambio del año sale de `contra_el_anio_anterior`. Al separar las dos
+                # lecturas, esta línea siguió pidiendo `cambio_score` —la clave del cómputo
+                # VIEJO— y `.get` devolvía None sin romper nada: el contraste entero se
+                # apagó en silencio y el informe salió diciendo que la comparación «no pudo
+                # computarse». Un `.get` sobre una clave renombrada no falla, DESAPARECE.
+                cambio = (rev.get("contra_el_anio_anterior") or {}).get("cambio")
                 payload["contexto_de_mercado"] = _contraste_con_el_mercado(
-                    rev.get("cambio_score"), su_tipo, sistema, tipo)
+                    cambio, su_tipo, sistema, tipo)
             payload.update(_amplitud_al_cierre(db, bank, anio))
         return ProductSnapshot(tier=tier, period=str(anio), payload=payload,
                                entity_name=str(bank.name))
