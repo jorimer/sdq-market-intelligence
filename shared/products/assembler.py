@@ -332,6 +332,35 @@ def _registrar_tiempo_de_ensamblado(product, tier, scope, snapshot, segundos: fl
         logger.exception("No se pudo registrar el tiempo de ensamblado")
 
 
+def orden_de_secciones(declaradas, narrativas, extra) -> tuple:
+    """El orden canónico en que se muestran las secciones de un informe.
+
+    **Por qué es una función y no tres líneas dentro del ensamblador.** El orden es lo que
+    viaja a la app como `commercial.sections`, y la app dibuja ESO: fuera del orden, una
+    sección con texto no existe para el cliente. Extraerlo lo hace comprobable sin montar un
+    producto entero — un test que recalcule el orden a mano pasa aunque el ensamblador haga
+    otra cosa, que es exactamente lo que pasó al escribirlo la primera vez.
+
+    Tres bloques, en este orden:
+
+    1. las secciones que el manifiesto DECLARA para el nivel;
+    2. las que el PRODUCTO produjo y el manifiesto no lista;
+    3. el glosario y las estándar (metodología, fuentes), que cierran el documento.
+
+    El bloque 2 faltaba. Le pasó al año por trimestres, cuya sección depende del PERÍODO
+    pedido y no del nivel: quedaba en `narratives`, fuera del orden, y la app mostraba un
+    informe con «Metodología y fuentes» y NADA en medio. El PDF salía completo porque su
+    render recibe la lista de secciones por otra vía. Sin error y sin aviso, en la superficie
+    que el cliente mira primero.
+    """
+    declaradas = tuple(declaradas or ())
+    extra = extra or {}
+    propias = tuple(k for k in (narrativas or {})
+                    if k not in declaradas and k not in extra)
+    del_final = tuple(k for k in extra if k not in declaradas)
+    return declaradas + propias + del_final
+
+
 async def _content_from_snapshot(
     product: SectorProduct,
     tier: ProductTier,
@@ -476,7 +505,7 @@ async def _content_from_snapshot(
         narratives = {**narratives, **std}
     _assert_system_narratives(level, snapshot, narratives)
     extra = {**glossary, **std}
-    order = tuple(level.sections) + tuple(k for k in extra if k not in level.sections)
+    order = orden_de_secciones(level.sections, narratives, extra)
     return ProductContent(level=level, snapshot=snapshot, narratives=narratives,
                           section_order=order)
 

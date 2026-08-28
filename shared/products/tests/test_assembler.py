@@ -23,3 +23,55 @@ def test_la_huella_de_la_receta_incluye_las_PLANTILLAS_por_seccion():
     finally:
         ce.THIN_TEMPLATES["early_warning_reading"] = original
     assert _narrative_logic_version() == antes, "la huella debe ser estable con la receta fija"
+
+
+def test_una_seccion_que_el_producto_PRODUJO_entra_al_orden():
+    """El orden es lo que la app dibuja: fuera de él, la sección no existe para el cliente.
+
+    **El caso, del 2026-08-27.** El año por trimestres se sirve como una sección que el
+    manifiesto NO declara —depende del PERÍODO pedido, no del nivel—. Quedaba en
+    `narratives` pero fuera del orden, y el orden es exactamente lo que viaja a la app como
+    `commercial.sections`.
+
+    En pantalla: «1. Metodología y fuentes», «2. Fuentes y referencias», y NADA en medio. El
+    PDF salía completo porque su render recibe la lista por otra vía. Sin error, sin aviso, y
+    con la superficie que el cliente mira primero siendo la que falló.
+    """
+    from shared.products.assembler import orden_de_secciones
+
+    orden = orden_de_secciones(
+        ("resumen",),
+        {"resumen": "a", "anio_por_trimestres": "b", "metodologia": "c", "glosario": "d"},
+        {"metodologia": "c", "glosario": "d"})
+    assert "anio_por_trimestres" in orden, (
+        "la sección tiene texto y no entra al orden: la app no la va a dibujar")
+
+
+def test_las_estandar_CIERRAN_el_documento():
+    """Metodología y fuentes van al final. Si el bloque nuevo se anexara después, el informe
+    terminaría con su contenido después de las fuentes."""
+    from shared.products.assembler import orden_de_secciones
+
+    orden = list(orden_de_secciones(
+        ("resumen",), {"resumen": "a", "propia": "b", "metodologia": "c"},
+        {"metodologia": "c"}))
+    assert orden.index("propia") < orden.index("metodologia")
+    assert orden[0] == "resumen"
+
+
+def test_sin_secciones_propias_el_orden_no_cambia():
+    """El contrapeso: la inmensa mayoría de los informes no producen secciones de más, y su
+    orden tiene que quedar idéntico."""
+    from shared.products.assembler import orden_de_secciones
+
+    assert orden_de_secciones(
+        ("a", "b"), {"a": "1", "b": "2", "glosario": "g"}, {"glosario": "g"}
+    ) == ("a", "b", "glosario")
+
+
+def test_una_seccion_declarada_SIN_texto_conserva_su_lugar():
+    """Se ordena por lo DECLARADO, no por lo que haya en el dict: una sección que el nivel
+    lista y que vino vacía no puede desaparecer del orden en silencio."""
+    from shared.products.assembler import orden_de_secciones
+
+    assert "b" in orden_de_secciones(("a", "b"), {"a": "1"}, {})
