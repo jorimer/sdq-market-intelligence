@@ -12,6 +12,7 @@ Anonimización-seguras: hablan de fuentes/cobertura, no de entidades.
 """
 from __future__ import annotations
 
+from datetime import timedelta
 from typing import Dict, Optional
 
 from shared.products.tiers import ProductTier
@@ -61,6 +62,74 @@ def _periodo_posterior(texto: str, corte: str) -> bool:
     return False
 
 
+def _fecha_del_corte(as_of: str):
+    """El corte como `date`, o ``None``. Acepta ``YYYY``, ``YYYY-MM`` y ``YYYY-MM-DD``.
+
+    Un producto anual pide su período como AÑO (`2025`); uno trimestral, como fecha. Los dos
+    tienen que poder anclar su frescura.
+    """
+    from datetime import date as _date
+
+    t = str(as_of or "").strip()
+    try:
+        if len(t) == 4:
+            return _date(int(t), 12, 31)
+        if len(t) == 7:
+            a, m = int(t[:4]), int(t[5:7])
+            return _date(a + (m == 12), 1 if m == 12 else m + 1, 1) - timedelta(days=1)
+        return _date.fromisoformat(t[:10])
+    except (ValueError, TypeError):
+        return None
+
+
+def _frescura_md(sig, as_of: Optional[str], hoy=None) -> str:
+    """La frescura ANCLADA AL CORTE del informe, no al día en que se genera.
+
+    **El defecto.** Se imprimía `freshness_days` tal cual, y ese número se computa contra
+    `date.today()`. Dos generaciones del MISMO informe daban 240 y 150 días sin que el dato
+    hubiera cambiado: la cifra envejecía sola dentro de un documento fechado. En material que
+    se manda a un tercero, eso es un número que se vuelve falso solo con esperar.
+
+    **Qué dice ahora.** La fecha real del dato más reciente —`hoy − freshness_days`, que SÍ es
+    estable— comparada contra el corte:
+
+    * si no hay dato posterior al corte, el informe declara que su dato ES el del corte;
+    * si lo hay, se DICE, con cuánto: que exista un corte más nuevo que el pedido es
+      información legítima para quien lee un informe fechado, y callarlo dejaría creer que
+      este es el último disponible.
+
+    Sin corte —una vista no fechada— se conserva la lectura de plataforma, que ahí es la
+    correcta: la pregunta es «¿qué tan al día está el eje HOY?».
+
+    *hoy* existe para poder PROBAR la invariante: que el mismo dato y el mismo corte producen
+    el mismo texto se genere cuando se genere. Sin la costura, un test tendría que mover el
+    reloj del proceso, y el defecto que este arreglo cierra es precisamente uno de reloj.
+    """
+    from datetime import date as _date
+
+    hoy = hoy or _date.today()
+    cadence = (sig.cadence if sig else None) or "—"
+    if not sig or sig.freshness_days is None:
+        return f"**Cadencia:** {cadence}."
+
+    d = int(sig.freshness_days)
+    corte = _fecha_del_corte(as_of) if as_of else None
+    if corte is None:
+        # Vista sin corte: la frescura describe el estado de la plataforma hoy.
+        return (f"**Cadencia:** {cadence}. **Frescura:** el dato más reciente tiene "
+                + ("menos de un día." if d == 0 else
+                   "un día." if d == 1 else f"{d} días."))
+
+    fecha_del_dato = hoy - timedelta(days=d)
+    posterior = (fecha_del_dato - corte).days
+    if posterior <= 0:
+        return (f"**Cadencia:** {cadence}. **Frescura:** el dato más reciente de este informe "
+                "es el del corte; no hay observación posterior en el panel.")
+    return (f"**Cadencia:** {cadence}. **Frescura:** el dato de este informe es el del corte. "
+            f"El panel ya registra observaciones hasta {fecha_del_dato.isoformat()} "
+            f"({posterior} días después), que este informe no incorpora: el corte manda.")
+
+
 def _methodology_md(sig, val, as_of: Optional[str] = None) -> str:
     """Markdown de Metodología desde ``DataHealth`` (sig) + ``ValidationState`` (val).
 
@@ -82,15 +151,7 @@ def _methodology_md(sig, val, as_of: Optional[str] = None) -> str:
                      "indicado donde se presentan.")
     sources = ", ".join(s for s in (sig.sources or ()) if s) if sig else ""
     lines.append(f"**Fuentes de dato:** {sources or '—'}.")
-    cadence = (sig.cadence if sig else None) or "—"
-    if sig and sig.freshness_days is not None:
-        d = int(sig.freshness_days)
-        # «1 días» en un documento que se vende. El plural se concuerda, no se asume.
-        lines.append(f"**Cadencia:** {cadence}. **Frescura:** el dato más reciente tiene "
-                     + ("menos de un día." if d == 0 else
-                        "un día." if d == 1 else f"{d} días."))
-    else:
-        lines.append(f"**Cadencia:** {cadence}.")
+    lines.append(_frescura_md(sig, as_of))
     if sig and sig.coverage is not None:
         lines.append(f"**Cobertura:** {_pct(sig.coverage)} del índice se sostiene en dato real; "
                      "lo no cubierto se declara como rúbrica o brecha — nunca se fabrica.")
