@@ -67,10 +67,42 @@ def test_ninguna_excepcion_sin_motivo():
     assert not vacias, f"excepción sin motivo escrito: {vacias}"
 
 
+#: Otros archivos que EMITEN claves relacionales al contexto. `derived.py` es el sitio
+#: canónico —de ahí que sea el que se barre para exigir la declaración— pero no es el único:
+#: un motor de módulo también puede servir una razón. El 2026-08-27 el modelo de propensión a
+#: quiebra sirvió `tasa_base` y `propension` como proporciones trimestrales, el modelo las
+#: dijo en porcentaje —como el propio repo las formatea— y el guard las marcó.
+#:
+#: Se AMPLÍA el barrido en vez de exceptuarlas: una excepción diría «esta clave no hace
+#: falta declararla», que es falso y es lo contrario de lo que pasó.
+OTROS_EMISORES = (
+    pathlib.Path(__file__).resolve().parents[3] / "modules" / "banking_score" / "propension_quiebra.py",
+)
+
+
+def _claves_de_todos_los_emisores() -> set:
+    claves = _claves_emitidas(ast.parse(FUENTE.read_text()))
+    for ruta in OTROS_EMISORES:
+        if ruta.exists():
+            claves |= _claves_emitidas(ast.parse(ruta.read_text()))
+    return claves
+
+
+def test_el_barrido_alcanza_a_los_OTROS_emisores():
+    """Prueba negativa: si una ruta se renombra, el barrido dejaría de leerla y el test de
+    abajo pasaría por no encontrar nada — no por estar todo bien."""
+    for ruta in OTROS_EMISORES:
+        assert ruta.exists(), f"emisor declarado que ya no existe: {ruta}"
+    assert len(_claves_de_todos_los_emisores()) > len(
+        _claves_emitidas(ast.parse(FUENTE.read_text()))), (
+        "los otros emisores no aportaron ninguna clave: el barrido no los está leyendo")
+
+
 def test_el_mapa_no_declara_claves_que_nadie_emite():
     """Una entrada muerta hace creer que una familia está cubierta cuando ya no existe."""
-    claves = _claves_emitidas(ast.parse(FUENTE.read_text()))
+    claves = _claves_de_todos_los_emisores()
     huerfanas = sorted(set(FORMAS_POR_CLAVE) - claves)
     assert not huerfanas, (
-        f"FORMAS_POR_CLAVE declara claves que derived.py ya no emite: {huerfanas}. O se "
-        "renombraron —y la familia real quedó sin declarar— o sobran.")
+        f"FORMAS_POR_CLAVE declara claves que nadie emite: {huerfanas}. O se renombraron "
+        "—y la familia real quedó sin declarar— o sobran. Si el emisor es un módulo nuevo, "
+        "agregalo a OTROS_EMISORES.")
