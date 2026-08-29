@@ -275,21 +275,23 @@ cambios:
       Calidad que no había recibido la calibración empírica que sus vecinos sí tuvieron.
     impacto:
       medido_al_publicar: >-
-        Medido sobre el último rating de cada una de las 43 entidades con cartera sectorial
-        en producción, aplicando la curva nueva sobre los valores crudos ya publicados. Antes
-        del cambio, 27 de esas 43 puntuaban exactamente 0 en el indicador —entre ellas las
-        DIEZ asociaciones de ahorros y préstamos del catálogo, y 13 de los 14 bancos de
-        ahorro y crédito, contra 2 de los 16 bancos múltiples—; después quedan 6. El
-        indicador sube en promedio 59,7 puntos en las asociaciones de ahorros y préstamos,
-        42,3 en los bancos de ahorro y crédito y 22,8 en las corporaciones de crédito, y BAJA
-        5,5 en la banca múltiple, que pasa a compararse contra su propio grupo de pares. En
-        el score global el movimiento va de -0,45 a +3,75 puntos, con media absoluta de 1,18.
-        DOS entidades cambian de banda de Resiliencia, las dos hacia arriba: Asociación La
-        Vega Real de Ahorros y Préstamos (72,90 a 77,74) y Corporación de Crédito Monumental
-        (74,26 a 76,32) pasan de Adecuada a Sólida; ambas habían bajado de Sólida a Adecuada
-        con el cambio de ponderación de Solidez del 2026-08-19, así que para ellas el efecto
-        neto de los dos cambios es volver a la banda que tenían antes de agosto. La medición
-        cubre el último corte de cada entidad; el recálculo aplica la misma curva a todos los
-        períodos históricos, cuyo movimiento no está medido en esta cifra.
+        Medido sobre producción DESPUÉS del recálculo (22 períodos, 1.785 ratings reescritos,
+        sin errores), comparando el último rating de cada una de las 43 entidades con cartera
+        sectorial contra el que tenían antes. En el indicador, 27 de esas 43 puntuaban
+        exactamente 0 —entre ellas las DIEZ asociaciones de ahorros y préstamos del catálogo,
+        y 13 de los 14 bancos de ahorro y crédito, contra 2 de los 16 bancos múltiples—;
+        después quedan 6. El indicador sube en promedio 59,7 puntos en las asociaciones de
+        ahorros y préstamos, 42,3 en los bancos de ahorro y crédito y 22,8 en las
+        corporaciones de crédito, y BAJA 5,5 en la banca múltiple, que pasa a compararse
+        contra su propio grupo de pares. En el score global se mueven 35 de las 43, en un
+        rango de -0,52 a +4,85 puntos y con media absoluta de 1,38. TRES entidades cambian de
+        banda de Resiliencia, las tres de Adecuada a Sólida: Asociación Duarte de Ahorros y
+        Préstamos (70,01 a 75,60), Asociación La Vega Real de Ahorros y Préstamos (72,90 a
+        78,43) y Corporación de Crédito Monumental (74,26 a 76,61). Las dos últimas habían
+        bajado de Sólida a Adecuada con el cambio de ponderación de Solidez del 2026-08-19,
+        así que para ellas el efecto neto de los dos cambios es volver a la banda que tenían
+        antes de agosto. La medición cubre el último corte de cada entidad; el recálculo
+        aplicó la misma curva a los 22 períodos históricos, cuyo movimiento no está medido en
+        esta cifra.
     pr: [993]
 
