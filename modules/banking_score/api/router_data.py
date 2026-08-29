@@ -643,3 +643,82 @@ async def recompute_carteras(
     from shared import operations
     return operations.trigger("recompute-carteras", origin="manual",
                               user_id=current_user.id, params={"period": period})
+
+
+# ─── Mapa sectorial ──────────────────────────────────────────────
+
+
+@router.get(
+    "/mapa-sectorial",
+    summary="El crédito del sistema abierto por sector económico",
+    description=(
+        "Agrega el libro de crédito de TODAS las entidades supervisadas por sector, con su "
+        "mora y su mora temprana de 31 a 90 días. Es la lectura que ninguna entidad puede "
+        "producir con su propio libro."
+    ),
+)
+async def mapa_sectorial_del_sistema(
+    corte: Optional[str] = Query(None, description="Corte YYYY-MM-DD; por defecto, el último con desglose"),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    from modules.banking_score.reports.mapa_sectorial import sistema_por_sector
+
+    pe = _corte_del_desglose(db, corte)
+    if pe is None:
+        raise HTTPException(
+            status_code=404,
+            detail=("Todavía no hay desglose sectorial cargado. Se llena con la "
+                    "sincronización SIB; sin ella la tabla existe vacía."))
+    return sistema_por_sector(db, pe)
+
+
+@router.get(
+    "/{bank_id}/mapa-sectorial",
+    summary="Posición de una entidad en el libro sectorial del sistema",
+    description=(
+        "Dónde presta la entidad y cómo le va ahí CONTRA EL RESTO del sistema. La brecha "
+        "entre su mora y la del mismo sector separa lo idiosincrático de lo compartido: es "
+        "la pregunta «¿es mi originación o es el sector?», que exige el panel completo."
+    ),
+)
+async def mapa_sectorial_de_entidad(
+    bank_id: str,
+    corte: Optional[str] = Query(None, description="Corte YYYY-MM-DD; por defecto, el último con desglose"),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    from modules.banking_score.reports.mapa_sectorial import posicion_de_la_entidad
+
+    bank = db.query(Bank).filter(Bank.id == bank_id).first()
+    if not bank:
+        raise HTTPException(status_code=404, detail="Entidad no encontrada")
+    pe = _corte_del_desglose(db, corte)
+    if pe is None:
+        raise HTTPException(status_code=404, detail="Todavía no hay desglose sectorial cargado.")
+    r = posicion_de_la_entidad(db, bank, pe)
+    if r is None:
+        # Se DECLARA por qué no hay lectura en vez de devolver una tabla vacía, que se lee
+        # como «no presta a nadie» cuando lo que pasa es que el cubo no la trajo.
+        raise HTTPException(
+            status_code=404,
+            detail=(f"{bank.name} no tiene desglose sectorial en {pe}. Las cambiarias no "
+                    f"tienen cartera de crédito, y una entidad puede no venir en el cubo "
+                    f"de ese corte."))
+    return r
+
+
+def _corte_del_desglose(db: Session, corte: Optional[str]):
+    """El corte pedido, o el ÚLTIMO con desglose. Nunca `date.today()`: el desglose vive en
+    cortes trimestrales y preguntar por hoy devolvería vacío siempre."""
+    from datetime import date as _date
+
+    from sqlalchemy import func as _func
+
+    from modules.banking_score.models.models import CarteraSectorial
+    if corte:
+        try:
+            return _date.fromisoformat(corte)
+        except ValueError:
+            raise HTTPException(status_code=422, detail="El corte va en formato YYYY-MM-DD")
+    return db.query(_func.max(CarteraSectorial.period_end)).scalar()
