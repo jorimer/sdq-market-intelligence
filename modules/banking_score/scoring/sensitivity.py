@@ -23,6 +23,7 @@ from typing import Any, Callable, Dict, List, Optional
 from modules.banking_score.scoring.engine import (
     calculate_deterministic_score, calculate_sub_components)
 from modules.banking_score.scoring.indicator_detail import INDICATOR_META, _band
+from modules.banking_score.scoring import hhi_estratos
 from modules.banking_score.scoring.weights import get_sub_component_weights
 
 # Fronteras de banda (score) — coinciden con _band(): fuerte≥85, adecuado≥70, moderado≥55.
@@ -34,11 +35,18 @@ class _Curve:
     (higher/lower/target). ``to_raw(target, current)`` da el umbral crudo para *target*;
     para 'target' usa *current* para elegir el lado (óptimo de dos ramas)."""
 
-    def __init__(self, direction: str, to_raw: Callable[[float, float], float]):
+    def __init__(self, direction: str, to_raw: Callable[..., float],
+                 estratificada: bool = False):
         self.direction = direction
         self._to_raw = to_raw
+        # Las curvas estratificadas necesitan el tipo de entidad para elegir sus anclas; el
+        # resto lo ignora. Se declara acá para que `to_raw` no tenga que adivinar por firma.
+        self.estratificada = estratificada
 
-    def to_raw(self, target_score: float, current_raw: float) -> float:
+    def to_raw(self, target_score: float, current_raw: float,
+               entity_type: Optional[str] = None) -> float:
+        if self.estratificada:
+            return self._to_raw(target_score, current_raw, entity_type)
         return self._to_raw(target_score, current_raw)
 
 
@@ -83,7 +91,9 @@ _CURVES: Dict[str, _Curve] = {
     "pct_cartera_a": _tramos(90.0, 94.0, 98.7),
     # sujeto-ok: es la CLAVE del indicador en la curva, no una porción servida
     "concentracion_top10": _lower(lambda s: (100.0 - s) * 57.0 / 100.0),
-    "hhi_sectorial": _lower(lambda s: 2500.0 - 10.0 * s),
+    # Estratificada: mismas anclas que `engine.calc_hhi_sectorial`, una sola fuente.
+    "hhi_sectorial": _Curve("lower", lambda s, _cur, et: hhi_estratos.raw_de(s, et),
+                            estratificada=True),
     "castigos_pct": _lower(lambda s: (100.0 - s) * 3.43 / 100.0),
     "exposicion_re": _target(
         lambda s, cur: 40.0 + (1.0 if cur >= 40.0 else -1.0) * (100.0 - s) * 1.5),
@@ -151,7 +161,8 @@ def _recompute_overall(indicators: Dict[str, Any], key: str, new_score: float,
     return calculate_deterministic_score(calculate_sub_components(mod), weights)
 
 
-def nivel_de_referencia(clave: str, raw_actual: float) -> Optional[float]:
+def nivel_de_referencia(clave: str, raw_actual: float,
+                        entity_type: Optional[str] = None) -> Optional[float]:
     """El nivel al que *clave* puntúa 50 sobre 100 — su punto de referencia.
 
     **Por qué existe.** Un ratio no se puede leer sin su referencia. «Cobertura de 96,75 %»
@@ -176,7 +187,7 @@ def nivel_de_referencia(clave: str, raw_actual: float) -> Optional[float]:
     if curva is None:
         return None
     try:
-        return round(float(curva.to_raw(50.0, float(raw_actual))), 4)
+        return round(float(curva.to_raw(50.0, float(raw_actual), entity_type)), 4)
     except (TypeError, ValueError, ZeroDivisionError):
         return None
 
@@ -226,7 +237,7 @@ def sensitivity_table(indicators: Dict[str, Any], entity_type: Optional[str] = N
         edge_up = _next_edge_up(float(score))
         if edge_up is not None:
             target = edge_up + 0.01  # apenas dentro de la banda superior
-            umbral = curve.to_raw(target, float(raw))
+            umbral = curve.to_raw(target, float(raw), entity_type)
             new_overall = _recompute_overall(indicators, key, target, weights)
             delta = round(new_overall - base, 2)
             if delta > 0.01:
@@ -242,7 +253,7 @@ def sensitivity_table(indicators: Dict[str, Any], entity_type: Optional[str] = N
         edge_down = _next_edge_down(float(score))
         if edge_down is not None and float(score) > edge_down - 0.01:
             target = edge_down - 0.01  # apenas debajo de la frontera (pierde banda)
-            umbral = curve.to_raw(target, float(raw))
+            umbral = curve.to_raw(target, float(raw), entity_type)
             new_overall = _recompute_overall(indicators, key, target, weights)
             delta = round(new_overall - base, 2)
             if delta < -0.01:

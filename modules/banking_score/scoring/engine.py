@@ -6,8 +6,9 @@ Persistence and event publishing happen in the API layer or a service wrapper.
 """
 import logging
 from dataclasses import dataclass
-from typing import Any, Dict, List, Optional
+from typing import Any, Callable, Dict, List, Optional
 
+from modules.banking_score.scoring import hhi_estratos
 from modules.banking_score.scoring.guards import patrimonio_es_positivo
 from modules.banking_score.scoring.weights import (
     CALIDAD_INDICATORS,
@@ -302,16 +303,15 @@ def calc_concentracion_top10(d) -> IndicatorResult:
     return {"raw": round(raw, 4), "score": round(score, 2)}
 
 
-def calc_hhi_sectorial(d) -> IndicatorResult:
-    """Sector HHI: normalized from raw HHI value."""
+def calc_hhi_sectorial(d, entity_type: Optional[str] = None) -> IndicatorResult:
+    """HHI sectorial de la cartera, calibrado POR ESTRATO (tipo de entidad).
+
+    La curva no vive acá: se deriva de las anclas declaradas en `hhi_estratos`, que son
+    también la fuente del inverso publicado como `nivel_de_referencia`. El porqué del
+    estrato —el indicador ordenaba tipo de entidad, no riesgo— está documentado ahí.
+    """
     raw = float(d.hhi_sectorial_raw or 0)
-    if raw < 1500:
-        score = 100.0
-    elif raw <= 2500:
-        score = 100 - ((raw - 1500) / 10)
-    else:
-        score = 0.0
-    return {"raw": round(raw, 4), "score": round(_clamp(score), 2)}
+    return {"raw": round(raw, 4), "score": round(hhi_estratos.score_de(raw, entity_type), 2)}
 
 
 def calc_castigos_pct(d) -> IndicatorResult:
@@ -456,7 +456,10 @@ def calc_hhi_ingresos(d) -> IndicatorResult:
 
 # ─── Dispatch table ─────────────────────────────────────────────
 
-_INDICATOR_FUNCS = {
+# Los calculadores no comparten firma: los declarados en `INDICADORES_ESTRATIFICADOS`
+# reciben además el tipo de entidad. El registro y las firmas los cruza
+# `TestIndicadoresEstratificados`, que es más estricto que lo que el tipo puede exigir.
+_INDICATOR_FUNCS: Dict[str, Callable[..., IndicatorResult]] = {
     # Solidez
     "solvencia": calc_solvencia,
     "tier1_ratio": calc_tier1_ratio,
@@ -591,7 +594,14 @@ def _indicator_available(data, name: str) -> bool:
 # ─── Public API ─────────────────────────────────────────────────
 
 
-def calculate_all_indicators(data) -> Dict[str, IndicatorResult]:
+# Indicadores cuya curva se calibra POR ESTRATO: su calculador recibe `entity_type` además
+# de los datos. Lo vigila `test_indicadores_estratificados_reciben_su_estrato`, que lee la
+# FIRMA del calculador — sin eso, agregar una clave acá y olvidar el parámetro haría que el
+# indicador se calibrara contra el universo en silencio, que es el defecto que se corrigió.
+INDICADORES_ESTRATIFICADOS = frozenset({"hhi_sectorial"})
+
+
+def calculate_all_indicators(data, entity_type: Optional[str] = None) -> Dict[str, IndicatorResult]:
     """Calculate all 19 indicators (+ composite) from raw banking data.
 
     Each result carries an ``available`` flag (False when its inputs are missing).
@@ -600,7 +610,8 @@ def calculate_all_indicators(data) -> Dict[str, IndicatorResult]:
     indicators: Dict[str, IndicatorResult] = {}
 
     for name, func in _INDICATOR_FUNCS.items():
-        res = dict(func(data))
+        res = dict(func(data, entity_type) if name in INDICADORES_ESTRATIFICADOS
+                   else func(data))
         res["available"] = _indicator_available(data, name)
         indicators[name] = res
 
@@ -700,7 +711,7 @@ def run_scoring(data, entity_type=None) -> Dict[str, Any]:
         indicators = calculate_fiduciaria_indicators(data)
         sub_scores = calculate_fiduciaria_sub_components(indicators)
     else:
-        indicators = calculate_all_indicators(data)
+        indicators = calculate_all_indicators(data, entity_type)
         sub_scores = calculate_sub_components(indicators)
     overall_score = calculate_deterministic_score(sub_scores, weights)
 

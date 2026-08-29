@@ -8,6 +8,7 @@ import pytest
 
 from modules.banking_score.models.models import BankingData
 from modules.banking_score.scoring import engine
+from modules.banking_score.scoring import hhi_estratos
 from modules.banking_score.scoring.sensitivity import _CURVES, sensitivity_table
 
 
@@ -59,7 +60,13 @@ def test_inverse_curve_matches_engine_roundtrip(key):
     score = calc(make(raw))["score"]
     assert 0.0 < score < 100.0, f"{key}: raw de prueba saturó la curva (score={score})"
     recovered = _CURVES[key].to_raw(score, raw)
-    assert recovered == pytest.approx(raw, abs=0.15), f"{key}: {recovered} != {raw} (score={score})"
+    # La tolerancia NO puede ser una constante para los 16: el motor redondea el score a dos
+    # decimales, y cuánto raw vale una centésima depende de la PENDIENTE de cada curva. En
+    # morosidad son milésimas de punto; en el HHI sectorial, cuyo rango crudo son miles de
+    # unidades, media unidad. Se deriva de la curva misma en vez de fijarse a ojo.
+    por_punto = abs(_CURVES[key].to_raw(score + 1.0, raw) - recovered)
+    assert recovered == pytest.approx(raw, abs=max(0.01, 0.02 * por_punto)), \
+        f"{key}: {recovered} != {raw} (score={score})"
 
 
 def test_every_engine_case_has_a_curve():
@@ -107,3 +114,27 @@ def test_sensitivity_downside_ranks_high_weight_first():
 def test_sensitivity_empty_when_no_indicators():
     r = sensitivity_table({}, entity_type="banca_multiple")
     assert r["palancas_alza"] == [] and r["riesgos_baja"] == []
+
+
+@pytest.mark.parametrize("estrato", sorted(hhi_estratos.ANCLAS))
+def test_inverso_del_hhi_sectorial_round_trip_por_estrato(estrato):
+    """El HHI sectorial se calibra por estrato: cada curva tiene que invertir la SUYA.
+
+    Con una curva global bastaba el round-trip de arriba. Con cuatro estratos, que el
+    universo invierta bien no dice nada de si la curva de las AAyP lo hace — y el inverso es
+    el que alimenta el `nivel_de_referencia` que se publica en los informes.
+    """
+    p10, p90 = hhi_estratos.ANCLAS[estrato]
+    raw = (p10 + p90) / 2.0
+    score = engine.calc_hhi_sectorial(_bd(hhi_sectorial_raw=raw), estrato)["score"]
+    assert 0.0 < score < 100.0
+    recuperado = _CURVES["hhi_sectorial"].to_raw(score, raw, estrato)
+    assert recuperado == pytest.approx(raw, abs=0.02 * (p90 - p10) / 100.0 * 100)
+
+
+def test_el_inverso_del_hhi_distingue_estratos():
+    """Si el inverso ignorara el estrato, los informes citarían el nivel de referencia de la
+    curva equivocada — con HTTP 200 y sin que nada fallara."""
+    niveles = {e: _CURVES["hhi_sectorial"].to_raw(50.0, 3000.0, e)
+               for e in hhi_estratos.ANCLAS}
+    assert len(set(niveles.values())) == len(niveles), f"estratos colapsados: {niveles}"

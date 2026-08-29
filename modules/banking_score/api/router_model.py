@@ -82,7 +82,8 @@ async def train_model(
 
     for record in records:
         try:
-            indicators = calculate_all_indicators(record)
+            indicators = calculate_all_indicators(
+                record, getattr(record, "entity_type", None))
             sub_scores = calculate_sub_components(indicators)
             # La etiqueta ahora son los DOS EJES deterministas, no el tier: el modelo
             # aprende a reproducir Perfil SDQ, que es lo que el sistema publica.
