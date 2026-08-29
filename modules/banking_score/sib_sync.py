@@ -14,7 +14,7 @@ import json
 import logging
 import threading
 from datetime import date, datetime, timezone
-from typing import Dict, List, Optional
+from typing import Any, Dict, List, Optional
 
 from sqlalchemy import func
 from sqlalchemy.orm import Session
@@ -624,6 +624,34 @@ def start_backfill_background(force: bool = False,
 # fields (mayores deudores → suma_top10, total, vigente A, vencida) and rescore —
 # far faster than the full ~3h backfill, for iterating on the concentration data.
 
+def _guardar_cartera_sectorial(db, bank_id: str, pe, por_sector: Any) -> None:
+    """Reescribe el desglose sectorial de una entidad y corte.
+
+    Se BORRA y se reinserta en vez de actualizar fila por fila porque el conjunto de sectores
+    de una entidad cambia entre cortes: si una entidad deja de prestarle a un sector, un
+    upsert dejaría la fila vieja para siempre y el sector aparecería como exposición viva.
+    Es la misma razón por la que el total y el desglose tienen que reconciliar.
+
+    Un corte sin desglose NO borra lo que ya había: significa que el cubo no trajo sectores
+    para esa entidad, y «no vino el dato» no es «ya no presta a nadie».
+    """
+    if not por_sector:
+        return
+    from modules.banking_score.models.models import CarteraSectorial
+    db.query(CarteraSectorial).filter_by(bank_id=bank_id, period_end=pe).delete(
+        synchronize_session=False)
+    for celda in por_sector:
+        db.add(CarteraSectorial(
+            bank_id=bank_id, period_end=pe,
+            sector=str(celda.get("sector") or "")[:160],
+            provincia=str(celda.get("provincia") or "SIN PROVINCIA")[:80],
+            region=(str(celda["region"])[:80] if celda.get("region") else None),
+            deuda=celda.get("deuda"), vencida=celda.get("vencida"),
+            vencida_31_90=celda.get("vencida_31_90"), cartera_a=celda.get("cartera_a"),
+            garantia=celda.get("garantia"), provision=celda.get("provision"),
+            creditos=celda.get("creditos")))
+
+
 def recompute_carteras_metrics(period: str, write_status=None) -> Dict:
     """Stream carteras/creditos for *period* (YYYY-MM), update the cartera fields on
     existing BankingData rows, and rescore the affected periods.
@@ -658,17 +686,22 @@ def recompute_carteras_metrics(period: str, write_status=None) -> Dict:
                 row = db.query(BankingData).filter_by(bank_id=bank.id, period_end=pe).first()
                 if not row:
                     continue  # only enrich existing rows (balance/income already loaded)
-                total = cm.get("total") or 0
+                # El desglose sectorial ensanchó el tipo del dict de métricas (trae un dict
+                # anidado), así que los escalares se acotan acá en vez de dejar que `Any` se
+                # propague a las columnas.
+                total = float(cm.get("total") or 0)
                 if total <= 0:
                     continue
                 row.cartera_total = total
-                row.suma_top10 = cm.get("mayores")
+                mayores = cm.get("mayores")
+                row.suma_top10 = None if mayores is None else float(mayores)
                 if cm.get("hhi") is not None:
                     row.hhi_sectorial_raw = cm["hhi"]
                 if cm.get("cartera_a"):
                     row.cartera_categoria_a = cm["cartera_a"]
                 if cm.get("vencida"):
                     row.cartera_vencida_90d = cm["vencida"]
+                _guardar_cartera_sectorial(db, bank.id, pe, cm.get("por_sector") or {})
                 updated += 1
                 affected_periods.add(pe)
         db.commit()

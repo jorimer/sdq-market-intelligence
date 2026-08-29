@@ -857,8 +857,9 @@ class SIBDataClient:
         income = margen_bruto + otros
         return abs(opex), (income if income > 0 else None)
 
-    def _compute_carteras_metrics(self, period_start: str, period_end: str = "",
-                                  on_progress=None) -> Dict[str, Dict[date, Dict[str, float]]]:
+    def _compute_carteras_metrics(
+        self, period_start: str, period_end: str = "", on_progress=None,
+    ) -> Dict[str, Dict[date, Dict[str, Any]]]:
         """Stream carteras/creditos ONE quarter at a time, aggregating per entity/quarter
         in a SINGLE pass over the loan-level cube:
           - sector HHI (Σ deuda by sectorEconomico → Σ shareᵢ²·10000)
@@ -902,7 +903,8 @@ class SIBDataClient:
                 if _norm(sector) == "TODOS":
                     continue
                 bucket = acc.setdefault(short, {}).setdefault(
-                    pe, {"sectors": {}, "total": 0.0, "mayores": 0.0, "vencida": 0.0, "cartera_a": 0.0})
+                    pe, {"sectors": {}, "total": 0.0, "mayores": 0.0, "vencida": 0.0,
+                         "cartera_a": 0.0, "por_sector": {}, "sin_sector": 0.0})
                 bucket["total"] += deuda
                 tipo = _norm(r.get("tipoCredito") or "")
                 if "MAYORES DEUDORES" in tipo:
@@ -913,10 +915,47 @@ class SIBDataClient:
                     pass
                 if (r.get("clasificacionEntidad") or "").strip().upper() == "A":
                     bucket["cartera_a"] += deuda
+                # EL DESGLOSE SECTORIAL COMPLETO, no solo la deuda. La fila del cubo trae a
+                # la vez mora, mora TEMPRANA (31-90 días), clasificación, garantía y
+                # provisión; hasta acá se leían para acumularlos al nivel de la entidad y el
+                # corte por sector se tiraba. Es el único lugar del sistema donde existe el
+                # libro de crédito de TODAS las entidades abierto por sector: un banco tiene
+                # su propia fila del cubo y ninguna de las otras noventa y una.
                 if sector:
                     bucket["sectors"][sector] = bucket["sectors"].get(sector, 0.0) + deuda
+                    # GRANO COMPLETO: sector × PROVINCIA. Agregar hacia arriba (solo sector,
+                    # solo provincia) es una suma; bajar exigiría volver a descargar los 22
+                    # trimestres del cubo. La provincia entra desde el nacimiento por eso.
+                    # `region` se guarda aunque se derive de la provincia: la trae la fuente y
+                    # copiarla evita mantener un mapa propio que se desincroniza cuando la SIB
+                    # reagrupa.
+                    prov = (r.get("provincia") or "").strip() or "SIN PROVINCIA"
+                    region = (r.get("region") or "").strip() or None
+                    ps = bucket["por_sector"].setdefault(
+                        (sector, prov), {"sector": sector, "provincia": prov,
+                                         "region": region,
+                                         "deuda": 0.0, "vencida": 0.0, "vencida_31_90": 0.0,
+                                         "cartera_a": 0.0, "garantia": 0.0, "provision": 0.0,
+                                         "creditos": 0.0})
+                    ps["deuda"] += deuda
+                    for clave, campo in (("vencida", "deudaVencida"),
+                                         ("vencida_31_90", "deudaVencidaDe31A90Dias"),
+                                         ("garantia", "valorGarantia"),
+                                         ("provision", "valorProvisionCapitalYRendimiento"),
+                                         ("creditos", "cantidadCredito")):
+                        try:
+                            ps[clave] += float(r.get(campo) or 0)
+                        except (TypeError, ValueError):
+                            pass
+                    if (r.get("clasificacionEntidad") or "").strip().upper() == "A":
+                        ps["cartera_a"] += deuda
+                else:
+                    # Se MIDE lo que queda fuera del desglose en vez de dejar que la vista
+                    # sectorial parezca cubrir el total. Sin esta cifra, una cartera con
+                    # mucho crédito sin sector se leería como si todo estuviera clasificado.
+                    bucket["sin_sector"] += deuda
             logger.info(f"    carteras {q}: {len(rows)} rows aggregated")
-        result: Dict[str, Dict[date, Dict[str, float]]] = {}
+        result: Dict[str, Dict[date, Dict[str, Any]]] = {}
         for short, by_period in acc.items():
             for pe, b in by_period.items():
                 total = b["total"]
@@ -925,12 +964,22 @@ class SIBDataClient:
                 sectors = b["sectors"]
                 stot = sum(sectors.values())
                 hhi = (sum((v / stot) ** 2 for v in sectors.values()) * 10000.0) if stot > 0 else None
+                por_sector = [
+                    {k: (round(v, 2) if isinstance(v, float) else v)
+                     for k, v in vals.items()}
+                    for vals in b["por_sector"].values()
+                ]
                 result.setdefault(short, {})[pe] = {
                     "hhi": round(hhi, 4) if hhi is not None else None,
                     "total": round(total, 2),
                     "mayores": round(b["mayores"], 2),
                     "vencida": round(b["vencida"], 2),
                     "cartera_a": round(b["cartera_a"], 2),
+                    "por_sector": por_sector,
+                    # Cuánto del libro NO tiene sector declarado en el cubo. Viaja con el
+                    # desglose porque es lo que define hasta dónde vale leerlo.
+                    "deuda_sin_sector": round(b["sin_sector"], 2),
+                    "cobertura_sectorial": (round(stot / total, 4) if total > 0 else None),
                 }
         return result
 
