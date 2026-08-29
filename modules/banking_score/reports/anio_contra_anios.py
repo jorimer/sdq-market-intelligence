@@ -72,6 +72,9 @@ def cierres_anuales(db: Session, bank: Bank, hasta: int) -> List[Dict[str, Any]]
             "anio": rr.period_end.year,
             "corte": rr.period_end.isoformat(),
             "score": round(float(rr.overall_score), 2),
+            # La banda es del eje de Resiliencia, no de `score`: viaja con su propio número.
+            "resiliencia": (None if rr.resiliencia_score is None
+                            else round(float(rr.resiliencia_score), 2)),
             "banda": rr.banda_resiliencia,
             "dimensiones": {nombre: (None if getattr(rr, col) is None
                                      else round(float(getattr(rr, col)), 2))
@@ -93,6 +96,13 @@ def _variaciones(serie: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
             "direccion": ("estable" if abs(delta) < UMBRAL_ANUAL
                           else "al alza" if delta > 0 else "a la baja"),
             "banda": despues["banda"],
+            # `cambio` es del score GLOBAL y la banda es del eje de Resiliencia: un cambio de
+            # banda explicado con el delta de otro número no se puede auditar. Viaja el suyo.
+            "resiliencia": despues.get("resiliencia"),
+            "resiliencia_anterior": antes.get("resiliencia"),
+            "cambio_resiliencia": (
+                None if antes.get("resiliencia") is None or despues.get("resiliencia") is None
+                else round(despues["resiliencia"] - antes["resiliencia"], 2)),
             "cambio_de_banda": (None if despues["banda"] == antes["banda"]
                                 else {"desde": antes["banda"], "hasta": despues["banda"]}),
         })

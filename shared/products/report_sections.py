@@ -82,6 +82,10 @@ def _fecha_del_corte(as_of: str):
         return None
 
 
+_CADENCIA_ES = {"monthly": "mensual", "quarterly": "trimestral", "annual": "anual",
+                "daily": "diaria", "weekly": "semanal"}
+
+
 def _frescura_md(sig, as_of: Optional[str], hoy=None) -> str:
     """La frescura ANCLADA AL CORTE del informe, no al día en que se genera.
 
@@ -108,7 +112,10 @@ def _frescura_md(sig, as_of: Optional[str], hoy=None) -> str:
     from datetime import date as _date
 
     hoy = hoy or _date.today()
-    cadence = (sig.cadence if sig else None) or "—"
+    # `cadence` es una CLAVE de máquina —la usa `_CADENCE_THRESHOLDS` para elegir umbrales—,
+    # así que no se traduce el valor: se traduce al escribirlo. Sin esto, un documento en
+    # español salía diciendo «Cadencia: quarterly».
+    cadence = _CADENCIA_ES.get((sig.cadence if sig else None) or "", None) or "—"
     if not sig or sig.freshness_days is None:
         return f"**Cadencia:** {cadence}."
 

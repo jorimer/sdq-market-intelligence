@@ -89,7 +89,13 @@ def entity_trajectories(db: Session, bank: Bank, n: int = TRAJECTORY_WINDOW,
     for rr in ratings:
         pe = str(rr.period_end)
         if rr.overall_score is not None:
+            # `score` es el GLOBAL y `banda_resiliencia` es la banda del eje de
+            # RESILIENCIA, que es otro número: reagrega solidez, calidad, liquidez y
+            # diversificación, y excluye eficiencia. Servir la banda sin el score que la
+            # produce fue lo que hizo leer los umbrales como arbitrarios en un informe real.
             overall.append({"period_end": pe, "score": round(float(rr.overall_score), 2),
+                            "resiliencia": (None if rr.resiliencia_score is None
+                                            else round(float(rr.resiliencia_score), 2)),
                             "banda_resiliencia": rr.banda_resiliencia})
         for sk, attr in _SUB_SCORE_ATTR.items():
             val = getattr(rr, attr, None)

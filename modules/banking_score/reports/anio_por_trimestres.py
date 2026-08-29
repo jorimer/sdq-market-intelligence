@@ -60,6 +60,9 @@ def _tramos(puntos: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
             "score_desde": round(float(s0), 2), "score_hasta": round(float(s1), 2),
             "cambio": delta,
             "direccion": direccion,
+            # `score_hasta` es el GLOBAL; la banda sale del eje de Resiliencia. Va su número.
+            "resiliencia_desde": antes.get("resiliencia"),
+            "resiliencia_hasta": despues.get("resiliencia"),
             "banda_hasta": despues.get("banda_resiliencia"),
         })
     return out
@@ -138,6 +141,7 @@ def anio_por_trimestres(db: Session, bank: Bank, anio: int) -> Optional[Dict[str
             "plurianual son el otro producto, «SDQ Banking · Revisión Anual»."),
         "serie": [{"corte": str(p["period_end"]),
                    "score": round(float(p["score"]), 2),
+                   "resiliencia": p.get("resiliencia"),
                    "banda": p.get("banda_resiliencia"),
                    "es_linea_base": str(p["period_end"]) == cortes[0]}
                   for p in puntos],

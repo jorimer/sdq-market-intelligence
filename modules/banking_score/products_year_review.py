@@ -317,11 +317,22 @@ class BankingYearReviewProduct:
         n = (db.query(func.count(RatingResult.id))
              .filter(RatingResult.period_end == date(ultimo, 12, 31),
                      RatingResult.model_type == ModelType.deterministic).scalar() or 0)
+        # FRESCURA: días desde la observación MÁS NUEVA del panel — la misma definición que
+        # usa el producto trimestral. Antes se medía contra el 31 de diciembre del año
+        # cerrado, que no es una propiedad del dato sino del calendario: crecía sola y daba
+        # un número distinto del que el trimestral publicaba para el mismo panel, así que los
+        # dos informes de un mismo paquete se contradecían. Que el informe hable de su corte
+        # y no del último dato lo resuelve `report_sections._frescura_md`, anclando al corte.
+        ultima_obs = (db.query(func.max(RatingResult.period_end))
+                      .filter(RatingResult.model_type == ModelType.deterministic).scalar())
+        cierres = "un año cerrado" if len(anios) == 1 else f"{len(anios)} años cerrados"
+        entidades = "1 entidad calificada" if n == 1 else f"{n} entidades calificadas"
         return DataHealth(
             coverage=1.0 if n else 0.0,
-            freshness_days=(date.today() - date(ultimo, 12, 31)).days,
+            freshness_days=(None if ultima_obs is None
+                            else (date.today() - ultima_obs).days),
             sources=("SIB", "SIMBAD"),
-            detail=f"{len(anios)} año(s) cerrado(s); {n} entidades al cierre de {ultimo}.")
+            detail=f"{cierres}; {entidades} al cierre de {ultimo}.")
 
     def has_engine(self) -> bool:
         return bool(self.available_periods())
@@ -500,13 +511,16 @@ SAMPLE_REVISION = {
     "anio": 2025, "entidad": SAMPLE_ENTIDAD,
     "cortes_del_anio": ["2024-12-31", "2025-03-31", "2025-06-30", "2025-09-30", "2025-12-31"],
     "cortes_faltantes": [],
-    "serie": [{"corte": "2024-12-31", "score": 72.4, "banda": "Sólida"},
-              {"corte": "2025-03-31", "score": 68.1, "banda": "Sólida"},
-              {"corte": "2025-06-30", "score": 63.4, "banda": "Adecuada"},
-              {"corte": "2025-09-30", "score": 67.9, "banda": "Adecuada"},
-              {"corte": "2025-12-31", "score": 71.8, "banda": "Sólida"}],
-    "apertura": {"corte": "2024-12-31", "score": 72.4, "banda": "Sólida"},
-    "cierre": {"corte": "2025-12-31", "score": 71.8, "banda": "Sólida"},
+    # `score` es el GLOBAL y `banda` es la del eje de RESILIENCIA, que es otro número. La
+    # muestra lo exhibe a propósito: 72.4 no podría ser «Sólida» si la banda saliera del
+    # score global, porque ese umbral es 75. La resiliencia viaja al lado para que se vea.
+    "serie": [{"corte": "2024-12-31", "score": 72.4, "resiliencia": 76.2, "banda": "Sólida"},
+              {"corte": "2025-03-31", "score": 68.1, "resiliencia": 75.4, "banda": "Sólida"},
+              {"corte": "2025-06-30", "score": 63.4, "resiliencia": 71.0, "banda": "Adecuada"},
+              {"corte": "2025-09-30", "score": 67.9, "resiliencia": 73.8, "banda": "Adecuada"},
+              {"corte": "2025-12-31", "score": 71.8, "resiliencia": 75.9, "banda": "Sólida"}],
+    "apertura": {"corte": "2024-12-31", "score": 72.4, "resiliencia": 76.2, "banda": "Sólida"},
+    "cierre": {"corte": "2025-12-31", "score": 71.8, "resiliencia": 75.9, "banda": "Sólida"},
     "cambio_score": -0.6,
     "regla_del_score": ("el score del año es el DEL CIERRE; no se promedian los trimestres"),
     "camino": {"amplitud": 9.0,
