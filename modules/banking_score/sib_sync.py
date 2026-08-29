@@ -473,6 +473,9 @@ def run_backfill(force: bool = False, period_start: str = "2021-01",
                     row = existing or BankingData(bank_id=bank.id, period_end=pe)
                     row.period_type = PeriodType.quarterly
                     row.source = DataSource.sib_api
+                    # El desglose sectorial NO es una columna de BankingData: se saca antes
+                    # del setattr y se persiste en su propia tabla.
+                    _guardar_cartera_sectorial(db, bank.id, pe, rec.pop("_por_sector", None))
                     for k, v in rec.items():
                         if v is not None:
                             setattr(row, k, v)

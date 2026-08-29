@@ -1463,6 +1463,13 @@ class SIBDataClient:
                     if cm:
                         if cm.get("hhi") is not None:
                             mapped["hhi_sectorial_raw"] = cm["hhi"]
+                        # El DESGLOSE viaja con el escalar. Acá no hay sesión de base, así
+                        # que se lleva en una clave con guion bajo que el escritor saca antes
+                        # de construir la fila. Sin esto, el backfill consumía el `hhi` y
+                        # tiraba `por_sector` — la tabla sectorial quedaba vacía y NADA
+                        # fallaba: dos horas y media de sync para un dato que no se escribía.
+                        if cm.get("por_sector"):
+                            mapped["_por_sector"] = cm["por_sector"]
                         # Largest-debtors concentration (SIB "Mayores Deudores") fills the
                         # per-bank top-10 indicator that was N/D — numerator and denominator
                         # both from the cube (self-consistent). We deliberately do NOT touch
