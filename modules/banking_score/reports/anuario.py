@@ -68,6 +68,9 @@ def _panel(db: Session, cortes: List[date]) -> Dict[date, Dict[str, Dict[str, An
             continue
         out[rr.period_end][b.name] = {
             "score": float(rr.overall_score),
+            # La banda es del eje de Resiliencia, no de `score`: viaja con su propio número.
+            "resiliencia": (None if rr.resiliencia_score is None
+                            else round(float(rr.resiliencia_score), 2)),
             "banda": rr.banda_resiliencia,
             "tipo": b.bank_type.value if b.bank_type else None,
         }
@@ -180,12 +183,24 @@ def anuario_del_sistema(db: Session, anio: int) -> Optional[Dict[str, Any]]:
         {"entidad": n, "tipo": panel[fin][n]["tipo"],
          "tipo_label": etiqueta_de_tipo(panel[fin][n]["tipo"]),
          "desde": panel[ini][n]["banda"], "hasta": panel[fin][n]["banda"],
-         "cambio_score": round(delta[n], 2)}
+         "cambio_score": round(delta[n], 2),
+         # `cambio_score` es del score GLOBAL, y la banda la determina el eje de
+         # RESILIENCIA. Ordenar por el global ordenaba los cambios de banda por un número
+         # que no es el que los produjo.
+         "resiliencia_desde": panel[ini][n].get("resiliencia"),
+         "resiliencia_hasta": panel[fin][n].get("resiliencia"),
+         "cambio_resiliencia": (
+             None if panel[ini][n].get("resiliencia") is None
+             or panel[fin][n].get("resiliencia") is None
+             else round(panel[fin][n]["resiliencia"] - panel[ini][n]["resiliencia"], 2))}
         for n in comparables
         if panel[ini][n]["banda"] and panel[fin][n]["banda"]
         and panel[ini][n]["banda"] != panel[fin][n]["banda"]
     ]
-    bandas.sort(key=lambda x: x["cambio_score"])
+    # Sin resiliencia medida van al final, no se cuelan como si no se hubieran movido.
+    bandas.sort(key=lambda x: (x["cambio_resiliencia"] is None,
+                               x["cambio_resiliencia"] if x["cambio_resiliencia"] is not None
+                               else 0.0))
 
     # ── Extremos, con su advertencia ──────────────────────────────────
     orden = sorted(comparables, key=lambda n: delta[n])
@@ -201,9 +216,19 @@ def anuario_del_sistema(db: Session, anio: int) -> Optional[Dict[str, Any]]:
     return {
         "anio": anio,
         "cortes": [str(c) for c in presentes],
+        # CADA CONTEO NOMBRA SU POBLACIÓN. El informe servía tres cifras de entidades con
+        # tres perímetros distintos —las vistas en el año, las comparables, y las calificadas
+        # al cierre que declara la metodología— sin decir cuál era cuál. Un revisor externo
+        # las leyó como el mismo denominador y concluyó que nos contradecíamos.
         "universo": {
             "comparables": len(comparables),
+            "comparables_significa": (
+                "entidades presentes en TODOS los cortes del año; es el único perímetro que "
+                "se ordena y el denominador de `conteo_direccion`, `por_tipo` y `sistema`"),
             "vistas_en_el_anio": len(vistas),
+            "vistas_en_el_anio_significa": (
+                "entidades con AL MENOS un corte en el año; incluye a las parciales, así que "
+                "es mayor que `comparables` y NO es el denominador de ningún agregado"),
             "parciales": [
                 {"entidad": n,
                  "cortes_presentes": sum(1 for c in presentes if n in panel[c]),
@@ -216,7 +241,17 @@ def anuario_del_sistema(db: Session, anio: int) -> Optional[Dict[str, Any]]:
                       "peor porque desaparecerían sin aviso"),
         },
         "sistema": sistema,
-        "conteo_direccion": conteo,
+        # Las TRES direcciones viajan juntas y con su total. Citar solo dos —«40 se
+        # deterioraron y 32 mejoraron»— deja al lector sumando 72 contra un universo de 82,
+        # y esa resta silenciosa se lee como un error nuestro.
+        "conteo_direccion": {
+            **conteo,
+            "poblacion": "entidades comparables (presentes en todos los cortes del año)",
+            "total": len(comparables),
+            "regla_de_cierre": ("mejora + deterioro + estable = total; si el texto cita solo "
+                                "dos de las tres, las cifras no cuadran y hay que nombrar "
+                                "también las estables"),
+        },
         "por_tipo": tipos,
         "cambios_de_banda": bandas,
         "extremos": extremos,

@@ -366,7 +366,9 @@ def _bandas_del_anio(puntos: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
     for p in puntos:
         banda = p.get("banda_resiliencia")
         if banda and previo and banda != previo:
-            cambios.append({"corte": str(p["period_end"]), "desde": previo, "hasta": banda})
+            cambios.append({"corte": str(p["period_end"]), "desde": previo, "hasta": banda,
+                            # El número que movió la banda, no el score global.
+                            "resiliencia": p.get("resiliencia")})
         if banda:
             previo = banda
     return cambios
@@ -428,12 +430,15 @@ def revision_anual(db: Session, bank: Bank, anio: int) -> Optional[Dict[str, Any
         # vio, no el del año, y ocultarlo haría pasar una lectura parcial por completa.
         "cortes_faltantes": faltantes,
         "serie": [{"corte": str(p["period_end"]), "score": round(float(p["score"]), 2),
+                   "resiliencia": p.get("resiliencia"),
                    "banda": p.get("banda_resiliencia")} for p in overall],
         "apertura": {"corte": str(apertura["period_end"]),
                      "score": round(float(apertura["score"]), 2),
+                     "resiliencia": apertura.get("resiliencia"),
                      "banda": apertura.get("banda_resiliencia")},
         "cierre": {"corte": str(final["period_end"]),
                    "score": round(float(final["score"]), 2),
+                   "resiliencia": final.get("resiliencia"),
                    "banda": final.get("banda_resiliencia")},
         "cambio_score": delta,
         # El score del año ES el del cierre. Se declara para que nadie —modelo ni lector—

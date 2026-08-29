@@ -410,6 +410,13 @@ def _build_section_context(
             # Los DOS EJES, no el símbolo: lo que entra al contexto es lo que la narrativa
             # termina escribiendo, así que pasarle el tier reintroduciría por texto la
             # notación que la superficie retiró.
+            # Las bandas viajan CON su magnitud. Sin el score del eje, el modelo tiene
+            # enfrente `overall_score` y una banda, y relaciona lo único que ve: así se
+            # escribe «con un score de 60,06 se ubica En vigilancia», que es falso —la
+            # banda sale de Resiliencia, que excluye eficiencia—. El hueco es lo que lo
+            # llena mal.
+            "ejecucion": scoring_result.get("ejecucion"),
+            "resiliencia": scoring_result.get("resiliencia"),
             "banda_ejecucion": scoring_result.get("banda_ejecucion"),
             "banda_resiliencia": scoring_result.get("banda_resiliencia"),
             "entorno_macro": scoring_result.get("entorno_macro", {}),
@@ -425,6 +432,13 @@ def _build_section_context(
             # Los DOS EJES, no el símbolo: lo que entra al contexto es lo que la narrativa
             # termina escribiendo, así que pasarle el tier reintroduciría por texto la
             # notación que la superficie retiró.
+            # Las bandas viajan CON su magnitud. Sin el score del eje, el modelo tiene
+            # enfrente `overall_score` y una banda, y relaciona lo único que ve: así se
+            # escribe «con un score de 60,06 se ubica En vigilancia», que es falso —la
+            # banda sale de Resiliencia, que excluye eficiencia—. El hueco es lo que lo
+            # llena mal.
+            "ejecucion": scoring_result.get("ejecucion"),
+            "resiliencia": scoring_result.get("resiliencia"),
             "banda_ejecucion": scoring_result.get("banda_ejecucion"),
             "banda_resiliencia": scoring_result.get("banda_resiliencia"),
             "overall_score": scoring_result.get("overall_score", 0),
@@ -451,6 +465,13 @@ def _build_section_context(
             # Los DOS EJES, no el símbolo: lo que entra al contexto es lo que la narrativa
             # termina escribiendo, así que pasarle el tier reintroduciría por texto la
             # notación que la superficie retiró.
+            # Las bandas viajan CON su magnitud. Sin el score del eje, el modelo tiene
+            # enfrente `overall_score` y una banda, y relaciona lo único que ve: así se
+            # escribe «con un score de 60,06 se ubica En vigilancia», que es falso —la
+            # banda sale de Resiliencia, que excluye eficiencia—. El hueco es lo que lo
+            # llena mal.
+            "ejecucion": scoring_result.get("ejecucion"),
+            "resiliencia": scoring_result.get("resiliencia"),
             "banda_ejecucion": scoring_result.get("banda_ejecucion"),
             "banda_resiliencia": scoring_result.get("banda_resiliencia"),
             "sub_componente": _SUB_LABELS.get(sub_key, sub_key),
@@ -514,6 +535,13 @@ def _build_section_context(
         "entity_name": bank_name,
         "period": period,
         "overall_score": scoring_result.get("overall_score", 0),
+        # Las bandas viajan CON su magnitud. Sin el score del eje, el modelo tiene
+        # enfrente `overall_score` y una banda, y relaciona lo único que ve: así se
+        # escribe «con un score de 60,06 se ubica En vigilancia», que es falso —la
+        # banda sale de Resiliencia, que excluye eficiencia—. El hueco es lo que lo
+        # llena mal.
+        "ejecucion": scoring_result.get("ejecucion"),
+        "resiliencia": scoring_result.get("resiliencia"),
         "banda_ejecucion": scoring_result.get("banda_ejecucion"),
         "banda_resiliencia": scoring_result.get("banda_resiliencia"),
         "sub_components": scoring_result.get("sub_components", {}),

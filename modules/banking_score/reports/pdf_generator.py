@@ -752,16 +752,24 @@ def _build_anio_por_trimestres_tables(dentro: Dict, styles) -> List:
     if serie:
         elementos.append(Paragraph(f"El año {dentro.get('anio', '')} trimestre a trimestre",
                                    styles["SDQHeading"]))
-        filas = [["Corte", "Score", "Banda", ""]]
+        filas = [["Corte", "Score", "Resiliencia", "Banda", ""]]
         for p in serie:
             filas.append([
                 str(p.get("corte", ""))[:7],
                 f"{p['score']:.2f}" if isinstance(p.get("score"), (int, float)) else "—",
+                f"{p['resiliencia']:.2f}" if isinstance(p.get("resiliencia"), (int, float)) else "—",
                 str(p.get("banda") or "—"),
                 # La línea base se MARCA: sin eso el año parecería tener cinco trimestres.
                 "línea base" if p.get("es_linea_base") else ""])
-        elementos.append(_branded_table(filas, [1.2 * inch, 1.0 * inch, 1.8 * inch, 1.0 * inch],
-                                        styles, font_size=9.5, padding=5))
+        elementos.append(_branded_table(
+            filas, [0.95 * inch, 0.9 * inch, 1.05 * inch, 1.45 * inch, 0.95 * inch],
+            styles, font_size=9.5, padding=5))
+        elementos.append(Paragraph(
+        "La banda corresponde al eje de RESILIENCIA, no al score global: Resiliencia "
+        "reagrega solidez, calidad, liquidez y diversificación, y excluye eficiencia. "
+        "Por eso un score global mayor puede convivir con una banda menor.",
+        styles["SDQSmall"]))
+
         elementos.append(Spacer(1, 0.2 * inch))
 
     tramos = dentro.get("tramos") or []
@@ -811,17 +819,29 @@ def _build_anio_contra_anios_tables(rev: Dict, styles) -> List:
     serie = rev.get("serie_de_cierres") or []
     if serie:
         elementos.append(Paragraph("Cierres anuales", styles["SDQHeading"]))
-        filas = [["Año", "Score", "Banda", "vs. año anterior"]]
+        # La banda NO sale de la columna «Score»: sale del eje de Resiliencia, que es otro
+        # número. Publicarlas pegadas sin decirlo hizo que un analista externo leyera los
+        # umbrales como arbitrarios —vio 60,06 «En vigilancia» y 59,73 «Adecuada»— cuando lo
+        # que variaba era la cifra que no estábamos mostrando.
+        filas = [["Año", "Score", "Resiliencia", "Banda", "vs. año anterior"]]
         cambios = {v["anio"]: v for v in (rev.get("variaciones") or [])}
         for p in serie:
             v = cambios.get(p.get("anio"))
             filas.append([
                 str(p.get("anio", "")),
                 f"{p['score']:.2f}" if isinstance(p.get("score"), (int, float)) else "—",
+                f"{p['resiliencia']:.2f}" if isinstance(p.get("resiliencia"), (int, float)) else "—",
                 str(p.get("banda") or "—"),
                 f"{v['cambio']:+.2f}" if v and isinstance(v.get("cambio"), (int, float)) else "—"])
-        elementos.append(_branded_table(filas, [1.0 * inch, 1.1 * inch, 1.9 * inch, 1.3 * inch],
-                                        styles, font_size=9.5, padding=5))
+        elementos.append(_branded_table(
+            filas, [0.75 * inch, 0.95 * inch, 1.05 * inch, 1.5 * inch, 1.15 * inch],
+            styles, font_size=9.5, padding=5))
+        elementos.append(Paragraph(
+        "La banda corresponde al eje de RESILIENCIA, no al score global: Resiliencia "
+        "reagrega solidez, calidad, liquidez y diversificación, y excluye eficiencia. "
+        "Por eso un score global mayor puede convivir con una banda menor.",
+        styles["SDQSmall"]))
+
         t = rev.get("tendencia") or {}
         if t.get("lectura"):
             elementos.append(Spacer(1, 0.08 * inch))
@@ -867,12 +887,20 @@ def _build_revision_anual_tables(rev: Dict, styles) -> List:
     serie = rev.get("serie") or []
     if serie:
         elements.append(Paragraph(f"El año {rev.get('anio', '')}", styles["SDQHeading"]))
-        rows = [["Corte", "Score", "Banda"]]
+        rows = [["Corte", "Score", "Resiliencia", "Banda"]]
         rows += [[str(p.get("corte", ""))[:7],
                   f"{p['score']:.2f}" if isinstance(p.get("score"), (int, float)) else "—",
+                  f"{p['resiliencia']:.2f}" if isinstance(p.get("resiliencia"), (int, float)) else "—",
                   str(p.get("banda") or "—")] for p in serie]
-        elements.append(_branded_table(rows, [1.4 * inch, 1.1 * inch, 2.3 * inch],
-                                       styles, font_size=9.5, padding=5))
+        elements.append(_branded_table(
+            rows, [1.1 * inch, 1.0 * inch, 1.1 * inch, 1.9 * inch],
+            styles, font_size=9.5, padding=5))
+        elements.append(Paragraph(
+        "La banda corresponde al eje de RESILIENCIA, no al score global: Resiliencia "
+        "reagrega solidez, calidad, liquidez y diversificación, y excluye eficiencia. "
+        "Por eso un score global mayor puede convivir con una banda menor.",
+        styles["SDQSmall"]))
+
         ap, ci = rev.get("apertura") or {}, rev.get("cierre") or {}
         nota = (f"Apertura {ap.get('score', '—')} → cierre {ci.get('score', '—')} "
                 f"({rev.get('cambio_score', 0):+.2f} puntos). "

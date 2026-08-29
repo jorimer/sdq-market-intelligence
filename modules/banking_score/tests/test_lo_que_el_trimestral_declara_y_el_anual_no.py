@@ -246,3 +246,68 @@ def test_los_tipos_del_universo_estan_TODOS_contemplados():
     for tipo in sorted(fuera):
         assert "sistema" not in (_fila_roa(tipo)["panel_cierre"] or {}), (
             f"'{tipo}' no integra el sistema y se le sirvió la referencia del sistema.")
+
+
+class TestLaFrescuraSignificaLoMismoEnLosDos:
+    """Los dos productos van en el MISMO paquete al cliente: si `freshness_days` no mide lo
+    mismo en ambos, los dos documentos se contradicen sobre qué tan al día está el dato.
+
+    El caso: el anual la medía contra el 31 de diciembre del año cerrado —una propiedad del
+    CALENDARIO, que crece sola cada día— mientras el trimestral la medía contra la
+    observación más nueva del panel. Una revisión externa de dos informes reales de la misma
+    entidad lo señaló como contradicción, y tenía razón. Que el informe hable de SU corte y no
+    del último dato es otra cosa, y la resuelve `report_sections._frescura_md` anclando al
+    corte; esto fija qué MIDE el campo.
+
+    Se lee con `ast` y no buscando texto: `data_signals` tiene un early return que también
+    asigna `freshness_days`, así que un `.index()` encuentra ESE y el test pasa con el código
+    viejo. Pasó — este test no tuvo dientes hasta que se comprobó contra la versión anterior.
+    """
+
+    @staticmethod
+    def _expresiones_de_frescura(clase):
+        """Cada expresión asignada a `freshness_days` en `data_signals`, como fuente."""
+        import ast
+        import inspect
+        import textwrap
+        arbol = ast.parse(textwrap.dedent(inspect.getsource(clase.data_signals)))
+        # Un nivel de indirección: el trimestral pasa `freshness_days=freshness` y calcula
+        # `freshness` una línea antes. Sin resolver el nombre, el test miraría la variable en
+        # vez de su definición y aprobaría cualquier cosa.
+        asignaciones = {t.id: ast.unparse(nodo.value)
+                        for nodo in ast.walk(arbol) if isinstance(nodo, ast.Assign)
+                        for t in nodo.targets if isinstance(t, ast.Name)}
+        out = []
+        for nodo in ast.walk(arbol):
+            if not isinstance(nodo, ast.Call):
+                continue
+            for kw in nodo.keywords:
+                if kw.arg != "freshness_days":
+                    continue
+                expr = ast.unparse(kw.value)
+                out.append(asignaciones.get(expr, expr) if isinstance(kw.value, ast.Name)
+                           else expr)
+        return out
+
+    def _productos(self):
+        from modules.banking_score.products import BankingProduct
+        from modules.banking_score.products_year_review import BankingYearReviewProduct
+        return (BankingProduct, BankingYearReviewProduct)
+
+    def test_la_frescura_sale_del_maximo_periodo_del_panel(self):
+        for clase in self._productos():
+            reales = [e for e in self._expresiones_de_frescura(clase) if e != "None"]
+            assert reales, f"{clase.__name__}: no asigna ninguna frescura real"
+            for expr in reales:
+                assert "period_end" in expr or "ultima_obs" in expr or "latest" in expr, (
+                    f"{clase.__name__}: la frescura sale de `{expr}`, que no es la observación "
+                    f"más nueva del panel; si cada producto usa otra referencia, los dos "
+                    f"informes de un mismo paquete se contradicen")
+
+    def test_la_frescura_no_se_computa_contra_una_fecha_de_CALENDARIO(self):
+        for clase in self._productos():
+            for expr in self._expresiones_de_frescura(clase):
+                assert "12, 31" not in expr, (
+                    f"{clase.__name__}: la frescura se mide contra `{expr}` — eso es una "
+                    f"propiedad del calendario, no del dato: crece sola aunque el panel no "
+                    f"cambie, y da un número distinto del que publica el otro producto")
