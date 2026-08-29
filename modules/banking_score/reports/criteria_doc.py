@@ -75,12 +75,17 @@ _ENTITY_TYPE_LABELS: Dict[str, str] = {
 
 # Agregados DERIVADOS que ponderan en el sub-componente pero no tienen fuente de dato
 # propia (se calculan de los indicadores listados), por eso no llevan ficha en el registro.
-_COMPOSITE_NOTES: Dict[str, str] = {
-    "calidad": (
-        "Además de los anteriores, el sub-componente incorpora un **compuesto de calidad**: "
-        "el promedio de las componentes disponibles de esta dimensión. No es un dato nuevo "
-        "—se deriva de los indicadores de la tabla— y su función es estabilizar la "
-        "dimensión cuando alguno de sus componentes no está disponible en el período."
+# Lo que este documento dice del compuesto tiene que ser lo que el motor HACE. Decía que
+# «estabiliza la dimensión cuando alguno de sus componentes no está disponible», y es falso:
+# promediar la media de un conjunto junto al conjunto devuelve la misma media, para cualquier
+# subconjunto disponible. No estabilizaba nada. Hoy ya no entra en la agregación —se publica
+# como resumen— y el texto lo dice así.
+_RESUMENES_DERIVADOS: Dict[str, str] = {
+    "composite_calidad": (
+        "Promedio de las componentes disponibles de Calidad de Activos. Se publica como "
+        "lectura de conjunto de la dimensión y **no entra en el puntaje**: es la media de los "
+        "indicadores de esa tabla, así que sumarlo al promedio devolvería exactamente el "
+        "mismo número."
     ),
 }
 
@@ -177,14 +182,19 @@ def _indicadores() -> str:
             bloques.append(
                 f"| {m.get('label', k)} | {m.get('que', '')} | {m.get('unit', '')} "
                 f"| {_DIRECTION_LABELS.get(m.get('direction', ''), '—')} |")
-        # Los COMPUESTOS derivados no tienen fuente propia (se calculan de los anteriores),
-        # así que no llevan ficha en el registro — pero SÍ ponderan en el sub-componente.
-        # Callarlos haría que el documento describa menos componentes de las que se puntúan.
-        derivados = [k for k in keys if k not in INDICATOR_META]
-        if derivados:
-            bloques += ["", _COMPOSITE_NOTES.get(
-                sub, "Este sub-componente incluye además un agregado derivado de los "
-                     "indicadores anteriores, sin fuente de dato propia.")]
+    # Los RESÚMENES DERIVADOS se publican en los informes pero no puntúan, así que no están
+    # en ninguna lista de agregación. Omitirlos dejaría al lector de un informe con una fila
+    # —«Calidad de activos (resumen de los 7)»— que la metodología no explica en ninguna
+    # parte. Se listan aparte y se declara que no votan, que es la diferencia que importa.
+    en_alguna_lista = {k for keys in _SUB_INDICATOR_MAP.values() for k in keys}
+    resumenes = [k for k in INDICATOR_META if k not in en_alguna_lista]
+    if resumenes:
+        bloques += ["", "### Lecturas derivadas (no puntúan)", "",
+                    "| Lectura | Qué es |", "|---|---|"]
+        for k in resumenes:
+            m = INDICATOR_META[k]
+            bloques.append(f"| {m.get('label', k)} | "
+                           f"{_RESUMENES_DERIVADOS.get(k, m.get('que', ''))} |")
     intro = (
         f"El motor evalúa **{n_listados} indicadores** agrupados en los cinco "
         "sub-componentes. Cada uno se normaliza a 0–100; la columna «Lectura» indica el "

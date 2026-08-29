@@ -94,10 +94,16 @@ SOLIDEZ_FAMILIAS = (
     ("capital_sobre_activos", ("patrimonio_activos",)),
 )
 
+# `composite_calidad` NO va acá: es la MEDIA de estos siete, y promediar la media de un
+# conjunto junto al conjunto da exactamente la misma media —comprobado sobre las 43 entidades
+# del panel: la diferencia máxima con `calidad_score` es 0,0043, puro redondeo—. O sea que no
+# aportaba nada, pero dejaba puesta una trampa: el día que alguien pondere dentro de Calidad,
+# como se hizo en Solidez, el compuesto adquiere peso real y ahí sí cada indicador cuenta dos
+# veces. Se sigue calculando y publicando como resumen; lo que no hace es votar.
 CALIDAD_INDICATORS = [
     "morosidad", "pct_cartera_a", "concentracion_top10",
     "hhi_sectorial", "castigos_pct", "exposicion_re",
-    "migracion", "composite_calidad",
+    "migracion",
 ]
 
 EFICIENCIA_INDICATORS = ["roa", "roe", "margen_financiero", "cost_to_income"]

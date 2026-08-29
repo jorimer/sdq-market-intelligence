@@ -520,10 +520,10 @@ INDICATOR_REQUIRES: Dict[str, List[str]] = {
     "hhi_ingresos": ["hhi_ingresos_raw"],
 }
 
-_CALIDAD_COMPONENT_KEYS = [
-    "morosidad", "pct_cartera_a", "concentracion_top10",
-    "hhi_sectorial", "castigos_pct", "exposicion_re", "migracion",
-]
+# Los componentes del compuesto SON los que agrega la dimensión: una sola lista. Mientras
+# fueron dos copias idénticas, agregar un indicador a Calidad y olvidarlo acá lo dejaba fuera
+# del resumen sin que nada fallara.
+_CALIDAD_COMPONENT_KEYS = list(CALIDAD_INDICATORS)
 
 # Indicators that can be satisfied by a pre-computed SIB ratio field (preferred)
 # in addition to their absolute-input formula.
