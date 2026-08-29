@@ -251,3 +251,45 @@ cambios:
         Ninguna cifra de cliente se ve afectada: los informes distribuidos hasta esta fecha
         fueron muestras.
     pr: [968]
+
+  - id: 2026-08-28-hhi-sectorial-por-estrato
+    fecha_efectiva: "2026-08-28"
+    sectores: [banking]
+    titulo: "El HHI sectorial se calibra por TIPO DE ENTIDAD, no contra un universo único"
+    que_cambio: >-
+      La concentración sectorial de la cartera deja de puntuarse contra una curva única para
+      todo el sistema y pasa a calibrarse dentro del tipo de entidad: el p10 observado de cada
+      estrato puntúa 100 y su p90 puntúa 0. Los tipos sin estrato propio usan la curva del
+      universo completo, declarada. La curva anterior eran las bandas antimonopolio del DOJ
+      —100 por debajo de 1500 y 0 por encima de 2500—, umbrales de referencia externa que
+      nunca se contrastaron contra este panel. El indicador se sigue calculando y publicando
+      igual; lo que cambia es contra quién se compara cada entidad.
+    por_que: >-
+      Contra una curva única el indicador no ordenaba riesgo: ordenaba tipo de entidad. Una
+      asociación de ahorros y préstamos presta para vivienda por su objeto social y un banco
+      de ahorro y crédito vive de un nicho; sus carteras están concentradas por diseño, y la
+      curva las castigaba por cumplir su licencia mientras la banca múltiple, diversificada
+      por definición, pasaba casi entera. La cifra más alta del panel corresponde a un banco
+      digital monoproducto: es estructura, no deterioro. Comparar esos HHI contra los de un
+      banco múltiple es ordenar lo que no es comparable. Era además el único indicador de
+      Calidad que no había recibido la calibración empírica que sus vecinos sí tuvieron.
+    impacto:
+      medido_al_publicar: >-
+        Medido sobre el último rating de cada una de las 43 entidades con cartera sectorial
+        en producción, aplicando la curva nueva sobre los valores crudos ya publicados. Antes
+        del cambio, 27 de esas 43 puntuaban exactamente 0 en el indicador —entre ellas las
+        DIEZ asociaciones de ahorros y préstamos del catálogo, y 13 de los 14 bancos de
+        ahorro y crédito, contra 2 de los 16 bancos múltiples—; después quedan 6. El
+        indicador sube en promedio 59,7 puntos en las asociaciones de ahorros y préstamos,
+        42,3 en los bancos de ahorro y crédito y 22,8 en las corporaciones de crédito, y BAJA
+        5,5 en la banca múltiple, que pasa a compararse contra su propio grupo de pares. En
+        el score global el movimiento va de -0,45 a +3,75 puntos, con media absoluta de 1,18.
+        DOS entidades cambian de banda de Resiliencia, las dos hacia arriba: Asociación La
+        Vega Real de Ahorros y Préstamos (72,90 a 77,74) y Corporación de Crédito Monumental
+        (74,26 a 76,32) pasan de Adecuada a Sólida; ambas habían bajado de Sólida a Adecuada
+        con el cambio de ponderación de Solidez del 2026-08-19, así que para ellas el efecto
+        neto de los dos cambios es volver a la banda que tenían antes de agosto. La medición
+        cubre el último corte de cada entidad; el recálculo aplica la misma curva a todos los
+        períodos históricos, cuyo movimiento no está medido en esta cifra.
+    pr: [993]
+

@@ -9,6 +9,9 @@ Validates:
 """
 import pytest
 
+import inspect
+
+from modules.banking_score.scoring import engine, hhi_estratos
 from modules.banking_score.scoring.engine import (
     BankingDataInput,
     calculate_all_indicators,
@@ -261,22 +264,47 @@ class TestConcentracionTop10:
 
 
 class TestHhiSectorial:
-    def test_low_hhi(self):
-        d = BankingDataInput(hhi_sectorial_raw=1_000)
-        r = calc_hhi_sectorial(d)
-        assert r["score"] == 100.0
+    """La curva se calibra POR ESTRATO (tipo de entidad), no contra un universo único.
 
-    def test_mid_hhi(self):
-        d = BankingDataInput(hhi_sectorial_raw=2_000)
-        r = calc_hhi_sectorial(d)
-        # 100 - (2000-1500)/10 = 50
-        assert r["score"] == pytest.approx(50.0, abs=0.1)
+    El defecto que motivó el cambio: con una curva global anclada en las bandas del DOJ, el
+    62,8% del panel de producción quedaba clavado en 0 — las DIEZ asociaciones de ahorros y
+    préstamos entre ellas. El indicador ordenaba tipo de entidad, no riesgo.
+    """
 
-    def test_high_hhi(self):
+    def test_el_mismo_hhi_puntua_distinto_segun_el_estrato(self):
+        """El corazón del arreglo: 3156 es la mediana de las AAyP y está muy por encima del
+        p90 de la banca múltiple. La misma cifra NO puede significar lo mismo en ambas."""
+        d = BankingDataInput(hhi_sectorial_raw=3_156)
+        aap = calc_hhi_sectorial(d, "aap")["score"]
+        multiple = calc_hhi_sectorial(d, "banca_multiple")["score"]
+        assert aap > multiple, "el estrato dejó de importar: se volvió una curva global"
+        assert aap == pytest.approx(64.1, abs=1.0)
+        assert multiple == 0.0
+
+    def test_una_aap_mediana_ya_no_saca_cero(self):
+        """Las diez AAyP del panel puntuaban 0 por prestar para vivienda, que es su licencia."""
+        assert calc_hhi_sectorial(BankingDataInput(hhi_sectorial_raw=3_156), "aap")["score"] > 0
+
+    def test_los_extremos_del_estrato_anclan_en_100_y_en_0(self):
+        p10, p90 = hhi_estratos.ANCLAS["banco_ahorro_credito"]
+        t = "banco_ahorro_credito"
+        assert calc_hhi_sectorial(BankingDataInput(hhi_sectorial_raw=p10), t)["score"] == 100.0
+        assert calc_hhi_sectorial(BankingDataInput(hhi_sectorial_raw=p90), t)["score"] == 0.0
+
+    def test_discrimina_dentro_del_estrato(self):
+        """Sobre el umbral viejo todo puntuaba 0: la cartera más concentrada del país
+        empataba con una apenas por encima. Dentro del estrato ahora se distinguen."""
+        t = "banco_ahorro_credito"
+        apenas = calc_hhi_sectorial(BankingDataInput(hhi_sectorial_raw=3_000), t)["score"]
+        extrema = calc_hhi_sectorial(BankingDataInput(hhi_sectorial_raw=6_500), t)["score"]
+        assert apenas > extrema > 0.0
+
+    def test_un_tipo_sin_estrato_propio_cae_al_universo_declarado(self):
+        """No hereda en silencio la curva de otro tipo: usa POR_DEFECTO, que está declarado."""
         d = BankingDataInput(hhi_sectorial_raw=3_000)
-        r = calc_hhi_sectorial(d)
-        assert r["score"] == 0.0
-
+        assert (calc_hhi_sectorial(d, "tipo_que_no_existe")["score"]
+                == calc_hhi_sectorial(d, None)["score"]
+                == pytest.approx(hhi_estratos.score_de(3_000, None), abs=0.01))
 
 class TestCastigosPct:
     def test_healthy_bank(self, healthy_bank):
@@ -598,3 +626,38 @@ class TestSimulateFromScores:
         # composite_calidad should be recalculated as average
         expected_composite = (80 + 90 + 70 + 60 + 85 + 75 + 95) / 7
         assert scores["composite_calidad"] == pytest.approx(expected_composite, abs=0.01)
+
+
+class TestIndicadoresEstratificados:
+    """El registro `engine.INDICADORES_ESTRATIFICADOS` y las FIRMAS tienen que coincidir.
+
+    Un indicador estratificado se calcula con `func(data, entity_type)`; el resto, con
+    `func(data)`. Las dos formas de romperlo fallan calladas y en direcciones opuestas, así
+    que se vigilan las dos: declarar la clave sin que el calculador acepte el estrato es un
+    TypeError en producción, y aceptar el estrato sin declarar la clave hace que el motor lo
+    llame con un argumento y calibre contra el universo — con el score equivocado, sin
+    excepción y sin marca. Este segundo es el que motivó el test.
+    """
+
+    def test_lo_declarado_acepta_el_estrato(self):
+        for clave in engine.INDICADORES_ESTRATIFICADOS:
+            func = engine._INDICATOR_FUNCS[clave]
+            params = list(inspect.signature(func).parameters)
+            assert len(params) >= 2, (
+                f"{clave} está declarado estratificado pero su calculador solo recibe "
+                f"{params}: el motor le pasaría dos argumentos y reventaría")
+
+    def test_lo_que_acepta_el_estrato_esta_declarado(self):
+        for clave, func in engine._INDICATOR_FUNCS.items():
+            acepta = len(inspect.signature(func).parameters) >= 2
+            assert acepta == (clave in engine.INDICADORES_ESTRATIFICADOS), (
+                f"{clave}: la firma dice estratificado={acepta} y el registro dice "
+                f"{clave in engine.INDICADORES_ESTRATIFICADOS}. Sin declararlo, el motor lo "
+                f"llama con un solo argumento y lo calibra contra el universo en silencio")
+
+    def test_todo_estrato_declarado_tiene_anclas_o_cae_al_universo(self):
+        """Ningún tipo de entidad hereda la curva de otro: o tiene anclas propias, o usa
+        POR_DEFECTO, que está declarado. Lo segundo es una decisión, no un descuido."""
+        for tipo in ("banca_multiple", "aap", "cambiaria", "fiduciaria", None):
+            assert hhi_estratos.anclas_de(tipo) in (
+                *hhi_estratos.ANCLAS.values(), hhi_estratos.POR_DEFECTO)

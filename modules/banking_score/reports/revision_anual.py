@@ -207,7 +207,9 @@ def _balance(indicadores: Dict[str, List[Dict[str, Any]]], cortes: List[str],
         # «puede cruzar por debajo del 100 %»—, y como el contexto no lo servía, esa cifra
         # llegaba sin respaldo y el guard vetaba el informe entero. Dos Revisiones Anuales
         # murieron así el 2026-08-27. No era el detector: era el hueco.
-        referencia = nivel_de_referencia(clave, v1)
+        # `tipo` va SIEMPRE: el HHI sectorial se calibra por estrato, y sin el tipo el
+        # informe publicaría el nivel de referencia de la curva del universo.
+        referencia = nivel_de_referencia(clave, v1, tipo)
         filas.append({
             "indicador": clave,
             "que_mide": meta.get("que", ""),
