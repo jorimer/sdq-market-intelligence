@@ -177,9 +177,24 @@ class TestPDFGenerator:
 
 class TestNarrative:
     def test_report_sections_defined(self):
+        """Las secciones que el SDQ Rating debe traer, NOMBRADAS.
+
+        Antes esto era `len(...) == 9`. Un conteo no dice cuál falta ni cuál sobra: se
+        satisface igual si alguien cambia una sección por otra, y hay que actualizarlo cada
+        vez que el documento crece legítimamente, que es cuando un test debería ayudar en
+        lugar de estorbar."""
         assert "full_rating" in REPORT_SECTIONS
-        assert len(REPORT_SECTIONS["full_rating"]) == 9
         assert "scorecard" in REPORT_SECTIONS
+        exigidas = {
+            "executive_summary", "solidez_financiera", "calidad_activos",
+            "eficiencia_rentabilidad", "liquidez", "diversificacion",
+            # La lectura que exige el libro de las otras noventa y una entidades.
+            "mapa_sectorial",
+            "risk_assessment", "comparative", "recommendation",
+        }
+        assert exigidas <= set(REPORT_SECTIONS["full_rating"])
+        assert len(REPORT_SECTIONS["full_rating"]) == len(set(REPORT_SECTIONS["full_rating"])), \
+            "una sección repetida se narraría dos veces"
 
     @pytest.mark.asyncio
     async def test_generate_narratives_fallback(self):

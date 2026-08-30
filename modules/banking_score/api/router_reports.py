@@ -618,6 +618,25 @@ async def generate_report(
             "indicators": {},
         }
 
+    # MAPA SECTORIAL. Esta ruta arma su `scoring_result` A MANO desde el `RatingResult`, no
+    # desde el snapshot del producto — es la razón por la que acá ya se perdieron cuatro
+    # veces cosas que el motor sí tenía. Un dato que se enganche solo del lado de productos
+    # NO llega al `full_rating`, que es el SDQ Rating: el documento que efectivamente se le
+    # entrega al cliente.
+    #
+    # Si la entidad no tiene desglose en ese corte, el mapa es None y la sección se cae sola
+    # por el filtro de abajo. No se fabrica una tabla vacía.
+    from modules.banking_score.reports.narrative import REPORT_SECTIONS
+    if "mapa_sectorial" in (REPORT_SECTIONS.get(report_type) or []):
+        from modules.banking_score.reports.mapa_sectorial import posicion_de_la_entidad
+        try:
+            mapa = posicion_de_la_entidad(db, bank, pe)
+        except Exception:  # noqa: BLE001 — el informe nunca depende de esta tabla
+            logger.exception("No se pudo computar el mapa sectorial de %s", bank.name)
+            mapa = None
+        if mapa:
+            scoring_result["mapa_sectorial"] = mapa
+
     # REVISIÓN ANUAL: sujeto de entidad, unidad de AÑO. Se computa antes de narrar y se exige
     # el año CERRADO por el mismo motivo que el anuario del sistema — sin diciembre esto es un
     # tramo, no un año, y saldría con el encabezado de un año.
