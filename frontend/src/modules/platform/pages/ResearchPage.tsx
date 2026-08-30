@@ -58,6 +58,7 @@ const SECTION_TITLES: Record<string, string> = {
   diversificacion: "Diversificación",
   comparative: "Posición vs pares",
   entorno_operativo: "Entorno operativo",
+  mapa_sectorial: "Mapa sectorial del crédito",
   soporte_soberano: "Soporte y techo soberano",
   risk_assessment: "Evaluación de riesgo",
   early_warning: "Alerta temprana",

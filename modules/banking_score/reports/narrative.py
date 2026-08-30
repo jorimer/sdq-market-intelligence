@@ -67,6 +67,7 @@ _SECTION_TO_TEMPLATE: Dict[str, str] = {
     "comparative": "banking_comparative",
     "recommendation": "banking_recommendation",
     "entorno_operativo": "banking_operating_env",
+    "mapa_sectorial": "banking_sector_map",
     "soporte_soberano": "banking_support_context",
     "trend_analysis": "trend_analysis",
     "sector_outlook": "sector_outlook",
@@ -80,7 +81,7 @@ _SECTION_TO_TEMPLATE: Dict[str, str] = {
 _CEREBRO_TEMPLATES = frozenset({
     "subcomponent_focus", "banking_summary", "banking_comparative",
     "banking_risk", "banking_recommendation", "banking_operating_env",
-    "banking_support_context",
+    "banking_support_context", "banking_sector_map",
     # El anuario vive en `THIN_TEMPLATES` (ruta cerebro) y faltaba acá, así que el motor lo
     # mandaba por la ruta LEGACY —donde esa plantilla no existe— y caía al relleno estático
     # EN SILENCIO. El primer anuario de producción salió con las tablas correctas y la sección
@@ -420,6 +421,30 @@ def _build_section_context(
             "banda_ejecucion": scoring_result.get("banda_ejecucion"),
             "banda_resiliencia": scoring_result.get("banda_resiliencia"),
             "entorno_macro": scoring_result.get("entorno_macro", {}),
+        }
+
+    # MAPA SECTORIAL: la lectura que exige el libro de las otras noventa y una entidades.
+    # El contexto va TAL CUAL lo computó `mapa_sectorial`: brechas de mora y spreads de tasa
+    # ya calculados contra el RESTO del sector, con el sujeto en cada clave. El modelo los
+    # COPIA. Si tuviera que derivar la dirección de dos porcentajes la invertiría — ya pasó
+    # en este repo, y la glosa sobrevivió a corregir el número.
+    if section == "mapa_sectorial":
+        mapa = scoring_result.get("mapa_sectorial") or {}
+        return {
+            "entity_name": bank_name,
+            "period": period,
+            # Los DOS EJES con su banda, por la misma razón que en las otras secciones de
+            # contexto: sin el score del eje el modelo relaciona la banda con lo único que
+            # ve, y escribe una frase falsa.
+            "ejecucion": scoring_result.get("ejecucion"),
+            "resiliencia": scoring_result.get("resiliencia"),
+            "banda_ejecucion": scoring_result.get("banda_ejecucion"),
+            "banda_resiliencia": scoring_result.get("banda_resiliencia"),
+            "mapa_sectorial": mapa,
+            # La mora agregada de la entidad, para que el modelo pueda cerrar el círculo:
+            # la brecha por sector explica de dónde sale el indicador del cuadro de mando.
+            # Sin ella tiene las partes y no el todo, y el hueco es lo que lo llena mal.
+            "morosidad_de_la_entidad": (all_indicators.get("morosidad") or {}).get("value"),
         }
 
     # Soporte y Techo Soberano (Fase 6): overlay de contexto estilo Fitch (soporte estatal,

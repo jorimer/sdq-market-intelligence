@@ -31,4 +31,8 @@ AI_CONTEXT_FILES = (
     # trimestral) y el año contra los años (producto anual). Las agregó el test estructural,
     # no yo — que es exactamente para lo que existe.
     "reports/anio_por_trimestres.py", "reports/anio_contra_anios.py",
+    # El mapa sectorial: computa la brecha de mora y el spread de tasa contra el RESTO del
+    # sector. Todo lo que calcula viaja al contexto del modelo, así que un cambio en cómo
+    # se computa una brecha DEBE invalidar las narrativas ya generadas.
+    "reports/mapa_sectorial.py",
 )

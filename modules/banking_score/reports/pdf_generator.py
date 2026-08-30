@@ -96,6 +96,7 @@ NARRATIVE_SECTION_TITLES = {
     "risk_assessment": "Evaluación de Riesgos",
     "comparative": "Análisis Comparativo",
     "entorno_operativo": "Entorno Operativo",
+    "mapa_sectorial": "Mapa Sectorial del Crédito",
     "soporte_soberano": "Soporte y Techo Soberano",
     "early_warning": "Alerta Temprana",
     "recommendation": "Recomendación",
@@ -1068,7 +1069,16 @@ def _build_anuario_tables(anuario: Dict, styles) -> List:
     return elements
 
 
-def _build_narrative_sections(narratives: Dict[str, str], styles) -> List:
+def _build_narrative_sections(narratives: Dict[str, str], styles,
+                              tablas: Optional[Dict[str, List]] = None) -> List:
+    """Las secciones narrativas, con su tabla DENTRO del texto cuando la hay.
+
+    El resto de las tablas del informe vive en un bloque de datos separado de la narrativa
+    por un salto de página. Eso funciona para las que encuadran el documento entero —el
+    telón macro, la estructura de mercado—, pero no para una tabla que ES el argumento de
+    su sección: mandarla veinte páginas atrás obliga al lector a sostener nueve columnas de
+    memoria mientras lee el párrafo que las interpreta. `tablas` mapea clave de sección a
+    flowables, y se emiten inmediatamente después del texto que los explica."""
     elements: List = []
     n = 0
     for section_key, text in narratives.items():
@@ -1078,6 +1088,8 @@ def _build_narrative_sections(narratives: Dict[str, str], styles) -> List:
         n += 1
         elements.append(Paragraph(f"{n}. {title}", styles["SDQHeading"]))
         elements.extend(_md_to_flowables(text or "", styles))
+        for el in (tablas or {}).get(section_key) or []:
+            elements.append(el)
         elements.append(Spacer(1, 0.2 * inch))
     return elements
 
@@ -1161,6 +1173,87 @@ def _build_macro_table(entorno_macro: Dict, styles) -> List:
         "Telón macroeconómico sistémico (BCRD), común a todas las entidades. No forma parte "
         "de la calificación standalone; encuadra la dirección del entorno operativo.",
         styles["SDQSmall"]))
+    return elements
+
+
+#: Cuántos sectores entran en la tabla. El corte es por EXPOSICIÓN, y lo que queda afuera se
+#: DECLARA al pie: un tope silencioso se lee como «esto es todo lo que hay».
+_MAX_SECTORES_EN_TABLA = 8
+
+_ATRIBUCION_LABEL = {
+    "idiosincratico_peor": "Propia",
+    "idiosincratico_mejor": "Propia (mejor)",
+    "compartido_con_el_sector": "Del sector",
+    "exposicion_no_material": "No material",
+    "sin_resto_con_que_comparar": "Único prestador",
+    "sin_dato": "—",
+}
+
+
+def _pp(v: Optional[float]) -> str:
+    """Un punto porcentual CON SU SIGNO. El signo es la relación —y la relación se computa
+    acá y se imprime; no se le pide al lector que la derive de dos columnas."""
+    return "—" if v is None else f"{v:+.2f}"
+
+
+def _num(v: Optional[float], suf: str = "") -> str:
+    return "—" if v is None else f"{v:.2f}{suf}"
+
+
+def _build_sector_map_table(mapa: Dict, styles) -> List:
+    """La tabla del mapa sectorial: la entidad contra el RESTO del sistema, sector a sector.
+
+    Va DENTRO de su sección y no en el bloque de datos, porque es el argumento del párrafo
+    que la precede: la brecha de mora y el spread de tasa se leen juntos o no se leen."""
+    sectores = (mapa or {}).get("sectores") or []
+    if not sectores:
+        return []
+    corte = mapa.get("corte")
+    ttl = "Posición por sector frente al resto del sistema" + (f" · {corte}" if corte else "")
+    elements: List = [Paragraph(ttl, styles["SDQSubHeading"])]
+    # Las unidades van en el ENCABEZADO y las celdas quedan desnudas: con el «%» pegado a
+    # cada cifra, «25.90%» no entraba en la columna y ReportLab lo partía dejando el signo
+    # solo en el renglón siguiente. Y las dos columnas de referencia decían ambas «Resto»,
+    # que en una tabla de nueve columnas no dice de qué es el resto: se nombran entera.
+    rows = [["Sector", "% de su\ncartera", "Mora\nentidad %", "Mora\nresto %",
+             "Brecha\npp", "Tasa\nentidad %", "Tasa\nresto %", "Spread\npp", "Origen"]]
+    mostrados = sectores[:_MAX_SECTORES_EN_TABLA]
+    for f in mostrados:
+        rows.append([
+            Paragraph(_md_inline(str(f.get("sector", ""))), styles["SDQSmall"]),
+            _num(f.get("peso_en_su_cartera_pct")),
+            _num(f.get("mora_pct")),
+            _num(f.get("mora_del_resto_del_sector_pct")),
+            _pp(f.get("brecha_de_mora_pp")),
+            _num(f.get("tasa_promedio_ponderada_pct")),
+            _num(f.get("tasa_del_resto_del_sector_pct")),
+            _pp(f.get("spread_de_tasa_pp")),
+            _ATRIBUCION_LABEL.get(str(f.get("atribucion")), "—"),
+        ])
+    table = _branded_table(
+        rows,
+        [1.30 * inch, 0.60 * inch, 0.58 * inch, 0.58 * inch, 0.56 * inch,
+         0.58 * inch, 0.58 * inch, 0.56 * inch, 0.76 * inch],
+        styles,
+        aligns=["LEFT", "RIGHT", "RIGHT", "RIGHT", "RIGHT",
+                "RIGHT", "RIGHT", "RIGHT", "CENTER"])
+    elements.append(table)
+    elements.append(Spacer(1, 0.08 * inch))
+    pie = ("«Resto» es el resto del sistema en el MISMO sector, EXCLUIDA esta entidad: "
+           "incluirla la compararía en parte contra sí misma. La brecha es su mora menos "
+           "la del resto y el spread su tasa menos la del resto, ambos en puntos "
+           "porcentuales. La tasa es un promedio ponderado por saldo adeudado. «Origen» "
+           "atribuye el deterioro a la originación propia o al sector.")
+    ocultos = len(sectores) - len(mostrados)
+    if ocultos > 0:
+        # Se DECLARA lo que no entró. Omitirlo en silencio haría leer la tabla como el
+        # libro completo, y la cuota de los sectores citados como si sumara cien.
+        resto_deuda = sum(float(x.get("deuda") or 0) for x in sectores[len(mostrados):])
+        total = sum(float(x.get("deuda") or 0) for x in sectores) or 1.0
+        pie += (f" Se muestran los {len(mostrados)} sectores de mayor exposición; los otros "
+                f"{ocultos} suman el {100.0 * resto_deuda / total:.1f}% de la cartera "
+                f"clasificada de la entidad.")
+    elements.append(Paragraph(pie, styles["SDQSmall"]))
     return elements
 
 
@@ -1437,8 +1530,17 @@ async def generate_pdf_report(
     if narratives:
         if body:
             body.append(PageBreak())
+        # La tabla del mapa va DENTRO de su sección, no en el bloque de datos: es el
+        # argumento del párrafo que la interpreta, y separarlos por veinte páginas obliga
+        # al lector a sostener nueve columnas de memoria.
+        tablas_en_linea: Dict[str, List] = {}
+        mapa = scoring_result.get("mapa_sectorial")
+        if mapa:
+            els = _build_sector_map_table(mapa, styles)
+            if els:
+                tablas_en_linea["mapa_sectorial"] = els
         body.extend(_build_narrative_sections(
-            _order_narratives(narratives, sections), styles))
+            _order_narratives(narratives, sections), styles, tablas_en_linea))
 
     # 5. Disclaimer (texto propio de banking; el shell no lo añade).
     body.extend(_build_disclaimer(styles))
