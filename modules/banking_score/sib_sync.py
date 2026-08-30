@@ -454,8 +454,24 @@ def run_backfill(force: bool = False, period_start: str = "2021-01",
                 _write_status(db, is_running=True,
                               phase=f"extrayendo {_tipo} ({_i}/{len(tipos)}) · {msg}")
 
+            # EL DESGLOSE SECTORIAL SE ESCRIBE Y SE COMMITEA POR TRIMESTRE, no al final.
+            # Dos backfills murieron el 2026-08-30 —106 y 107 minutos— y los dos tiraron
+            # todo lo agregado hasta ese punto, porque la escritura ocurría después de los
+            # veintidós. Ahora un fallo cuesta un trimestre.
+            def _escribir_trimestre(pe, por_entidad, _tipo=tipo) -> None:
+                escritas = 0
+                for short, celdas in por_entidad.items():
+                    bank, _ = _match_or_create_bank(db, short)
+                    if not bank:
+                        continue
+                    _guardar_cartera_sectorial(db, bank.id, pe, celdas)
+                    escritas += len(celdas)
+                db.commit()
+                logger.info("[sib] desglose sectorial %s (%s): %d celdas", pe, _tipo, escritas)
+
             bulk = client.extract_one_tipo(tipo, period_start=period_start,
-                                           on_progress=_progress, skip_carteras=skip_carteras)
+                                           on_progress=_progress, skip_carteras=skip_carteras,
+                                           on_quarter=_escribir_trimestre)
             unmatched += bulk.get("_unmatched", [])
             entity_meta = bulk.get("_entity_meta", {})  # cambiarias: live dynamic catalog
             for short_name, periods in bulk.items():
@@ -681,7 +697,7 @@ def _guardar_cartera_sectorial(db, bank_id: str, pe, por_sector: Any) -> None:
             # no obliga a tocar esta lista, que es donde se olvidaría.
             **{k: celda.get(k) for k in (
                 "deuda", "vencida", "vencida_31_90", "garantia", "provision", "creditos",
-                "desembolso", "deuda_capital", "plasticos", "deuda_x_tasa",
+                "desembolso", "deuda_capital", "plasticos", "tasa_por_deuda",
                 "deuda_con_tasa", "deuda_moneda_extranjera", "deuda_persona_fisica",
                 "cartera_a", "cartera_b", "cartera_c", "cartera_d", "cartera_e")}))
 

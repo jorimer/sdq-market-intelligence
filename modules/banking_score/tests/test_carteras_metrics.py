@@ -164,25 +164,31 @@ class TestLasMedidasQueSeSumanEnLaMISMA_pasada:
         base.update(kw)
         return base
 
-    def test_la_tasa_se_acumula_PONDERADA_por_deuda(self, monkeypatch):
-        """Se guarda Σ(tasa × deuda) y su base, no un promedio: el promedio simple de dos
-        celdas de tamaño distinto no es la tasa de nadie, y guardarlo lo haría irrecuperable."""
+    def test_la_tasa_del_emisor_YA_viene_ponderada_y_no_se_vuelve_a_multiplicar(self, monkeypatch):
+        """`tasaPorDeuda` es el NUMERADOR del promedio, no una tasa.
+
+        Comprobado contra el cubo: una fila de ADEMI trae deuda 500.291 y tasaPorDeuda
+        18.435.617 —treinta y siete veces mayor— y el cociente da 36,85%, la banda del
+        microcrédito. Multiplicarla otra vez por la deuda desbordó `Numeric(22,4)` y tumbó
+        un backfill de 107 minutos; peor, con una columna más ancha habría guardado un
+        número sin sentido en silencio. Se acumula TAL CUAL y la tasa sale del cociente.
+        """
         c = self._celda(monkeypatch, [
-            self._fila(deuda=900, tasaPorDeuda=10.0),
-            self._fila(deuda=100, tasaPorDeuda=20.0, provincia="AZUA"),
+            self._fila(deuda=900, tasaPorDeuda=9000.0),      # 10% ponderado
+            self._fila(deuda=100, tasaPorDeuda=2000.0, provincia="AZUA"),   # 20%
         ])
-        total = sum(x["deuda_x_tasa"] for x in c)
+        num = sum(x["tasa_por_deuda"] for x in c)
         base = sum(x["deuda_con_tasa"] for x in c)
-        assert total == 900 * 10.0 + 100 * 20.0
+        assert num == 11000.0            # se SUMA, no se multiplica
         assert base == 1000
-        assert total / base == 11.0        # ponderada; el promedio simple daría 15,0
+        assert num / base == 11.0        # ponderada; el promedio simple daría 15,0
 
     def test_una_celda_sin_tasa_no_entra_en_la_BASE_del_promedio(self, monkeypatch):
-        """Si entrara con tasa 0, bajaría el promedio de todas las demás."""
-        c = self._celda(monkeypatch, [self._fila(deuda=500, tasaPorDeuda=12.0),
+        """Si entrara con cero, bajaría el promedio de todas las demás."""
+        c = self._celda(monkeypatch, [self._fila(deuda=500, tasaPorDeuda=6000.0),
                                       self._fila(deuda=500, provincia="AZUA")])[0:2]
         assert sum(x["deuda_con_tasa"] for x in c) == 500
-        assert sum(x["deuda_x_tasa"] for x in c) / 500 == 12.0
+        assert sum(x["tasa_por_deuda"] for x in c) / 500 == 12.0
 
     def test_moneda_y_persona_entran_como_MEDIDA_no_como_dimension(self, monkeypatch):
         """Dos valores cada una: como grano cuadruplicarían las filas para decir lo mismo.
@@ -211,5 +217,64 @@ class TestLasMedidasQueSeSumanEnLaMISMA_pasada:
     def test_un_campo_ausente_deja_CERO_medido_y_no_rompe(self, monkeypatch):
         """Las filas reales no siempre traen todos los campos."""
         c = self._celda(monkeypatch, [self._fila(deuda=100)])[0]
-        assert c["desembolso"] == 0.0 and c["deuda_x_tasa"] == 0.0
+        assert c["desembolso"] == 0.0 and c["tasa_por_deuda"] == 0.0
         assert c["deuda"] == 100
+
+
+class TestElDesgloseSeEscribePorTRIMESTRE:
+    """Un fallo cuesta un trimestre, no la serie entera.
+
+    Dos backfills murieron el 2026-08-30 —106 y 107 minutos— y los dos tiraron todo lo
+    agregado, porque el desglose se acumulaba en memoria y la escritura ocurría después de
+    los veintidós trimestres. Ahora cada corte se entrega al cerrar, se escribe y se LIBERA:
+    el fallo cuesta cinco minutos y la memoria queda plana en vez de crecer hasta las 133.000
+    celdas.
+    """
+
+    @staticmethod
+    def _correr(monkeypatch, trimestres, filas_por_q, on_quarter=None):
+        client = SIBDataClient.__new__(SIBDataClient)
+        monkeypatch.setattr(client, "_quarters_in_range", lambda ps, pe: trimestres)
+        monkeypatch.setattr(client, "_fetch_for_all_types",
+                            lambda ep, ps, pe: filas_por_q.get(ps, []))
+        return client._compute_carteras_metrics(trimestres[0], trimestres[-1],
+                                                on_quarter=on_quarter)
+
+    @staticmethod
+    def _fila(periodo, deuda=100):
+        return {"entidad": "BANRESERVAS", "periodo": periodo, "tipoCredito": "Comerciales",
+                "sectorEconomico": "F - CONSTRUCCIÓN", "provincia": "SANTIAGO",
+                "clasificacionEntidad": "A", "deuda": deuda}
+
+    def test_se_emite_UNA_vez_por_trimestre_al_cerrarlo(self, monkeypatch):
+        vistos = []
+        self._correr(monkeypatch, ["2025-09", "2025-12"],
+                     {"2025-09": [self._fila("2025-09", 100)],
+                      "2025-12": [self._fila("2025-12", 200)]},
+                     on_quarter=lambda pe, d: vistos.append((str(pe), d)))
+        assert [p for p, _ in vistos] == ["2025-09-30", "2025-12-31"]
+        assert vistos[0][1]["Banreservas"][0]["deuda"] == 100
+        assert vistos[1][1]["Banreservas"][0]["deuda"] == 200
+
+    def test_lo_emitido_se_LIBERA_para_que_la_memoria_no_crezca(self, monkeypatch):
+        from datetime import date
+        r = self._correr(monkeypatch, ["2025-09", "2025-12"],
+                         {"2025-09": [self._fila("2025-09")],
+                          "2025-12": [self._fila("2025-12")]},
+                         on_quarter=lambda pe, d: None)
+        assert r["Banreservas"][date(2025, 9, 30)]["por_sector"] == []
+
+    def test_los_ESCALARES_sobreviven_porque_el_resto_del_flujo_los_necesita(self, monkeypatch):
+        """Se libera lo pesado (`por_sector`), no el hhi ni los totales."""
+        from datetime import date
+        r = self._correr(monkeypatch, ["2025-12"], {"2025-12": [self._fila("2025-12", 500)]},
+                         on_quarter=lambda pe, d: None)
+        c = r["Banreservas"][date(2025, 12, 31)]
+        assert c["total"] == 500 and c["hhi"] is not None and c["cartera_a"] == 500
+
+    def test_SIN_escritor_el_comportamiento_anterior_se_conserva(self, monkeypatch):
+        """`recompute_carteras_metrics` no pasa escritor y sigue recibiendo el desglose
+        completo en el retorno: los dos caminos funcionan."""
+        from datetime import date
+        r = self._correr(monkeypatch, ["2025-12"], {"2025-12": [self._fila("2025-12")]})
+        assert len(r["Banreservas"][date(2025, 12, 31)]["por_sector"]) == 1

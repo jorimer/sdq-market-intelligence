@@ -257,7 +257,7 @@ class CarteraSectorial(UUIDMixin, Base):
     # Σ(tasa × deuda) y su base: el promedio ponderado se reconstruye a cualquier nivel de
     # agregación. Un promedio simple de tasas de celdas de tamaño distinto no es la tasa de
     # nadie, y guardarlo así lo haría irrecuperable.
-    deuda_x_tasa = Column(Numeric(22, 4), nullable=True)
+    tasa_por_deuda = Column(Numeric(22, 4), nullable=True)
     deuda_con_tasa = Column(Numeric(18, 2), nullable=True)
     # `moneda` y `persona` tienen DOS valores: entran como medida y no como dimensión, que
     # cuadruplicaría las filas para decir lo mismo. El resto es nacional y jurídica.
