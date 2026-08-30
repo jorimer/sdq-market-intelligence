@@ -1495,34 +1495,52 @@ async def generate_pdf_report(
         body.extend(_build_band_distribution_table(band_distribution, styles))
         body.append(Spacer(1, 0.3 * inch))
 
-    # 3c. Bloque de pares — estructura de mercado (opt-in; Insight/Deep Dive).
-    if peer_block:
-        body.extend(_build_peer_block(peer_block, styles))
-        body.append(Spacer(1, 0.3 * inch))
+    # ── 3c-3f. Las tablas que PERTENECEN a una sección ──────────────────────────────
+    #
+    # Cada una de estas cuatro es el respaldo de un párrafo concreto, no del documento: la
+    # de pares sostiene el comparativo, la macro el entorno operativo, la de soporte su
+    # propia sección y la de sensibilidad la recomendación —que es donde se dice qué palanca
+    # mover—. Impresas todas juntas veinte páginas antes del texto que las interpreta,
+    # obligan al lector a sostener de memoria lo que debería tener al lado.
+    #
+    # A diferencia de las de arriba —cuadro de mando, indicadores, trayectoria—, que sí
+    # encuadran el documento entero y por eso siguen abriendo.
+    #
+    # Si la sección dueña NO se está narrando (un `scorecard` no lleva comparativo), la
+    # tabla vuelve al bloque de datos en vez de desaparecer: perder una tabla en silencio
+    # por reordenar el documento sería exactamente el defecto que este cambio evita.
+    tablas_en_linea: Dict[str, List] = {}
+    secciones_narradas = set(narratives or {})
+    if sections:
+        secciones_narradas &= set(sections)
 
-    # 3d. Entorno Operativo — factores macro BCRD (opt-in; Deep Dive con contrato macro).
+    def _colocar(seccion: str, elementos: List) -> None:
+        if not elementos:
+            return
+        if seccion in secciones_narradas:
+            tablas_en_linea[seccion] = elementos
+        else:
+            body.extend(elementos)
+            body.append(Spacer(1, 0.3 * inch))
+
+    if peer_block:
+        _colocar("comparative", _build_peer_block(peer_block, styles))
+
     entorno_macro = scoring_result.get("entorno_macro")
     if entorno_macro:
-        macro_els = _build_macro_table(entorno_macro, styles)
-        if macro_els:
-            body.extend(macro_els)
-            body.append(Spacer(1, 0.3 * inch))
+        _colocar("entorno_operativo", _build_macro_table(entorno_macro, styles))
 
-    # 3e. Sensibilidad del score — palancas al alza / riesgos a la baja (opt-in; Deep Dive).
     sensibilidades = scoring_result.get("sensibilidades")
     if sensibilidades:
-        sens_els = _build_sensitivity_table(sensibilidades, styles)
-        if sens_els:
-            body.extend(sens_els)
-            body.append(Spacer(1, 0.3 * inch))
+        _colocar("recommendation", _build_sensitivity_table(sensibilidades, styles))
 
-    # 3f. Soporte y Techo Soberano — contexto estructural estilo Fitch (opt-in; Deep Dive).
     soporte = scoring_result.get("soporte_soberano")
     if soporte:
-        sup_els = _build_support_table(soporte, styles)
-        if sup_els:
-            body.extend(sup_els)
-            body.append(Spacer(1, 0.3 * inch))
+        _colocar("soporte_soberano", _build_support_table(soporte, styles))
+
+    mapa = scoring_result.get("mapa_sectorial")
+    if mapa:
+        _colocar("mapa_sectorial", _build_sector_map_table(mapa, styles))
 
     # 4. Narrative sections (filtradas/ordenadas por el manifiesto si `sections`). Un único
     # salto de página separa el bloque de datos (tablas) de la narrativa; las tablas fluyen
@@ -1530,15 +1548,6 @@ async def generate_pdf_report(
     if narratives:
         if body:
             body.append(PageBreak())
-        # La tabla del mapa va DENTRO de su sección, no en el bloque de datos: es el
-        # argumento del párrafo que la interpreta, y separarlos por veinte páginas obliga
-        # al lector a sostener nueve columnas de memoria.
-        tablas_en_linea: Dict[str, List] = {}
-        mapa = scoring_result.get("mapa_sectorial")
-        if mapa:
-            els = _build_sector_map_table(mapa, styles)
-            if els:
-                tablas_en_linea["mapa_sectorial"] = els
         body.extend(_build_narrative_sections(
             _order_narratives(narratives, sections), styles, tablas_en_linea))
 
