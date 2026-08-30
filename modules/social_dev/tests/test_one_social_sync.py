@@ -44,6 +44,8 @@ SUB_SYNCS_DE_RED = (
     "_sync_participacion_exportadora", "_sync_mem_electrico", "_sync_sisdom_income",
     "_sync_minerd_coverage", "_sync_sisdom_schooling", "_sync_wb_findex",
     "_sync_endesa_child_mortality", "_sync_siuben_provincial",
+    # Baja el CSV del salario mínimo del MHE (vía datos.gob.do).
+    "_sync_salario_minimo",
 )
 
 #: Los que NO pegan a la red, y que por eso son justamente lo que estos tests ejercitan de

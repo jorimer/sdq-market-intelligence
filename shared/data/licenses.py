@@ -285,6 +285,27 @@ LICENCIAS: Dict[str, Licencia] = {
               "Mientras no contesten, esos dos puntos son NO CONFIRMADOS: no son una "
               "negativa, pero tampoco se pueden dar por concedidos."),
     ),
+    ("Open Data Commons Open Database License (ODbL) — Ministerio de Hacienda y "
+     "Economía, vía datos.gob.do"): Licencia(
+        terminos_url="https://opendatacommons.org/licenses/odbl/1-0/",
+        verificado_el="2026-08-30",
+        nota=("La ODbL la declara el portal nacional en la ficha del dataset «Estadísticas "
+              "de Salario Mínimo, 2000-2025» del MHE. Texto de la licencia LEÍDO, no solo "
+              "localizado, y las dos cláusulas que decidían el caso son la 4.3 y la 4.5.\n"
+              "4.3 — usar las CIFRAS dentro de un informe es una «Produced Work»: NO exige "
+              "el aviso completo del 4.2 ni obliga al share-alike; lo que sí exige es un "
+              "aviso que diga que el contenido salió de esta base y que está bajo esta "
+              "licencia. O sea que publicar el salario mínimo en un informe está permitido "
+              "CITANDO fuente y licencia.\n"
+              "4.4 y 4.5 — el share-alike alcanza a una BASE DERIVADA que se use "
+              "públicamente, y el 4.5(a) aclara que una «Collective Database» —incorporar "
+              "esta serie junto a otras sin derivar de ella— no obliga a licenciar el "
+              "conjunto bajo ODbL. Nuestro panel combina series de emisores distintos sin "
+              "alterar ésta, así que cae ahí.\n"
+              "Lo que SIGUE restringido y hay que respetar: redistribuir la base (o una "
+              "derivada de ella) sí arrastra atribución y share-alike. Por eso la licencia "
+              "queda marcada como restrictiva: el permiso es para citar, no para "
+              "republicar el dataset.")),
     "DIGEPRES — informe oficial de ejecucion presupuestaria (Ley 423-06)": Licencia(
         terminos_url=None, verificado_el=None,
         nota=("El informe se publica en cumplimiento del articulo 59 de la Ley Organica de "
