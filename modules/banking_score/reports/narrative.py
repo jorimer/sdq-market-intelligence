@@ -41,6 +41,10 @@ REPORT_SECTIONS: Dict[str, list] = {
         "eficiencia_rentabilidad",
         "liquidez",
         "diversificacion",
+        # El MAPA SECTORIAL cierra la diversificación: ésta dice CUÁNTO se concentra el
+        # libro y aquélla CÓMO le va en cada sector contra el resto del sistema. Va acá y
+        # no al final porque el riesgo y el comparativo se apoyan en su conclusión.
+        "mapa_sectorial",
         "risk_assessment",
         "comparative",
         "recommendation",
@@ -687,6 +691,16 @@ async def generate_report_narratives(
     # DataWatch convivía con una sección de Tendencias completa sobre el mismo período: se
     # lee como bug en vivo, no como función pendiente.
     is_system = report_type in _SYSTEM_REPORT_TYPES
+
+    # SIN DATO NO HAY SECCIÓN. El mapa sectorial existe desde el backfill del cubo de
+    # créditos: los cortes anteriores no lo tienen, y una entidad sin cartera clasificada
+    # tampoco. Pedirle al modelo que narre un contexto vacío produce una sección hueca, y
+    # `full_rating` está entre los tipos que FALLAN CERRADO ante una sección degradada —o
+    # sea que sin este filtro una entidad sin desglose dejaría de poder emitir su SDQ Rating
+    # por completo. El gate gemelo vive en la ruta de productos; acá faltaba porque esta
+    # ruta arma su `scoring_result` a mano, que es la misma grieta de siempre.
+    if "mapa_sectorial" in sections and not scoring_result.get("mapa_sectorial"):
+        sections = [s for s in sections if s != "mapa_sectorial"]
 
     for section in sections:
         if section == "anuario":
