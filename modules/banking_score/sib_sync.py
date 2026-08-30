@@ -747,10 +747,17 @@ def recompute_carteras_metrics(period: str, write_status=None) -> Dict:
                 row.suma_top10 = None if mayores is None else float(mayores)
                 if cm.get("hhi") is not None:
                     row.hhi_sectorial_raw = cm["hhi"]
-                if cm.get("cartera_a"):
-                    row.cartera_categoria_a = cm["cartera_a"]
-                if cm.get("vencida"):
-                    row.cartera_vencida_90d = cm["vencida"]
+                # NO se escriben `cartera_categoria_a` ni `cartera_vencida_90d`, por la misma
+                # razón que el backfill declara y respeta: morosidad y % de cartera vigente
+                # usan los ratios PRE-COMPUTADOS de la SIB, y pisarlos con cifras del cubo
+                # los distorsiona.
+                #
+                # Esta ruta sí los escribía, y los dos caminos discrepaban en silencio. El
+                # 2026-08-29 se corrieron 22 recomputes manuales para poblar el desglose
+                # sectorial —el backfill tenía el cableado roto— y eso metió la distorsión en
+                # los 22 trimestres de 89 entidades. Vivió un día en producción y se descubrió
+                # al comparar 1.681 puntos de score contra la línea base: 680 se habían
+                # movido, y el «cambio» era en realidad la corrección.
                 _guardar_cartera_sectorial(db, bank.id, pe, cm.get("por_sector") or {})
                 updated += 1
                 affected_periods.add(pe)

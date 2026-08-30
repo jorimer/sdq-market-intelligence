@@ -17,6 +17,22 @@ Tres lecturas, en este orden:
    IDIOSINCRÁTICO de lo COMPARTIDO. Es la única de las tres que exige el panel completo, y
    es la que vale.
 
+Contra QUÉ se compara. Contra el RESTO del sistema, no contra el sistema entero. Con el
+total, una entidad grande se compara en buena medida CONTRA SÍ MISMA: su propia mora entra
+en el promedio que debía servirle de referencia y lo arrastra hacia ella, de modo que
+cuanto más grande es la entidad más pequeña sale su brecha. El sesgo va siempre en la
+misma dirección —hacia «acá no pasa nada»— y es máximo justo en las entidades cuya
+originación más importa. Por eso `_agregar` se computa una sola vez sobre todas las celdas
+y la referencia de la entidad se obtiene RESTÁNDOLE la suya.
+
+La tasa es un PROMEDIO PONDERADO, y no se promedia. La SIB publica `tasaPorDeuda` como la
+suma de tasa × saldo (su *Catálogo de Indicadores Financieros* v3.0 lo define: la variable
+de ponderación es el saldo adeudado), y persistimos el cociente por celda. Agregar celdas
+exige RE-PONDERAR por `deuda_con_tasa`: el promedio simple de los cocientes le da a una
+celda de un millón el mismo voto que a una de diez mil millones. Las celdas sin tasa creíble
+salen del numerador Y del denominador — si quedaran en el denominador, la tasa agregada se
+diluiría hacia cero por celdas que nunca aportaron.
+
 Doctrina aplicada. Las relaciones se COMPUTAN acá y el modelo las copia; no se le pide que
 derive una dirección. Cada cuota nombra su población en la clave (`peso_en_su_cartera_pct`
 vs `cuota_del_sector_pct`) porque son dos denominadores distintos y el modelo reatribuye al
@@ -29,7 +45,6 @@ import logging
 from datetime import date
 from typing import Any, Dict, List, Optional
 
-from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from modules.banking_score.models.models import Bank, CarteraSectorial
@@ -60,34 +75,106 @@ def _celdas(db: Session, corte: date) -> List[CarteraSectorial]:
             .all())
 
 
+#: Las medidas del cubo que se SUMAN. La tasa NO está acá a propósito: es un cociente y
+#: sumarla no significa nada. Va aparte, re-ponderada por `deuda_con_tasa`.
+_SUMABLES = ("deuda", "vencida", "vencida_31_90", "garantia", "provision",
+             "creditos", "desembolso", "deuda_moneda_extranjera", "deuda_persona_fisica",
+             "deuda_con_tasa")
+
+
+def _vacio() -> Dict[str, Any]:
+    a: Dict[str, Any] = {k: 0.0 for k in _SUMABLES}
+    # Numerador de la tasa re-ponderada: Σ(tasa × saldo). Solo acumula celdas con tasa
+    # creíble, y `deuda_con_tasa_valida` acumula EL MISMO subconjunto para que el cociente
+    # tenga el mismo universo arriba y abajo.
+    a["tasa_por_deuda"] = 0.0
+    a["deuda_con_tasa_valida"] = 0.0
+    a["bancos"] = set()
+    a["celdas"] = 0
+    return a
+
+
+def _sumar(acc: Dict[str, Any], c: CarteraSectorial) -> None:
+    for k in _SUMABLES:
+        acc[k] += float(getattr(c, k, None) or 0)
+    tasa = c.tasa_ponderada
+    base = float(c.deuda_con_tasa or 0)
+    if tasa is not None and base > 0:
+        acc["tasa_por_deuda"] += float(tasa) * base
+        acc["deuda_con_tasa_valida"] += base
+    acc["bancos"].add(str(c.bank_id))
+    acc["celdas"] += 1
+
+
+def _restar(total: Dict[str, Any], propio: Dict[str, Any]) -> Dict[str, Any]:
+    """El RESTO del sistema: el agregado del sector menos lo que aporta la entidad.
+
+    Sin esto una entidad grande se compara contra un promedio que ella misma domina, y su
+    brecha sale sistemáticamente encogida — el sesgo es máximo justo donde más importa."""
+    r: Dict[str, Any] = {k: total[k] - propio[k] for k in _SUMABLES}
+    r["tasa_por_deuda"] = total["tasa_por_deuda"] - propio["tasa_por_deuda"]
+    r["deuda_con_tasa_valida"] = total["deuda_con_tasa_valida"] - propio["deuda_con_tasa_valida"]
+    r["bancos"] = total["bancos"] - propio["bancos"]
+    r["celdas"] = total["celdas"] - propio["celdas"]
+    return r
+
+
+def _agregar(celdas: List[CarteraSectorial]) -> Dict[str, Dict[str, Any]]:
+    """Acumula por sector UNA sola vez. Las dos lecturas —sistema y entidad— salen de acá,
+    porque dos acumuladores separados discrepan en silencio."""
+    out: Dict[str, Dict[str, Any]] = {}
+    for c in celdas:
+        _sumar(out.setdefault(str(c.sector), _vacio()), c)
+    return out
+
+
+def _tasa(acc: Dict[str, Any]) -> Optional[float]:
+    """Tasa promedio RE-PONDERADA por saldo. Nunca el promedio simple de los cocientes."""
+    base = acc.get("deuda_con_tasa_valida") or 0.0
+    if base <= 0:
+        return None
+    return round(acc["tasa_por_deuda"] / base, 2)
+
+
+def _medidas(acc: Dict[str, Any]) -> Dict[str, Any]:
+    """Las medidas que se derivan de un acumulado, con el SUJETO en cada clave."""
+    d = acc["deuda"]
+    return {
+        "mora_pct": _pct(acc["vencida"], d),
+        # Señal ADELANTADA: se deteriora antes que la vencida.
+        "mora_temprana_31_90_pct": _pct(acc["vencida_31_90"], d),
+        "tasa_promedio_ponderada_pct": _tasa(acc),
+        # Cobertura sobre la cartera VENCIDA, no sobre la total: mide si lo ya deteriorado
+        # está provisionado. Si no hay mora, no hay qué cubrir y el dato es None, no 0.
+        "cobertura_de_provision_sobre_vencida_pct": _pct(acc["provision"], acc["vencida"]),
+        "garantia_sobre_deuda_pct": _pct(acc["garantia"], d),
+        "dolarizacion_de_la_deuda_pct": _pct(acc["deuda_moneda_extranjera"], d),
+        "deuda_de_persona_fisica_pct": _pct(acc["deuda_persona_fisica"], d),
+        "creditos": int(acc["creditos"]) or None,
+        "credito_promedio": (round(d / acc["creditos"], 2) if acc["creditos"] else None),
+        "desembolso_del_trimestre": round(acc["desembolso"], 2) or None,
+    }
+
+
 def sistema_por_sector(db: Session, corte: date) -> Dict[str, Any]:
     """El sistema entero abierto por sector, agregando sobre provincias y entidades."""
-    filas = (db.query(
-                CarteraSectorial.sector,
-                func.sum(CarteraSectorial.deuda),
-                func.sum(CarteraSectorial.vencida),
-                func.sum(CarteraSectorial.vencida_31_90),
-                func.count(func.distinct(CarteraSectorial.bank_id)))
-             .filter(CarteraSectorial.period_end == corte)
-             .group_by(CarteraSectorial.sector).all())
-    if not filas:
+    por_sector = _agregar(_celdas(db, corte))
+    if not por_sector:
         return {"corte": str(corte), "sectores": [], "sin_dato": True}
 
-    total = sum(float(f[1] or 0) for f in filas)
+    total = sum(a["deuda"] for a in por_sector.values())
     sectores = []
-    for sector, deuda, vencida, temprana, n_ent in filas:
-        d = float(deuda or 0)
-        sectores.append({
+    for sector, acc in por_sector.items():
+        fila = {
             "sector": sector,
-            "deuda": round(d, 2),
+            "deuda": round(acc["deuda"], 2),
             # El SUJETO en la clave: esta cuota es sobre el crédito TOTAL del sistema, no
             # sobre la cartera de ninguna entidad.
-            "peso_en_el_sistema_pct": _pct(d, total),
-            "entidades_que_prestan": int(n_ent or 0),
-            "mora_pct": _pct(vencida, d),
-            # Señal ADELANTADA: se deteriora antes que la vencida.
-            "mora_temprana_31_90_pct": _pct(temprana, d),
-        })
+            "peso_en_el_sistema_pct": _pct(acc["deuda"], total),
+            "entidades_que_prestan": len(acc["bancos"]),
+        }
+        fila.update(_medidas(acc))
+        sectores.append(fila)
     sectores.sort(key=lambda s: -float(s["deuda"] or 0))
     return {
         "corte": str(corte),
@@ -96,70 +183,108 @@ def sistema_por_sector(db: Session, corte: date) -> Dict[str, Any]:
         "que_es": ("el crédito de TODAS las entidades supervisadas abierto por sector "
                    "económico; la mora temprana de 31 a 90 días se deteriora antes que la "
                    "vencida, así que ordena por anticipación y no por daño consumado"),
+        "como_se_agrega_la_tasa": ("promedio ponderado por saldo adeudado, tal como la "
+                                   "define la SIB; las celdas sin tasa creíble salen del "
+                                   "numerador y del denominador"),
     }
 
 
 def posicion_de_la_entidad(db: Session, bank: Bank, corte: date) -> Optional[Dict[str, Any]]:
-    """Dónde presta esta entidad, y cómo le va ahí contra el resto del sistema."""
-    mias = [c for c in _celdas(db, corte) if str(c.bank_id) == str(bank.id)]
+    """Dónde presta esta entidad, y cómo le va ahí contra el RESTO del sistema."""
+    celdas = _celdas(db, corte)
+    mias = [c for c in celdas if str(c.bank_id) == str(bank.id)]
     if not mias:
         logger.info("Mapa sectorial: %s no tiene desglose en %s.", bank.name, corte)
         return None
 
-    sistema = {s["sector"]: s for s in sistema_por_sector(db, corte)["sectores"]}
-    por_sector: Dict[str, Dict[str, float]] = {}
-    for c in mias:
-        a = por_sector.setdefault(str(c.sector), {"deuda": 0.0, "vencida": 0.0,
-                                                  "temprana": 0.0, "provincias": 0.0})
-        a["deuda"] += float(c.deuda or 0)
-        a["vencida"] += float(c.vencida or 0)
-        a["temprana"] += float(c.vencida_31_90 or 0)
-        a["provincias"] += 1
+    todo = _agregar(celdas)
+    mio = _agregar(mias)
+    credito_del_sistema = sum(a["deuda"] for a in todo.values())
+    mi_total = sum(a["deuda"] for a in mio.values())
 
-    mi_total = sum(v["deuda"] for v in por_sector.values())
     filas = []
-    for sector, v in por_sector.items():
-        s = sistema.get(sector) or {}
-        mora_mia = _pct(v["vencida"], v["deuda"])
-        mora_sis = s.get("mora_pct")
-        material = v["deuda"] >= MATERIALIDAD_DEUDA
-        brecha = (None if mora_mia is None or mora_sis is None
-                  else round(mora_mia - mora_sis, 2))
-        filas.append({
-            "sector": sector,
-            "deuda": round(v["deuda"], 2),
-            "provincias_en_que_presta": int(v["provincias"]),
-            # DOS cuotas con DOS denominadores. Sin el sujeto en la clave, el modelo las
-            # confunde y publica «concentra el 31% del sector» cuando es de su cartera.
-            "peso_en_su_cartera_pct": _pct(v["deuda"], mi_total),
-            "cuota_del_sector_pct": _pct(v["deuda"], s.get("deuda")),
-            "peso_del_sector_en_el_sistema_pct": s.get("peso_en_el_sistema_pct"),
-            "mora_pct": mora_mia,
-            "mora_del_sector_pct": mora_sis,
-            "mora_temprana_31_90_pct": _pct(v["temprana"], v["deuda"]),
-            "mora_temprana_del_sector_pct": s.get("mora_temprana_31_90_pct"),
+    for sector, acc in mio.items():
+        resto = _restar(todo[sector], acc)
+        mi = _medidas(acc)
+        su = _medidas(resto)
+        material = acc["deuda"] >= MATERIALIDAD_DEUDA
+
+        def _brecha(a: Optional[float], b: Optional[float]) -> Optional[float]:
             # LA RELACIÓN SE COMPUTA ACÁ. El modelo la copia; si tuviera que derivarla de
             # dos porcentajes, invertiría la dirección — ya pasó en este repo.
-            "brecha_de_mora_pp": brecha,
-            "atribucion": _atribuir(brecha, material),
+            return None if a is None or b is None else round(a - b, 2)
+
+        fila = {
+            "sector": sector,
+            "deuda": round(acc["deuda"], 2),
+            "provincias_en_que_presta": acc["celdas"],
+            # DOS cuotas con DOS denominadores. Sin el sujeto en la clave, el modelo las
+            # confunde y publica «concentra el 31% del sector» cuando es de su cartera.
+            "peso_en_su_cartera_pct": _pct(acc["deuda"], mi_total),
+            "cuota_del_sector_pct": _pct(acc["deuda"], todo[sector]["deuda"]),
+            "peso_del_sector_en_el_sistema_pct": _pct(todo[sector]["deuda"],
+                                                      credito_del_sistema),
+            "entidades_en_el_resto_del_sector": len(resto["bancos"]),
+            "mora_pct": mi["mora_pct"],
+            "mora_del_resto_del_sector_pct": su["mora_pct"],
+            "brecha_de_mora_pp": _brecha(mi["mora_pct"], su["mora_pct"]),
+            "mora_temprana_31_90_pct": mi["mora_temprana_31_90_pct"],
+            "mora_temprana_del_resto_del_sector_pct": su["mora_temprana_31_90_pct"],
+            "brecha_de_mora_temprana_pp": _brecha(mi["mora_temprana_31_90_pct"],
+                                                  su["mora_temprana_31_90_pct"]),
+            # El precio al que la entidad coloca en ese sector contra el precio del resto.
+            # Un spread positivo con mora igual es margen; con mora peor es riesgo mal
+            # cobrado. Ninguna de las dos lecturas existe sin el libro de los demás.
+            "tasa_promedio_ponderada_pct": mi["tasa_promedio_ponderada_pct"],
+            "tasa_del_resto_del_sector_pct": su["tasa_promedio_ponderada_pct"],
+            "spread_de_tasa_pp": _brecha(mi["tasa_promedio_ponderada_pct"],
+                                         su["tasa_promedio_ponderada_pct"]),
+            "cobertura_de_provision_sobre_vencida_pct":
+                mi["cobertura_de_provision_sobre_vencida_pct"],
+            "cobertura_del_resto_del_sector_pct":
+                su["cobertura_de_provision_sobre_vencida_pct"],
+            "garantia_sobre_deuda_pct": mi["garantia_sobre_deuda_pct"],
+            "garantia_del_resto_del_sector_pct": su["garantia_sobre_deuda_pct"],
+            "dolarizacion_de_la_deuda_pct": mi["dolarizacion_de_la_deuda_pct"],
+            "dolarizacion_del_resto_del_sector_pct": su["dolarizacion_de_la_deuda_pct"],
+            "deuda_de_persona_fisica_pct": mi["deuda_de_persona_fisica_pct"],
+            "creditos": mi["creditos"],
+            "credito_promedio": mi["credito_promedio"],
+            "credito_promedio_del_resto_del_sector": su["credito_promedio"],
+            "desembolso_del_trimestre": mi["desembolso_del_trimestre"],
+            "atribucion": _atribuir(_brecha(mi["mora_pct"], su["mora_pct"]), material,
+                                    hay_resto=resto["deuda"] > 0),
             "material": material,
-        })
+        }
+        filas.append(fila)
     filas.sort(key=lambda f: -float(f["deuda"] or 0))
     return {
         "entidad": bank.name,
         "corte": str(corte),
         "credito_clasificado": round(mi_total, 2),
         "sectores": filas,
+        "contra_que_se_compara": (
+            "el RESTO del sistema en el mismo sector, EXCLUIDA la entidad; incluirla "
+            "haría que se comparase en parte contra sí misma y encogería su brecha tanto "
+            "más cuanto mayor fuese su cuota"),
         "regla_de_atribucion": (
-            f"la brecha es la mora de la entidad menos la del MISMO sector en todo el "
+            f"la brecha es la mora de la entidad menos la del MISMO sector en el resto del "
             f"sistema; por debajo de {BRECHA_MATERIAL_PP} punto porcentual no se atribuye a "
             f"ninguna de las dos causas, y por debajo de "
             f"RD${MATERIALIDAD_DEUDA:,.0f} de exposición la mora de una celda es ruido"),
     }
 
 
-def _atribuir(brecha: Optional[float], material: bool) -> str:
-    """Idiosincrático, compartido, o no atribuible — nunca una cuarta cosa inventada."""
+def _atribuir(brecha: Optional[float], material: bool, hay_resto: bool = True) -> str:
+    """Idiosincrático, compartido, o no atribuible — nunca una cuarta cosa inventada.
+
+    `sin_resto_con_que_comparar` no es un caso degenerado que haya que esconder: es el
+    hallazgo. Significa que la entidad es la ÚNICA que presta a ese sector, y entonces no
+    existe referencia contra la cual atribuir su mora —ni buena ni mala—. Confundirlo con
+    `sin_dato` diría «falta el dato» cuando el dato está completo y lo que falta es un
+    comparable; son cosas distintas y la segunda es la interesante."""
+    if not hay_resto:
+        return "sin_resto_con_que_comparar"
     if brecha is None:
         return "sin_dato"
     if not material:
