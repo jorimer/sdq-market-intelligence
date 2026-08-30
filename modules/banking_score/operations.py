@@ -245,6 +245,77 @@ def _run_dedup_acciones(params, user_id, set_phase) -> Dict:
         db.close()
 
 
+def cortes_sin_desglose_sectorial(db) -> list:
+    """Trimestres con datos bancarios cuyo libro de crédito NO está abierto por sector.
+
+    Es la brecha entre lo que sabemos de cada entidad y lo que sabemos de su cartera. Se
+    computa comparando los dos conjuntos, nunca se lleva una lista a mano: un corte nuevo
+    aparece solo, y uno que se completó desaparece solo.
+    """
+    from modules.banking_score.models.models import BankingData, CarteraSectorial
+    con_datos = {r[0] for r in db.query(BankingData.period_end).distinct()}
+    con_desglose = {r[0] for r in db.query(CarteraSectorial.period_end).distinct()}
+    return sorted(con_datos - con_desglose, reverse=True)
+
+
+def _run_sectorial_al_dia(params, user_id, set_phase) -> Dict:
+    """Llena el desglose sectorial de los trimestres que aún no lo tienen, DE A UNO.
+
+    Por qué de a uno y no un backfill completo. Un deploy de Railway reinicia el worker y
+    mata la operación en vuelo: el 2026-08-29 un backfill de 2h30 murió en el trimestre 14
+    de 22 y no dejó nada. Procesar un trimestre por corrida hace que una interrupción cueste
+    ocho minutos, y que la siguiente corrida retome donde quedó sin repetir trabajo — la
+    brecha se recomputa cada vez contra la base, no contra una lista guardada.
+
+    Por eso también esta operación SÍ puede tener cadencia, mientras que el backfill completo
+    no debería: es corta, idempotente y reanudable.
+    """
+    from modules.banking_score.sib_sync import recompute_carteras_metrics
+    cuantos = int(params.get("cortes") or 1)
+    db = SessionLocal()
+    try:
+        faltan = cortes_sin_desglose_sectorial(db)
+    finally:
+        db.close()
+    if not faltan:
+        return {"faltaban": 0, "procesados": [], "nota": "todos los trimestres tienen desglose"}
+
+    def _ws(_db, **updates):
+        if updates.get("phase"):
+            set_phase(updates["phase"])
+
+    hechos = []
+    for pe in faltan[:cuantos]:
+        periodo = f"{pe.year}-{pe.month:02d}"
+        set_phase(f"desglose sectorial de {periodo}")
+        r = recompute_carteras_metrics(periodo, write_status=_ws)
+        # Un corte puede no tener cubo publicado todavía: se REPORTA, no se reintenta en
+        # bucle ni se marca como hecho.
+        hechos.append({"corte": periodo, "filas": r.get("rows_updated", 0),
+                       "sin_cubo": not r.get("rows_updated")})
+    return {"faltaban": len(faltan), "procesados": hechos,
+            "quedan": max(0, len(faltan) - len(hechos))}
+
+
+def _run_sib_sync_liviano(params, user_id, set_phase) -> Dict:
+    """Re-ingesta desde la SIB SIN el cubo de carteras. Es la mitad rápida del sync.
+
+    Por qué existe y por qué el backfill completo NO se agenda. El sync entero tarda unas
+    dos horas y media, casi todas en transmitir el cubo de créditos; un deploy reinicia el
+    worker y lo mata a mitad —pasó el 2026-08-29 y no dejó nada—. Como
+    `seed_default_schedules` activa sola toda operación recurrente en el próximo despliegue,
+    agendar el completo garantiza repetir ese choque.
+
+    La partición es limpia: esto trae balance, resultados, indicadores y solvencia —lo que
+    estuvo DOS MESES sin actualizarse, y por lo que un trimestre entero ya publicado no
+    estaba en la plataforma— y `cartera-sectorial-al-dia` trae el cubo de a un trimestre.
+    Entre las dos cubren todo sin que ninguna corra horas.
+    """
+    from modules.banking_score.sib_sync import run_backfill
+    set_phase("re-ingesta SIB sin el cubo de carteras")
+    return run_backfill(force=True, skip_carteras=True)
+
+
 def register() -> None:
     """Register banking-score operations into the shared console (idempotent)."""
     register_operation(Operation(
@@ -339,6 +410,27 @@ def register() -> None:
         "`docs/PROPUESTA_CAMBIARIAS_FIDUCIARIAS.md` §0 recomendó y dejó pendiente. No filtra "
         "nada: solo mide. On-demand. Parámetro opcional: `tipo`.",
         _run_materialidad, default_interval_hours=0,
+    ))
+    register_operation(Operation(
+        "sib-sync-liviano", "Sincronizar con la SIB (sin el cubo de carteras)",
+        "Re-ingesta balance, resultados, indicadores y solvencia desde la SIB. NO baja el "
+        "cubo de créditos —de eso se encarga `cartera-sectorial-al-dia`, de a un trimestre—, "
+        "y por eso es corta y se puede agendar sin que un deploy la parta a la mitad. "
+        "Existe porque la banca era el ÚNICO eje sin cadencia: se descubrió con dos meses de "
+        "atraso y un trimestre publicado que nadie había traído.",
+        _run_sib_sync_liviano, default_interval_hours=168,
+        # Re-ingerir → re-puntuar → re-validar. Misma cascada que `rescore`: sin ella, un
+        # dato nuevo convive con un backtest calculado sobre el anterior.
+        triggers=["backtest", "alerts-sweep"],
+    ))
+    register_operation(Operation(
+        "cartera-sectorial-al-dia", "Completar el desglose sectorial pendiente",
+        "Busca los trimestres con datos bancarios cuyo libro de crédito todavía no está "
+        "abierto por sector y provincia, y llena UNO por corrida. La brecha se recomputa "
+        "contra la base en cada pasada, así que un corte nuevo entra solo y una "
+        "interrupción cuesta un trimestre, no la serie entera. Parámetro opcional: "
+        "`cortes` (cuántos por corrida, por defecto 1).",
+        _run_sectorial_al_dia, default_interval_hours=168,
     ))
     registrar_motor(MotorValidacion(
         eje="banking_score", operacion="backtest", clave=BACKTEST_REPORT_KEY,
