@@ -119,6 +119,111 @@ def parse_informality(content: bytes,
     return out
 
 
+SHEET_TRIMESTRAL = "Indicadores"
+_ROMANOS = {"I": 1, "II": 2, "III": 3, "IV": 4}
+
+
+def _fila_de_trimestres(rows: List[list]) -> Optional[int]:
+    """La fila cuyo contenido son numerales romanos de trimestre, buscada por CONTENIDO.
+
+    No por índice: si el BCRD agrega una fila de título arriba, una posición fija leería
+    otra cosa en silencio. Es la misma regla que el resto de los parsers de este archivo.
+    """
+    for i, r in enumerate(rows[:_HEADER_SCAN_ROWS]):
+        romanos = sum(1 for c in r[1:] if _trimestre(c) is not None)
+        if romanos >= 4:
+            return i
+    return None
+
+
+def _trimestre(cell: object) -> Optional[int]:
+    """`'III'` → 3. Tolera la marca de nota al pie que el BCRD pega al trimestre en curso
+    (`'I 1/'`): el número del trimestre no cambia porque el dato sea preliminar."""
+    if not isinstance(cell, str):
+        return None
+    return _ROMANOS.get(cell.strip().split()[0].upper() if cell.strip() else "")
+
+
+_NOTA_AL_PIE = re.compile(r"\s*\d+/\s*$")
+
+
+def _sin_nota(txt: str) -> str:
+    """Quita la marca de nota al pie que el BCRD pega al final de algunas etiquetas."""
+    return _NOTA_AL_PIE.sub("", txt or "").strip()
+
+
+def parse_trimestral(content: bytes, label: str) -> List[Tuple[str, float]]:
+    """``00_Indicadores.xlsx`` hoja «Indicadores» → ``[('YYYY-Qn', valor)]`` ascendente.
+
+    **Por qué existe, además de la serie anual.** `parse_informality` lee la hoja «Promedio 4
+    Trimestres», que son las ventanas anuales que el PROPIO BCRD calcula, y esa serie sostiene
+    los indicadores de la END, que son anuales. Pero el crédito se mide por trimestre: para
+    leer el deterioro de una cartera contra el mercado laboral hace falta la misma cadencia,
+    y está publicada en otra hoja del mismo libro que ya descargamos.
+
+    Las dos series conviven a propósito. La anual NO se deriva de ésta ni al revés: son del
+    emisor, con su propia definición de ventana, y promediar cuatro trimestres para
+    reproducir la anual daría un número que el BCRD no publicó.
+
+    El año va en una fila con celdas combinadas (aparece una vez y se propaga) y el trimestre
+    en la fila de abajo. El trimestre se lee del ROMANO, nunca de la posición: el libro
+    arranca en III-2014, así que numerar por orden etiquetaría III como I.
+    """
+    import openpyxl
+
+    wb = openpyxl.load_workbook(io.BytesIO(content), data_only=True, read_only=True)
+    try:
+        if SHEET_TRIMESTRAL not in wb.sheetnames:
+            raise BcrdLaborUnavailable(
+                f"el libro no trae la hoja '{SHEET_TRIMESTRAL}' (hojas: {wb.sheetnames})")
+        rows = [list(r) for r in wb[SHEET_TRIMESTRAL].iter_rows(values_only=True)]
+    finally:
+        wb.close()
+
+    fila_q = _fila_de_trimestres(rows)
+    if fila_q is None or fila_q == 0:
+        raise BcrdLaborUnavailable(
+            "no se encontró la fila de trimestres (I/II/III/IV) en la hoja "
+            f"'{SHEET_TRIMESTRAL}' (¿cambió el layout del BCRD?)")
+    fila_anio = rows[fila_q - 1]
+
+    # El año se propaga hacia la derecha desde la celda combinada que lo declara.
+    periodo_por_col: dict = {}
+    anio: Optional[int] = None
+    for ci, c in enumerate(rows[fila_q]):
+        if ci < len(fila_anio) and isinstance(fila_anio[ci], (int, float)) \
+                and 2000 < fila_anio[ci] < 2100:
+            anio = int(fila_anio[ci])
+        q = _trimestre(c)
+        if q is not None and anio is not None:
+            periodo_por_col[ci] = f"{anio}-Q{q}"
+
+    if not periodo_por_col:
+        raise BcrdLaborUnavailable(
+            f"la hoja '{SHEET_TRIMESTRAL}' no produjo ningún período (año + trimestre)")
+
+    # La hoja trimestral pega la MARCA DE NOTA AL PIE a la etiqueta («SU1: Tasa de
+    # Desocupación 4/») y la anual no. Se quita la marca y se compara EXACTO — no por
+    # prefijo: en esta hoja «Ocupados Informales» (un conteo, en millones) convive con
+    # «Ocupación Informal» (una tasa), y un prefijo laxo puede tomar la fila equivocada.
+    objetivo = _norm(_sin_nota(label))
+    fila = next((r for r in rows
+                 if r and isinstance(r[0], str) and _norm(_sin_nota(r[0])) == objetivo), None)
+    if fila is None:
+        raise BcrdLaborUnavailable(
+            f"no se encontró la fila '{label}' en la hoja '{SHEET_TRIMESTRAL}'")
+
+    out: List[Tuple[str, float]] = []
+    for ci, periodo in sorted(periodo_por_col.items()):
+        v = fila[ci] if ci < len(fila) else None
+        if isinstance(v, (int, float)) and 0 < float(v) <= 100:
+            out.append((periodo, round(float(v), 2)))
+    if not out:
+        raise BcrdLaborUnavailable(
+            f"la fila '{label}' no trae ningún valor en rango 0-100 en la hoja trimestral")
+    return out
+
+
 def fetch_bcrd_informality() -> List[Tuple[int, float]]:  # pragma: no cover - network I/O
     """Live: descarga el libro de indicadores del CDN del BCRD y lo parsea."""
     import httpx
@@ -344,4 +449,10 @@ def fetch_bcrd_labor_market() -> dict:  # pragma: no cover - network I/O
         "employment_gender_ratio": parse_gender_ratio(r.content, EMPLOYMENT_RATE_LABEL),
         "unemployment_gender_ratio": parse_gender_ratio(r.content, UNEMPLOYMENT_LABEL),
         "regional_unemployment_gap": parse_regional_gap(r.content),
+        # TRIMESTRALES, de la hoja «Indicadores» del MISMO libro. No es una segunda
+        # descarga ni una derivación de la anual: son series propias del emisor con su
+        # cadencia real, y hacen falta porque el crédito se mide por trimestre.
+        "unemployment_rate_trimestral": parse_trimestral(r.content, UNEMPLOYMENT_LABEL),
+        "informality_rate_trimestral": parse_trimestral(r.content, "Ocupación Informal"),
+        "employment_rate_trimestral": parse_trimestral(r.content, "Tasa de Ocupación"),
     }
