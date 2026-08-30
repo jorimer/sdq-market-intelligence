@@ -135,3 +135,81 @@ class TestDesgloseSectorial:
         del filas[0]["valorGarantia"]
         c = self._celdas(self._corte(monkeypatch, filas), "F - CONSTRUCCIÓN")[0]
         assert c["deuda"] == 600 and c["garantia"] == 0.0
+
+
+class TestLasMedidasQueSeSumanEnLaMISMA_pasada:
+    """Todo lo que el cubo trae y sirve, capturado de una vez.
+
+    Re-hacer el backfill cuesta unas dos horas y media: cada campo que se agregue después
+    obliga a pagar esa espera otra vez. Por eso se decidió el conjunto completo antes de
+    repoblar, y por eso las dimensiones de cardinalidad baja entran como MEDIDA —`moneda` y
+    `persona` tienen dos valores, `clasificacionEntidad` seis; como grano multiplicarían las
+    filas por veinticuatro para no decir nada nuevo—.
+    """
+
+    @staticmethod
+    def _celda(monkeypatch, filas, sector="F - CONSTRUCCIÓN"):
+        from datetime import date as _d
+        client = SIBDataClient.__new__(SIBDataClient)
+        monkeypatch.setattr(client, "_quarters_in_range", lambda ps, pe: ["2025-12"])
+        monkeypatch.setattr(client, "_fetch_for_all_types", lambda ep, ps, pe: filas)
+        m = client._compute_carteras_metrics("2025-12", "2025-12")["Banreservas"][_d(2025, 12, 31)]
+        return [c for c in m["por_sector"] if c["sector"] == sector]
+
+    @staticmethod
+    def _fila(**kw):
+        base = {"entidad": "BANRESERVAS", "periodo": "2025-12", "tipoCredito": "Comerciales",
+                "sectorEconomico": "F - CONSTRUCCIÓN", "provincia": "SANTIAGO",
+                "clasificacionEntidad": "A", "deuda": 100}
+        base.update(kw)
+        return base
+
+    def test_la_tasa_se_acumula_PONDERADA_por_deuda(self, monkeypatch):
+        """Se guarda Σ(tasa × deuda) y su base, no un promedio: el promedio simple de dos
+        celdas de tamaño distinto no es la tasa de nadie, y guardarlo lo haría irrecuperable."""
+        c = self._celda(monkeypatch, [
+            self._fila(deuda=900, tasaPorDeuda=10.0),
+            self._fila(deuda=100, tasaPorDeuda=20.0, provincia="AZUA"),
+        ])
+        total = sum(x["deuda_x_tasa"] for x in c)
+        base = sum(x["deuda_con_tasa"] for x in c)
+        assert total == 900 * 10.0 + 100 * 20.0
+        assert base == 1000
+        assert total / base == 11.0        # ponderada; el promedio simple daría 15,0
+
+    def test_una_celda_sin_tasa_no_entra_en_la_BASE_del_promedio(self, monkeypatch):
+        """Si entrara con tasa 0, bajaría el promedio de todas las demás."""
+        c = self._celda(monkeypatch, [self._fila(deuda=500, tasaPorDeuda=12.0),
+                                      self._fila(deuda=500, provincia="AZUA")])[0:2]
+        assert sum(x["deuda_con_tasa"] for x in c) == 500
+        assert sum(x["deuda_x_tasa"] for x in c) / 500 == 12.0
+
+    def test_moneda_y_persona_entran_como_MEDIDA_no_como_dimension(self, monkeypatch):
+        """Dos valores cada una: como grano cuadruplicarían las filas para decir lo mismo.
+        Lo que no es extranjera es nacional; lo que no es física, jurídica."""
+        c = self._celda(monkeypatch, [
+            self._fila(deuda=300, moneda="Moneda Extranjera", persona="Persona física"),
+            self._fila(deuda=700, moneda="Moneda Nacional", persona="Persona jurídica"),
+        ])
+        assert len(c) == 1, "no debe abrirse una fila por moneda ni por persona"
+        assert c[0]["deuda"] == 1000
+        assert c[0]["deuda_moneda_extranjera"] == 300
+        assert c[0]["deuda_persona_fisica"] == 300
+
+    def test_la_clasificacion_COMPLETA_no_solo_la_A(self, monkeypatch):
+        """Con las cinco clases se computa migración y pérdida esperada por sector."""
+        c = self._celda(monkeypatch, [self._fila(deuda=100, clasificacionEntidad=k)
+                                      for k in ("A", "B", "C", "D", "E")])[0]
+        assert [c[f"cartera_{k}"] for k in "abcde"] == [100.0] * 5
+        assert c["deuda"] == 500
+
+    def test_el_DESEMBOLSO_es_flujo_y_la_deuda_es_stock(self, monkeypatch):
+        """Son cosas distintas: uno dice cuánto se prestó NUEVO, el otro cuánto se debe."""
+        c = self._celda(monkeypatch, [self._fila(deuda=1000, valorDesembolso=250)])[0]
+        assert c["deuda"] == 1000 and c["desembolso"] == 250
+
+    def test_un_campo_ausente_deja_CERO_medido_y_no_rompe(self, monkeypatch):
+        """Las filas reales no siempre traen todos los campos."""
+        c = self._celda(monkeypatch, [self._fila(deuda=100)])[0]
+        assert c["desembolso"] == 0.0 and c["deuda_x_tasa"] == 0.0
+        assert c["deuda"] == 100

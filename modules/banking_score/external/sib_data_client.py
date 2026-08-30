@@ -141,6 +141,23 @@ def cambiaria_display_name(code: str) -> str:
     return f"{code.title()} (Agente de Cambio)"
 
 
+#: Una celda del cubo abierta por sector y provincia. Las MEDIDAS se suman; las claves de
+#: identidad (`sector`, `provincia`, `region`) las pisa el `dict(...)` que crea la celda.
+#: Vive como constante para que agregar un campo sea una línea acá y no una firma nueva.
+_CELDA_VACIA = {
+    "sector": "", "provincia": "", "region": None,
+    "deuda": 0.0, "vencida": 0.0, "vencida_31_90": 0.0,
+    "garantia": 0.0, "provision": 0.0, "creditos": 0.0,
+    "desembolso": 0.0, "deuda_capital": 0.0, "plasticos": 0.0,
+    # Σ(tasa × deuda) y su base, para que el promedio ponderado se pueda reconstruir a
+    # cualquier nivel de agregación sin volver al cubo.
+    "deuda_x_tasa": 0.0, "deuda_con_tasa": 0.0,
+    "deuda_moneda_extranjera": 0.0, "deuda_persona_fisica": 0.0,
+    "cartera_a": 0.0, "cartera_b": 0.0, "cartera_c": 0.0, "cartera_d": 0.0, "cartera_e": 0.0,
+}
+
+
+
 class SIBDataClient:
     """
     Client for the Superintendencia de Bancos REST API v2.
@@ -932,23 +949,45 @@ class SIBDataClient:
                     prov = (r.get("provincia") or "").strip() or "SIN PROVINCIA"
                     region = (r.get("region") or "").strip() or None
                     ps = bucket["por_sector"].setdefault(
-                        (sector, prov), {"sector": sector, "provincia": prov,
-                                         "region": region,
-                                         "deuda": 0.0, "vencida": 0.0, "vencida_31_90": 0.0,
-                                         "cartera_a": 0.0, "garantia": 0.0, "provision": 0.0,
-                                         "creditos": 0.0})
+                        (sector, prov), dict(_CELDA_VACIA, sector=sector, provincia=prov,
+                                             region=region))
                     ps["deuda"] += deuda
                     for clave, campo in (("vencida", "deudaVencida"),
                                          ("vencida_31_90", "deudaVencidaDe31A90Dias"),
                                          ("garantia", "valorGarantia"),
                                          ("provision", "valorProvisionCapitalYRendimiento"),
-                                         ("creditos", "cantidadCredito")):
+                                         ("creditos", "cantidadCredito"),
+                                         ("desembolso", "valorDesembolso"),
+                                         ("deuda_capital", "deudaCapital"),
+                                         ("plasticos", "cantidadPlasticos")):
                         try:
                             ps[clave] += float(r.get(campo) or 0)
                         except (TypeError, ValueError):
                             pass
-                    if (r.get("clasificacionEntidad") or "").strip().upper() == "A":
-                        ps["cartera_a"] += deuda
+                    # LA TASA SE ACUMULA PONDERADA, no promediada. Un promedio simple de
+                    # tasas de celdas de tamaño distinto no es la tasa de nadie; guardando
+                    # Σ(tasa × deuda) cualquier agregación posterior —por sector, por
+                    # provincia, por entidad— divide por su propia deuda y sale correcta.
+                    try:
+                        tasa = float(r.get("tasaPorDeuda") or 0)
+                        if tasa > 0:
+                            ps["deuda_x_tasa"] += tasa * deuda
+                            ps["deuda_con_tasa"] += deuda
+                    except (TypeError, ValueError):
+                        pass
+                    # Las dimensiones de cardinalidad BAJA entran como MEDIDA, no como
+                    # dimensión: `moneda` y `persona` tienen dos valores cada una y
+                    # convertirlas en grano cuadruplicaría las filas para decir lo mismo.
+                    # Lo que no es extranjera es nacional, y lo que no es física, jurídica.
+                    if "EXTRANJERA" in _norm(r.get("moneda") or ""):
+                        ps["deuda_moneda_extranjera"] += deuda
+                    if "FISICA" in _norm(r.get("persona") or ""):
+                        ps["deuda_persona_fisica"] += deuda
+                    # La clasificación completa, no solo la A: con las cinco clases se puede
+                    # computar migración y pérdida esperada por sector, que con una sola no.
+                    clase = (r.get("clasificacionEntidad") or "").strip().upper()
+                    if clase in ("A", "B", "C", "D", "E"):
+                        ps[f"cartera_{clase.lower()}"] += deuda
                 else:
                     # Se MIDE lo que queda fuera del desglose en vez de dejar que la vista
                     # sectorial parezca cubrir el total. Sin esta cifra, una cartera con
