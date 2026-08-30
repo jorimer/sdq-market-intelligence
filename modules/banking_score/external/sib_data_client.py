@@ -141,6 +141,12 @@ def cambiaria_display_name(code: str) -> str:
     return f"{code.title()} (Agente de Cambio)"
 
 
+def _celdas_serializadas(por_sector: dict) -> list:
+    """Las celdas de un corte, redondeadas — la misma forma que consume el escritor."""
+    return [{k: (round(v, 2) if isinstance(v, float) else v) for k, v in vals.items()}
+            for vals in por_sector.values()]
+
+
 #: Una celda del cubo abierta por sector y provincia. Las MEDIDAS se suman; las claves de
 #: identidad (`sector`, `provincia`, `region`) las pisa el `dict(...)` que crea la celda.
 #: Vive como constante para que agregar un campo sea una línea acá y no una firma nueva.
@@ -149,9 +155,9 @@ _CELDA_VACIA = {
     "deuda": 0.0, "vencida": 0.0, "vencida_31_90": 0.0,
     "garantia": 0.0, "provision": 0.0, "creditos": 0.0,
     "desembolso": 0.0, "deuda_capital": 0.0, "plasticos": 0.0,
-    # Σ(tasa × deuda) y su base, para que el promedio ponderado se pueda reconstruir a
-    # cualquier nivel de agregación sin volver al cubo.
-    "deuda_x_tasa": 0.0, "deuda_con_tasa": 0.0,
+    # Numerador del promedio ponderado TAL COMO LO PUBLICA el emisor, y su base. La tasa
+    # se obtiene dividiendo, a cualquier nivel de agregación, sin volver al cubo.
+    "tasa_por_deuda": 0.0, "deuda_con_tasa": 0.0,
     "deuda_moneda_extranjera": 0.0, "deuda_persona_fisica": 0.0,
     "cartera_a": 0.0, "cartera_b": 0.0, "cartera_c": 0.0, "cartera_d": 0.0, "cartera_e": 0.0,
 }
@@ -876,6 +882,7 @@ class SIBDataClient:
 
     def _compute_carteras_metrics(
         self, period_start: str, period_end: str = "", on_progress=None,
+        on_quarter=None,
     ) -> Dict[str, Dict[date, Dict[str, Any]]]:
         """Stream carteras/creditos ONE quarter at a time, aggregating per entity/quarter
         in a SINGLE pass over the loan-level cube:
@@ -964,14 +971,17 @@ class SIBDataClient:
                             ps[clave] += float(r.get(campo) or 0)
                         except (TypeError, ValueError):
                             pass
-                    # LA TASA SE ACUMULA PONDERADA, no promediada. Un promedio simple de
-                    # tasas de celdas de tamaño distinto no es la tasa de nadie; guardando
-                    # Σ(tasa × deuda) cualquier agregación posterior —por sector, por
-                    # provincia, por entidad— divide por su propia deuda y sale correcta.
+                    # `tasaPorDeuda` YA VIENE PONDERADA por el emisor: es el numerador del
+                    # promedio, no una tasa. Se comprobó contra el cubo — una fila de ADEMI
+                    # trae deuda 500.291 y tasaPorDeuda 18.435.617, treinta y siete veces
+                    # mayor; el cociente da 36,85 %, que es la banda del microcrédito.
+                    # Multiplicarla por la deuda otra vez no solo desbordaba la columna:
+                    # producía un número sin sentido, y con una columna más ancha se habría
+                    # guardado en silencio. Se ACUMULA TAL CUAL y la tasa sale del cociente.
                     try:
-                        tasa = float(r.get("tasaPorDeuda") or 0)
-                        if tasa > 0:
-                            ps["deuda_x_tasa"] += tasa * deuda
+                        num = float(r.get("tasaPorDeuda") or 0)
+                        if num > 0:
+                            ps["tasa_por_deuda"] += num
                             ps["deuda_con_tasa"] += deuda
                     except (TypeError, ValueError):
                         pass
@@ -994,6 +1004,27 @@ class SIBDataClient:
                     # mucho crédito sin sector se leería como si todo estuviera clasificado.
                     bucket["sin_sector"] += deuda
             logger.info(f"    carteras {q}: {len(rows)} rows aggregated")
+            # EL DESGLOSE SE ENTREGA Y SE LIBERA AL CERRAR CADA TRIMESTRE.
+            #
+            # Antes se acumulaban los veintidós y recién al final se escribía: un fallo en
+            # el trimestre 19 tiraba los 18 anteriores —pasó dos veces el 2026-08-30, 106 y
+            # 107 minutos cada una— y la memoria crecía con cada uno hasta las 133.000
+            # celdas. Con esto, un fallo cuesta UN trimestre y la memoria queda plana.
+            #
+            # Los ESCALARES (hhi, total, mayores, vencida, cartera_a) siguen acumulándose:
+            # son cinco números por entidad y corte, y el resto del flujo los necesita para
+            # enriquecer `BankingData`. Lo pesado —y lo único que se libera— es `por_sector`.
+            pe_q = self._period_to_quarter_end(q)
+            if on_quarter is not None and pe_q is not None:
+                emitido = {short: _celdas_serializadas(b["por_sector"])
+                           for short, by_pe in acc.items()
+                           for b in (by_pe.get(pe_q),) if b and b["por_sector"]}
+                if emitido:
+                    on_quarter(pe_q, emitido)
+                for by_pe in acc.values():
+                    b = by_pe.get(pe_q)
+                    if b is not None:
+                        b["por_sector"] = {}
         result: Dict[str, Dict[date, Dict[str, Any]]] = {}
         for short, by_period in acc.items():
             for pe, b in by_period.items():
@@ -1260,6 +1291,7 @@ class SIBDataClient:
         period_end: str = "",
         on_progress=None,
         skip_carteras: bool = False,
+        on_quarter=None,
     ) -> Dict[str, List[Dict]]:
         """Extract just one tipoEntidad — enables incremental, resumable backfills
         (write each type as it completes instead of one 20-min all-or-nothing pass).
@@ -1278,7 +1310,8 @@ class SIBDataClient:
         try:
             return self.extract_all_entities_bulk(
                 period_start=period_start, period_end=period_end,
-                on_progress=on_progress, skip_carteras=skip_carteras)
+                on_progress=on_progress, skip_carteras=skip_carteras,
+                on_quarter=on_quarter)
         finally:
             self._discovered_tipo_codes = saved
 
@@ -1288,6 +1321,7 @@ class SIBDataClient:
         period_end: str = "",
         on_progress=None,
         skip_carteras: bool = False,
+        on_quarter=None,
     ) -> Dict[str, List[Dict]]:
         """
         BULK ETL: fetch data from ALL SIB endpoints using tipoEntidad filter
@@ -1366,7 +1400,8 @@ class SIBDataClient:
             carteras_metrics: Dict[str, Dict] = {}
         else:
             logger.info("  Computing carteras metrics from carteras/creditos (per-quarter)...")
-            carteras_metrics = self._compute_carteras_metrics(period_start, period_end, on_progress=on_progress)
+            carteras_metrics = self._compute_carteras_metrics(
+                period_start, period_end, on_progress=on_progress, on_quarter=on_quarter)
             logger.info(f"    → carteras metrics for {len(carteras_metrics)} entities")
         loans: List[Dict] = []  # raw loan rows are never retained; metrics injected post-map
 
