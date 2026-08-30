@@ -697,7 +697,7 @@ def _guardar_cartera_sectorial(db, bank_id: str, pe, por_sector: Any) -> None:
             # no obliga a tocar esta lista, que es donde se olvidaría.
             **{k: celda.get(k) for k in (
                 "deuda", "vencida", "vencida_31_90", "garantia", "provision", "creditos",
-                "desembolso", "deuda_capital", "plasticos", "tasa_por_deuda",
+                "desembolso", "deuda_capital", "plasticos", "tasa_ponderada",
                 "deuda_con_tasa", "deuda_moneda_extranjera", "deuda_persona_fisica",
                 "cartera_a", "cartera_b", "cartera_c", "cartera_d", "cartera_e")}))
 

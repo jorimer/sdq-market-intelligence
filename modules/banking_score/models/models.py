@@ -257,7 +257,12 @@ class CarteraSectorial(UUIDMixin, Base):
     # Σ(tasa × deuda) y su base: el promedio ponderado se reconstruye a cualquier nivel de
     # agregación. Un promedio simple de tasas de celdas de tamaño distinto no es la tasa de
     # nadie, y guardarlo así lo haría irrecuperable.
-    tasa_por_deuda = Column(Numeric(22, 4), nullable=True)
+    # LA TASA, no el numerador crudo. `tasaPorDeuda` del cubo viene ponderado por el
+    # emisor y su magnitud desbordó Numeric(22,4) incluso sin multiplicar, o sea que su
+    # unidad no es la que se supuso; guardar un número que no se puede interpretar no
+    # sirve. `None` cuando la tasa derivada cae fuera de la banda creíble: dice «no se
+    # pudo derivar», que es distinto de un cero.
+    tasa_ponderada = Column(Numeric(9, 4), nullable=True)
     deuda_con_tasa = Column(Numeric(18, 2), nullable=True)
     # `moneda` y `persona` tienen DOS valores: entran como medida y no como dimensión, que
     # cuadruplicaría las filas para decir lo mismo. El resto es nacional y jurídica.
