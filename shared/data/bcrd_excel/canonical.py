@@ -121,6 +121,35 @@ def note_for(series_code: str) -> str:
     return ""
 
 
+# El IPC por QUINTIL DE INGRESO. Cinco series, una por quintil, generadas en vez de
+# copiadas: comparten todo salvo el número, y cinco copias del mismo texto se desincronizan
+# en cuanto alguien edite una.
+#
+# Por qué estas series y no el IPC general. La inflación del titular es un promedio de la
+# economía; la que aprieta a un hogar endeudado es la de SU canasta. Medido sobre la base
+# vigente: desde octubre de 2020 el quintil 1 acumuló 43,4% y el quintil 5 36,3% — siete
+# puntos de brecha que el índice general no muestra. La cartera de consumo del sistema vive
+# en los quintiles bajos, así que ésta es la variable de capacidad de pago que faltaba.
+#
+# Se ingiere el ÍNDICE y la variación se deriva como YoY, igual que el IPC general. Las
+# columnas de tasa de la planilla se descartan a propósito: la inferencia las nombra por
+# coordenada de columna (`..._c5`) sin decir de qué quintil son, y una tasa que no nombra su
+# población es exactamente lo que la doctrina prohíbe servir.
+_IPC_QUINTILES = [
+    CanonicalSeries(
+        key=f"ipc_quintil_{q}", concept=f"IPC del quintil {q} de ingreso", sector="precios",
+        source_file="ipc_quintiles_base_2019-2020.xls", base="2019-2020", frequency="mensual",
+        homogenization="base vigente para el nivel; variación interanual (YoY) para comparar",
+        rationale=("La inflación que enfrenta cada quintil difiere de la general: la canasta "
+                   "de un hogar de ingreso bajo pesa distinto. Es la medida de capacidad de "
+                   "pago que explica el deterioro de la cartera de consumo, que se concentra "
+                   "en los quintiles bajos."),
+        robustness="green", api_series=None, api_transform="yoy",
+        excel_series_suffix=f"quintil_{q}",
+    )
+    for q in (1, 2, 3, 4, 5)
+]
+
 # Order roughly follows the BCRD statistics sectors shown in the portal.
 REGISTRY: List[CanonicalSeries] = [
     # ── Precios ──────────────────────────────────────────────────
@@ -151,6 +180,7 @@ REGISTRY: List[CanonicalSeries] = [
                   "robusto cuando hay empalmes de base.",
         robustness="green", api_series="bcrd.inflacion.inflacion.interanual", api_transform="identity",
     ),
+    *_IPC_QUINTILES,
     CanonicalSeries(
         key="ipc_subyacente", concept="IPC subyacente (núcleo)", sector="precios",
         source_file="ipc_subyacente_base_2019-2020.xlsx", base="2019-2020", frequency="mensual",
