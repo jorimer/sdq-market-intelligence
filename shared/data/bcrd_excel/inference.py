@@ -251,15 +251,36 @@ def _sparse_year_column(grid: Grid, month_col: int, row0: int) -> Optional[int]:
 
 
 def _header_name(grid: Grid, value_col: int, data_row0: int) -> str:
-    """Build a series name from the non-empty header cells above a value column."""
+    """Build a series name from the non-empty header cells above a value column.
+
+    La caída a ``value_col - 1`` existe porque a veces el rótulo se escribe una columna a la
+    izquierda del dato. Pero solo se aplica cuando la columna del valor NO tiene rótulo
+    propio en NINGUNA fila del encabezado: hacerlo fila por fila le roba el sub-encabezado a
+    la serie vecina.
+
+    El caso que lo destapó: en el IPC por quintiles el encabezado es «Quintil 2» en una fila
+    y la celda de abajo está vacía, mientras la columna anterior —la tasa del quintil 1— dice
+    «Inflación». La mezcla bautizaba `quintil_2_inflacion` a una columna que contiene un
+    ÍNDICE. Un nombre así no es cosmético: dice que el número es una tasa cuando no lo es, y
+    quien lo consuma después no tiene cómo saberlo.
+    """
+    filas = range(max(0, data_row0 - 6), data_row0)
+
+    def _texto(r: int, c: int):
+        v = grid.cell(r, c)
+        if v is None or isinstance(v, (int, float)):
+            return None
+        return str(v).strip() or None
+
+    propio = [c for c in (value_col,) if any(_texto(r, c) for r in filas)]
+    cols = propio or [value_col - 1]
+
     parts: List[str] = []
-    for r in range(max(0, data_row0 - 6), data_row0):
-        for c in (value_col, value_col - 1):  # headers sometimes sit one col left
-            v = grid.cell(r, c)
-            if v is not None and not isinstance(v, (int, float)):
-                txt = str(v).strip()
-                if txt and txt.lower() not in (p.lower() for p in parts):
-                    parts.append(txt)
+    for r in filas:
+        for c in cols:
+            txt = _texto(r, c)
+            if txt and txt.lower() not in (p.lower() for p in parts):
+                parts.append(txt)
                 break
     return " · ".join(parts[-3:]) or f"col{value_col}"
 
@@ -308,7 +329,13 @@ def infer_spec(wb: Workbook, file: str) -> ExtractionSpec:
             file=file, sheet=grid.name, orientation="year_blocks",
             data_row_start=min(year_rows), month_col=month_col,
             metric_header_row=metric_rows[-1] if metric_rows else None,
-            super_header_row=metric_rows[-2] if len(metric_rows) >= 2 else None,
+            # La PRIMERA fila del bloque de encabezado, no la penúltima: cuando el
+            # rótulo se envuelve en dos filas, la penúltima es su CONTINUACIÓN («y
+            # Tabaco») y tomarla dejaba a las doce columnas de índice del IPC por grupos
+            # con el mismo nombre —doce series colapsadas en una, con doce valores por
+            # mes y la última pisando a las anteriores—. `_extract_year_blocks` une desde
+            # acá hasta la métrica.
+            super_header_row=metric_rows[0] if len(metric_rows) >= 2 else None,
             value_col_start=month_col + 1, value_col_end=grid.ncols,
             # Tasas de interés, etc.: la unidad ("% nominal anual") va en el caption sobre
             # el primer bloque de año. Aplica a toda la hoja.
