@@ -158,3 +158,86 @@ def test_una_entidad_SIN_desglose_sigue_pudiendo_emitir_su_SDQ_Rating(db_session
         "sección hueca, así que el informe entero dejaría de emitirse")
     # Y el resto del informe sí se produce: el filtro quita una sección, no el documento.
     assert "executive_summary" in narr and len(narr) >= 8
+
+
+class TestElSDQRatingLlevaSuTablaDePares:
+    """El §Análisis Comparativo afirmaba «rezagado frente a sus pares» sin imprimir una sola
+    tabla de pares: la comparación le quedaba al lector como acto de fe.
+
+    El bloque ya se computaba del lado de PRODUCTOS. Esta ruta no lo pedía, así que las dos
+    superficies emitían el mismo documento con distinto contenido — el defecto de siempre.
+    """
+
+    def test_la_ruta_le_pasa_el_bloque_de_pares_al_PDF(self, db_session, monkeypatch):
+        from modules.banking_score.models.models import Bank as _B
+        bank = seed_test_bank(db_session)
+        # Un SEGUNDO banco con calificación: `_named_peers` devuelve None con menos de dos,
+        # y sin él este test pasaría por el motivo equivocado.
+        otro = _B(name="Banco Par", bank_type=BankType.banca_multiple, is_active=True)
+        db_session.add(otro)
+        db_session.commit()
+
+        token = register_and_login(email="ruta-pares@sdq.do")
+        h = auth_headers(token)
+        for b in (bank, otro):
+            client.post(f"/api/v1/banking-score/{b.id}/run?period_end=2024-12-31", headers=h)
+
+        visto = {}
+
+        async def _espia_pdf(**kw):
+            visto.update(kw)
+            return "/tmp/no-se-escribe.pdf"
+
+        async def _narrativas(report_type, bank_name, scoring_result, period,
+                              benchmarks=None, anuario=None, revision=None):
+            return {s: f"Análisis de {s}."
+                    for s in REPORT_SECTIONS.get(report_type, ["executive_summary"])}
+
+        monkeypatch.setattr(
+            "modules.banking_score.reports.narrative.generate_report_narratives", _narrativas)
+        monkeypatch.setattr(
+            "modules.banking_score.reports.pdf_generator.generate_pdf_report", _espia_pdf)
+        r = client.post(
+            f"/api/v1/banking-score/reports/{bank.id}/generate"
+            f"?period_end=2024-12-31&report_type=full_rating", headers=h)
+        assert r.status_code in (200, 201), r.text
+
+        assert visto.get("peer_block"), (
+            "el SDQ Rating sale sin tabla de pares: el comparativo afirma una posición "
+            "relativa que el documento no muestra")
+        # Y la AMPLITUD, que le da a la tabla de indicadores sus columnas de percentil y
+        # tendencia; sin ella salen vacías y nadie lo nota.
+        sr = visto["scoring_result"]
+        assert "percentiles" in sr and "trayectorias" in sr
+
+    def test_lo_EXCLUSIVO_del_Deep_Dive_no_se_cuela_en_esta_ruta(self, db_session,
+                                                                monkeypatch):
+        """Las sensibilidades y el entorno macro los declara el catálogo como exclusivos del
+        Deep Dive. Subirlos acá sería una decisión comercial, no un arreglo — y se tomaría
+        sin que nadie la tomara."""
+        bank = seed_test_bank(db_session)
+        token = register_and_login(email="ruta-tier@sdq.do")
+        h = auth_headers(token)
+        client.post(f"/api/v1/banking-score/{bank.id}/run?period_end=2024-12-31", headers=h)
+
+        visto = {}
+
+        async def _espia_pdf(**kw):
+            visto.update(kw)
+            return "/tmp/no-se-escribe.pdf"
+
+        async def _narrativas(report_type, bank_name, scoring_result, period,
+                              benchmarks=None, anuario=None, revision=None):
+            return {s: f"Análisis de {s}."
+                    for s in REPORT_SECTIONS.get(report_type, ["executive_summary"])}
+
+        monkeypatch.setattr(
+            "modules.banking_score.reports.narrative.generate_report_narratives", _narrativas)
+        monkeypatch.setattr(
+            "modules.banking_score.reports.pdf_generator.generate_pdf_report", _espia_pdf)
+        client.post(
+            f"/api/v1/banking-score/reports/{bank.id}/generate"
+            f"?period_end=2024-12-31&report_type=full_rating", headers=h)
+        sr = visto["scoring_result"]
+        assert "sensibilidades" not in sr
+        assert "entorno_macro" not in sr

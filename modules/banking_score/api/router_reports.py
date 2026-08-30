@@ -626,6 +626,35 @@ async def generate_report(
     #
     # Si la entidad no tiene desglose en ese corte, el mapa es None y la sección se cae sola
     # por el filtro de abajo. No se fabrica una tabla vacía.
+    # ESTRUCTURA DE MERCADO Y PARES NOMBRADOS + AMPLITUD. Nada de esto llegaba al SDQ
+    # Rating que se entrega. El §Análisis Comparativo afirmaba «rezagado frente a sus pares»
+    # y no imprimía ni una tabla de pares; la tabla de indicadores salía sin sus columnas de
+    # percentil y tendencia; y no había trayectoria del score ni descomposición de qué lo
+    # movió. Todo eso ya se computa del lado de productos y esta ruta no lo pedía: dos
+    # superficies emitiendo el MISMO documento con distinto contenido.
+    #
+    # Se toma el armado de `products.bloque_de_pares` en vez de repetirlo acá. Copiarlo
+    # habría sido lo fácil: dos implementaciones de la misma cuenta son dos oportunidades de
+    # que discrepen, y es el defecto que esta ruta viene arrastrando.
+    #
+    # Lo que NO se sube: las sensibilidades y el entorno macro, que el catálogo declara
+    # EXCLUSIVOS del Deep Dive. Subirlos acá sería una decisión comercial, no un arreglo.
+    peer_block: Dict[str, Any] = {}
+    if rating and report_type in ("full_rating", "scorecard"):
+        from modules.banking_score.products import bloque_de_pares
+        from modules.banking_score.scoring.amplitude import (
+            entity_trajectories, period_percentiles,
+        )
+        try:
+            peer_block = bloque_de_pares(db, bank, pe)
+            # `as_of` = el corte del informe: la trayectoria no arrastra períodos
+            # posteriores al que anuncia la portada.
+            scoring_result["trayectorias"] = entity_trajectories(db, bank, as_of=pe)
+            scoring_result["percentiles"] = period_percentiles(db, bank, pe)
+        except Exception:  # noqa: BLE001 — el informe nunca depende de estos bloques
+            logger.exception("No se pudo enriquecer el informe de %s con pares/amplitud",
+                             bank.name)
+
     from modules.banking_score.reports.narrative import REPORT_SECTIONS
     if "mapa_sectorial" in (REPORT_SECTIONS.get(report_type) or []):
         from modules.banking_score.reports.mapa_sectorial import posicion_de_la_entidad
@@ -724,6 +753,7 @@ async def generate_report(
             # Las tablas del año viajan al PDF: sin ellas la Revisión Anual sería la misma
             # foto de diciembre con otro título, que es exactamente lo que vino a corregir.
             revision=revision,
+            peer_block=peer_block or None,
         )
         _attach_pdf(report, file_path, narratives)
     except NarrativeDegradedError as d:
