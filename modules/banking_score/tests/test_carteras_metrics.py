@@ -164,24 +164,39 @@ class TestLasMedidasQueSeSumanEnLaMISMA_pasada:
         base.update(kw)
         return base
 
-    def test_la_tasa_del_emisor_YA_viene_ponderada_y_no_se_vuelve_a_multiplicar(self, monkeypatch):
-        """`tasaPorDeuda` es el NUMERADOR del promedio, no una tasa.
-
-        Comprobado contra el cubo: una fila de ADEMI trae deuda 500.291 y tasaPorDeuda
-        18.435.617 —treinta y siete veces mayor— y el cociente da 36,85%, la banda del
-        microcrédito. Multiplicarla otra vez por la deuda desbordó `Numeric(22,4)` y tumbó
-        un backfill de 107 minutos; peor, con una columna más ancha habría guardado un
-        número sin sentido en silencio. Se acumula TAL CUAL y la tasa sale del cociente.
+    def test_se_guarda_LA_TASA_y_no_el_numerador_crudo(self, monkeypatch):
+        """`tasaPorDeuda` viene ponderado por el emisor y su MAGNITUD no es la supuesta:
+        desbordó `Numeric(22,4)` incluso sumándolo sin multiplicar, en dos backfills. Un
+        número cuya unidad no se entiende no se persiste —alguien lo usaría creyendo que la
+        entiende—; se guarda la tasa, que sí se lee, con su base al lado para re-ponderar.
         """
-        c = self._celda(monkeypatch, [
-            self._fila(deuda=900, tasaPorDeuda=9000.0),      # 10% ponderado
-            self._fila(deuda=100, tasaPorDeuda=2000.0, provincia="AZUA"),   # 20%
-        ])
-        num = sum(x["tasa_por_deuda"] for x in c)
-        base = sum(x["deuda_con_tasa"] for x in c)
-        assert num == 11000.0            # se SUMA, no se multiplica
-        assert base == 1000
-        assert num / base == 11.0        # ponderada; el promedio simple daría 15,0
+        from modules.banking_score.external.sib_data_client import _celdas_serializadas
+        crudo = {("F", "SANTIAGO"): {"sector": "F", "provincia": "SANTIAGO", "region": None,
+                                     "deuda": 1000.0, "tasa_por_deuda": 11000.0,
+                                     "deuda_con_tasa": 1000.0}}
+        c = _celdas_serializadas(crudo)[0]
+        assert c["tasa_ponderada"] == 11.0
+        assert "tasa_por_deuda" not in c, "el intermedio crudo no debe viajar"
+        assert c["deuda_con_tasa"] == 1000.0, "la base viaja: sin ella no se puede re-ponderar"
+
+    def test_una_tasa_INVEROSIMIL_no_se_publica_y_queda_declarada(self, monkeypatch):
+        """Es la doctrina: declarar el hueco, no rellenarlo. Un 18.000% no es una tasa, y
+        servirlo sería peor que no tener el dato."""
+        from modules.banking_score.external.sib_data_client import _celdas_serializadas
+        for num, esperado in ((1000.0 * 18000, None), (1000.0 * 0.1, None),
+                              (1000.0 * 36.85, 36.85)):
+            c = _celdas_serializadas({("F", "X"): {
+                "sector": "F", "provincia": "X", "region": None, "deuda": 1000.0,
+                "tasa_por_deuda": num, "deuda_con_tasa": 1000.0}})[0]
+            assert c["tasa_ponderada"] == esperado
+
+    def test_sin_base_la_tasa_es_None_y_no_cero(self, monkeypatch):
+        """Un cero diría «presta al 0%»; None dice «no se pudo derivar»."""
+        from modules.banking_score.external.sib_data_client import _celdas_serializadas
+        c = _celdas_serializadas({("F", "X"): {
+            "sector": "F", "provincia": "X", "region": None, "deuda": 1000.0,
+            "tasa_por_deuda": 0.0, "deuda_con_tasa": 0.0}})[0]
+        assert c["tasa_ponderada"] is None
 
     def test_una_celda_sin_tasa_no_entra_en_la_BASE_del_promedio(self, monkeypatch):
         """Si entrara con cero, bajaría el promedio de todas las demás."""

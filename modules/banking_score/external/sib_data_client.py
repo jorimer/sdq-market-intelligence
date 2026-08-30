@@ -141,10 +141,45 @@ def cambiaria_display_name(code: str) -> str:
     return f"{code.title()} (Agente de Cambio)"
 
 
+#: Banda en la que una tasa activa dominicana es CREÍBLE. La banca múltiple ronda 12-15% y
+#: el microcrédito llega a 50-60%; se deja margen hasta 200 para no recortar un caso real.
+#: Fuera de la banda NO se publica un número: se deja `None`, que dice «no se pudo derivar»,
+#: en vez de un valor que nadie puede explicar.
+TASA_MIN_CREIBLE, TASA_MAX_CREIBLE = 0.5, 200.0
+
+
+def _tasa_ponderada(celda: dict) -> Optional[float]:
+    """Tasa implícita de la celda: numerador del emisor sobre su base.
+
+    Se guarda LA TASA y no la suma cruda. El numerador `tasaPorDeuda` viene ya ponderado por
+    el emisor y su magnitud desbordó `Numeric(22,4)` incluso sumándolo sin multiplicar —o
+    sea que su unidad no es la que se supuso—. Guardar un número que no se puede interpretar
+    no sirve para nada: lo que el producto necesita es la tasa, que sí se lee, y su base,
+    que permite re-ponderar al agregar.
+
+    Fuera de la banda creíble devuelve None. Es la doctrina: declarar el hueco, no rellenarlo.
+    """
+    base = celda.get("deuda_con_tasa") or 0.0
+    if base <= 0:
+        return None
+    t = (celda.get("tasa_por_deuda") or 0.0) / base
+    return round(t, 4) if TASA_MIN_CREIBLE <= t <= TASA_MAX_CREIBLE else None
+
+
 def _celdas_serializadas(por_sector: dict) -> list:
-    """Las celdas de un corte, redondeadas — la misma forma que consume el escritor."""
-    return [{k: (round(v, 2) if isinstance(v, float) else v) for k, v in vals.items()}
-            for vals in por_sector.values()]
+    """Las celdas de un corte, redondeadas — la misma forma que consume el escritor.
+
+    La tasa se DERIVA acá y el numerador crudo NO viaja: es un intermedio de cálculo cuya
+    unidad no está confirmada, y persistirlo invitaría a que alguien lo use creyendo que la
+    entiende.
+    """
+    salida = []
+    for vals in por_sector.values():
+        c = {k: (round(v, 2) if isinstance(v, float) else v) for k, v in vals.items()}
+        c["tasa_ponderada"] = _tasa_ponderada(vals)
+        c.pop("tasa_por_deuda", None)
+        salida.append(c)
+    return salida
 
 
 #: Una celda del cubo abierta por sector y provincia. Las MEDIDAS se suman; las claves de
