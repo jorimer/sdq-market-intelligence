@@ -311,6 +311,27 @@ def _now() -> str:
     return datetime.now(timezone.utc).isoformat()
 
 
+def _fase_actual(db) -> Optional[str]:
+    """La fase que el estado traía ANTES de pisarla con «error»: dice DÓNDE murió."""
+    try:
+        return (get_sync_status(db) or {}).get("phase")
+    except Exception:  # noqa: BLE001 — el diagnóstico nunca puede romper el manejo del error
+        return None
+
+
+def _firma_tecnica(exc: Exception, fase: Optional[str]) -> Dict[str, Optional[str]]:
+    """Tipo de excepción, mensaje acotado y fase — lo mínimo para diagnosticar sin logs.
+
+    El mensaje se trunca porque un error de driver puede traer una consulta entera, y el
+    estado se sirve por API a la pantalla de Datos.
+    """
+    return {
+        "excepcion": type(exc).__name__,
+        "detalle": str(exc)[:300] or None,
+        "fase_al_fallar": fase,
+    }
+
+
 def _friendly_error(exc: Exception) -> str:
     """Translate a raw exception into a clear Spanish message for the UI.
     The full technical detail stays in the logs, not in front of the operator.
@@ -581,11 +602,18 @@ def run_backfill(force: bool = False, period_start: str = "2021-01",
     except Exception as e:  # noqa: BLE001 — report any failure into status
         logger.exception("SIB backfill failed")  # full technical detail → logs
         friendly = _friendly_error(e)
+        # LA FIRMA TÉCNICA TAMBIÉN SE PERSISTE. El mensaje amable sigue en `alerts` —un
+        # stacktrace no va delante del operador— pero mandar el detalle SOLO a los logs deja
+        # irrecuperable el fallo de una operación de dos horas y media para quien no tenga
+        # acceso al servidor. Pasó el 2026-08-30: el backfill murió en el trimestre 19 de 22
+        # y lo único que quedó fue «el detalle está en los registros».
+        tecnico = _firma_tecnica(e, _fase_actual(db))
         try:
-            _write_status(db, is_running=False, phase="error", alerts=[friendly])
+            _write_status(db, is_running=False, phase="error", alerts=[friendly],
+                          last_sync_result={"status": "error", "message": friendly, **tecnico})
         except Exception:  # noqa: BLE001
             pass
-        return {"status": "error", "message": friendly}
+        return {"status": "error", "message": friendly, **tecnico}
     finally:
         db.close()
 
