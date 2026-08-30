@@ -136,3 +136,57 @@ def test_el_barrido_encontro_algo():
     """Toda aserción de ausencia lleva al lado la prueba de que había dónde mirar."""
     assert MAPA["sectores"], "la muestra no tiene sectores"
     assert json.dumps(MAPA)   # serializable: viaja en el payload del snapshot
+
+
+class TestElAgregadoLlegaAlGuardComoCifraSERVIDA:
+    """El caso real: un informe se vetó por una cifra correcta que nadie había servido.
+
+    El primer SDQ Rating con mapa sectorial abrió con «los dos sectores de decisión propia
+    representan juntos el 48,39% de su cartera». Aritméticamente correcto —41,62 + 6,77— y
+    para el guard numérico una cifra sin respaldo, porque una suma que nadie sirvió no lo
+    tiene. El informe siguiente, con el mismo contenido, se vetó y no se entregó.
+
+    Lo fija acá y no solo en el módulo porque lo que importa no es que `_resumen` compute:
+    es que sus cifras lleguen al CONTEXTO que el guard usa para juzgar. Entre una y otra
+    cosa hay un `_build_section_context` que puede olvidarse de pasarlo, y entonces el
+    agregado existiría y el informe se seguiría vetando.
+    """
+
+    def _contexto(self):
+        from modules.banking_score.reports.narrative import _build_section_context
+        return _build_section_context(
+            SECCION, "Banco Prueba",
+            {"mapa_sectorial": MAPA, "indicators": {"morosidad": {"value": 1.9}}},
+            "2024-12-31")
+
+    def test_el_contexto_de_la_seccion_LLEVA_el_resumen(self):
+        ctx = self._contexto()
+        assert ctx["mapa_sectorial"].get("resumen"), (
+            "sin el resumen en el contexto, el modelo suma los pesos por su cuenta y el "
+            "guard veta el informe entero")
+
+    def test_el_guard_reconoce_el_agregado_SERVIDO(self):
+        from shared.narrative.numeric_guard import deterministic_uncited_figures
+        ctx = self._contexto()
+        r = MAPA["resumen"]
+        peso = r["peso_en_su_cartera_de_los_sectores_con_deterioro_propio_pct"]
+        texto = (f"Los sectores donde el deterioro es propio pesan el {peso}% de su cartera "
+                 f"clasificada.")
+        assert not deterministic_uncited_figures(ctx, texto), (
+            "el agregado servido debe pasar el guard; si no, la sección no puede abrir con "
+            "la única frase que responde la pregunta")
+
+    def test_el_guard_SIGUE_vetando_una_suma_que_el_modelo_arma_solo(self):
+        """El arreglo no es aflojar el detector. Una suma de un subconjunto elegido por el
+        modelo sigue sin respaldo — y además dice menos que el agregado real."""
+        from shared.narrative.numeric_guard import deterministic_uncited_figures
+        ctx = self._contexto()
+        sectores = MAPA["sectores"]
+        inventada = round(sum(s["peso_en_su_cartera_pct"] for s in sectores[:2]), 2)
+        assert deterministic_uncited_figures(ctx, f"Juntos representan el {inventada}%.")
+
+    def test_la_plantilla_le_PROHIBE_sumar_porcentajes(self):
+        from shared.narrative import claude_engine as CE
+        thin = CE.THIN_TEMPLATES[PLANTILLA]
+        assert "NO SUMES" in thin and "resumen" in thin, (
+            "sin la regla, el modelo vuelve a sumar el peso de los sectores que elija")

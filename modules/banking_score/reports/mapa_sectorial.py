@@ -262,6 +262,7 @@ def posicion_de_la_entidad(db: Session, bank: Bank, corte: date) -> Optional[Dic
         "entidad": bank.name,
         "corte": str(corte),
         "credito_clasificado": round(mi_total, 2),
+        "resumen": _resumen(filas, mi_total),
         "sectores": filas,
         "contra_que_se_compara": (
             "el RESTO del sistema en el mismo sector, EXCLUIDA la entidad; incluirla "
@@ -273,6 +274,51 @@ def posicion_de_la_entidad(db: Session, bank: Bank, corte: date) -> Optional[Dic
             f"ninguna de las dos causas, y por debajo de "
             f"RD${MATERIALIDAD_DEUDA:,.0f} de exposición la mora de una celda es ruido"),
     }
+
+
+#: Cómo se agrupan las atribuciones para el resumen. El modelo abre la sección diciendo
+#: cuánto del libro está en cada grupo, así que el agregado se le SIRVE computado.
+_GRUPOS = {
+    "con_deterioro_propio": ("idiosincratico_peor",),
+    "con_mejor_desempeno_que_su_sector": ("idiosincratico_mejor",),
+    "alineados_con_su_sector": ("compartido_con_el_sector",),
+}
+
+
+def _resumen(filas: List[Dict[str, Any]], mi_total: float) -> Dict[str, Any]:
+    """Cuánto del libro cae en cada tipo de atribución.
+
+    Por qué se sirve y no se deja que el modelo lo sume. La primera frase útil de esta
+    sección es «los sectores donde el deterioro es propio son el X% de su cartera», y el
+    modelo la necesita SIEMPRE. Sin servirla, la suma igual: el primer informe real de
+    producción dijo «juntos representan el 48.39%» —correcto, 41,62 + 6,77— y el guard
+    numérico la marcó como cifra sin respaldo, porque una suma que nadie sirvió no lo tiene.
+    El informe siguiente, con el mismo contenido, se vetó por eso y no se entregó.
+
+    La cura es la doctrina, no aflojar el detector: si sabés qué cifra va a necesitar el
+    modelo, pasásela con su nombre real. Dejar el hueco es lo que lo llena mal — y acá lo
+    llenaba BIEN, que es peor, porque el número correcto quedaba indefendible.
+
+    Solo entran las celdas MATERIALES: sumar una exposición que la propia tabla marca como
+    ruido daría un agregado que la tabla contradice."""
+    out: Dict[str, Any] = {}
+    for nombre, atribuciones in _GRUPOS.items():
+        grupo = [f for f in filas if f.get("atribucion") in atribuciones]
+        deuda = sum(float(f.get("deuda") or 0) for f in grupo)
+        out[f"sectores_{nombre}"] = len(grupo)
+        # El SUJETO en la clave: el denominador es la cartera clasificada de la ENTIDAD, no
+        # el crédito del sistema ni el del sector.
+        out[f"peso_en_su_cartera_de_los_sectores_{nombre}_pct"] = _pct(deuda, mi_total)
+        # CERO, no None. Acá el cero está MEDIDO: se conoce el desglose completo y ningún
+        # sector cae en este grupo. `None` diría «no sé», y las tres claves del grupo
+        # —cuántos, cuánto pesan, cuánta deuda— tienen que contar la misma historia: un
+        # conteo en 0 junto a una deuda en «sin dato» se lee como una tabla rota.
+        out[f"deuda_en_los_sectores_{nombre}"] = round(deuda, 2)
+    out["lectura"] = (
+        "cada peso se computa sobre la cartera CLASIFICADA de la entidad; los sectores sin "
+        "exposición material y aquellos en los que la entidad es el único prestador no "
+        "entran en ningún grupo, porque no hay atribución que hacerles")
+    return out
 
 
 def _atribuir(brecha: Optional[float], material: bool, hay_resto: bool = True) -> str:

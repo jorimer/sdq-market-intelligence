@@ -40,6 +40,7 @@ from modules.banking_score.models.models import Bank, ModelType, RatingResult
 from modules.banking_score.products_year_review import YEAR_REVIEW_KEY
 from modules.banking_score.reports.narrative import generate_named_narratives
 from modules.banking_score.reports.pdf_generator import generate_pdf_report
+from modules.banking_score.reports.mapa_sectorial import _resumen as _resumen_sectorial
 from modules.banking_score.scoring.amplitude import entity_trajectories, period_percentiles
 from modules.banking_score.scoring.benchmarks import panel_benchmarks
 from modules.banking_score.scoring.market_concentration import compute_market_concentration
@@ -109,7 +110,7 @@ SAMPLE_SCORING = {
 #
 # La tabla es la vidriera del producto, así que va con dato: sin ella la sección saldría con
 # prosa y sin la tabla que la prosa interpreta, y el nivel se vería peor de lo que es.
-SAMPLE_MAPA_SECTORIAL = {
+SAMPLE_MAPA_SECTORIAL: Dict[str, Any] = {
     "entidad": SAMPLE_NAME,
     "corte": SAMPLE_PERIOD,
     "credito_clasificado": 42_000_000_000.0,
@@ -162,6 +163,13 @@ SAMPLE_MAPA_SECTORIAL = {
         "se comparase en parte contra sí misma y encogería su brecha tanto más cuanto mayor "
         "fuese su cuota"),
 }
+# El resumen de la muestra se COMPUTA con la misma función que el real, no se escribe. Es
+# la única parte del payload que se redacta a mano, así que es la única que puede quedar
+# diciendo algo que sus propias filas contradicen — y encima es la que se le manda a un
+# comprador. Lo mismo vale para el informe real: sin este agregado el modelo suma los pesos
+# que elige y el guard numérico veta el documento entero (pasó el 2026-08-30).
+SAMPLE_MAPA_SECTORIAL["resumen"] = _resumen_sectorial(
+    SAMPLE_MAPA_SECTORIAL["sectores"], SAMPLE_MAPA_SECTORIAL["credito_clasificado"])
 
 SAMPLE_SYSTEM = {"band_distribution": {"Sólida": 6, "Adecuada": 8, "En vigilancia": 3,
                                        "Frágil": 1},

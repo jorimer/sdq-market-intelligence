@@ -317,3 +317,91 @@ class TestElSpreadDeTasaContraElResto:
             "una clave «…_del_sector_pct» sin «resto» miente sobre contra qué se compara")
         assert c["cuota_del_sector_pct"] == 50.0, (
             "la cuota se computa sobre el sector ENTERO, incluida la entidad")
+
+
+class TestElResumenQueElModeloNecesita:
+    """El agregado se SIRVE porque el modelo lo va a usar sí o sí.
+
+    El primer informe real de producción abrió diciendo «los dos sectores de decisión propia
+    representan juntos el 48,39% de su cartera». La cifra era aritméticamente correcta —41,62
+    + 6,77— y el guard numérico la marcó como cifra sin respaldo: una suma que nadie sirvió no
+    lo tiene. El informe siguiente, con el mismo contenido, se vetó por eso y no se entregó.
+
+    Y la cifra además decía MENOS de lo que había: los sectores con deterioro propio eran
+    cinco y pesaban el 58,7%, así que elegir dos subestimaba el hallazgo. Servir el agregado
+    arregla las dos cosas a la vez, que es la señal de que es el arreglo correcto y no un
+    parche al detector.
+    """
+
+    @pytest.fixture
+    def db_tres_grupos(self, db_session):
+        """Una entidad con un sector de cada tipo de atribución, y un competidor en cada uno
+        para que el «resto» exista."""
+        yo = Bank(name="Banco Sujeto", bank_type=BankType.banca_multiple)
+        otro = Bank(name="Banco Resto", bank_type=BankType.banca_multiple)
+        db_session.add_all([yo, otro])
+        db_session.flush()
+        filas = [
+            # (banco, sector, deuda, vencida) — mora del resto fijada en 2% en los tres
+            (yo,    "F - CONSTRUCCIÓN", 500_000_000, 40_000_000),   # 8,0% → propio
+            (yo,    "G - COMERCIO",     300_000_000,  6_000_000),   # 2,0% → alineado
+            (yo,    "D - INDUSTRIA",    200_000_000,    200_000),   # 0,1% → mejor
+            (otro,  "F - CONSTRUCCIÓN", 500_000_000, 10_000_000),
+            (otro,  "G - COMERCIO",     500_000_000, 10_000_000),
+            (otro,  "D - INDUSTRIA",    500_000_000, 10_000_000),
+        ]
+        for banco, sector, deuda, venc in filas:
+            db_session.add(CarteraSectorial(
+                bank_id=banco.id, period_end=CORTE, sector=sector, provincia="AZUA",
+                deuda=deuda, vencida=venc, vencida_31_90=0))
+        db_session.commit()
+        return db_session, yo
+
+    def test_agrupa_por_atribucion_con_su_peso_sobre_la_cartera(self, db_tres_grupos):
+        db, yo = db_tres_grupos
+        r = ms.posicion_de_la_entidad(db, yo, CORTE)["resumen"]
+        assert r["sectores_con_deterioro_propio"] == 1
+        assert r["peso_en_su_cartera_de_los_sectores_con_deterioro_propio_pct"] == 50.0
+        assert r["sectores_alineados_con_su_sector"] == 1
+        assert r["peso_en_su_cartera_de_los_sectores_alineados_con_su_sector_pct"] == 30.0
+        assert r["sectores_con_mejor_desempeno_que_su_sector"] == 1
+        assert r["peso_en_su_cartera_de_los_sectores_con_mejor_desempeno_que_su_sector_pct"] == 20.0
+
+    def test_los_tres_grupos_suman_la_cartera_cuando_todo_es_atribuible(self, db_tres_grupos):
+        db, yo = db_tres_grupos
+        r = ms.posicion_de_la_entidad(db, yo, CORTE)["resumen"]
+        total = sum(r[k] for k in r if k.startswith("peso_en_su_cartera_"))
+        assert total == pytest.approx(100.0, abs=0.1)
+
+    def test_una_celda_NO_material_no_entra_en_ningun_grupo(self, db_session):
+        """Sumar una exposición que la propia tabla marca como ruido daría un agregado que
+        la tabla contradice."""
+        yo = Bank(name="Banco Sujeto", bank_type=BankType.banca_multiple)
+        otro = Bank(name="Banco Resto", bank_type=BankType.banca_multiple)
+        db_session.add_all([yo, otro])
+        db_session.flush()
+        db_session.add(CarteraSectorial(bank_id=yo.id, period_end=CORTE, sector="B - PESCA",
+                                        provincia="SAMANÁ", deuda=50_000, vencida=25_000,
+                                        vencida_31_90=0))
+        db_session.add(CarteraSectorial(bank_id=otro.id, period_end=CORTE, sector="B - PESCA",
+                                        provincia="SAMANÁ", deuda=80_000_000, vencida=800_000,
+                                        vencida_31_90=0))
+        db_session.commit()
+        r = ms.posicion_de_la_entidad(db_session, yo, CORTE)["resumen"]
+        assert r["sectores_con_deterioro_propio"] == 0
+        # CERO medido, no `None`: se conoce el desglose completo y ninguna celda entra. Las
+        # tres claves del grupo cuentan la misma historia.
+        assert r["peso_en_su_cartera_de_los_sectores_con_deterioro_propio_pct"] == 0.0
+        assert r["deuda_en_los_sectores_con_deterioro_propio"] == 0.0
+
+    def test_cada_peso_del_resumen_nombra_su_denominador(self, db_tres_grupos):
+        """La regla del sujeto sobre el resumen: son porcentajes de la cartera de la
+        ENTIDAD, no del sector ni del sistema, y las tres poblaciones conviven en el mismo
+        payload."""
+        db, yo = db_tres_grupos
+        r = ms.posicion_de_la_entidad(db, yo, CORTE)["resumen"]
+        pesos = [k for k in r if k.endswith("_pct")]
+        assert pesos
+        for k in pesos:
+            assert k.startswith("peso_en_su_cartera_"), (
+                f"«{k}» no dice sobre qué población se computa")
