@@ -344,13 +344,31 @@ def _extract_year_blocks(grid: Grid, spec: ExtractionSpec, lineage: Lineage,
     c1 = spec.value_col_end if spec.value_col_end is not None else grid.ncols
 
     # Nombre de cada columna: super-encabezado ("Total") + métrica ("Mensual").
+    # El super-encabezado puede venir PARTIDO en varias filas: Excel envuelve el texto de
+    # una celda ancha y el resto cae en la fila de abajo («Bebidas Alcohólicas y» +
+    # «y Tabaco»). Se unen las filas desde `super_header_row` hasta la métrica, y recién
+    # después se rellena hacia la derecha — al revés, cada fila rellenaría por su cuenta y
+    # una columna heredaría el nombre de su vecina.
     col_super: Dict[int, str] = {}
     if spec.super_header_row is not None:
+        fin = spec.metric_header_row if spec.metric_header_row is not None else spec.super_header_row + 1
+        propio: Dict[int, str] = {}
+        for c in range(c0, c1):
+            partes = [_clean_label(grid.cell(r, c)) or ""
+                      for r in range(spec.super_header_row, max(fin, spec.super_header_row + 1))]
+            # Una parte que YA está contenida en lo acumulado no se repite: la fila de
+            # abajo a veces reproduce la cola del rótulo entero («Bebidas Alcohólicas y
+            # Tabaco» + «y Tabaco»), y concatenar a ciegas produce nombres duplicados.
+            junto = ""
+            for x in partes:
+                if x and x.lower() not in junto.lower():
+                    junto = f"{junto} {x}".strip()
+            if junto:
+                propio[c] = junto
         current = ""
         for c in range(c0, c1):
-            lab = _clean_label(grid.cell(spec.super_header_row, c)) or ""
-            if lab:
-                current = lab
+            if propio.get(c):
+                current = propio[c]
             if current:
                 col_super[c] = current
     col_name: Dict[int, str] = {}

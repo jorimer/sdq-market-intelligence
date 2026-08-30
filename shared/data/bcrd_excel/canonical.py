@@ -150,6 +150,51 @@ _IPC_QUINTILES = [
     for q in (1, 2, 3, 4, 5)
 ]
 
+# El IPC por GRUPO de la canasta (las doce divisiones COICOP) y por REGIÓN. Mismo motivo
+# que los quintiles: el promedio de la economía no es lo que aprieta a un hogar. La mora de
+# consumo no la mueve la inflación general sino la de lo que el hogar NO puede dejar de
+# comprar —alimentos, transporte, vivienda—, y la regional cruza con la provincia que el
+# libro de crédito ya trae.
+#
+# Se ingiere el ÍNDICE; la variación se deriva como YoY. Las columnas «Var. %» de la
+# planilla se descartan por la misma razón que en quintiles.
+_IPC_GRUPOS = [
+    CanonicalSeries(
+        key=f"ipc_grupo_{k}", concept=f"IPC — {etiqueta}", sector="precios",
+        source_file="ipc_grupos_base_2019-2020.xls", base="2019-2020", frequency="mensual",
+        homogenization="base vigente para el nivel; variación interanual (YoY) para comparar",
+        rationale=("La inflación de la canasta que el hogar no puede posponer explica el "
+                   "deterioro de la cartera de consumo mejor que el índice general."),
+        robustness="green", api_series=None, api_transform="yoy",
+        excel_series_suffix=f"{k}_indice",
+    )
+    for k, etiqueta in (
+        ("alimentos_y_bebidas_no_alcoholicas", "Alimentos y bebidas no alcohólicas"),
+        ("bebidas_alcoholicas_y_tabaco", "Bebidas alcohólicas y tabaco"),
+        ("prendas_de_vestir_y_calzado", "Prendas de vestir y calzado"),
+        ("vivienda", "Vivienda"), ("muebles", "Muebles"), ("salud", "Salud"),
+        ("transporte", "Transporte"), ("comunicaciones", "Comunicaciones"),
+        ("recreacion_y_cultura", "Recreación y cultura"), ("educacion", "Educación"),
+        ("restaurantes_y_hoteles", "Restaurantes y hoteles"),
+        ("bienes_y_servicios_diversos", "Bienes y servicios diversos"),
+    )
+]
+
+_IPC_REGIONES = [
+    CanonicalSeries(
+        key=f"ipc_region_{k}", concept=f"IPC de la región {etiqueta}", sector="precios",
+        source_file="ipc_regiones_base_2019-2020.xls", base="2019-2020", frequency="mensual",
+        homogenization="base vigente para el nivel; variación interanual (YoY) para comparar",
+        rationale=("El crédito trae provincia desde el cubo de la SIB; la inflación regional "
+                   "permite leer el deterioro de una cartera contra el costo de vida de "
+                   "DONDE se prestó, y no contra un promedio nacional que no le aplica."),
+        robustness="green", api_series=None, api_transform="yoy",
+        excel_series_suffix=f"region_{k}",
+    )
+    for k, etiqueta in (("ozama", "Ozama"), ("norte", "Norte"), ("este", "Este"),
+                        ("sur", "Sur"))
+]
+
 # Order roughly follows the BCRD statistics sectors shown in the portal.
 REGISTRY: List[CanonicalSeries] = [
     # ── Precios ──────────────────────────────────────────────────
@@ -181,6 +226,8 @@ REGISTRY: List[CanonicalSeries] = [
         robustness="green", api_series="bcrd.inflacion.inflacion.interanual", api_transform="identity",
     ),
     *_IPC_QUINTILES,
+    *_IPC_GRUPOS,
+    *_IPC_REGIONES,
     CanonicalSeries(
         key="ipc_subyacente", concept="IPC subyacente (núcleo)", sector="precios",
         source_file="ipc_subyacente_base_2019-2020.xlsx", base="2019-2020", frequency="mensual",

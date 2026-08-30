@@ -329,7 +329,13 @@ def infer_spec(wb: Workbook, file: str) -> ExtractionSpec:
             file=file, sheet=grid.name, orientation="year_blocks",
             data_row_start=min(year_rows), month_col=month_col,
             metric_header_row=metric_rows[-1] if metric_rows else None,
-            super_header_row=metric_rows[-2] if len(metric_rows) >= 2 else None,
+            # La PRIMERA fila del bloque de encabezado, no la penúltima: cuando el
+            # rótulo se envuelve en dos filas, la penúltima es su CONTINUACIÓN («y
+            # Tabaco») y tomarla dejaba a las doce columnas de índice del IPC por grupos
+            # con el mismo nombre —doce series colapsadas en una, con doce valores por
+            # mes y la última pisando a las anteriores—. `_extract_year_blocks` une desde
+            # acá hasta la métrica.
+            super_header_row=metric_rows[0] if len(metric_rows) >= 2 else None,
             value_col_start=month_col + 1, value_col_end=grid.ncols,
             # Tasas de interés, etc.: la unidad ("% nominal anual") va en el caption sobre
             # el primer bloque de año. Aplica a toda la hoja.
