@@ -649,10 +649,13 @@ def _guardar_cartera_sectorial(db, bank_id: str, pe, por_sector: Any) -> None:
             sector=str(celda.get("sector") or "")[:160],
             provincia=str(celda.get("provincia") or "SIN PROVINCIA")[:80],
             region=(str(celda["region"])[:80] if celda.get("region") else None),
-            deuda=celda.get("deuda"), vencida=celda.get("vencida"),
-            vencida_31_90=celda.get("vencida_31_90"), cartera_a=celda.get("cartera_a"),
-            garantia=celda.get("garantia"), provision=celda.get("provision"),
-            creditos=celda.get("creditos")))
+            # Las medidas se copian por NOMBRE desde la celda: agregar un campo al cubo
+            # no obliga a tocar esta lista, que es donde se olvidaría.
+            **{k: celda.get(k) for k in (
+                "deuda", "vencida", "vencida_31_90", "garantia", "provision", "creditos",
+                "desembolso", "deuda_capital", "plasticos", "deuda_x_tasa",
+                "deuda_con_tasa", "deuda_moneda_extranjera", "deuda_persona_fisica",
+                "cartera_a", "cartera_b", "cartera_c", "cartera_d", "cartera_e")}))
 
 
 def recompute_carteras_metrics(period: str, write_status=None) -> Dict:

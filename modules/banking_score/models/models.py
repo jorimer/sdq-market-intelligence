@@ -248,6 +248,28 @@ class CarteraSectorial(UUIDMixin, Base):
     provision = Column(Numeric(18, 2), nullable=True)
     creditos = Column(Numeric(18, 2), nullable=True)
 
+    # ── Medidas agregadas en #997 y ampliadas antes del backfill ──
+    # Se suman TODAS en la misma pasada del cubo porque re-hacerlo cuesta ~2h30: cada campo
+    # que se agregue después obliga a pagar esa espera otra vez.
+    desembolso = Column(Numeric(18, 2), nullable=True)      # flujo NUEVO, no el stock
+    deuda_capital = Column(Numeric(18, 2), nullable=True)
+    plasticos = Column(Numeric(18, 2), nullable=True)
+    # Σ(tasa × deuda) y su base: el promedio ponderado se reconstruye a cualquier nivel de
+    # agregación. Un promedio simple de tasas de celdas de tamaño distinto no es la tasa de
+    # nadie, y guardarlo así lo haría irrecuperable.
+    deuda_x_tasa = Column(Numeric(22, 4), nullable=True)
+    deuda_con_tasa = Column(Numeric(18, 2), nullable=True)
+    # `moneda` y `persona` tienen DOS valores: entran como medida y no como dimensión, que
+    # cuadruplicaría las filas para decir lo mismo. El resto es nacional y jurídica.
+    deuda_moneda_extranjera = Column(Numeric(18, 2), nullable=True)
+    deuda_persona_fisica = Column(Numeric(18, 2), nullable=True)
+    # La clasificación COMPLETA: con las cinco clases se computa migración y pérdida
+    # esperada por sector; con solo la A, no.
+    cartera_b = Column(Numeric(18, 2), nullable=True)
+    cartera_c = Column(Numeric(18, 2), nullable=True)
+    cartera_d = Column(Numeric(18, 2), nullable=True)
+    cartera_e = Column(Numeric(18, 2), nullable=True)
+
     bank = relationship("Bank")
 
     __table_args__ = (

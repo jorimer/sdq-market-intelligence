@@ -288,6 +288,65 @@ def _sync_bcrd_mercado_laboral(db: Session, set_phase: Callable[[str], None]) ->
     return synced
 
 
+#: Salario mínimo (MHE, vía datos.gob.do). MENSUAL desde 2000, por tamaño de empresa y
+#: área. Es el piso de la capacidad de pago del hogar, y al ser mensual cada ajuste aparece
+#: como un ESCALÓN fechado: se puede leer la cartera antes y después de un aumento en vez de
+#: correlacionar dos curvas suaves.
+#:
+#: El tema lleva el tamaño y el área porque «Empresa grande» vale RD$27.989 fuera de
+#: hotelería y RD$16.800 dentro: sin esa distinción en la clave, un régimen pisaría al otro.
+_SALARIO_MINIMO_ENTIDAD = "salario_minimo"
+
+
+def _tema_salario(serie) -> str:
+    """Clave estable por combinación, corta para que quepa en la columna."""
+    import re
+    def _slug(x: str) -> str:
+        return re.sub(r"[^a-z0-9]+", "_", _sin_tildes(x).lower()).strip("_")[:28]
+    return f"sm_{_slug(serie.tamano)}_{_slug(serie.area)}"[:60]
+
+
+def _sin_tildes(x: str) -> str:
+    import unicodedata
+    return "".join(c for c in unicodedata.normalize("NFD", x)
+                   if unicodedata.category(c) != "Mn")
+
+
+def _sync_salario_minimo(db: Session, set_phase: Callable[[str], None]) -> int:
+    """Persiste el salario mínimo mensual por combinación, con su vejez DECLARADA.
+
+    Una serie escalonada repite su valor hasta el próximo ajuste, así que una categoría
+    abandonada se ve idéntica a una vigente. Medido sobre la fuente: «zona franca en áreas
+    geográficas deprimidas» no cambia desde julio de 2006 y «Gobierno Central» desde abril de
+    2019, mientras las otras ocho se ajustaron en 2025. Servirlas sin marca diría que ése es
+    el salario mínimo de hoy en esas categorías, y no lo es.
+
+    La marca va en la desagregación de cada punto —no en un campo aparte— porque es lo que
+    viaja con el dato a cualquier consumidor.
+    """
+    from shared.data.salario_minimo import LICENSE as SM_LICENSE
+    from shared.data.salario_minimo import SOURCE as SM_SOURCE
+    from shared.data.salario_minimo import fetch_salario_minimo
+
+    set_phase("salario mínimo (MHE · datos.gob.do)")
+    series = fetch_salario_minimo()
+    synced = 0
+    for serie in series:
+        tema = _tema_salario(serie)
+        ultimo = serie.ultimo_cambio
+        disagg = f"{serie.tamano} · {serie.area}"[:60]
+        for periodo, valor in serie.puntos:
+            _upsert_indicator(db, theme=tema, entity=_SALARIO_MINIMO_ENTIDAD,
+                              period=periodo, value=float(valor), source=SM_SOURCE,
+                              disagg=disagg, unit="RD$/mes")
+            synced += 1
+        logger.info("[social] salario mínimo %s: %d meses, último ajuste %s",
+                    tema, len(serie.puntos), ultimo or "NUNCA")
+    logger.info("[social] salario mínimo: %d puntos en %d series (%s)",
+                synced, len(series), SM_LICENSE[:40])
+    return synced
+
+
 #: Participación política de las mujeres en gobiernos locales (CEPAL · OIG). Los produce
 #: la JCE y no hay fuente abierta nacional: se verificó contra `datos.gob.do` y no existe.
 #: La CEPAL los recoge del propio organismo electoral y los publica con API abierta.
@@ -1303,6 +1362,10 @@ def one_social_sync(db: Session, set_phase: Optional[Callable[[str], None]] = No
     export_synced = _best_effort(
         "participación en el comercio mundial (3.18 y 3.19)",
         lambda: _sync_participacion_exportadora(db, set_phase), errors)
+    # El piso de la capacidad de pago del hogar. Mismo criterio: independiente del resto.
+    salmin_synced = _best_effort(
+        "salario mínimo mensual (MHE · datos.gob.do)",
+        lambda: _sync_salario_minimo(db, set_phase), errors)
     # Mismo criterio: no depende de nada de esta corrida y entra antes del commit temprano.
     mem_synced = _best_effort(
         "sector eléctrico (MEM · 3.27, 3.28 y 3.29)",
@@ -1368,6 +1431,7 @@ def one_social_sync(db: Session, set_phase: Optional[Callable[[str], None]] = No
         "cobertura_salud_synced": salud_synced,
         "participacion_export_synced": export_synced,
         "mem_electrico_synced": mem_synced,
+        "salario_minimo_synced": salmin_synced,
         "income_synced": income_synced,
         "coverage_synced": coverage_synced,
         "schooling_synced": schooling_synced,
