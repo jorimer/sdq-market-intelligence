@@ -16,12 +16,11 @@ from typing import Dict, List, Optional, Tuple
 from sqlalchemy.orm import Session
 
 from shared.contracts.macro_sector import (
-    ADVERSO,
-    FAVORABLE,
     ND,
-    NEUTRAL,
     MacroFactor,
     MacroSectorContract,
+    classify_factor,
+    factor_reading,
 )
 from shared.doctrine import load_doctrine_raw
 from modules.macro_monitor.scoring.momentum import compute_series_momentum
@@ -85,41 +84,9 @@ def _yoy_change(clean: List[Tuple[str, float]]) -> Optional[float]:
     return round((latest_value / base - 1.0) * 100.0, 2)
 
 
-def _classify(value: float, fdoc: dict) -> Tuple[str, str]:
-    """Map *value* to (direction, magnitude) per the factor's doctrine thresholds."""
-    good = fdoc.get("good_direction", "high")
-    fav = float(fdoc["favorable_at"])
-    adv = float(fdoc["adverse_at"])
-    ref = float(fdoc.get("magnitude_ref", 1.0)) or 1.0
-
-    if good == "low":
-        if value <= fav:
-            direction, dist = FAVORABLE, fav - value
-        elif value >= adv:
-            direction, dist = ADVERSO, value - adv
-        else:
-            direction, dist = NEUTRAL, 0.0
-    else:  # high is good
-        if value >= fav:
-            direction, dist = FAVORABLE, value - fav
-        elif value <= adv:
-            direction, dist = ADVERSO, adv - value
-        else:
-            direction, dist = NEUTRAL, 0.0
-
-    if direction == NEUTRAL:
-        magnitude = "bajo"
-    elif dist >= ref:
-        magnitude = "alto"
-    elif dist >= ref / 2.0:
-        magnitude = "moderado"
-    else:
-        magnitude = "bajo"
-    return direction, magnitude
-
-
-def _fmt(value: float) -> str:
-    return f"{value:+.1f}" if value < 0 else f"{value:.2f}"
+#: La clasificación vive en el contrato compartido (mismo lugar que FAVORABLE/
+#: ADVERSO/NEUTRAL y que la doctrina de umbrales); acá queda su nombre histórico.
+_classify = classify_factor
 
 
 def _factor_from_doctrine(fdoc: dict, grouped: Dict[str, Obs], names: Dict[str, str]) -> MacroFactor:
@@ -141,15 +108,15 @@ def _factor_from_doctrine(fdoc: dict, grouped: Dict[str, Obs], names: Dict[str, 
     mode = fdoc.get("mode", "level")
     trend = compute_series_momentum(clean).get("trend")
     if mode == "change":
-        value = _yoy_change(clean)
-        if value is None:
+        yoy = _yoy_change(clean)
+        if yoy is None:
             return MacroFactor(value=None, direction=ND, magnitude=ND,
                                reading="sin variación interanual computable", trend=trend, **base)
-        reading = f"{value:+.1f}% interanual"
+        value = yoy
     else:
         value = round(clean[-1][1] * float(fdoc.get("scale", 1.0)), 2)
-        reading = f"{_fmt(value)}{(' ' + unit) if unit else ''}"
 
+    reading = factor_reading(value, fdoc)
     direction, magnitude = _classify(value, fdoc)
     return MacroFactor(value=value, direction=direction, magnitude=magnitude,
                        reading=reading, trend=trend, **base)
