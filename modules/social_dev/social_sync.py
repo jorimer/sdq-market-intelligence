@@ -237,6 +237,22 @@ _MERCADO_LABORAL = {
 }
 
 
+#: Las MISMAS tres condiciones del mercado laboral, con la cadencia del emisor. Van bajo
+#: temas propios y no bajo los anuales: la clave es (entidad, tema, período), así que
+#: «2026» y «2026-Q1» convivirían sin chocar — pero mezclarlos en un mismo tema invita a
+#: que alguien los promedie junto, y un promedio de puntos anuales y trimestrales no es
+#: ninguna de las dos cosas. La cadencia viaja en la clave.
+#:
+#: Para qué: el crédito se mide por trimestre. Leer el deterioro de una cartera contra un
+#: promedio anual del mercado laboral compara dos cosas que no ocurrieron en la misma
+#: ventana. La serie ANUAL no se toca: sostiene los indicadores de la END, que son anuales.
+_MERCADO_LABORAL_TRIMESTRAL = {
+    "unemployment_rate_trimestral": ("desocupación trimestral (BCRD · ENCFT)", "%"),
+    "informality_rate_trimestral": ("ocupación informal trim. (BCRD · ENCFT)", "%"),
+    "employment_rate_trimestral": ("ocupación trimestral (BCRD · ENCFT)", "%"),
+}
+
+
 def _sync_bcrd_mercado_laboral(db: Session, set_phase: Callable[[str], None]) -> int:
     """Desocupación y brechas de género de la ENCFT, del CDN del BCRD.
 
@@ -258,8 +274,17 @@ def _sync_bcrd_mercado_laboral(db: Session, set_phase: Callable[[str], None]) ->
                               value=float(value), source=SOURCE, disagg="nacional",
                               unit=unidad)
             synced += 1
+    # El primer elemento ya ES el período —un año en las anuales, «YYYY-Qn» en las
+    # trimestrales—, así que el mismo bucle sirve para las dos.
+    for tema, (_etiqueta, unidad) in _MERCADO_LABORAL_TRIMESTRAL.items():
+        for periodo, value in series.get(tema, ()):
+            _upsert_indicator(db, theme=tema, entity=HEALTH_ENTITY, period=str(periodo),
+                              value=float(value), source=SOURCE, disagg="nacional",
+                              unit=unidad)
+            synced += 1
     logger.info("[social] mercado laboral BCRD: %d puntos en %d series (%s)",
-                synced, len(_MERCADO_LABORAL), LICENSE[:40])
+                synced, len(_MERCADO_LABORAL) + len(_MERCADO_LABORAL_TRIMESTRAL),
+                LICENSE[:40])
     return synced
 
 
