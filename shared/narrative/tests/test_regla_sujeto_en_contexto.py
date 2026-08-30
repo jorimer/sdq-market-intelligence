@@ -59,22 +59,59 @@ def _contextos():
     # la mudó a `ai_context_files.py` porque la comparten sus DOS productos, y este lector
     # —anclado al nombre del archivo— dejó de encontrarla y sacó a banca entera de la regla
     # sin que nada fallara por el motivo real. Se ancla al SÍMBOLO, que es lo que importa.
+    #
+    # Y se lee con `ast`, no con una expresión regular. El lector anterior capturaba
+    # `\(([^)]*)\)`, que termina en el PRIMER paréntesis de cierre — y un comentario dentro
+    # de la tupla que dijera «(producto anual)» la cortaba ahí. Se llevó puestos los tres
+    # últimos archivos de la lista de banca, dos de los cuales los había agregado otro test
+    # estructural precisamente para que no quedaran fuera. Nada falló: el barrido siguió
+    # encontrando treinta y cinco archivos y dando verde sobre los que sí leía.
+    #
+    # La lección es la del repo: un instrumento de verificación también se verifica, y un
+    # lector de código se escribe con el parser del lenguaje, no con una regex.
     for carpeta in sorted(RAIZ.glob("modules/*/")):
         for fuente in sorted(carpeta.glob("*.py")):
-            m = re.search(r"^AI_CONTEXT_FILES\s*=\s*\(([^)]*)\)",
-                          fuente.read_text(encoding="utf-8"), re.M | re.S)
-            if not m:
+            texto = fuente.read_text(encoding="utf-8")
+            if "AI_CONTEXT_FILES" not in texto:
                 continue
-            for rel in re.findall(r'"([^"]+)"', m.group(1)):
-                ruta = carpeta / rel
-                if ruta.exists():
-                    rutas.add(ruta)
+            for nodo in ast.walk(ast.parse(texto)):
+                if not isinstance(nodo, ast.Assign):
+                    continue
+                if not any(isinstance(t, ast.Name) and t.id == "AI_CONTEXT_FILES"
+                           for t in nodo.targets):
+                    continue
+                if not isinstance(nodo.value, (ast.Tuple, ast.List)):
+                    continue
+                for el in nodo.value.elts:
+                    if not (isinstance(el, ast.Constant) and isinstance(el.value, str)):
+                        continue
+                    ruta = carpeta / el.value
+                    if ruta.exists():
+                        rutas.add(ruta)
     return sorted(rutas)
 
 
 def test_hay_contextos_que_revisar():
     """Si el glob deja de encontrar archivos, el test pasaría vacío y no protegería nada."""
     assert len(_contextos()) >= 10
+
+
+def test_el_lector_recupera_la_lista_COMPLETA_que_el_modulo_declara():
+    """Un barrido que encuentra «algo» no prueba que encontró TODO.
+
+    El lector anterior leía la tupla con una regex que terminaba en el primer paréntesis de
+    cierre, así que un comentario intercalado que dijera «(producto anual)» truncaba la
+    lista en silencio. Seguía devolviendo treinta y cinco archivos y dando verde. La única
+    forma de detectarlo es comparar contra la lista que el módulo declara DE VERDAD —
+    importándola— en vez de contra un piso arbitrario."""
+    from modules.banking_score.ai_context_files import AI_CONTEXT_FILES
+    leidos = {str(p.relative_to(RAIZ)) for p in _contextos()}
+    for rel in AI_CONTEXT_FILES:
+        declarado = f"modules/banking_score/{rel}"
+        if (RAIZ / declarado).exists():
+            assert declarado in leidos, (
+                f"banca declara {rel} y la regla del sujeto no lo está leyendo: "
+                f"ese archivo puede publicar una cuota sin población y nada fallaría")
 
 
 def test_banca_esta_cubierta():

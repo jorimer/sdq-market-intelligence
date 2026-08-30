@@ -37,6 +37,18 @@ SUJETOS: Tuple[str, ...] = (
     # conocía y que es justo la que el modelo reatribuía: publicó la concentración de los
     # diez mayores deudores como si fuera de entidades.
     "deudor", "deudores",
+    # Los tres denominadores del mapa sectorial del crédito. Aparecieron juntos y se
+    # descubrieron juntos: el lector de la regla truncaba la lista de archivos de banca en un
+    # paréntesis, así que los archivos que los usan nunca se revisaron.
+    #
+    # `cartera` — el libro de crédito de la entidad. `peso_en_su_cartera_pct` dice que el
+    # denominador es su propia cartera, que es justo lo que lo distingue de
+    # `cuota_del_sector_pct`: dos porcentajes de la misma exposición sobre dos poblaciones
+    # distintas, y confundirlos publica «concentra el 31% del sector» cuando es de su libro.
+    # `sistema` — las noventa y dos entidades supervisadas.
+    # `movimiento` — la suma de los movimientos en valor absoluto, no el neto; la distinción
+    # importa porque el neto puede ser cero con movimiento grande.
+    "cartera", "sistema", "movimiento", "movimientos",
 )
 
 # Marcador de exención declarada, para las superficies que se leen con `ast`.

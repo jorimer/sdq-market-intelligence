@@ -102,6 +102,67 @@ SAMPLE_SCORING = {
         "liquidez": {"raw": 31.0, "score": 80, "available": True},
     },
 }
+# Mapa sectorial de la muestra. Cifras sintéticas, pero coherentes ENTRE SÍ y con el resto
+# de la muestra: la mora agregada de Banco Demo es 1,9%, y las moras por sector ponderadas
+# por su exposición dan ese mismo 1,9%. Una muestra cuyas partes no suman su propio total es
+# lo primero que un comprador con calculadora encuentra.
+#
+# La tabla es la vidriera del producto, así que va con dato: sin ella la sección saldría con
+# prosa y sin la tabla que la prosa interpreta, y el nivel se vería peor de lo que es.
+SAMPLE_MAPA_SECTORIAL = {
+    "entidad": SAMPLE_NAME,
+    "corte": SAMPLE_PERIOD,
+    "credito_clasificado": 42_000_000_000.0,
+    "sectores": [
+        {"sector": "Y - CONSUMO DE BIENES Y SERVICIOS", "deuda": 14_700_000_000.0,
+         "peso_en_su_cartera_pct": 35.0, "cuota_del_sector_pct": 4.1,
+         "mora_pct": 3.04, "mora_del_resto_del_sector_pct": 4.31,
+         "brecha_de_mora_pp": -1.27,
+         "tasa_promedio_ponderada_pct": 25.90, "tasa_del_resto_del_sector_pct": 26.58,
+         "spread_de_tasa_pp": -0.68,
+         "atribucion": "idiosincratico_mejor", "material": True},
+        {"sector": "Z - COMPRA Y REMODELACIÓN DE VIVIENDA", "deuda": 10_080_000_000.0,
+         "peso_en_su_cartera_pct": 24.0, "cuota_del_sector_pct": 2.2,
+         "mora_pct": 0.55, "mora_del_resto_del_sector_pct": 0.78,
+         "brecha_de_mora_pp": -0.23,
+         "tasa_promedio_ponderada_pct": 11.20, "tasa_del_resto_del_sector_pct": 11.47,
+         "spread_de_tasa_pp": -0.27,
+         "atribucion": "compartido_con_el_sector", "material": True},
+        {"sector": "G - COMERCIO AL POR MAYOR Y AL POR MENOR", "deuda": 6_720_000_000.0,
+         "peso_en_su_cartera_pct": 16.0, "cuota_del_sector_pct": 2.3,
+         "mora_pct": 1.50, "mora_del_resto_del_sector_pct": 1.70,
+         "brecha_de_mora_pp": -0.20,
+         "tasa_promedio_ponderada_pct": 13.10, "tasa_del_resto_del_sector_pct": 13.65,
+         "spread_de_tasa_pp": -0.55,
+         "atribucion": "compartido_con_el_sector", "material": True},
+        {"sector": "F - CONSTRUCCIÓN", "deuda": 5_040_000_000.0,
+         "peso_en_su_cartera_pct": 12.0, "cuota_del_sector_pct": 3.3,
+         "mora_pct": 3.40, "mora_del_resto_del_sector_pct": 1.13,
+         "brecha_de_mora_pp": 2.27,
+         "tasa_promedio_ponderada_pct": 12.60, "tasa_del_resto_del_sector_pct": 11.82,
+         "spread_de_tasa_pp": 0.78,
+         "atribucion": "idiosincratico_peor", "material": True},
+        {"sector": "D - INDUSTRIA MANUFACTURERA", "deuda": 3_360_000_000.0,
+         "peso_en_su_cartera_pct": 8.0, "cuota_del_sector_pct": 2.1,
+         "mora_pct": 0.50, "mora_del_resto_del_sector_pct": 0.57,
+         "brecha_de_mora_pp": -0.07,
+         "tasa_promedio_ponderada_pct": 10.40, "tasa_del_resto_del_sector_pct": 10.28,
+         "spread_de_tasa_pp": 0.12,
+         "atribucion": "compartido_con_el_sector", "material": True},
+        {"sector": "H - ALOJAMIENTO Y SERVICIOS DE COMIDA", "deuda": 2_100_000_000.0,
+         "peso_en_su_cartera_pct": 5.0, "cuota_del_sector_pct": 1.5,
+         "mora_pct": 0.30, "mora_del_resto_del_sector_pct": 0.33,
+         "brecha_de_mora_pp": -0.03,
+         "tasa_promedio_ponderada_pct": 8.10, "tasa_del_resto_del_sector_pct": 7.74,
+         "spread_de_tasa_pp": 0.36,
+         "atribucion": "compartido_con_el_sector", "material": True},
+    ],
+    "contra_que_se_compara": (
+        "el RESTO del sistema en el mismo sector, EXCLUIDA la entidad; incluirla haría que "
+        "se comparase en parte contra sí misma y encogería su brecha tanto más cuanto mayor "
+        "fuese su cuota"),
+}
+
 SAMPLE_SYSTEM = {"band_distribution": {"Sólida": 6, "Adecuada": 8, "En vigilancia": 3,
                                        "Frágil": 1},
                  "n_entities": 18, "system_avg_score": 71.8, "period": SAMPLE_PERIOD}
@@ -243,6 +304,36 @@ SAMPLE_NARRATIVES = {
         "igual todas las entidades. La señal adelantada a vigilar es la trayectoria del tipo "
         "de cambio y de las reservas internacionales del BCRD."
     ),
+    "mapa_sectorial": (
+        "El deterioro de Banco Demo está **concentrado en un solo sector, y es suyo**. La "
+        "morosidad agregada de 1.9% se descompone de forma nítida: en cinco de los seis "
+        "sectores en que la entidad presta, su cartera se comporta igual o mejor que la del "
+        "resto del sistema en ese mismo sector; en **construcción** no. Ahí registra 3.4% de "
+        "mora contra 1.13% del resto del sistema en construcción —una brecha de **2.27 "
+        "puntos porcentuales**— sobre el 12% de su cartera clasificada. Es la única "
+        "exposición del libro que la comparación atribuye a la originación propia y no al "
+        "ciclo del sector.\n\n"
+        "La lectura de precio refuerza el diagnóstico en lugar de contradecirlo. En "
+        "construcción, Banco Demo coloca a 12.6% frente al 11.82% del resto del sistema: "
+        "cobra **0.78 puntos** más por un riesgo que se está materializando **2.27 puntos** "
+        "peor. La prima cubre alrededor de un tercio del diferencial de deterioro, de modo "
+        "que la exposición no está mal originada por desconocimiento del riesgo sino mal "
+        "cobrada respecto de él. Corregir el precio de originación en ese sector es una "
+        "palanca disponible y acotada: afecta al 12% del libro, no a la política de crédito "
+        "de la entidad.\n\n"
+        "El contraste está en **consumo**, el 35% de la cartera y su exposición principal. "
+        "Ahí la entidad registra 3.04% de mora contra 4.31% del resto del sistema —**1.27 "
+        "puntos mejor**— y lo hace cobrando 0.68 puntos **menos** que el resto. Colocar por "
+        "debajo del precio del mercado con mejor comportamiento de cartera es la firma de "
+        "una selección de deudores efectiva, y es el activo comercial que sostiene la banda "
+        "de Ejecución. Vivienda (24% del libro) y comercio (16%) se comportan en línea con "
+        "sus sectores, sin brecha material en ninguna de las dos direcciones.\n\n"
+        "Al próximo corte, el indicador a vigilar es la **mora temprana de 31 a 90 días en "
+        "construcción**: se deteriora antes que la vencida y anticiparía si la brecha de "
+        "2.27 puntos se amplía o si el ajuste de originación ya empezó a rendir. Esta "
+        "lectura es contexto explicativo de la calidad de activos —descompone de dónde sale "
+        "el indicador— y no constituye un componente separado de la calificación."
+    ),
     "soporte_soberano": (
         "Esta sección es **contexto estructural**, no un componente de la calificación "
         "SDQ (que mide fortaleza financiera **standalone**). Banco Demo **no es una entidad "
@@ -297,9 +388,13 @@ _INSIGHT_SECTIONS = (
 # SOPORTE Y TECHO SOBERANO (capa de contexto estilo Fitch, NO muta el standalone) +
 # riesgo/escenarios + recomendación + limitaciones. Ambas secciones son exclusivas del
 # Deep Dive.
+# El MAPA SECTORIAL es la sección que responde «¿es mi originación o es el sector?», y la
+# única del documento que exige el libro de las otras noventa y una entidades. Va con el
+# entorno y el soporte —las capas de contexto— porque como ellas encuadra el standalone sin
+# mutarlo: la brecha contra el resto del sector explica un indicador, no lo recalifica.
 _DEEP_DIVE_SECTIONS = _INSIGHT_SECTIONS + (
-    "entorno_operativo", "soporte_soberano", "risk_assessment", "early_warning",
-    "recommendation", "limitations")
+    "entorno_operativo", "mapa_sectorial", "soporte_soberano", "risk_assessment",
+    "early_warning", "recommendation", "limitations")
 
 # Limitaciones: texto estático (sin cifras → guard anti-alucinación trivialmente limpio).
 # Incluye el ENCUADRE del score (Fase 3, portado de pensiones): la calificación SDQ es
@@ -773,6 +868,26 @@ class BankingProduct:
             prop = evaluar_entidad(db, str(bank.name), cast(date, rr.period_end))
             if prop:
                 scoring_result["propension_quiebra"] = prop
+            # MAPA SECTORIAL: dónde presta la entidad y cómo le va ahí contra el RESTO del
+            # sistema en el MISMO sector. Es la única lectura del informe que un banco no
+            # puede reproducir con su propia API: exige el libro de crédito de las otras
+            # noventa y una entidades, sector por sector y provincia por provincia.
+            #
+            # AL CORTE del informe, por la misma razón que la alerta temprana: un Deep Dive
+            # de diciembre con el mapa de marzo se contradice consigo mismo.
+            #
+            # Si la entidad no tiene desglose en ese corte, `posicion_de_la_entidad`
+            # devuelve None y la sección no se emite. No se fabrica un mapa vacío: los
+            # cortes anteriores al backfill del cubo no lo tienen, y una tabla de guiones
+            # se lee como «esta entidad no presta», que es falso.
+            from modules.banking_score.reports.mapa_sectorial import posicion_de_la_entidad
+            try:
+                mapa = posicion_de_la_entidad(db, bank, cast(date, rr.period_end))
+            except Exception:  # noqa: BLE001 — el snapshot nunca depende de esta tabla
+                logger.exception("No se pudo computar el mapa sectorial de %s", bank.name)
+                mapa = None
+            if mapa:
+                scoring_result["mapa_sectorial"] = mapa
         conc = compute_market_concentration(db, rr.period_end, "activos")
         # sujeto-ok: `metric_label` encabeza el dict y nombra la población sobre la que se
         # computan CR5/CR10/HHI (activos); el sujeto llega al modelo junto al número.
@@ -835,7 +950,9 @@ class BankingProduct:
                                    entity_name=None, entity_roster=(SAMPLE_NAME,))
         return ProductSnapshot(
             tier=tier, period=SAMPLE_PERIOD,
-            payload={"scoring_result": dict(SAMPLE_SCORING), "peer_block": dict(SAMPLE_PEER)},
+            payload={"scoring_result": {**SAMPLE_SCORING,
+                                        "mapa_sectorial": SAMPLE_MAPA_SECTORIAL},
+                     "peer_block": dict(SAMPLE_PEER)},
             entity_name=SAMPLE_NAME)
 
     def sample_narratives(self, tier: ProductTier) -> Dict[str, str]:
@@ -894,6 +1011,10 @@ class BankingProduct:
         # reales; sin contrato macro la sección no se emite (nunca vacía/fabricada).
         if not scoring_result.get("entorno_macro"):
             claude_sections = [s for s in claude_sections if s != "entorno_operativo"]
+        # Mapa sectorial: los cortes anteriores al backfill del cubo de créditos no tienen
+        # desglose, y una entidad sin cartera clasificada tampoco. Sin dato no hay sección.
+        if not scoring_result.get("mapa_sectorial"):
+            claude_sections = [s for s in claude_sections if s != "mapa_sectorial"]
         out = await generate_named_narratives(
             claude_sections, snapshot.entity_name or "Entidad", scoring_result,
             snapshot.period, benchmarks=peer_block,
