@@ -547,6 +547,31 @@ def _posterior_al_corte(periodo: Optional[str], corte: date) -> bool:
         return False
 
 
+def bloque_de_pares(db: Session, bank: Bank, period_end: date) -> Dict[str, object]:
+    """La estructura de mercado + los pares NOMBRADOS de *bank*, para el PDF.
+
+    Vive acá —y es pública— porque la necesitan las DOS rutas que emiten el SDQ Rating: la
+    de productos y la de informes (`POST /{bank_id}/generate`). La segunda no la tenía, así
+    que su §Análisis Comparativo afirmaba «rezagado frente a sus pares» y no le daba al
+    lector ni una tabla: la comparación quedaba como acto de fe. Copiar el armado a la otra
+    ruta habría sido la salida fácil y la equivocada — dos implementaciones de la misma
+    cuenta son dos oportunidades de que discrepen, y este repo ya paga esa cuenta.
+
+    Devuelve `{}` cuando no hay concentración medible ni al menos otro par: no se fabrica
+    una tabla de una fila."""
+    bloque: Dict[str, object] = {}
+    conc = compute_market_concentration(db, period_end, "activos")
+    if conc.get("available"):
+        # sujeto-ok: `metric_label` encabeza el dict y nombra la población sobre la que se
+        # computan CR5/CR10/HHI (activos); el sujeto llega al modelo junto al número.
+        bloque = {"metric_label": conc["metric_label"], "cr5": conc["cr5"],
+                  "cr10": conc["cr10"], "hhi": conc["hhi"]}
+    named = _named_peers(db, bank, period_end)
+    if named:
+        bloque["named_peers"] = named
+    return bloque
+
+
 def _named_peers(db: Session, bank: Bank, period_end: date) -> Optional[Dict[str, object]]:
     """Pares NOMBRADOS de *bank* en *period_end*: su posición (sistema y mismo tipo) + los
     líderes de su MISMO TIPO con score/rating reales. Complementa el percentil (anónimo) con
@@ -888,19 +913,12 @@ class BankingProduct:
                 mapa = None
             if mapa:
                 scoring_result["mapa_sectorial"] = mapa
-        conc = compute_market_concentration(db, rr.period_end, "activos")
-        # sujeto-ok: `metric_label` encabeza el dict y nombra la población sobre la que se
-        # computan CR5/CR10/HHI (activos); el sujeto llega al modelo junto al número.
-        peer_block: Dict[str, object] = ({"metric_label": conc["metric_label"], "cr5": conc["cr5"],
-                                          "cr10": conc["cr10"], "hhi": conc["hhi"]}
-                                         if conc.get("available") else {})
-        # Pares NOMBRADOS (mismo patrón que pension/insurance exponen en 'peers'): posición
-        # de la entidad + competidores concretos con su score/rating. Solo en los niveles
-        # nombrados (el Pulse permanece anonimizado por doctrina). Dato ya computado
-        # (RatingResult del período) — costo marginal: un query indexado.
-        named = _named_peers(db, bank, rr.period_end)
-        if named:
-            peer_block["named_peers"] = named
+        # Estructura de mercado + pares NOMBRADOS (mismo patrón que pension/insurance
+        # exponen en 'peers'). Solo en los niveles nombrados (el Pulse permanece anonimizado
+        # por doctrina). Dato ya computado (RatingResult del período) — costo marginal: un
+        # query indexado. El armado vive en `bloque_de_pares` porque la ruta de informes
+        # emite el MISMO documento y necesita el mismo bloque.
+        peer_block: Dict[str, object] = bloque_de_pares(db, bank, cast(date, rr.period_end))
         # REFERENCIA POR INDICADOR (promedios del sistema y del grupo de pares, MEDIDOS en
         # este mismo corte). Sin esto, las secciones de dimensión —`subcomponent_focus`, que
         # es donde el informe analiza eficiencia, liquidez, calidad…— llegaban al modelo con

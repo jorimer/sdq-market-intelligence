@@ -133,8 +133,6 @@ modules/banking_score/products.py:0: error: Argument "entity_name" to "ProductSn
 modules/banking_score/products.py:0: error: Argument "key" to "sorted" has incompatible type "Callable[[dict[str, object]], object]"; expected "Callable[[dict[str, object]], SupportsDunderLT[Any] | SupportsDunderGT[Any]]"  [arg-type]
 modules/banking_score/products.py:0: error: Argument 1 to "setdefault" of "MutableMapping" has incompatible type "object"; expected "str"  [arg-type]
 modules/banking_score/products.py:0: error: Argument 2 to "bank_alerts" has incompatible type "Column[str]"; expected "str"  [arg-type]
-modules/banking_score/products.py:0: error: Argument 2 to "compute_market_concentration" has incompatible type "Column[date]"; expected "date | None"  [arg-type]
-modules/banking_score/products.py:0: error: Argument 3 to "_named_peers" has incompatible type "Column[date]"; expected "date"  [arg-type]
 modules/banking_score/products.py:0: error: Argument 3 to "period_percentiles" has incompatible type "Column[date]"; expected "date"  [arg-type]
 modules/banking_score/products.py:0: error: Argument 4 to "support_overlay" has incompatible type "Column[str]"; expected "str"  [arg-type]
 modules/banking_score/products.py:0: error: Argument 5 to "support_overlay" has incompatible type "Column[date]"; expected "date"  [arg-type]
