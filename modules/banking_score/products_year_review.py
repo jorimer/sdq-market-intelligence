@@ -278,6 +278,10 @@ def _amplitud_al_cierre(db: Session, bank: Bank, anio: int) -> Dict[str, Any]:
         mapa = posicion_de_la_entidad(db, bank, cierre)
         if mapa:
             out["mapa_sectorial"] = mapa
+        from modules.banking_score.reports.inflacion_del_deudor import inflacion_por_quintil
+        infl = inflacion_por_quintil(db, cierre)
+        if infl:
+            out["inflacion_del_deudor"] = infl
     except Exception:  # noqa: BLE001
         logger.exception("Mapa sectorial omitido en la Revisión Anual %s de %s", anio, bank.name)
 
