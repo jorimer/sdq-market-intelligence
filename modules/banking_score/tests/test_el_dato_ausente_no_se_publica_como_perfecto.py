@@ -13,8 +13,14 @@ concentración real de esa entidad era 34,90%, su peor indicador de calidad. La 
 estaba bien —54.29, con los dos excluidos—; el DOCUMENTO no, y es el documento lo que se
 vende.
 
-La fila se LISTA marcada y no se esconde: una fila ausente se lee como que el indicador no
-existe para esta entidad, cuando lo que pasa es que no vino el dato en este corte.
+La fila NO se publica. Hubo una versión intermedia que la mostraba marcada «s/d» con su nota
+al pie; el dueño la revirtió el 2026-08-31 porque un inventario de faltantes dentro de un
+documento de calificación no se lee como rigor sino como producto incompleto. Omitirla no
+publica nada falso: el score ya excluye esos indicadores y renormaliza los pesos, y la
+afirmación de MÉTODO vive una sola vez, en Limitaciones.
+
+Lo que este test protege es lo de siempre y no cambió: el 0.0 por defecto NUNCA sale
+publicado, ni con su valor ni con el 100 que la curva le da al cero.
 
 El test es de COMPORTAMIENTO —construye la tabla y mira las celdas— y no de texto. Un test
 que buscara `available` en el fuente pasaría en verde con solo mencionarlo en un comentario.
@@ -30,8 +36,12 @@ def _texto(celda):
 
 
 def _celdas(indicadores, **kw):
-    tabla = next(e for e in pdf._build_indicators_table(indicadores, pdf._get_styles(), **kw)
-                 if hasattr(e, "_cellvalues"))
+    # Sin filas publicables no hay tabla: `_build_indicators_table` no la emite. Devolver {}
+    # y no reventar es parte de lo que se comprueba.
+    tabla = next((e for e in pdf._build_indicators_table(indicadores, pdf._get_styles(), **kw)
+                  if hasattr(e, "_cellvalues")), None)
+    if tabla is None:
+        return {}
     filas = [[_texto(c) for c in fila] for fila in tabla._cellvalues[1:]]
     return {fila[0]: fila[1:] for fila in filas}
 
@@ -53,12 +63,11 @@ def test_el_indicador_no_disponible_no_muestra_ni_valor_ni_score():
             "inversos —concentración, HHI— el cero por defecto puntúa 100")
 
 
-def test_la_fila_SIGUE_estando_marcada_y_no_desaparece():
-    """Esconderla se lee como que el indicador no existe para la entidad."""
+def test_la_fila_NO_se_publica():
+    """El documento no inventaría lo que le falta (decisión del dueño, 2026-08-31)."""
     c = _celdas({"concentracion_top10": _SIN_DATO, "morosidad": _CON_DATO})
-    assert len(c) == 2, f"la fila sin dato desapareció en vez de declararse: {c}"
-    rotulo = next(r for r in c if "orosidad" not in r)
-    assert c[rotulo][0] == "s/d"
+    assert len(c) == 1, f"el indicador sin dato sigue apareciendo en la tabla: {c}"
+    assert "orosidad" in next(iter(c))
 
 
 def test_el_indicador_CON_dato_sigue_publicando_su_valor():
@@ -69,18 +78,27 @@ def test_el_indicador_CON_dato_sigue_publicando_su_valor():
 
 
 def test_tampoco_publica_percentil_ni_tendencia_de_lo_que_no_midio():
-    """Las columnas de amplitud: un percentil o una tendencia de un indicador sin dato
-    describen el cero por defecto, no a la entidad."""
+    """Las columnas de amplitud describirían el cero por defecto, no a la entidad. Al no
+    emitirse la fila, no hay dónde publicarlas — pero se comprueba, porque el percentil y la
+    tendencia entran por otra vía que la fila y podrían sobrevivir a su omisión."""
     c = _celdas({"concentracion_top10": _SIN_DATO},
                 percentiles={"indicators": {"concentracion_top10":
                                             {"sector": {"percentile": 97.0}}}},
                 trajectories={"indicators": {"concentracion_top10": {"delta": 38.0}}})
-    rotulo = next(iter(c))
-    assert c[rotulo][2] == "—" and c[rotulo][3] == "—", (
-        f"publica amplitud de un indicador sin dato: {c[rotulo]}")
+    assert c == {}, f"publica un indicador sin dato con su amplitud: {c}"
 
 
-def test_la_nota_al_pie_DICE_que_no_se_acredita_ni_se_penaliza():
-    """El lector tiene que poder distinguir «no vino» de «midió cero»."""
-    assert "no vino" in pdf._NOTA_SIN_DATO
-    assert "renormalizan" in pdf._NOTA_SIN_DATO
+def test_la_afirmacion_de_METODO_sobrevive_en_Limitaciones():
+    """Se sacó el inventario de faltantes, no la explicación del método. Si esta frase
+    desapareciera, el documento dejaría de decir en ninguna parte que los pesos se
+    renormalizan sobre lo medido — y ahí sí perderíamos algo que un lector profesional
+    espera encontrar."""
+    from modules.banking_score.products import _LIMITATIONS_TEXT
+    assert "se renormalizan sobre lo efectivamente medido" in _LIMITATIONS_TEXT
+    assert "no acredita ni penaliza un dato ausente" in _LIMITATIONS_TEXT
+
+
+def test_el_documento_NO_inventaria_lo_que_le_falta():
+    """El contra-test de la decisión: si alguien repone el marcado «s/d», esto lo frena."""
+    c = _celdas({"concentracion_top10": _SIN_DATO, "morosidad": _CON_DATO})
+    assert not any("s/d" in celda for celdas in c.values() for celda in celdas), c

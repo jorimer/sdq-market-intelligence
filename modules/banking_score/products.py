@@ -527,7 +527,19 @@ _LIMITATIONS_TEXT = (
     "La calificación SDQ es una medida de fortaleza financiera intrínseca (standalone), "
     "construida íntegramente sobre información pública supervisada (SIB/SIMBAD/BCRD) a la "
     "fecha de corte indicada; no incorpora información material no pública ni eventos "
-    "posteriores al período. Es una lectura de fortaleza financiera y no es un rating de "
+    "posteriores al período. "
+    # LA AFIRMACIÓN DE MÉTODO VIVE ACÁ Y SOLO ACÁ. Antes el documento señalaba cada
+    # indicador sin insumo en la tabla («s/d»), con su nota al pie, y reemplazaba la
+    # sección faltante por un párrafo que explicaba el hueco. Es correcto hacia adentro y
+    # daña la venta: un lector de un documento de calificación no lee un inventario de
+    # faltantes como rigor, lo lee como producto incompleto. Decisión del dueño
+    # (2026-08-31): lo que no se puede afirmar no se menciona, y esto —que SÍ es una
+    # afirmación sobre el método, no una lista de carencias— se dice una sola vez y en la
+    # sección donde ese lector la busca.
+    "Todo indicador del índice se sostiene en dato medido en la fuente: cuando un insumo "
+    "no está disponible en el período, el indicador se excluye del promedio de su "
+    "dimensión y los pesos se renormalizan sobre lo efectivamente medido, de modo que la "
+    "calificación no acredita ni penaliza un dato ausente. Es una lectura de fortaleza financiera y no es un rating de "
     "crédito: no mide la probabilidad de incumplimiento. Tampoco incorpora el soporte "
     "soberano, la importancia sistémica ni el techo soberano del país, por lo que no es "
     "directamente comparable con las escalas de las calificadoras internacionales: la "

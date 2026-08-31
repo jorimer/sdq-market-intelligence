@@ -160,8 +160,14 @@ def _methodology_md(sig, val, as_of: Optional[str] = None) -> str:
     lines.append(f"**Fuentes de dato:** {sources or '—'}.")
     lines.append(_frescura_md(sig, as_of))
     if sig and sig.coverage is not None:
-        lines.append(f"**Cobertura:** {_pct(sig.coverage)} del índice se sostiene en dato real; "
-                     "lo no cubierto se declara como rúbrica o brecha — nunca se fabrica.")
+        # AFIRMACIÓN DE MÉTODO, no inventario de faltantes. La frase anterior terminaba en
+        # «lo no cubierto se declara como rúbrica o brecha — nunca se fabrica», que es cierta
+        # y le anunciaba al comprador que tenemos huecos. Un lector de un documento de
+        # calificación lee la primera mitad como rigor y la segunda como producto incompleto.
+        # Decisión del dueño (2026-08-31). Lo que se afirma sigue siendo verificable y sigue
+        # siendo lo mismo hacia adentro: solo dato real entra al índice.
+        lines.append(f"**Cobertura:** {_pct(sig.coverage)} del índice se construye sobre dato "
+                     "real medido en la fuente.")
     detail = getattr(sig, "detail", None) if sig else None
     if detail and not _periodo_posterior(detail, as_of or ""):
         lines.append(f"**Lectura del dato:** {detail}")

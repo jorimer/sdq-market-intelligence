@@ -34,10 +34,14 @@ describe("IndicatorTable · el dato ausente no se publica como perfecto", () => 
     expect(screen.queryByText("100.0")).toBeNull();
   });
 
-  it("LISTA la fila marcada: esconderla se lee como que el indicador no existe", () => {
-    render(<IndicatorTable indicators={{ concentracion_top10: SIN_DATO }} />);
-    expect(screen.getByText("concentracion_top10")).toBeTruthy();
-    expect(screen.getByText("s/d")).toBeTruthy();
+  it("NO dibuja la fila: el documento no inventaría lo que le falta", () => {
+    // Hubo una versión que la mostraba marcada «s/d». El dueño la revirtió el 2026-08-31:
+    // un inventario de faltantes desvaloriza el producto. Omitirla no publica nada falso —
+    // el score ya excluye esos indicadores y renormaliza los pesos.
+    render(<IndicatorTable indicators={{ concentracion_top10: SIN_DATO, morosidad: CON_DATO }} />);
+    expect(screen.queryByText("concentracion_top10")).toBeNull();
+    expect(screen.queryByText("s/d")).toBeNull();
+    expect(screen.getByText("morosidad")).toBeTruthy();
   });
 
   it("el indicador CON dato sigue publicando su valor y su score", () => {
