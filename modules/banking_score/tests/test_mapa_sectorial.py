@@ -405,3 +405,100 @@ class TestElResumenQueElModeloNecesita:
         for k in pesos:
             assert k.startswith("peso_en_su_cartera_"), (
                 f"«{k}» no dice sobre qué población se computa")
+
+
+class TestLaGeografiaDelCredito:
+    """El cubo es sector × PROVINCIA y la provincia se agregaba hasta desaparecer.
+
+    Treinta y tres provincias guardadas en `cartera_sectorial` y ninguna servida por ninguna
+    superficie: la dimensión existía en la base y no salía del informe. Es la misma forma de
+    no entregar un dato que ya apareció con el cubo entero y con el IPC por quintil, esta vez
+    dentro de una tabla que ya usábamos.
+
+    Lo que la vuelve inimitable es la comparación: un banco ve su propia huella geográfica.
+    Lo que no puede ver es si esa huella sigue al mercado o se aparta de él, ni cómo le va en
+    cada provincia contra el resto del país en la misma provincia.
+    """
+
+    @pytest.fixture
+    def db_geografico(self, db_session):
+        yo = Bank(name="Banco Capitalino", bank_type=BankType.banca_multiple)
+        otro = Bank(name="Banco del Cibao", bank_type=BankType.banca_multiple)
+        db_session.add_all([yo, otro])
+        db_session.flush()
+        filas = [
+            # (banco, sector, provincia, deuda, vencida)
+            (yo,   "F - CONSTRUCCIÓN", "DISTRITO NACIONAL", 800_000_000, 40_000_000),
+            (yo,   "G - COMERCIO",     "DISTRITO NACIONAL", 100_000_000,  2_000_000),
+            (yo,   "G - COMERCIO",     "SANTIAGO",          100_000_000,  1_000_000),
+            (otro, "F - CONSTRUCCIÓN", "SANTIAGO",          700_000_000,  7_000_000),
+            (otro, "G - COMERCIO",     "SANTIAGO",          300_000_000,  3_000_000),
+        ]
+        for banco, sector, prov, deuda, venc in filas:
+            db_session.add(CarteraSectorial(
+                bank_id=banco.id, period_end=CORTE, sector=sector, provincia=prov,
+                deuda=deuda, vencida=venc, vencida_31_90=0))
+        db_session.commit()
+        return db_session, yo
+
+    def test_el_SISTEMA_se_abre_por_provincia(self, db_geografico):
+        db, _ = db_geografico
+        provs = {p["provincia"]: p for p in sistema_por_sector_provincias(db)}
+        assert provs["DISTRITO NACIONAL"]["deuda"] == 900_000_000
+        assert provs["SANTIAGO"]["deuda"] == 1_100_000_000
+        assert provs["SANTIAGO"]["entidades_que_prestan"] == 2
+
+    def test_la_ENTIDAD_trae_sus_DOS_cuotas_con_su_poblacion(self, db_geografico):
+        db, yo = db_geografico
+        p = {x["provincia"]: x for x in ms.posicion_de_la_entidad(db, yo, CORTE)["provincias"]}
+        dn = p["DISTRITO NACIONAL"]
+        # 800M+100M de 1.000M propios = 90% de SU cartera; 900M de 2.000M del país = 45%.
+        assert dn["peso_en_su_cartera_pct"] == 90.0
+        assert dn["peso_de_la_provincia_en_el_pais_pct"] == 45.0
+
+    def test_la_SOBRE_representacion_se_computa_y_el_modelo_la_copia(self, db_geografico):
+        db, yo = db_geografico
+        p = {x["provincia"]: x for x in ms.posicion_de_la_entidad(db, yo, CORTE)["provincias"]}
+        assert p["DISTRITO NACIONAL"]["sobre_representacion_pp"] == 45.0
+        assert p["SANTIAGO"]["sobre_representacion_pp"] == -45.0
+
+    def test_su_mora_por_provincia_se_lee_contra_la_del_PAIS(self, db_geografico):
+        db, yo = db_geografico
+        p = {x["provincia"]: x for x in ms.posicion_de_la_entidad(db, yo, CORTE)["provincias"]}
+        dn = p["DISTRITO NACIONAL"]
+        assert dn["mora_pct"] == pytest.approx(4.67, abs=0.01)     # 42M de 900M propios
+        assert dn["mora_del_resto_del_pais_en_la_provincia_pct"] == pytest.approx(4.67, abs=.01)
+
+    def test_SIN_PROVINCIA_no_se_esconde(self, db_session):
+        """Es una porción real del libro cuyo rótulo la fuente no trae. Ocultarla haría que
+        las cuotas no sumaran cien sin decir por qué."""
+        b = Bank(name="Banco Sin Rótulo", bank_type=BankType.banca_multiple)
+        db_session.add(b)
+        db_session.flush()
+        for prov, deuda in (("SANTIAGO", 100_000_000), ("SIN PROVINCIA", 100_000_000)):
+            db_session.add(CarteraSectorial(
+                bank_id=b.id, period_end=CORTE, sector="G - COMERCIO", provincia=prov,
+                deuda=deuda, vencida=0, vencida_31_90=0))
+        db_session.commit()
+        p = {x["provincia"]: x for x in
+             ms.posicion_de_la_entidad(db_session, b, CORTE)["provincias"]}
+        assert "SIN PROVINCIA" in p
+        assert sum(x["peso_en_su_cartera_pct"] for x in p.values()) == pytest.approx(100.0)
+
+    def test_la_tasa_por_provincia_se_RE_PONDERA_igual_que_por_sector(self, db_session):
+        b = Bank(name="Banco Tasa Prov", bank_type=BankType.banca_multiple)
+        db_session.add(b)
+        db_session.flush()
+        for sector, deuda, tasa in (("F - CONSTRUCCIÓN", 990_000_000, 8.0),
+                                    ("G - COMERCIO", 10_000_000, 40.0)):
+            db_session.add(CarteraSectorial(
+                bank_id=b.id, period_end=CORTE, sector=sector, provincia="AZUA",
+                deuda=deuda, vencida=0, vencida_31_90=0,
+                deuda_con_tasa=deuda, tasa_ponderada=tasa))
+        db_session.commit()
+        p = ms.posicion_de_la_entidad(db_session, b, CORTE)["provincias"][0]
+        assert p["tasa_promedio_ponderada_pct"] == pytest.approx(8.32, abs=.01)
+
+
+def sistema_por_sector_provincias(db):
+    return ms.sistema_por_sector(db, CORTE)["provincias"]

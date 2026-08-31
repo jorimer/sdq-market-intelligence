@@ -156,9 +156,63 @@ def _medidas(acc: Dict[str, Any]) -> Dict[str, Any]:
     }
 
 
+def _agregar_por(celdas: List[CarteraSectorial], clave) -> Dict[str, Dict[str, Any]]:
+    """El mismo acumulador, agrupando por otra dimensión del cubo.
+
+    `_agregar` agrupa por sector porque es la lectura que abre el informe. Pero la celda del
+    cubo es sector × PROVINCIA, y la provincia se estaba agregando hasta hacerla desaparecer:
+    la tabla existía en la base y no salía por ninguna superficie. Con esta función la misma
+    aritmética —y las mismas reglas de la tasa ponderada— sirven las dos lecturas."""
+    out: Dict[str, Dict[str, Any]] = {}
+    for c in celdas:
+        k = clave(c)
+        if not k:
+            continue
+        _sumar(out.setdefault(str(k), _vacio()), c)
+    return out
+
+
+def _por_provincia(celdas: List[CarteraSectorial], total: float) -> List[Dict[str, Any]]:
+    """El crédito abierto por PROVINCIA, con las medidas que la provincia sí decide.
+
+    Qué se sirve y qué no. Van la exposición, la mora, la mora temprana, la tasa y la
+    garantía: todas se computan sobre la celda y significan lo mismo a este nivel. NO va el
+    número de sectores como si fuera una medida de diversificación —una provincia con dos
+    sectores puede estar mejor diversificada por monto que otra con diez— así que se sirve el
+    conteo con su nombre y nada más.
+    """
+    filas = []
+    for provincia, acc in _agregar_por(celdas, lambda c: c.provincia).items():
+        # «SIN PROVINCIA» NO se descarta: es una porción real del libro cuyo rótulo la
+        # fuente no trae, y esconderla haría que las cuotas no sumaran cien sin decir por qué.
+        fila = {
+            "provincia": provincia,
+            "deuda": round(acc["deuda"], 2),
+            # El SUJETO en la clave: es la cuota sobre el crédito clasificado de la
+            # población que la función recibe —el sistema o una entidad—, no sobre el sector.
+            "peso_en_la_cartera_pct": _pct(acc["deuda"], total),
+            "sectores_en_que_presta": 0,   # se completa abajo, del mismo barrido
+            "entidades_que_prestan": len(acc["bancos"]),
+        }
+        fila.update({k: v for k, v in _medidas(acc).items()
+                     if k in ("mora_pct", "mora_temprana_31_90_pct",
+                              "tasa_promedio_ponderada_pct", "garantia_sobre_deuda_pct",
+                              "creditos", "credito_promedio")})
+        filas.append(fila)
+    # El conteo de sectores por provincia, del mismo barrido.
+    sectores: Dict[str, set] = {}
+    for c in celdas:
+        sectores.setdefault(str(c.provincia), set()).add(str(c.sector))
+    for f in filas:
+        f["sectores_en_que_presta"] = len(sectores.get(str(f["provincia"]), ()))
+    filas.sort(key=lambda f: -float(f["deuda"] or 0))
+    return filas
+
+
 def sistema_por_sector(db: Session, corte: date) -> Dict[str, Any]:
     """El sistema entero abierto por sector, agregando sobre provincias y entidades."""
-    por_sector = _agregar(_celdas(db, corte))
+    celdas = _celdas(db, corte)
+    por_sector = _agregar(celdas)
     if not por_sector:
         return {"corte": str(corte), "sectores": [], "sin_dato": True}
 
@@ -180,6 +234,9 @@ def sistema_por_sector(db: Session, corte: date) -> Dict[str, Any]:
         "corte": str(corte),
         "credito_total_del_sistema": round(total, 2),
         "sectores": sectores,
+        # LA GEOGRAFÍA DEL CRÉDITO. El cubo es sector × provincia y la provincia se estaba
+        # agregando hasta desaparecer: 33 provincias guardadas y ninguna servida.
+        "provincias": _por_provincia(celdas, total),
         "que_es": ("el crédito de TODAS las entidades supervisadas abierto por sector "
                    "económico; la mora temprana de 31 a 90 días se deteriora antes que la "
                    "vencida, así que ordena por anticipación y no por daño consumado"),
@@ -262,6 +319,11 @@ def posicion_de_la_entidad(db: Session, bank: Bank, corte: date) -> Optional[Dic
         "entidad": bank.name,
         "corte": str(corte),
         "credito_clasificado": round(mi_total, 2),
+        # DÓNDE presta, no solo a quién. La cuota de la entidad en cada provincia contra el
+        # peso que esa provincia tiene en el crédito del país dice si su huella geográfica
+        # sigue al mercado o se aparta de él — y un banco solo ve su propia huella.
+        "provincias": _provincias_contra_el_pais(mias, celdas, mi_total,
+                                                 credito_del_sistema),
         "resumen": _resumen(filas, mi_total),
         "sectores": filas,
         "contra_que_se_compara": (
@@ -319,6 +381,34 @@ def _resumen(filas: List[Dict[str, Any]], mi_total: float) -> Dict[str, Any]:
         "exposición material y aquellos en los que la entidad es el único prestador no "
         "entran en ningún grupo, porque no hay atribución que hacerles")
     return out
+
+
+def _provincias_contra_el_pais(mias: List[CarteraSectorial], todas: List[CarteraSectorial],
+                               mi_total: float, total_pais: float) -> List[Dict[str, Any]]:
+    """Dónde presta la entidad, contra dónde presta el país.
+
+    Las DOS cuotas viajan con su población en la clave, por el mismo motivo que en la lectura
+    sectorial: `peso_en_su_cartera_pct` es sobre su libro y `peso_de_la_provincia_en_el_pais_pct`
+    sobre el crédito nacional. Confundirlas publica «concentra el 40% de Santiago» cuando es
+    el 40% de su propia cartera.
+
+    La brecha entre las dos es la RELACIÓN y se computa acá: positiva significa que la
+    entidad está SOBRE-representada en esa provincia respecto del mercado."""
+    del_pais = {p["provincia"]: p for p in _por_provincia(todas, total_pais)}
+    filas = _por_provincia(mias, mi_total)
+    for f in filas:
+        pais = del_pais.get(f["provincia"]) or {}
+        peso_pais = pais.get("peso_en_la_cartera_pct")
+        f["peso_en_su_cartera_pct"] = f.pop("peso_en_la_cartera_pct")
+        f["peso_de_la_provincia_en_el_pais_pct"] = peso_pais
+        f["sobre_representacion_pp"] = (
+            None if f["peso_en_su_cartera_pct"] is None or peso_pais is None
+            else round(f["peso_en_su_cartera_pct"] - peso_pais, 2))
+        f["mora_del_resto_del_pais_en_la_provincia_pct"] = pais.get("mora_pct")
+        f["brecha_de_mora_pp"] = (
+            None if f.get("mora_pct") is None or pais.get("mora_pct") is None
+            else round(f["mora_pct"] - pais["mora_pct"], 2))
+    return filas
 
 
 def _atribuir(brecha: Optional[float], material: bool, hay_resto: bool = True) -> str:
