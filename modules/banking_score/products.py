@@ -1059,6 +1059,15 @@ class BankingProduct:
                 from modules.banking_score.reports.capacidad_de_pago import (
                     capacidad_de_pago)
                 infl = capacidad_de_pago(db, cast(date, rr.period_end))
+                if infl and mapa:
+                    # El cruce necesita las provincias del mapa: la holgura del territorio
+                    # donde la entidad PRESTA, no la del país.
+                    from modules.banking_score.reports.capacidad_de_pago import (
+                        holgura_donde_presta)
+                    donde = holgura_donde_presta(db, cast(date, rr.period_end),
+                                                 mapa.get("provincias") or [])
+                    if donde:
+                        infl["holgura_donde_presta"] = donde
                 if infl:
                     scoring_result["capacidad_de_pago"] = infl
             except Exception:  # noqa: BLE001 — el snapshot nunca depende de esta serie

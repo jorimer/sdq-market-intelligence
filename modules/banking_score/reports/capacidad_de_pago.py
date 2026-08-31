@@ -404,11 +404,13 @@ def mercado_laboral_por_region(db: Session, corte: date) -> Optional[Dict[str, A
     6,5% en el Cibao a 14,0% en el Sur, más del doble. Un informe que cite solo el número del
     país describe un promedio que no le ocurre a ningún territorio.
 
-    Qué NO se hace, y se declara. El libro de crédito de esta plataforma tiene provincia y la
-    región que copia de la SIB; la ENCFT usa sus propios cuatro dominios. Cruzar las dos
-    nomenclaturas exige comprobar antes que hablen de lo mismo — no se inventa un mapa
-    provincia→dominio en el medio. Hasta entonces esto es contexto del PAÍS, servido con su
-    dispersión, y no una atribución al territorio donde presta la entidad.
+    Contra qué se cruza, y por qué se puede. Las dos nomenclaturas usan la MISMA
+    regionalización legal: los dominios de la ENCFT se construyen sobre las 10 Regiones de
+    Desarrollo del Decreto 710-04 —lo declara su diseño muestral— y la partición que trae el
+    cubo de la SIB coincide con esa agregación provincia por provincia en las 32. La
+    composición vive declarada en `shared/data/regiones_rd`, con un test que la contrasta
+    contra lo que la SIB publica: si reagrupa una provincia, se entera el test y no el
+    lector.
     """
     anio = str(corte.year)
     tabla: Dict[str, Dict[str, Any]] = {}
@@ -435,9 +437,83 @@ def mercado_laboral_por_region(db: Session, corte: date) -> Optional[Dict[str, A
         out["dominio_con_menos_holgura"] = mejor
     out["que_es"] = (
         "subutilización, desocupación y ocupación por dominio geográfico de la ENCFT "
-        "(anual: la apertura regional no se publica por trimestre). Es contexto del PAÍS: "
-        "los dominios de la encuesta y las provincias del libro de crédito son "
-        "nomenclaturas distintas y no se cruzan sin comprobar que hablen de lo mismo")
+        "(anual: la apertura regional no se publica por trimestre). Los dominios y las "
+        "provincias del libro de crédito comparten la regionalización del Decreto 710-04, "
+        "así que la condición laboral de cada dominio corresponde al territorio donde la "
+        "entidad presta")
+    return out
+
+
+def holgura_donde_presta(db: Session, corte: date,
+                         provincias: List[Dict[str, Any]]) -> Optional[Dict[str, Any]]:
+    """La holgura laboral del territorio donde la entidad efectivamente presta.
+
+    Es el cruce que ningún banco puede hacer, y no por el dato —los dos son públicos— sino
+    por la mitad que le falta: para saber si su exposición está en el territorio de más o de
+    menos holgura hay que tener el libro de crédito abierto por provincia, y él solo tiene el
+    suyo.
+
+    La cuota de cartera por dominio se computa acá y el modelo la copia. «SIN PROVINCIA» y
+    cualquier rótulo fuera de la regionalización quedan FUERA y se declaran: asignarlos a un
+    dominio les atribuiría condiciones laborales de un territorio que no les corresponde.
+    """
+    from shared.data.regiones_rd import PROCEDENCIA, dominio_de_la_provincia
+
+    regional = mercado_laboral_por_region(db, corte)
+    if not regional:
+        return None
+    peso: Dict[str, float] = {}
+    sin_dominio = 0.0
+    total = 0.0
+    for f in provincias or ():
+        deuda = float(f.get("deuda") or 0)
+        total += deuda
+        dominio = dominio_de_la_provincia(str(f.get("provincia") or ""))
+        if dominio is None:
+            sin_dominio += deuda
+        else:
+            peso[dominio] = peso.get(dominio, 0.0) + deuda
+    if not peso or total <= 0:
+        return None
+
+    filas = []
+    for dominio, deuda in sorted(peso.items(), key=lambda kv: -kv[1]):
+        laboral = (regional.get("por_dominio") or {}).get(dominio) or {}
+        filas.append({
+            "dominio": dominio,
+            # El SUJETO en la clave: es la cuota sobre la cartera clasificada de la ENTIDAD.
+            "peso_en_su_cartera_pct": round(100.0 * deuda / total, 2),
+            "subutilizacion_amplia_su4_pct": laboral.get("subutilizacion_amplia_su4_pct"),
+            "desocupacion_abierta_su1_pct": laboral.get("desocupacion_abierta_su1_pct"),
+        })
+    # LA RELACIÓN SE COMPUTA ACÁ: la holgura que enfrenta la entidad es el promedio de los
+    # dominios PONDERADO POR SU EXPOSICIÓN, no el del país. Un promedio simple de los cuatro
+    # daría la holgura de un banco que prestara igual en los cuatro, que no es ninguno.
+    # Estrechado a float ANTES de operar: `filas` es un dict heterogéneo —lleva el nombre
+    # del dominio— y multiplicar sin estrechar es cómo un texto llega a una multiplicación.
+    con_dato: List[Tuple[float, float]] = []
+    for f in filas:
+        w, v_su4 = f.get("peso_en_su_cartera_pct"), f.get("subutilizacion_amplia_su4_pct")
+        if isinstance(w, (int, float)) and isinstance(v_su4, (int, float)):
+            con_dato.append((float(w), float(v_su4)))
+    out: Dict[str, Any] = {"anio": regional.get("anio"), "por_dominio": filas,
+                           "procedencia_de_la_region": PROCEDENCIA}
+    if con_dato:
+        base = sum(w for w, _ in con_dato)
+        if base > 0:
+            ponderada = sum(w * v for w, v in con_dato) / base
+            out["subutilizacion_ponderada_por_su_exposicion_pct"] = round(ponderada, 2)
+            nacional = _ultimo_valor_de(db, "subutilizacion_su4_regional_anual", "nacional",
+                                        str(corte.year))
+            if nacional is not None:
+                out["subutilizacion_del_pais_pct"] = nacional
+                out["mas_holgura_que_el_pais_pp"] = round(ponderada - nacional, 2)
+    if sin_dominio > 0:
+        out["cartera_sin_dominio_asignable_pct"] = round(100.0 * sin_dominio / total, 2)
+        out["por_que_queda_fuera"] = (
+            "cartera cuya provincia la fuente no rotula o no pertenece a la regionalización: "
+            "asignarla a un dominio le atribuiría condiciones laborales de un territorio que "
+            "no le corresponde")
     return out
 
 
