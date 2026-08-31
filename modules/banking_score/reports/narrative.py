@@ -466,6 +466,11 @@ def _build_section_context(
             # la brecha por sector explica de dónde sale el indicador del cuadro de mando.
             # Sin ella tiene las partes y no el todo, y el hueco es lo que lo llena mal.
             "morosidad_de_la_entidad": (all_indicators.get("morosidad") or {}).get("value"),
+            # La inflación que enfrenta el DEUDOR, abierta por quintil de ingreso. Va en
+            # ESTA sección y no en el entorno macro porque acá está cuantificada la
+            # exposición a consumo: el dato solo significa algo al lado del peso de esa
+            # cartera. En el telón macro sería una curiosidad; acá es la explicación.
+            "inflacion_del_deudor": scoring_result.get("inflacion_del_deudor"),
         }
 
     # Soporte y Techo Soberano (Fase 6): overlay de contexto estilo Fitch (soporte estatal,

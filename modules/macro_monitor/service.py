@@ -42,6 +42,22 @@ DEBT_SERIES = "public_debt_gdp"
 # serie canónica VIVA de cada flujo. Se lee vía :func:`_flow_pct_panel`.
 
 
+#: Un código de serie desempatado por ÍNDICE DE COLUMNA. `inference._series_from_headers`
+#: le pega `_c<n>` cuando dos columnas de la planilla producen el mismo nombre: la serie
+#: resultante se llama «la segunda columna que también se llamaba tasa de inflación», que no
+#: dice de QUÉ es. El caso real: `ipc_quintiles.tasa_de_inflacion_inflacion_c5` —una tasa
+#: sin su quintil— e `ipc_regiones.tasa_de_inflacion_c7` —sin su región—, junto a series de
+#: índice que SÍ nombran su población. Quien las consuma después no tiene cómo saber que el
+#: rótulo no identifica nada, y es la doctrina del sujeto rota en el punto donde se FABRICA
+#: el nombre.
+_CODIGO_SIN_SUJETO = re.compile(r"_c\d+$")
+
+
+def _sin_sujeto(codigo: str) -> bool:
+    """¿El código de la serie perdió su sujeto al desempatarse por coordenada?"""
+    return bool(_CODIGO_SIN_SUJETO.search(codigo or ""))
+
+
 def _upsert_records(db: Session, records) -> int:
     """Upsert a list of :class:`Record` into MacroSeries (by series_code+period).
 
@@ -57,6 +73,17 @@ def _upsert_records(db: Session, records) -> int:
     # luego dos celdas vacías para el mismo período, y el último-gana ingenuo dejaba el
     # período en None — borrando dato publicado. No fabricar y no destruir son la misma
     # disciplina.
+    # NO SE PERSISTE lo que no nombra su sujeto. Se descarta acá —en la frontera de
+    # escritura— y no en cada extractor, porque es la única puerta por la que pasan todos.
+    # Y se REGISTRA lo descartado: un veto silencioso se lee como que la planilla no traía
+    # esas columnas.
+    descartadas = sorted({r.series for r in records if _sin_sujeto(r.series)})
+    if descartadas:
+        logger.info("macro: %d serie(s) NO se persisten porque su código se desempató por "
+                    "coordenada de columna y no dice de qué son: %s",
+                    len(descartadas), ", ".join(descartadas[:8]))
+        records = [r for r in records if not _sin_sujeto(r.series)]
+
     deduped: Dict[tuple, Any] = {}
     for r in records:
         key = (r.series, r.period)

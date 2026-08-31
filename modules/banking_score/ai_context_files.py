@@ -35,4 +35,8 @@ AI_CONTEXT_FILES = (
     # sector. Todo lo que calcula viaja al contexto del modelo, así que un cambio en cómo
     # se computa una brecha DEBE invalidar las narrativas ya generadas.
     "reports/mapa_sectorial.py",
+    # La inflación por quintil de ingreso: la capacidad de pago del deudor que explica la
+    # mora de consumo. Computa una brecha entre quintiles que el modelo copia, así que un
+    # cambio en cómo se computa DEBE invalidar las narrativas ya generadas.
+    "reports/inflacion_del_deudor.py",
 )

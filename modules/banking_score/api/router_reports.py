@@ -670,6 +670,16 @@ async def generate_report(
             mapa = None
         if mapa:
             scoring_result["mapa_sectorial"] = mapa
+        # La inflación del DEUDOR viaja con el mapa: es la capacidad de pago que explica la
+        # mora de consumo, y solo significa algo al lado del peso de esa cartera.
+        try:
+            from modules.banking_score.reports.inflacion_del_deudor import (
+                inflacion_por_quintil)
+            infl = inflacion_por_quintil(db, pe)
+            if infl:
+                scoring_result["inflacion_del_deudor"] = infl
+        except Exception:  # noqa: BLE001 — el informe nunca depende de esta serie
+            logger.exception("Inflación por quintil omitida en el informe de %s", bank.name)
     if "mapa_sectorial_sistema" in _secs:
         from modules.banking_score.reports.mapa_sectorial import sistema_por_sector
         try:
