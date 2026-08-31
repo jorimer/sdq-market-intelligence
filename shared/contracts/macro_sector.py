@@ -11,11 +11,13 @@ broad economy), a *magnitude*, and which sectors/agents it most affects. The
 mapping (which series, the thresholds, the impacted sectors) is house doctrine
 (`shared/doctrine/macro_sector.yaml`), never hardcoded.
 
-Pure data types — no I/O, no domain logic. ``None``/``"n/d"`` means "not
-available", never a fabricated reading.
+Tipos de datos + la REGLA que clasifica un factor contra su doctrina
+(:func:`classify_factor`), que vive acá y no en el productor porque tiene un segundo
+consumidor fuera de ``macro_monitor`` (la muestra curada de banca) y un módulo no importa a
+otro. ``None``/``"n/d"`` means "not available", never a fabricated reading.
 """
 from dataclasses import dataclass, field
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Tuple
 
 # AppSetting key under which macro_monitor persists the latest contract, so
 # cross-module consumers (sector_intel) read it without importing the producer.
@@ -104,6 +106,65 @@ FAVORABLE = "favorable"
 ADVERSO = "adverso"
 NEUTRAL = "neutral"
 ND = "n/d"
+
+# Direcciones/magnitudes de un factor macro. La REGLA vive acá, junto a las constantes que
+# nombra y al lado de la doctrina que trae sus umbrales, y no dentro del productor: la
+# muestra curada de banca necesita clasificar sus factores sintéticos con esta misma regla,
+# y un módulo no importa a otro. Una segunda implementación de la misma cuenta es una
+# segunda oportunidad de que discrepen.
+def classify_factor(value: float, fdoc: Dict[str, Any]) -> Tuple[str, str]:
+    """Map *value* to (direction, magnitude) per the factor's doctrine thresholds."""
+    good = fdoc.get("good_direction", "high")
+    fav = float(fdoc["favorable_at"])
+    adv = float(fdoc["adverse_at"])
+    ref = float(fdoc.get("magnitude_ref", 1.0)) or 1.0
+
+    if good == "low":
+        if value <= fav:
+            direction, dist = FAVORABLE, fav - value
+        elif value >= adv:
+            direction, dist = ADVERSO, value - adv
+        else:
+            direction, dist = NEUTRAL, 0.0
+    else:  # high is good
+        if value >= fav:
+            direction, dist = FAVORABLE, value - fav
+        elif value <= adv:
+            direction, dist = ADVERSO, adv - value
+        else:
+            direction, dist = NEUTRAL, 0.0
+
+    if direction == NEUTRAL:
+        magnitude = "bajo"
+    elif dist >= ref:
+        magnitude = "alto"
+    elif dist >= ref / 2.0:
+        magnitude = "moderado"
+    else:
+        magnitude = "bajo"
+    return direction, magnitude
+
+
+def factor_doctrine(key: str) -> Optional[Dict[str, Any]]:
+    """La declaración de doctrina del factor *key* (``shared/doctrine/macro_sector.yaml``),
+    o ``None`` si no está declarado. Umbrales, etiqueta y unidad salen de ahí — copiarlos a
+    mano es la primera copia que se desincroniza."""
+    from shared.doctrine import load_doctrine_raw
+
+    for f in (load_doctrine_raw("macro_sector").get("factors") or []):
+        if f.get("key") == key:
+            return f
+    return None
+
+
+def factor_reading(value: float, fdoc: Dict[str, Any]) -> str:
+    """La frase corta del factor, con el MISMO formato que emite el productor: nivel →
+    ``"5.75 %"``; variación → ``"+7.2% interanual"``."""
+    if fdoc.get("mode") == "change":
+        return f"{value:+.1f}% interanual"
+    unit = fdoc.get("unit")
+    val = f"{value:+.1f}" if value < 0 else f"{value:.2f}"
+    return f"{val}{(' ' + unit) if unit else ''}"
 
 
 @dataclass(frozen=True)

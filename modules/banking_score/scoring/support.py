@@ -34,6 +34,19 @@ STATE_OWNED = frozenset({"Banco de Reservas de la República Dominicana"})
 _SIFI_RANK = 5
 
 
+def systemic_label(rank: Optional[int]) -> str:
+    """La etiqueta de importancia sistémica que corresponde a un *rank* por activos.
+
+    Vive fuera de :func:`support_overlay` porque la muestra curada del producto declara su
+    propio rank y necesita la MISMA etiqueta: escribirla a mano es la forma de que la
+    vidriera diga «Sistémica» al lado de un rank que la regla no llamaría así."""
+    if rank and rank <= _SIFI_RANK:
+        return f"Sistémica — top {rank} por activos (dentro del CR5)"
+    if rank:
+        return f"Relevante — top {rank} por activos"
+    return "No sistémica (fuera del top-10 por activos)"
+
+
 def sovereign_anchor(db: Optional[Session] = None) -> Dict[str, Any]:
     """Ancla soberana de RD desde el store refrescable multi-agencia (Wikipedia →
     ``AppSetting``, con el ``regulatory.yaml`` como piso). Bajo la política "S&P manda"
@@ -135,23 +148,45 @@ def _support_assessment(state_owned: bool, is_systemic: bool,
     return prop + cap
 
 
+def sovereign_at(period_end: date, db: Optional[Session] = None) -> Dict[str, Any]:
+    """El ancla soberana de RD vista DESDE *period_end*: el rating vigente al corte, sin
+    las fechas que todavía no habían ocurrido. Público porque la muestra curada del
+    producto necesita el MISMO techo con la MISMA poda que un informe real."""
+    return _sovereign_as_of(sovereign_anchor(db), period_end)
+
+
 def support_overlay(db: Session, bank: Bank, standalone_score: float,
                     standalone_tier: str, period_end: date) -> Dict[str, Any]:
     """Overlay de soporte/sistémico/techo soberano para *bank*. NO muta el standalone;
     devuelve un bloque de contexto para narrativa + tabla del Deep Dive."""
-    state_owned = bank.name in STATE_OWNED
     activos = _entity_share(db, bank, period_end, "activos")
     depositos = _entity_share(db, bank, period_end, "depositos")
-    rank = (activos or {}).get("rank")
-    is_systemic = bool(rank and rank <= _SIFI_RANK)
-    if rank and rank <= _SIFI_RANK:
-        sys_label = f"Sistémica — top {rank} por activos (dentro del CR5)"
-    elif rank:
-        sys_label = f"Relevante — top {rank} por activos"
-    else:
-        sys_label = "No sistémica (fuera del top-10 por activos)"
+    return compose_support_overlay(
+        state_owned=bank.name in STATE_OWNED,
+        activos_share=(activos or {}).get("share"),
+        depositos_share=(depositos or {}).get("share"),
+        rank_activos=(activos or {}).get("rank"),
+        sovereign=sovereign_at(period_end, db),
+        standalone_score=standalone_score,
+        standalone_tier=standalone_tier,
+    )
 
-    sov = _sovereign_as_of(sovereign_anchor(db), period_end)
+
+def compose_support_overlay(*, state_owned: bool, activos_share: Optional[float],
+                            depositos_share: Optional[float], rank_activos: Optional[int],
+                            sovereign: Dict[str, Any], standalone_score: float,
+                            standalone_tier: str) -> Dict[str, Any]:
+    """El overlay ARMADO desde sus primitivas, sin DB.
+
+    Existe separado de :func:`support_overlay` porque la muestra curada del producto
+    declara sus propias cuotas y su propio rank y debe pasar por ESTA misma composición:
+    la etiqueta sistémica y la lectura del soporte son relaciones —se computan— y una
+    muestra que las escriba a mano es una muestra que puede decir «Sistémica» al lado de
+    un rank que la regla no llamaría así."""
+    rank = rank_activos
+    is_systemic = bool(rank and rank <= _SIFI_RANK)
+    sys_label = systemic_label(rank)
+    sov = sovereign
     return {
         "state_owned": state_owned,
         # Procedencia del flag: set de configuración declarado (regla de casa), no un
@@ -164,8 +199,8 @@ def support_overlay(db: Session, bank: Bank, standalone_score: float,
         "systemic": {
             # sujeto-ok: las dos nombran su población en la propia clave (activos del
             # sistema, depósitos del sistema) y son de la entidad del informe.
-            "activos_share": (activos or {}).get("share"),
-            "depositos_share": (depositos or {}).get("share"),  # sujeto-ok: ver arriba
+            "activos_share": activos_share,
+            "depositos_share": depositos_share,  # sujeto-ok: ver arriba
             "rank_activos": rank,
             "is_systemic": is_systemic,
             "label": sys_label,

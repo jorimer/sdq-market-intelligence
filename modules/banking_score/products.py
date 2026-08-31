@@ -45,7 +45,8 @@ from modules.banking_score.scoring.amplitude import entity_trajectories, period_
 from modules.banking_score.scoring.benchmarks import panel_benchmarks
 from modules.banking_score.scoring.market_concentration import compute_market_concentration
 from modules.banking_score.scoring.sensitivity import sensitivity_table
-from modules.banking_score.scoring.support import support_overlay
+from modules.banking_score.scoring.support import (STATE_OWNED, compose_support_overlay,
+                                                   sovereign_at, support_overlay)
 from modules.banking_score.scoring.system_aggregate import system_pulse_aggregate
 
 logger = logging.getLogger("sdq.banking.products")
@@ -91,7 +92,7 @@ _ES_ANIO = re.compile(r"^\d{4}$")
 # muestra (la usa el producto y el script scripts/generate_tier_samples.py).
 SAMPLE_NAME = "Banco Demo, S.A."
 SAMPLE_PERIOD = "2024-12-31"
-SAMPLE_SCORING = {
+SAMPLE_SCORING: Dict[str, Any] = {
     "overall_score": 80.3, "banda_ejecucion": "Competitiva", "banda_resiliencia": "Sólida",
     "sub_components": {"solidez": 85, "calidad": 82, "eficiencia": 72,
                        "liquidez": 78, "diversificacion": 62},
@@ -99,8 +100,11 @@ SAMPLE_SCORING = {
         "solvencia": {"raw": 16.8, "score": 90, "available": True},
         "morosidad": {"raw": 1.9, "score": 85, "available": True},
         "roe": {"raw": 19.4, "score": 78, "available": True},
-        "eficiencia": {"raw": 56.0, "score": 70, "available": True},
-        "liquidez": {"raw": 31.0, "score": 80, "available": True},
+        # Las claves son las REALES del motor (`INDICATOR_META`), no rótulos libres: con
+        # «eficiencia»/«liquidez» la muestra imprimía filas sin etiqueta ni unidad
+        # («Eficiencia 56.00») y ninguna tabla derivada podía anclarse a un indicador.
+        "cost_to_income": {"raw": 56.0, "score": 70, "available": True},
+        "liquidez_inmediata": {"raw": 31.0, "score": 80, "available": True},
     },
 }
 # Mapa sectorial de la muestra. Cifras sintéticas, pero coherentes ENTRE SÍ y con el resto
@@ -170,6 +174,112 @@ SAMPLE_MAPA_SECTORIAL: Dict[str, Any] = {
 # que elige y el guard numérico veta el documento entero (pasó el 2026-08-30).
 SAMPLE_MAPA_SECTORIAL["resumen"] = _resumen_sectorial(
     SAMPLE_MAPA_SECTORIAL["sectores"], SAMPLE_MAPA_SECTORIAL["credito_clasificado"])
+
+# ── Los tres bloques de AMPLITUD del Deep Dive en la muestra ─────────────────────────
+# El Deep Dive real adjunta al `scoring_result` tres bloques que se sirven como TABLA:
+# entorno macro (Fase 4), sensibilidades (Fase 4) y soporte/techo soberano (Fase 6). La
+# muestra no los traía, así que dos de sus secciones salían narradas y SIN la tabla que la
+# prosa interpreta, y la de Entorno Operativo no salía: el motor la retira cuando no hay
+# telón macro. Un nivel se veía peor de lo que es, en la única pieza que se usa para vender.
+#
+# Mismo criterio que el mapa sectorial: cifras SINTÉTICAS pero coherentes entre sí y con el
+# resto de la muestra, y las relaciones —dirección, magnitud, umbral, impacto, etiqueta
+# sistémica— COMPUTADAS con las reglas reales del motor, nunca escritas a ojo. Lo vigila
+# `tests/test_muestra_deep_dive_cierra_sola.py`.
+
+# ENTORNO MACRO — telón sistémico del BCRD al corte de la muestra. Los valores son de un
+# 2024 dominicano plausible; `direction`/`magnitude`/`reading` NO se eligen: salen de los
+# umbrales declarados en `shared/doctrine/macro_sector.yaml` vía `classify_factor`. La
+# lectura curada dice «telón favorable con matices» — ningún factor adverso, y el punto de
+# atención (tipo de cambio) presente en la tabla.
+SAMPLE_ENTORNO_MACRO = {
+    "period": "2024-12",
+    "factors": [
+        {"key": "activity", "label": "Actividad económica (IMAE)", "value": 5.0, "unit": "%",
+         "direction": "favorable", "magnitude": "moderado", "reading": "5.00 %",
+         "trend": None},
+        {"key": "inflation", "label": "Inflación interanual", "value": 3.4, "unit": "%",
+         "direction": "favorable", "magnitude": "bajo", "reading": "3.40 %", "trend": None},
+        {"key": "policy_rate", "label": "Tasa de Política Monetaria", "value": 5.75,
+         "unit": "%", "direction": "neutral", "magnitude": "bajo", "reading": "5.75 %",
+         "trend": None},
+        {"key": "fx_depreciation", "label": "Depreciación cambiaria (interanual)",
+         "value": 7.2, "unit": "%", "direction": "neutral", "magnitude": "bajo",
+         "reading": "+7.2% interanual", "trend": None},
+        {"key": "reserves", "label": "Reservas internacionales (interanual)", "value": 9.8,
+         "unit": "%", "direction": "favorable", "magnitude": "moderado",
+         "reading": "+9.8% interanual", "trend": None},
+    ],
+}
+
+# SENSIBILIDADES — qué palanca sube el score y qué riesgo le hace perder banda.
+#
+# Cómo se construyó, porque no es obvio y un mantenedor que lo ignore la rompe: la muestra
+# declara CINCO indicadores (uno por dimensión, salvo eficiencia que lleva dos) y sus cinco
+# sub-componentes, que con los pesos reales reconstruyen su propio 80.3. Sobre ESE universo:
+#   * el objetivo es la frontera de banda contigua (`_next_edge_up/_next_edge_down`, ±0,01),
+#     y la banda objetivo la que devuelve `_band` para ese objetivo — igual que el motor;
+#   * el UMBRAL mueve el valor crudo por el MISMO tramo que la curva real del indicador
+#     recorre entre el score actual y el objetivo. Se ancla en el crudo declarado en vez de
+#     leer la curva de frente porque los cinco pares (crudo, score) de la muestra son
+#     ilustrativos y no caen sobre la curva: pedirle a la curva el umbral de frente daría
+#     «para SUBIR, baje el ROE de 19,4% a 12,75%», que es lo primero que un comprador nota;
+#   * el IMPACTO se recomputa con la agregación real (`calculate_deterministic_score` y los
+#     pesos por tipo) moviendo el sub-componente el promedio de sus indicadores mostrados.
+# Morosidad y eficiencia no aparecen a la baja porque están JUSTO sobre su frontera: el
+# motor descarta las filas cuyo impacto es infinitesimal, y la muestra hace lo mismo.
+SAMPLE_SENSIBILIDADES = {
+    "baseline_overall": 80.3,
+    "palancas_alza": [
+        {"indicador": "cost_to_income", "label": "Eficiencia operativa (cost-to-income)",
+         "sub": "eficiencia", "raw_actual": 56.0, "score_actual": 70.0,
+         "banda_actual": "adecuado", "umbral_raw": 48.49, "umbral_fmt": "48.49%",
+         "score_objetivo": 85.0, "banda_objetivo": "fuerte", "delta_overall": 1.13},
+        {"indicador": "roe", "label": "ROE (12 meses móviles)",
+         "sub": "eficiencia", "raw_actual": 19.4, "score_actual": 78.0,
+         "banda_actual": "adecuado", "umbral_raw": 20.45, "umbral_fmt": "20.45%",
+         "score_objetivo": 85.0, "banda_objetivo": "fuerte", "delta_overall": 0.53},
+        {"indicador": "liquidez_inmediata", "label": "Liquidez inmediata",
+         "sub": "liquidez", "raw_actual": 31.0, "score_actual": 80.0,
+         "banda_actual": "adecuado", "umbral_raw": 32.5, "umbral_fmt": "32.50%",
+         "score_objetivo": 85.0, "banda_objetivo": "fuerte", "delta_overall": 0.5},
+    ],
+    "riesgos_baja": [
+        {"indicador": "solvencia", "label": "Índice de solvencia",
+         "sub": "solidez", "raw_actual": 16.8, "score_actual": 90.0,
+         "banda_actual": "fuerte", "umbral_raw": 14.67, "umbral_fmt": "14.67%",
+         "score_objetivo": 85.0, "banda_objetivo": "adecuado", "delta_overall": -2.0},
+        {"indicador": "liquidez_inmediata", "label": "Liquidez inmediata",
+         "sub": "liquidez", "raw_actual": 31.0, "score_actual": 80.0,
+         "banda_actual": "adecuado", "umbral_raw": 28.0, "umbral_fmt": "28.00%",
+         "score_objetivo": 70.0, "banda_objetivo": "moderado", "delta_overall": -1.0},
+        {"indicador": "roe", "label": "ROE (12 meses móviles)",
+         "sub": "eficiencia", "raw_actual": 19.4, "score_actual": 78.0,
+         "banda_actual": "adecuado", "umbral_raw": 18.2, "umbral_fmt": "18.20%",
+         "score_objetivo": 70.0, "banda_objetivo": "moderado", "delta_overall": -0.6},
+    ],
+}
+
+# SOPORTE Y TECHO SOBERANO — se ARMA con la misma composición que el producto real
+# (`compose_support_overlay`), no se transcribe: la etiqueta sistémica y la lectura del
+# soporte son relaciones. Lo único sintético son la cuota y el rank; el techo soberano es
+# el ancla DECLARADA de RD (`sovereign_anchor`, piso de `regulatory.yaml`), vista desde el
+# corte de la muestra con la misma poda de fechas posteriores que aplica un informe real.
+#: Cuota de ACTIVOS del sistema de la entidad de la muestra (sujeto-ok: la clave nombra su
+#: población y el rank declara contra qué universo). Coherente con el CR5 de `SAMPLE_PEER`.
+_SAMPLE_CUOTA_ACTIVOS_PCT = 12.4
+#: Cuota de DEPÓSITOS del sistema de la entidad de la muestra (sujeto-ok: ver arriba).
+_SAMPLE_CUOTA_DEPOSITOS_PCT = 11.8
+_SAMPLE_RANK_ACTIVOS = 3
+SAMPLE_SOPORTE_SOBERANO = compose_support_overlay(
+    state_owned=SAMPLE_NAME in STATE_OWNED,
+    activos_share=_SAMPLE_CUOTA_ACTIVOS_PCT,
+    depositos_share=_SAMPLE_CUOTA_DEPOSITOS_PCT,
+    rank_activos=_SAMPLE_RANK_ACTIVOS,
+    sovereign=sovereign_at(date.fromisoformat(SAMPLE_PERIOD)),
+    standalone_score=SAMPLE_SCORING["overall_score"],
+    standalone_tier=SAMPLE_SCORING["banda_resiliencia"],
+)
 
 SAMPLE_SYSTEM = {"band_distribution": {"Sólida": 6, "Adecuada": 8, "En vigilancia": 3,
                                        "Frágil": 1},
@@ -974,11 +1084,20 @@ class BankingProduct:
         if tier == ProductTier.pulse:
             return ProductSnapshot(tier=tier, period=SAMPLE_PERIOD, payload=dict(SAMPLE_SYSTEM),
                                    entity_name=None, entity_roster=(SAMPLE_NAME,))
+        scoring: Dict[str, Any] = dict(SAMPLE_SCORING)
+        # Amplitud EXCLUSIVA del Deep Dive, gateada por nivel igual que en el producto real:
+        # entorno macro, sensibilidades, soporte/techo soberano y mapa sectorial. Colarla en
+        # el Insight regala en la muestra lo que separa un nivel del otro — y el mapa lo
+        # hacía: su tabla salía en el PDF del Insight, sin la sección que la interpreta,
+        # porque la muestra lo adjuntaba a los DOS niveles nombrados.
+        if tier == ProductTier.deep_dive:
+            scoring["entorno_macro"] = SAMPLE_ENTORNO_MACRO
+            scoring["sensibilidades"] = SAMPLE_SENSIBILIDADES
+            scoring["soporte_soberano"] = SAMPLE_SOPORTE_SOBERANO
+            scoring["mapa_sectorial"] = SAMPLE_MAPA_SECTORIAL
         return ProductSnapshot(
             tier=tier, period=SAMPLE_PERIOD,
-            payload={"scoring_result": {**SAMPLE_SCORING,
-                                        "mapa_sectorial": SAMPLE_MAPA_SECTORIAL},
-                     "peer_block": dict(SAMPLE_PEER)},
+            payload={"scoring_result": scoring, "peer_block": dict(SAMPLE_PEER)},
             entity_name=SAMPLE_NAME)
 
     def sample_narratives(self, tier: ProductTier) -> Dict[str, str]:
