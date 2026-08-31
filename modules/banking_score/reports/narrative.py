@@ -735,6 +735,7 @@ async def generate_report_narratives(
     # cerrado ante una sección degradada. Un texto determinista no es un fallback estático,
     # así que no dispara ese gate.
     _motivos: Dict[str, str] = {}
+    _orden = list(sections)  # ANTES de sacar nada: es el orden en que se numeran las secciones
     for clave in ("mapa_sectorial", "mapa_sectorial_sistema"):
         if clave in sections and not scoring_result.get(clave):
             sections = [s for s in sections if s != clave]
@@ -788,10 +789,12 @@ async def generate_report_narratives(
         )
         narratives[section] = result.text
 
-    # La ausencia declarada va al FINAL para que la sección aparezca donde correspondía y no
-    # antes que las que sí se generaron.
+    # La ausencia declarada va EN SU LUGAR, no al final. El PDF numera las secciones por el
+    # orden del dict, así que anexarla dejaba «10. Mapa Sectorial del Crédito» después de la
+    # Recomendación — un documento que se vende no puede tener su índice desordenado porque
+    # un dato faltó.
     narratives.update(_motivos)
-    return narratives
+    return {k: narratives[k] for k in _orden if k in narratives}
 
 
 async def generate_named_narratives(

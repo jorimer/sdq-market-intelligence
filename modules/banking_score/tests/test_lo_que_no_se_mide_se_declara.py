@@ -125,3 +125,30 @@ class TestLaAusenciaDelMapaSeDECLARA:
         assert updates, (
             f"la ruta de {ruta} descarta la sección sin colocar el motivo: el informe queda "
             "mudo sobre por qué falta el mapa")
+
+
+class TestLaSeccionDeclaradaVaEnSuLUGAR:
+    """El PDF numera las secciones por el orden del dict. Anexar la declarada al final dejó
+    «10. Mapa Sectorial del Crédito» DESPUÉS de la Recomendación en el informe real de
+    2026-06-30: un documento que se vende no puede tener el índice desordenado porque faltó
+    un dato."""
+
+    @pytest.mark.parametrize("ruta", ["informes", "productos"])
+    def test_el_retorno_respeta_el_orden_declarado(self, ruta):
+        import ast
+        import inspect
+        if ruta == "informes":
+            from modules.banking_score.reports import narrative as mod
+            fn_name = "generate_report_narratives"
+        else:
+            from modules.banking_score import products_year_review as mod
+            fn_name = "narratives"
+        fn = next(n for n in ast.walk(ast.parse(inspect.getsource(mod)))
+                  if isinstance(n, ast.FunctionDef | ast.AsyncFunctionDef)
+                  and n.name == fn_name)
+        # El último `return` tiene que ser una comprensión de dict guiada por el orden
+        # original, no el dict crudo al que se le anexó.
+        returns = [n for n in ast.walk(fn) if isinstance(n, ast.Return) and n.value]
+        assert any(isinstance(r.value, ast.DictComp) for r in returns), (
+            f"la ruta de {ruta} devuelve el dict tal cual: la sección declarada queda al "
+            "final y el índice del documento sale desordenado")

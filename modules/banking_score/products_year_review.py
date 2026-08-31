@@ -513,6 +513,7 @@ class BankingYearReviewProduct:
         # coloca como TEXTO de la sección, sin pasar por el modelo — narrar un contexto
         # vacío es justo lo que este filtro evita.
         motivos: Dict[str, str] = {}
+        orden = list(secciones)  # ANTES de sacar nada: numera las secciones del documento
         for clave in ("mapa_sectorial", "mapa_sectorial_sistema"):
             if clave in secciones and not (snapshot.payload or {}).get(clave):
                 secciones = [s for s in secciones if s != clave]
@@ -534,8 +535,10 @@ class BankingYearReviewProduct:
                 axis="banking",
                 audience="inversionista" if tier == ProductTier.pulse else "comite_credito")
             out[seccion] = res.text
+        # EN SU LUGAR, no al final: el PDF numera por el orden del dict, y anexarla dejaba
+        # el mapa después de la recomendación.
         out.update(motivos)
-        return out
+        return {k: out[k] for k in orden if k in out}
 
     # ── Muestra curada ──
     def sample_snapshot(self, tier: ProductTier) -> ProductSnapshot:
