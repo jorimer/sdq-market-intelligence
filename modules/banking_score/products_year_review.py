@@ -278,6 +278,13 @@ def _amplitud_al_cierre(db: Session, bank: Bank, anio: int) -> Dict[str, Any]:
         mapa = posicion_de_la_entidad(db, bank, cierre)
         if mapa:
             out["mapa_sectorial"] = mapa
+        else:
+            # El MOTIVO viaja en el payload para que el ensamblador pueda declarar la
+            # ausencia sin volver a la base. Distingue «la fuente no publicó este corte» de
+            # «esta entidad no tiene desglose»: confundirlos haría que un trimestre sin
+            # publicar se leyera como una característica del banco evaluado.
+            from modules.banking_score.reports.mapa_sectorial import motivo_sin_mapa
+            out["mapa_sectorial_no_publicado"] = motivo_sin_mapa(db, cierre, bank)
     except Exception:  # noqa: BLE001
         logger.exception("Mapa sectorial omitido en la Revisión Anual %s de %s", anio, bank.name)
 
@@ -438,6 +445,10 @@ class BankingYearReviewProduct:
                 sis = sistema_por_sector(db, date(anio, 12, 31))
                 if sis and sis.get("sectores"):
                     payload_sistema["mapa_sectorial_sistema"] = sis
+                else:
+                    from modules.banking_score.reports.mapa_sectorial import motivo_sin_mapa
+                    payload_sistema["mapa_sectorial_sistema_no_publicado"] = motivo_sin_mapa(
+                        db, date(anio, 12, 31), None)
             except Exception:  # noqa: BLE001 — el snapshot nunca depende de esta tabla
                 logger.exception("Mapa del sistema omitido en el año %s", anio)
             return ProductSnapshot(tier=tier, period=str(anio),
@@ -494,9 +505,20 @@ class BankingYearReviewProduct:
         # tiene desglose, y tampoco una entidad sin cartera clasificada. Pedirle al modelo
         # que narre un mapa que no existe produce una sección hueca — y el gate de
         # degradación tumba el informe entero.
+        #
+        # PERO LA AUSENCIA SE DECLARA, igual que en la ruta de informes. Una sección que
+        # desaparece en silencio deja la peor lectura posible: que la entidad evaluada
+        # carece de algo, cuando lo que falta puede ser un trimestre que la fuente no
+        # publicó. El motivo lo computó el data-pull y viaja en el payload; acá solo se
+        # coloca como TEXTO de la sección, sin pasar por el modelo — narrar un contexto
+        # vacío es justo lo que este filtro evita.
+        motivos: Dict[str, str] = {}
         for clave in ("mapa_sectorial", "mapa_sectorial_sistema"):
             if clave in secciones and not (snapshot.payload or {}).get(clave):
                 secciones = [s for s in secciones if s != clave]
+                motivo = (snapshot.payload or {}).get(f"{clave}_no_publicado")
+                if isinstance(motivo, str) and motivo:
+                    motivos[clave] = motivo
         for seccion in secciones:
             plantilla = ("banking_sector_map_system" if seccion == "mapa_sectorial_sistema"
                          else "anio_del_sistema" if seccion == "anio_del_sistema"
@@ -512,6 +534,7 @@ class BankingYearReviewProduct:
                 axis="banking",
                 audience="inversionista" if tier == ProductTier.pulse else "comite_credito")
             out[seccion] = res.text
+        out.update(motivos)
         return out
 
     # ── Muestra curada ──
