@@ -39,7 +39,8 @@ from modules.banking_score.models.models import Bank, ModelType, RatingResult
 # no importa este módulo, así que la dirección es de ida y no hay ciclo.
 from modules.banking_score.products_year_review import YEAR_REVIEW_KEY
 from modules.banking_score.reports.narrative import generate_named_narratives
-from modules.banking_score.reports.pdf_generator import generate_pdf_report
+from modules.banking_score.reports.pdf_generator import (
+    NOTA_DE_METODO_DEL_INDICE, generate_pdf_report)
 from modules.banking_score.reports.mapa_sectorial import _resumen as _resumen_sectorial
 from modules.banking_score.scoring.amplitude import entity_trajectories, period_percentiles
 from modules.banking_score.scoring.benchmarks import panel_benchmarks
@@ -528,18 +529,16 @@ _LIMITATIONS_TEXT = (
     "construida íntegramente sobre información pública supervisada (SIB/SIMBAD/BCRD) a la "
     "fecha de corte indicada; no incorpora información material no pública ni eventos "
     "posteriores al período. "
-    # LA AFIRMACIÓN DE MÉTODO VIVE ACÁ Y SOLO ACÁ. Antes el documento señalaba cada
-    # indicador sin insumo en la tabla («s/d»), con su nota al pie, y reemplazaba la
-    # sección faltante por un párrafo que explicaba el hueco. Es correcto hacia adentro y
-    # daña la venta: un lector de un documento de calificación no lee un inventario de
-    # faltantes como rigor, lo lee como producto incompleto. Decisión del dueño
-    # (2026-08-31): lo que no se puede afirmar no se menciona, y esto —que SÍ es una
-    # afirmación sobre el método, no una lista de carencias— se dice una sola vez y en la
-    # sección donde ese lector la busca.
-    "Todo indicador del índice se sostiene en dato medido en la fuente: cuando un insumo "
-    "no está disponible en el período, el indicador se excluye del promedio de su "
-    "dimensión y los pesos se renormalizan sobre lo efectivamente medido, de modo que la "
-    "calificación no acredita ni penaliza un dato ausente. Es una lectura de fortaleza financiera y no es un rating de "
+    # LA AFIRMACIÓN DE MÉTODO SE COMPONE, no se repite. Su texto vive en UNA constante
+    # (`NOTA_DE_METODO_DEL_INDICE`) que también emite al pie la ruta de calificación, porque
+    # esos informes no tienen sección de Limitaciones y quedaban sin decir nada sobre el
+    # método. Dos textos que dicen «lo mismo» es exactamente como uno se queda atrás — este
+    # repo ya lo pagó con un serializador copiado a mano.
+    #
+    # Por qué existe: el documento dejó de inventariar lo que le falta (decisión del dueño,
+    # 2026-08-31), pero esto no es una lista de carencias sino una afirmación sobre CÓMO se
+    # construye el índice, y en la sección donde un lector profesional la busca suma rigor.
+    + NOTA_DE_METODO_DEL_INDICE + " Es una lectura de fortaleza financiera y no es un rating de "
     "crédito: no mide la probabilidad de incumplimiento. Tampoco incorpora el soporte "
     "soberano, la importancia sistémica ni el techo soberano del país, por lo que no es "
     "directamente comparable con las escalas de las calificadoras internacionales: la "

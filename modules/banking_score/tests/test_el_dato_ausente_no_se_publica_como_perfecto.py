@@ -88,6 +88,45 @@ def test_tampoco_publica_percentil_ni_tendencia_de_lo_que_no_midio():
     assert c == {}, f"publica un indicador sin dato con su amplitud: {c}"
 
 
+def test_la_nota_de_metodo_es_UNA_sola_y_las_dos_superficies_la_COMPONEN():
+    """No dos textos que dicen lo mismo: uno se queda atrás. Este repo ya lo pagó con un
+    serializador copiado a mano que dejó de derivar la tasa en una de las dos bocas."""
+    import ast
+    import inspect
+
+    from modules.banking_score import products
+    from modules.banking_score.reports import pdf_generator
+
+    # `_LIMITATIONS_TEXT` la CONCATENA por nombre, no la reescribe.
+    arbol = ast.parse(inspect.getsource(products))
+    asign = next(n for n in ast.walk(arbol) if isinstance(n, ast.Assign)
+                 and any(getattr(t, "id", "") == "_LIMITATIONS_TEXT" for t in n.targets))
+    nombres = {n.id for n in ast.walk(asign) if isinstance(n, ast.Name)}
+    assert "NOTA_DE_METODO_DEL_INDICE" in nombres, (
+        "Limitaciones volvió a escribir la frase a mano en vez de componer la constante")
+    assert pdf_generator.NOTA_DE_METODO_DEL_INDICE in products._LIMITATIONS_TEXT
+
+
+def test_el_informe_de_CALIFICACION_tambien_dice_el_metodo():
+    """Esos informes no tienen sección de Limitaciones, así que quedaban sin decir nada.
+
+    Se emite al pie y atado a la PRESENCIA de la tabla de indicadores, no a una lista de
+    tipos de informe: una lista es lo que alguien olvida actualizar al agregar un tipo, y
+    este repo ya tiene el antecedente del anuario.
+    """
+    def _texto(els):
+        return " ".join(e.getPlainText() if hasattr(e, "getPlainText") else ""
+                        for e in els)
+
+    styles = pdf._get_styles()
+    con = _texto(pdf._build_disclaimer(styles, con_nota_de_metodo=True))
+    sin = _texto(pdf._build_disclaimer(styles, con_nota_de_metodo=False))
+    assert "renormalizan sobre lo efectivamente medido" in con
+    assert "renormalizan sobre lo efectivamente medido" not in sin, (
+        "un boletín que no publica el índice no tiene por qué explicar cómo se construye")
+    assert "SDQ Consulting" in sin, "el disclaimer se perdió al agregar la nota"
+
+
 def test_la_afirmacion_de_METODO_sobrevive_en_Limitaciones():
     """Se sacó el inventario de faltantes, no la explicación del método. Si esta frase
     desapareciera, el documento dejaría de decir en ninguna parte que los pesos se
