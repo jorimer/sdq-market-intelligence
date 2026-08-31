@@ -554,12 +554,89 @@ class TestLaHolguraPorRegion:
         db.commit()
         assert I.mercado_laboral_por_region(db, CORTE) is None
 
-    def test_DECLARA_que_no_cruza_con_las_provincias_del_credito(self, db_regional):
-        """Los dominios de la encuesta y las provincias del libro son nomenclaturas
-        distintas. Inventar el mapa en el medio es lo que este repo no hace."""
+    def test_DECLARA_de_dónde_sale_la_correspondencia_con_el_credito(self, db_regional):
+        """Antes esta lectura declaraba que NO se cruzaba con las provincias del libro,
+        porque la correspondencia no estaba verificada. Se verificó: los dominios de la
+        ENCFT se construyen sobre las 10 Regiones de Desarrollo del Decreto 710-04 —lo dice
+        su diseño muestral— y la partición del cubo de la SIB coincide provincia por
+        provincia. La declaración cambia con el hecho, no al revés."""
         r = I.mercado_laboral_por_region(db_regional, CORTE)
-        assert "nomenclaturas distintas" in r["que_es"]
+        assert "710-04" in r["que_es"]
+        assert "nomenclaturas distintas" not in r["que_es"]
 
     def test_entra_al_bloque_de_capacidad_de_pago(self, db_regional):
         r = I.capacidad_de_pago(db_regional, CORTE)
         assert "holgura_por_region" in r
+
+
+class TestLaHolguraDondePresta:
+    """El cruce que ningún banco puede hacer — y no por el dato, que es público, sino por la
+    mitad que le falta: el libro de crédito abierto por provincia de las otras noventa y una
+    entidades."""
+
+    @pytest.fixture()
+    def db_cruce(self, db):
+        from modules.social_dev.models.models import SocialIndicator
+        for dom, su4, su1 in (("ozama", 13.70, 6.31), ("norte", 6.52, 2.24),
+                              ("sur", 14.00, 5.60), ("este", 9.35, 4.11),
+                              ("nacional", 10.88, 4.95)):
+            for tema, v in (("subutilizacion_su4_regional_anual", su4),
+                            ("desocupacion_su1_regional_anual", su1)):
+                db.add(SocialIndicator(theme=tema, entity_key=dom, period="2025",
+                                       value=v, unit="%", source="BCRD"))
+        db.commit()
+        return db
+
+    _PROVINCIAS = [
+        {"provincia": "DISTRITO NACIONAL", "deuda": 600_000_000.0},
+        {"provincia": "SANTIAGO", "deuda": 300_000_000.0},
+        {"provincia": "SAN CRISTOBAL", "deuda": 100_000_000.0},
+    ]
+
+    def test_agrupa_la_cartera_por_DOMINIO(self, db_cruce):
+        r = I.holgura_donde_presta(db_cruce, CORTE, self._PROVINCIAS)
+        pesos = {f["dominio"]: f["peso_en_su_cartera_pct"] for f in r["por_dominio"]}
+        assert pesos == {"ozama": 60.0, "norte": 30.0, "sur": 10.0}
+
+    def test_la_holgura_se_pondera_por_SU_exposicion_y_no_es_el_promedio_del_pais(
+            self, db_cruce):
+        """Un promedio simple de los cuatro daría la holgura de un banco que prestara igual
+        en los cuatro, que no es ninguno."""
+        r = I.holgura_donde_presta(db_cruce, CORTE, self._PROVINCIAS)
+        esperado = 0.60 * 13.70 + 0.30 * 6.52 + 0.10 * 14.00
+        assert r["subutilizacion_ponderada_por_su_exposicion_pct"] == pytest.approx(
+            esperado, abs=.01)
+        assert r["subutilizacion_ponderada_por_su_exposicion_pct"] != pytest.approx(
+            (13.70 + 6.52 + 14.00 + 9.35) / 4, abs=.1)
+
+    def test_la_comparacion_contra_el_PAIS_se_computa(self, db_cruce):
+        r = I.holgura_donde_presta(db_cruce, CORTE, self._PROVINCIAS)
+        assert r["subutilizacion_del_pais_pct"] == 10.88
+        assert r["mas_holgura_que_el_pais_pp"] == pytest.approx(
+            r["subutilizacion_ponderada_por_su_exposicion_pct"] - 10.88, abs=.01)
+
+    def test_SIN_PROVINCIA_queda_fuera_y_se_DECLARA(self, db_cruce):
+        provincias = self._PROVINCIAS + [{"provincia": "SIN PROVINCIA",
+                                          "deuda": 200_000_000.0}]
+        r = I.holgura_donde_presta(db_cruce, CORTE, provincias)
+        assert {f["dominio"] for f in r["por_dominio"]} == {"ozama", "norte", "sur"}
+        assert r["cartera_sin_dominio_asignable_pct"] == pytest.approx(16.67, abs=.01)
+        assert "no le corresponde" in r["por_que_queda_fuera"]
+
+    def test_declara_de_dónde_sale_la_region(self, db_cruce):
+        r = I.holgura_donde_presta(db_cruce, CORTE, self._PROVINCIAS)
+        assert "710-04" in r["procedencia_de_la_region"]
+
+    def test_sin_dato_laboral_no_hay_cruce(self, db):
+        assert I.holgura_donde_presta(db, CORTE, self._PROVINCIAS) is None
+
+    def test_sin_provincias_no_hay_cruce(self, db_cruce):
+        assert I.holgura_donde_presta(db_cruce, CORTE, []) is None
+
+    @pytest.mark.parametrize("archivo", [
+        "modules/banking_score/products.py",
+        "modules/banking_score/api/router_reports.py",
+    ])
+    def test_las_rutas_que_emiten_un_informe_lo_SIRVEN(self, archivo):
+        import pathlib
+        assert "holgura_donde_presta" in pathlib.Path(archivo).read_text()

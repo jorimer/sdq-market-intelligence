@@ -679,6 +679,17 @@ async def generate_report(
             from modules.banking_score.reports.capacidad_de_pago import (
                 capacidad_de_pago)
             infl = capacidad_de_pago(db, pe)
+            # `scoring_result` es heterogéneo (lleva escalares y dicts), así que el mapa se
+            # estrecha ANTES de pedirle sus provincias: sin eso, un valor de otro tipo llega
+            # como lista al cruce y el error aparece lejos de acá.
+            _mapa = scoring_result.get("mapa_sectorial")
+            _provs = _mapa.get("provincias") if isinstance(_mapa, dict) else None
+            if infl and isinstance(_provs, list) and _provs:
+                from modules.banking_score.reports.capacidad_de_pago import (
+                    holgura_donde_presta)
+                donde = holgura_donde_presta(db, pe, _provs)
+                if donde:
+                    infl["holgura_donde_presta"] = donde
             if infl:
                 scoring_result["capacidad_de_pago"] = infl
         except Exception:  # noqa: BLE001 — el informe nunca depende de esta serie
