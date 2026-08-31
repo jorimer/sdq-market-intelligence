@@ -123,15 +123,23 @@ def inflacion_por_quintil(db: Session, corte: date) -> Optional[Dict[str, Any]]:
 
 # ── El PISO de ingreso: el salario mínimo ────────────────────────────────────────────
 #
-# El salario mínimo dominicano no es UNO: son once combinaciones de tamaño de empresa y
-# área, y varias llevan años congeladas —«zona franca en áreas geográficas deprimidas» no se
-# ajusta desde julio de 2006—. Elegir una al azar publicaría como piso vigente un número que
-# nadie cobra hoy, así que la referencia se DECLARA y se comprueba que esté viva.
+# El salario mínimo dominicano no es UNO: son DIEZ combinaciones de tamaño de empresa y área,
+# y varias llevan años congeladas —«zona franca en áreas geográficas deprimidas» sigue en
+# RD$3.600 desde julio de 2006, y el Gobierno Central en RD$10.000 desde abril de 2019—.
+# Elegir una al azar publicaría como piso vigente un número que nadie cobra hoy, así que la
+# referencia se DECLARA y se comprueba que esté viva.
 #
-# Se toma la empresa GRANDE del sector privado no sectorizado: es el techo del piso legal y
-# la referencia contra la que se lee un crédito de consumo de banca múltiple. La clave lo
-# nombra — un salario mínimo sin su categoría es un número sin sujeto.
-_TEMA_SALARIO_REFERENCIA = "sm_empresa_grande_no_sectorizado"
+# Se toma la empresa GRANDE del sector privado no sectorizado (RD$27.989 desde abril de 2025):
+# es el techo del piso legal y la referencia contra la que se lee un crédito de consumo de
+# banca múltiple. La clave lo nombra — un salario mínimo sin su categoría es un número sin
+# sujeto.
+#
+# La clave es la que produce `social_sync._tema_salario` sobre la fuente, no una inventada:
+# la primera versión de esta línea decía `sm_empresa_grande_no_sectorizado` —plausible y
+# falsa— y la lectura entera habría devuelto `None` en silencio, que es el defecto que este
+# repo tiene nombrado: un binding a una serie inexistente no falla, DESAPARECE. Lo vigila
+# `test_la_referencia_del_salario_EXISTE_en_la_fuente`.
+_TEMA_SALARIO_REFERENCIA = "sm_empresa_grande_empresas_del_sector_no_secto"
 
 #: Meses sin ajuste a partir de los cuales la referencia deja de describir el presente. Dos
 #: años es más de lo que cualquier ajuste dominicano ha tardado en la serie observada.
