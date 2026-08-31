@@ -880,6 +880,30 @@ THIN_TEMPLATES = {
         "componente del rating. Usa SOLO las cifras de 'entorno_macro'; ninguna inventada; si "
         "un factor viene 'n/d', no lo cites."
     ),
+    "banking_sector_map_system": (
+        "Lee el LIBRO DE CRÉDITO DEL SISTEMA abierto por sector económico: dónde presta el "
+        "país, con qué mora y a qué precio.\n"
+        "Contexto ('mapa_sectorial_sistema.sectores': una fila por sector, agregando TODAS "
+        "las entidades supervisadas):\n{context}\n\n"
+        "Máximo 300 palabras. EMPIEZA POR EL VEREDICTO: ¿dónde está concentrado el crédito "
+        "del sistema y qué sector muestra el deterioro más relevante hacia adelante? "
+        "Desarrolla 3-4 sectores, no la lista de diecinueve: los de mayor peso y los de "
+        "mayor deterioro, que no son los mismos.\n"
+        "EL SUJETO ES EL SISTEMA, NO UNA ENTIDAD. En este documento no hay entidad: no "
+        "escribas «la entidad», no atribuyas nada a un banco y no nombres a ninguno. Cada "
+        "cifra es del sector agregando todas las entidades supervisadas.\n"
+        "LA MORA TEMPRANA DE 31 A 90 DÍAS ORDENA POR ANTICIPACIÓN. Se deteriora antes que "
+        "la vencida, así que un sector con mora temprana alta y vencida baja es la señal "
+        "que importa; leerlo al revés invierte la conclusión.\n"
+        "LAS CIFRAS SE COPIAN. Pesos, moras y tasas vienen computados. No sumes los pesos "
+        "de los sectores que elijas para armar un agregado: si querés hablar de un grupo, "
+        "nombrá el peso de cada uno por separado.\n"
+        "SI HAY TASA, LEELA CONTRA LA GARANTÍA Y LA MONEDA del mismo sector: una tasa baja "
+        "con garantía alta y deuda en dólares describe un negocio distinto de una tasa alta "
+        "sin garantía. Si `tasa_promedio_ponderada_pct` viene nula, no menciones precio en "
+        "ese sector.\n"
+        "Cierra con el sector que vigilarías al próximo corte y por qué."
+    ),
     "banking_sector_map": (
         "Lee el MAPA SECTORIAL del libro de crédito: dónde presta esta entidad y cómo le va "
         "ahí contra el RESTO del sistema en el MISMO sector.\n"
@@ -1643,6 +1667,12 @@ STATIC_FALLBACKS = {
         "de cambio y reservas del BCRD— constituye el telón sistémico común a todas las "
         "entidades del sistema. Se presenta como contexto y no forma parte de la calificación "
         "standalone de la entidad, que mide su fortaleza financiera propia."
+    ),
+    "banking_sector_map_system": (
+        "El libro de crédito del sistema bancario dominicano abierto por sector económico "
+        "muestra dónde se concentra el financiamiento, con qué morosidad y a qué precio "
+        "promedio se coloca en cada actividad. La morosidad temprana, de treinta y uno a "
+        "noventa días, ordena la lectura por anticipación y no por daño ya consumado."
     ),
     "banking_sector_map": (
         "El mapa sectorial abre el libro de crédito de la entidad por sector económico y "

@@ -59,6 +59,7 @@ const SECTION_TITLES: Record<string, string> = {
   comparative: "Posición vs pares",
   entorno_operativo: "Entorno operativo",
   mapa_sectorial: "Mapa sectorial del crédito",
+  mapa_sectorial_sistema: "El crédito del sistema por sector",
   soporte_soberano: "Soporte y techo soberano",
   risk_assessment: "Evaluación de riesgo",
   early_warning: "Alerta temprana",

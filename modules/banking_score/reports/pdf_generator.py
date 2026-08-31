@@ -97,6 +97,7 @@ NARRATIVE_SECTION_TITLES = {
     "comparative": "Análisis Comparativo",
     "entorno_operativo": "Entorno Operativo",
     "mapa_sectorial": "Mapa Sectorial del Crédito",
+    "mapa_sectorial_sistema": "El Crédito del Sistema por Sector",
     "soporte_soberano": "Soporte y Techo Soberano",
     "early_warning": "Alerta Temprana",
     "recommendation": "Recomendación",
@@ -1257,6 +1258,51 @@ def _build_sector_map_table(mapa: Dict, styles) -> List:
     return elements
 
 
+def _build_system_sector_table(mapa: Dict, styles) -> List:
+    """El libro de crédito del SISTEMA por sector. Otra tabla y no la de entidad con menos
+    columnas: acá no hay contra qué comparar —el sujeto ES el agregado— así que las
+    columnas son de composición (peso, garantía, moneda) y no de brecha."""
+    sectores = (mapa or {}).get("sectores") or []
+    if not sectores:
+        return []
+    corte = mapa.get("corte")
+    ttl = "El crédito del sistema por sector" + (f" · {corte}" if corte else "")
+    elements: List = [Paragraph(ttl, styles["SDQSubHeading"])]
+    rows = [["Sector", "% del\ncrédito", "Entidades", "Mora\n%", "Mora 31-90\n%",
+             "Tasa\n%", "Garantía\n%", "US$\n%"]]
+    mostrados = sectores[:_MAX_SECTORES_EN_TABLA]
+    for f in mostrados:
+        rows.append([
+            Paragraph(_md_inline(str(f.get("sector", ""))), styles["SDQSmall"]),
+            _num(f.get("peso_en_el_sistema_pct")),
+            str(f.get("entidades_que_prestan") or "—"),
+            _num(f.get("mora_pct")),
+            _num(f.get("mora_temprana_31_90_pct")),
+            _num(f.get("tasa_promedio_ponderada_pct")),
+            _num(f.get("garantia_sobre_deuda_pct")),
+            _num(f.get("dolarizacion_de_la_deuda_pct")),
+        ])
+    table = _branded_table(
+        rows,
+        [1.55 * inch, 0.62 * inch, 0.72 * inch, 0.58 * inch, 0.78 * inch,
+         0.58 * inch, 0.75 * inch, 0.62 * inch],
+        styles,
+        aligns=["LEFT", "RIGHT", "RIGHT", "RIGHT", "RIGHT", "RIGHT", "RIGHT", "RIGHT"])
+    elements.append(table)
+    elements.append(Spacer(1, 0.08 * inch))
+    pie = ("Agrega TODAS las entidades supervisadas que prestan a cada sector. La mora de "
+           "31 a 90 días se deteriora antes que la vencida, así que ordena por anticipación "
+           "y no por daño consumado. La tasa es un promedio ponderado por saldo adeudado.")
+    ocultos = len(sectores) - len(mostrados)
+    if ocultos > 0:
+        resto = sum(float(x.get("deuda") or 0) for x in sectores[len(mostrados):])
+        total = sum(float(x.get("deuda") or 0) for x in sectores) or 1.0
+        pie += (f" Se muestran los {len(mostrados)} sectores de mayor peso; los otros "
+                f"{ocultos} suman el {100.0 * resto / total:.1f}% del crédito del sistema.")
+    elements.append(Paragraph(pie, styles["SDQSmall"]))
+    return elements
+
+
 def _sensitivity_rows(rows: List[Dict]) -> List[List]:
     out: List[List] = []
     for r in rows:
@@ -1541,6 +1587,10 @@ async def generate_pdf_report(
     mapa = scoring_result.get("mapa_sectorial")
     if mapa:
         _colocar("mapa_sectorial", _build_sector_map_table(mapa, styles))
+
+    mapa_sis = scoring_result.get("mapa_sectorial_sistema")
+    if mapa_sis:
+        _colocar("mapa_sectorial_sistema", _build_system_sector_table(mapa_sis, styles))
 
     # 4. Narrative sections (filtradas/ordenadas por el manifiesto si `sections`). Un único
     # salto de página separa el bloque de datos (tablas) de la narrativa; las tablas fluyen

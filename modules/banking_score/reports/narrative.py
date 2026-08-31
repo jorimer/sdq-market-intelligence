@@ -54,9 +54,11 @@ REPORT_SECTIONS: Dict[str, list] = {
     "datawatch": ["executive_summary", "trend_analysis"],
     "wire": ["executive_summary"],
     "criteria": ["risk_assessment"],
-    "sector_outlook": ["sector_outlook"],
-    "anuario": ["anuario"],
-    "revision_anual": ["revision_anual"],
+    "sector_outlook": ["sector_outlook", "mapa_sectorial_sistema"],
+    "anuario": ["anuario", "mapa_sectorial_sistema"],
+    # La Revisión Anual lleva el mapa al CIERRE del año: es la lectura que el comité no
+    # puede reproducir, y salía solo en el trimestral.
+    "revision_anual": ["revision_anual", "mapa_sectorial"],
 }
 
 # Map each section to the NarrativeEngine template name
@@ -72,6 +74,11 @@ _SECTION_TO_TEMPLATE: Dict[str, str] = {
     "recommendation": "banking_recommendation",
     "entorno_operativo": "banking_operating_env",
     "mapa_sectorial": "banking_sector_map",
+    # El sistema por sector: MISMO cubo, sujeto distinto. Una plantilla aparte y no la de
+    # entidad con otro contexto, porque la lectura es otra —dónde presta el país y qué
+    # sectores se deterioran— y una plantilla que pide «la posición de la entidad» sobre un
+    # agregado devuelve una sección sobre alguien que el documento no nombra.
+    "mapa_sectorial_sistema": "banking_sector_map_system",
     "soporte_soberano": "banking_support_context",
     "trend_analysis": "trend_analysis",
     "sector_outlook": "sector_outlook",
@@ -85,7 +92,7 @@ _SECTION_TO_TEMPLATE: Dict[str, str] = {
 _CEREBRO_TEMPLATES = frozenset({
     "subcomponent_focus", "banking_summary", "banking_comparative",
     "banking_risk", "banking_recommendation", "banking_operating_env",
-    "banking_support_context", "banking_sector_map",
+    "banking_support_context", "banking_sector_map", "banking_sector_map_system",
     # El anuario vive en `THIN_TEMPLATES` (ruta cerebro) y faltaba acá, así que el motor lo
     # mandaba por la ruta LEGACY —donde esa plantilla no existe— y caía al relleno estático
     # EN SILENCIO. El primer anuario de producción salió con las tablas correctas y la sección
@@ -427,6 +434,16 @@ def _build_section_context(
             "entorno_macro": scoring_result.get("entorno_macro", {}),
         }
 
+    # MAPA SECTORIAL DEL SISTEMA: dónde presta el país y qué sectores se deterioran. El
+    # sujeto es el sistema, así que el contexto NO lleva entidad ni bandas: pasárselas haría
+    # que el modelo escribiera sobre una entidad en un documento que no analiza ninguna.
+    if section == "mapa_sectorial_sistema":
+        return {
+            "period": period,
+            "scope": "Sistema bancario dominicano (todas las entidades supervisadas)",
+            "mapa_sectorial_sistema": scoring_result.get("mapa_sectorial_sistema") or {},
+        }
+
     # MAPA SECTORIAL: la lectura que exige el libro de las otras noventa y una entidades.
     # El contexto va TAL CUAL lo computó `mapa_sectorial`: brechas de mora y spreads de tasa
     # ya calculados contra el RESTO del sector, con el sujeto en cada clave. El modelo los
@@ -699,8 +716,9 @@ async def generate_report_narratives(
     # sea que sin este filtro una entidad sin desglose dejaría de poder emitir su SDQ Rating
     # por completo. El gate gemelo vive en la ruta de productos; acá faltaba porque esta
     # ruta arma su `scoring_result` a mano, que es la misma grieta de siempre.
-    if "mapa_sectorial" in sections and not scoring_result.get("mapa_sectorial"):
-        sections = [s for s in sections if s != "mapa_sectorial"]
+    for clave in ("mapa_sectorial", "mapa_sectorial_sistema"):
+        if clave in sections and not scoring_result.get(clave):
+            sections = [s for s in sections if s != clave]
 
     for section in sections:
         if section == "anuario":

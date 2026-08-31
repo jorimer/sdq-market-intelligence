@@ -906,8 +906,20 @@ class BankingProduct:
                 raise ValueError(
                     f"No hay año {anio} de {bank.name}: falta el corte de diciembre o la "
                     "entidad no tiene panel suficiente. Elegí un año ya cerrado.")
-            return ProductSnapshot(tier=tier, period=str(anio),
-                                   payload={"anio_por_trimestres": dentro},
+            # MAPA SECTORIAL al cierre del año. Este producto lee el año POR DENTRO, y la
+            # composición del libro por sector es parte de ese adentro: sin ella el año se
+            # cuenta solo con el score y sus dimensiones, que es lo que cualquiera puede
+            # recomputar desde la API de la SIB.
+            pl: Dict[str, Any] = {"anio_por_trimestres": dentro}
+            try:
+                from modules.banking_score.reports.mapa_sectorial import (
+                    posicion_de_la_entidad)
+                mapa = posicion_de_la_entidad(db, bank, date(anio, 12, 31))
+                if mapa:
+                    pl["mapa_sectorial"] = mapa
+            except Exception:  # noqa: BLE001 — el snapshot nunca depende de esta tabla
+                logger.exception("Mapa sectorial omitido en el año %s de %s", anio, bank.name)
+            return ProductSnapshot(tier=tier, period=str(anio), payload=pl,
                                    entity_name=str(bank.name))
         q = db.query(RatingResult).filter(
             RatingResult.bank_id == bank.id,
@@ -1146,7 +1158,20 @@ class BankingProduct:
             res = await narrative_engine.generate(
                 context=ctx, template="anio_por_trimestres", mode="deep",
                 axis="banking", audience="comite_credito")
-            return {"anio_por_trimestres": res.text}
+            salida = {"anio_por_trimestres": res.text}
+            # El mapa, cuando el cierre lo tiene. Va como sección propia y no dentro del
+            # contexto del año: son dos sujetos —la serie del score y el libro por sector— y
+            # meterlos en un mismo prompt hace que el modelo elija uno.
+            mapa = snapshot.payload.get("mapa_sectorial")
+            if mapa:
+                res_m = await narrative_engine.generate(
+                    context={"period": snapshot.period,
+                             "entity_name": snapshot.entity_name,
+                             "mapa_sectorial": mapa},
+                    template="banking_sector_map", mode="deep",
+                    axis="banking", audience="comite_credito")
+                salida["mapa_sectorial"] = res_m.text
+            return salida
 
         scoring_result = snapshot.payload["scoring_result"]
         peer_block = snapshot.payload.get("peer_block")
@@ -1259,11 +1284,16 @@ class BankingProduct:
                 # cada encabezado — la confusión que la separación vino a cerrar, colada por
                 # un literal.
                 "anio_por_trimestres", snapshot.entity_name or "Entidad",
+                # El mapa viaja en el `scoring_result` porque es de ahí que el generador
+                # lo lee para dibujar su tabla; sin él saldría el párrafo sin las columnas.
                 {"overall_score": cierre.get("score") or 0,
                  "banda_ejecucion": None, "banda_resiliencia": cierre.get("banda"),
-                 "sub_components": {}, "indicators": {}},
+                 "sub_components": {}, "indicators": {},
+                 **({"mapa_sectorial": snapshot.payload["mapa_sectorial"]}
+                    if snapshot.payload.get("mapa_sectorial") else {})},
                 snapshot.period, narratives=narratives, output_dir=output_dir,
-                sections=["anio_por_trimestres"], tier=tier.value,
+                sections=[s for s in ("anio_por_trimestres", "mapa_sectorial")
+                          if s in narratives], tier=tier.value,
                 watermark=level.watermark, sample=sample, anio_dentro=dentro,
             )
 

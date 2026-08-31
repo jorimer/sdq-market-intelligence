@@ -180,10 +180,17 @@ def test_la_revision_anual_esta_registrada_en_TODAS_sus_superficies():
     from shared.narrative.claude_engine import THIN_TEMPLATES
 
     assert ReportType.revision_anual.value == "revision_anual"
-    assert REPORT_SECTIONS["revision_anual"] == ["revision_anual"]
+    # El mapa sectorial va CON la Revisión Anual: es la lectura que exige el libro del
+    # sistema entero, y salía solo en el trimestral — o sea que el producto anual, que es
+    # el que el comité mira para cerrar el año, no la tenía.
+    assert REPORT_SECTIONS["revision_anual"] == ["revision_anual", "mapa_sectorial"]
+    for seccion in REPORT_SECTIONS["revision_anual"]:
+        plantilla = _SECTION_TO_TEMPLATE[seccion]
+        assert plantilla in THIN_TEMPLATES, (
+            f"«{seccion}»: la plantilla no existe, saldría al relleno estático")
+        assert plantilla in _CEREBRO_TEMPLATES, (
+            f"«{seccion}»: iría por la ruta legacy y saldría hueca")
     plantilla = _SECTION_TO_TEMPLATE["revision_anual"]
-    assert plantilla in THIN_TEMPLATES, "la plantilla no existe: saldría al relleno estático"
-    assert plantilla in _CEREBRO_TEMPLATES, "iría por la ruta legacy y saldría hueca"
     assert REPORT_TYPE_LABELS["revision_anual"] == "Revisión Anual"
 
 
