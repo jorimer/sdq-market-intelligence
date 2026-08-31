@@ -1303,6 +1303,59 @@ def _build_system_sector_table(mapa: Dict, styles) -> List:
     return elements
 
 
+#: Provincias en la tabla geográfica. Son 33 y la cola es larga: se muestran las de mayor
+#: exposición y lo que queda afuera se DECLARA, como en la sectorial.
+_MAX_PROVINCIAS_EN_TABLA = 8
+
+
+def _build_geografia_table(provincias: List[Dict], styles) -> List:
+    """Dónde presta la entidad, contra dónde presta el país.
+
+    El cubo es sector × provincia y la provincia se agregaba hasta desaparecer: existía en la
+    base y no salía por ninguna superficie. Un banco ve su propia huella geográfica; lo que no
+    puede ver es si sigue al mercado o se aparta de él, ni cómo le va en cada provincia contra
+    el resto del país en esa misma provincia."""
+    if not provincias:
+        return []
+    elements: List = [Paragraph("Dónde presta, contra dónde presta el país",
+                                styles["SDQSubHeading"])]
+    rows = [["Provincia", "% de su\ncartera", "% del\ncrédito\ndel país", "Sobre/sub\npp",
+             "Mora\n%", "Mora del\npaís %", "Brecha\npp", "Sectores"]]
+    mostradas = provincias[:_MAX_PROVINCIAS_EN_TABLA]
+    for f in mostradas:
+        rows.append([
+            Paragraph(_md_inline(str(f.get("provincia", ""))), styles["SDQSmall"]),
+            _num(f.get("peso_en_su_cartera_pct")),
+            _num(f.get("peso_de_la_provincia_en_el_pais_pct")),
+            _pp(f.get("sobre_representacion_pp")),
+            _num(f.get("mora_pct")),
+            _num(f.get("mora_del_resto_del_pais_en_la_provincia_pct")),
+            _pp(f.get("brecha_de_mora_pp")),
+            str(f.get("sectores_en_que_presta") or "—"),
+        ])
+    table = _branded_table(
+        rows,
+        [1.40 * inch, 0.62 * inch, 0.70 * inch, 0.66 * inch, 0.52 * inch, 0.66 * inch,
+         0.60 * inch, 0.62 * inch],
+        styles,
+        aligns=["LEFT"] + ["RIGHT"] * 7)
+    elements.append(table)
+    elements.append(Spacer(1, 0.08 * inch))
+    pie = ("Las dos primeras columnas tienen denominadores DISTINTOS: la primera es sobre la "
+           "cartera clasificada de la entidad y la segunda sobre el crédito de todo el país. "
+           "«Sobre/sub» es la diferencia entre ambas: positiva, la entidad pesa más en esa "
+           "provincia que el mercado. «SIN PROVINCIA» es la porción del libro cuyo rótulo la "
+           "fuente no trae y se muestra para que las cuotas sumen cien.")
+    ocultas = len(provincias) - len(mostradas)
+    if ocultas > 0:
+        resto = sum(float(x.get("deuda") or 0) for x in provincias[len(mostradas):])
+        total = sum(float(x.get("deuda") or 0) for x in provincias) or 1.0
+        pie += (f" Se muestran las {len(mostradas)} de mayor exposición; las otras "
+                f"{ocultas} suman el {100.0 * resto / total:.1f}% de la cartera.")
+    elements.append(Paragraph(pie, styles["SDQSmall"]))
+    return elements
+
+
 def _sensitivity_rows(rows: List[Dict]) -> List[List]:
     out: List[List] = []
     for r in rows:
@@ -1586,7 +1639,11 @@ async def generate_pdf_report(
 
     mapa = scoring_result.get("mapa_sectorial")
     if mapa:
-        _colocar("mapa_sectorial", _build_sector_map_table(mapa, styles))
+        els = _build_sector_map_table(mapa, styles)
+        # La geografía va DEBAJO de la sectorial, en la misma sección: son dos aperturas del
+        # mismo cubo y el párrafo las interpreta juntas.
+        els += _build_geografia_table(mapa.get("provincias") or [], styles)
+        _colocar("mapa_sectorial", els)
 
     mapa_sis = scoring_result.get("mapa_sectorial_sistema")
     if mapa_sis:

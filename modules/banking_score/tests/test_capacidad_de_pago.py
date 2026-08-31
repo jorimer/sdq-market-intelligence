@@ -451,3 +451,66 @@ def test_la_referencia_es_la_categoria_VIGENTE_y_no_una_congelada():
     assert "zona_franca" not in I._TEMA_SALARIO_REFERENCIA
     assert "gobierno" not in I._TEMA_SALARIO_REFERENCIA
     assert "empresa_grande" in I._TEMA_SALARIO_REFERENCIA
+
+
+class TestLaPrecisionDeLaEncuesta:
+    """La ENCFT es una ENCUESTA y publicábamos sus cifras desnudas.
+
+    El BCRD publica el error estándar, el intervalo al 95% y el coeficiente de variación de
+    cada estimación —en dos hojas del mismo libro que ya descargábamos— y no se usaban. Una
+    diferencia menor que los intervalos NO es una diferencia: sin ellos, «5,60 puntos» se lee
+    como un hecho exacto de una medición que no lo es. Es la doctrina de ordenar solo lo
+    comparable, aplicada al dato de encuesta.
+    """
+
+    @pytest.fixture()
+    def db_con_precision(self, db):
+        for tema, v in (("informality_rate_trimestral", 54.10),
+                        ("unemployment_rate_trimestral", 4.95),
+                        ("underutilization_su4_trimestral", 10.55),
+                        # Cifras REALES del BCRD al primer trimestre de 2026.
+                        ("unemployment_rate_trimestral_ic95_inf", 4.43),
+                        ("unemployment_rate_trimestral_ic95_sup", 5.48),
+                        ("unemployment_rate_trimestral_cv", 6.45),
+                        ("underutilization_su4_trimestral_ic95_inf", 9.87),
+                        ("underutilization_su4_trimestral_ic95_sup", 11.23),
+                        ("underutilization_su4_trimestral_cv", 3.93)):
+            _sembrar_social(db, tema, [("2026-Q1", v)], unidad="%")
+        return db
+
+    def test_sirve_el_INTERVALO_y_el_coeficiente_de_variacion(self, db_con_precision):
+        r = I.mercado_laboral(db_con_precision, CORTE)
+        p = r["precision_de_la_encuesta"]["desocupacion_abierta_su1"]
+        assert p["ic95_inferior"] == 4.43 and p["ic95_superior"] == 5.48
+        assert p["coeficiente_de_variacion_pct"] == 6.45
+
+    def test_decide_si_la_brecha_SE_PUEDE_AFIRMAR(self, db_con_precision):
+        """SU1 llega a 5,48 y SU4 arranca en 9,87: no se solapan, la brecha es real."""
+        r = I.mercado_laboral(db_con_precision, CORTE)
+        assert r["la_brecha_entre_SU1_y_SU4_es_significativa"] is True
+
+    def test_si_los_intervalos_SE_SOLAPAN_la_brecha_no_se_afirma(self, db):
+        for tema, v in (("informality_rate_trimestral", 54.10),
+                        ("unemployment_rate_trimestral", 9.0),
+                        ("underutilization_su4_trimestral", 10.0),
+                        ("unemployment_rate_trimestral_ic95_inf", 8.0),
+                        ("unemployment_rate_trimestral_ic95_sup", 10.5),
+                        ("underutilization_su4_trimestral_ic95_inf", 9.2),
+                        ("underutilization_su4_trimestral_ic95_sup", 11.0)):
+            _sembrar_social(db, tema, [("2026-Q1", v)], unidad="%")
+        r = I.mercado_laboral(db, CORTE)
+        assert r["la_brecha_entre_SU1_y_SU4_es_significativa"] is False
+
+    def test_sin_precision_la_lectura_sigue_saliendo_sin_el_bloque(self, db):
+        for tema, v in (("informality_rate_trimestral", 54.10),
+                        ("unemployment_rate_trimestral", 4.95)):
+            _sembrar_social(db, tema, [("2026-Q1", v)], unidad="%")
+        r = I.mercado_laboral(db, CORTE)
+        assert "precision_de_la_encuesta" not in r
+        assert r["ocupacion_informal_pct"] == 54.10
+
+    def test_la_plantilla_prohibe_afirmar_una_diferencia_que_se_SOLAPA(self):
+        from shared.narrative.claude_engine import THIN_TEMPLATES
+        thin = THIN_TEMPLATES["banking_sector_map"]
+        assert "la_brecha_entre_SU1_y_SU4_es_significativa" in thin
+        assert "los intervalos se solapan" in thin

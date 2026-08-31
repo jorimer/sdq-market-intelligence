@@ -114,3 +114,51 @@ def test_el_barrido_encontro_un_pdf_con_contenido(tmp_path):
     """Una aserción de presencia sobre un PDF vacío pasaría sola si el extractor fallara."""
     t = _texto(tmp_path, narratives=_NARRATIVAS, sections=_SECCIONES, peer_block=_PEERS)
     assert len(t) > 1500, "el extractor no devolvió texto: las aserciones no probarían nada"
+
+
+class TestLaTablaGeografica:
+    """La provincia estaba en la base y no salía por ninguna superficie."""
+
+    _MAPA_CON_PROVINCIAS = {
+        **_MAPA,
+        "provincias": [
+            {"provincia": "DISTRITO NACIONAL", "deuda": 200_000_000.0,
+             "peso_en_su_cartera_pct": 66.67, "peso_de_la_provincia_en_el_pais_pct": 40.0,
+             "sobre_representacion_pp": 26.67, "mora_pct": 8.0,
+             "mora_del_resto_del_pais_en_la_provincia_pct": 2.0, "brecha_de_mora_pp": 6.0,
+             "sectores_en_que_presta": 12},
+            {"provincia": "SIN PROVINCIA", "deuda": 100_000_000.0,
+             "peso_en_su_cartera_pct": 33.33, "peso_de_la_provincia_en_el_pais_pct": 5.0,
+             "sobre_representacion_pp": 28.33, "mora_pct": None,
+             "mora_del_resto_del_pais_en_la_provincia_pct": None, "brecha_de_mora_pp": None,
+             "sectores_en_que_presta": 3},
+        ],
+    }
+
+    def test_se_imprime_DENTRO_de_la_misma_seccion_que_la_sectorial(self, tmp_path):
+        scoring = {**_SCORING, "mapa_sectorial": self._MAPA_CON_PROVINCIAS}
+        t = _texto(tmp_path, scoring_result=scoring, narratives=_NARRATIVAS,
+                   sections=_SECCIONES)
+        titulo = _pos(t, "Mapa Sectorial del Crédito")
+        geo = _pos(t, "Dónde presta, contra dónde presta el país")
+        siguiente = _pos(t, "Análisis Comparativo")
+        assert titulo < geo < siguiente
+
+    def test_va_DEBAJO_de_la_sectorial_porque_el_parrafo_las_lee_juntas(self, tmp_path):
+        scoring = {**_SCORING, "mapa_sectorial": self._MAPA_CON_PROVINCIAS}
+        t = _texto(tmp_path, scoring_result=scoring, narratives=_NARRATIVAS,
+                   sections=_SECCIONES)
+        assert _pos(t, "Posición por sector") < _pos(t, "Dónde presta, contra dónde")
+
+    def test_SIN_PROVINCIA_aparece_y_el_pie_explica_qué_es(self, tmp_path):
+        scoring = {**_SCORING, "mapa_sectorial": self._MAPA_CON_PROVINCIAS}
+        t = _texto(tmp_path, scoring_result=scoring, narratives=_NARRATIVAS,
+                   sections=_SECCIONES)
+        assert "SIN PROVINCIA" in t
+        assert "cuyo rótulo la fuente no trae" in t
+
+    def test_sin_provincias_la_seccion_sale_igual_con_su_tabla_sectorial(self, tmp_path):
+        """Los cortes anteriores al backfill no tienen provincia; la sección no se rompe."""
+        t = _texto(tmp_path, narratives=_NARRATIVAS, sections=_SECCIONES)
+        assert "Posición por sector" in t
+        assert "Dónde presta, contra dónde" not in t
