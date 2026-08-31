@@ -143,7 +143,7 @@ class TestLasCuatroMedidasDeSubutilizacion:
                     f"«{etiqueta}» no dice qué medida es")
 
     def test_el_informe_sirve_la_ANCHA_y_la_angosta_con_su_brecha(self):
-        from modules.banking_score.reports.capacidad_de_pago import _TEMAS_LABORALES
+        from shared.capacidad_de_pago import _TEMAS_LABORALES
         assert _TEMAS_LABORALES["unemployment_rate_trimestral"] == "desocupacion_abierta_su1_pct"
         assert _TEMAS_LABORALES["underutilization_su4_trimestral"] == (
             "subutilizacion_amplia_su4_pct")

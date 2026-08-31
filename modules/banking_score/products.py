@@ -920,14 +920,14 @@ class BankingProduct:
                 # La CAPACIDAD DE PAGO del deudor: la inflación de su canasta por quintil,
                 # el piso de ingreso y la formalidad del empleo. Viaja con el mapa porque
                 # solo significa algo al lado del peso de la cartera de consumo.
-                from modules.banking_score.reports.capacidad_de_pago import (
+                from shared.capacidad_de_pago import (
                     capacidad_de_pago)
                 infl = capacidad_de_pago(db, date(anio, 12, 31))
                 if infl and mapa:
                     # El cruce con el TERRITORIO. Este producto computaba la capacidad de
                     # pago y no le pasaba las provincias, así que se quedaba con la lectura
                     # del país teniendo la del territorio donde la entidad presta a mano.
-                    from modules.banking_score.reports.capacidad_de_pago import (
+                    from shared.capacidad_de_pago import (
                         holgura_donde_presta)
                     donde = holgura_donde_presta(db, date(anio, 12, 31),
                                                  mapa.get("provincias") or [])
@@ -1066,13 +1066,13 @@ class BankingProduct:
             # el piso de ingreso y la formalidad del empleo. Viaja con el mapa porque
             # solo significa algo al lado del peso de la cartera de consumo.
             try:
-                from modules.banking_score.reports.capacidad_de_pago import (
+                from shared.capacidad_de_pago import (
                     capacidad_de_pago)
                 infl = capacidad_de_pago(db, cast(date, rr.period_end))
                 if infl and mapa:
                     # El cruce necesita las provincias del mapa: la holgura del territorio
                     # donde la entidad PRESTA, no la del país.
-                    from modules.banking_score.reports.capacidad_de_pago import (
+                    from shared.capacidad_de_pago import (
                         holgura_donde_presta)
                     donde = holgura_donde_presta(db, cast(date, rr.period_end),
                                                  mapa.get("provincias") or [])

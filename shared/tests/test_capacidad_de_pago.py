@@ -25,7 +25,7 @@ from shared.auth.models import User  # noqa: F401 — registra users para las FK
 from modules.macro_monitor.models.models import MacroSeries  # noqa: F401
 from modules.social_dev.models.models import SocialIndicator  # noqa: F401
 from shared.database.base import Base
-from modules.banking_score.reports import capacidad_de_pago as I
+from shared import capacidad_de_pago as I
 
 CORTE = date(2026, 3, 31)
 
@@ -180,7 +180,7 @@ class TestUnaSerieSinSujetoNoSePERSISTE:
 
     def test_las_cinco_del_QUINTIL_que_sí_sirven_pasan(self):
         from modules.macro_monitor.service import _sin_sujeto
-        from modules.banking_score.reports.capacidad_de_pago import _PREFIJO, QUINTILES
+        from shared.capacidad_de_pago import _PREFIJO, QUINTILES
         for q in QUINTILES:
             assert not _sin_sujeto(f"{_PREFIJO}{q}")
 

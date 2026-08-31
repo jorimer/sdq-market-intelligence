@@ -297,6 +297,34 @@ def _pulse_table(pulse: Dict[str, Any]) -> Optional[tuple]:
     return (f"Pulso del mercado asegurador{sello} (SIS · SISALRIL)", rows)
 
 
+def _corte_del_periodo(periodo):
+    """El período del producto como fecha de corte. Un período que no se puede leer cae a
+    HOY y no a una fecha inventada: la lectura se poda por corte, así que una fecha falsa
+    serviría contexto de un momento que el informe no describe."""
+    from datetime import date as _d
+    try:
+        t = str(periodo or "").strip()
+        if len(t) >= 10:
+            return _d.fromisoformat(t[:10])
+        if len(t) >= 7:
+            y, m = int(t[:4]), int(t[5:7])
+            return _d(y, m, 28)
+    except (ValueError, TypeError):
+        pass
+    return _d.today()
+
+
+
+#: Dónde vive el contexto que ve el modelo. Se declara porque este eje ahora lee un
+#: constructor TRANSVERSAL —la capacidad de pago del hogar, en `shared/`— y sin declararlo
+#: ese archivo queda FUERA de la huella de caché: un arreglo de lo que el modelo lee no
+#: invalidaría nada, y `ProductReportCache` no tiene TTL.
+AI_CONTEXT_FILES = (
+    "ai_context.py",
+    "shared/capacidad_de_pago.py",
+)
+
+
 class InsuranceProduct:
     """``SectorProduct`` de Seguros. ``db`` opcional (las muestras no tocan DB)."""
 
@@ -432,6 +460,19 @@ class InsuranceProduct:
             payload["headline_line"] = headline
         if caveat:
             payload["caveat"] = caveat
+        # LA CAPACIDAD DE PAGO DEL HOGAR. Una póliza voluntaria compite con la canasta: un hogar cuyo
+        # piso de ingreso no la cubre deja de renovar antes que de comer.
+        #
+        # Vive en `shared/` porque la leen cuatro ejes y no tiene nada del eje adentro: son
+        # series nacionales del BCRD y del MHE. Lo que cambia entre ejes es la LECTURA, no el
+        # dato, y ésa la fija la regla de la plantilla — no se copia el bloque.
+        try:
+            from shared.capacidad_de_pago import capacidad_de_pago
+            _cap = capacidad_de_pago(db, _corte_del_periodo(rating.get("period")))
+            if _cap:
+                payload["capacidad_de_pago"] = _cap
+        except Exception:  # noqa: BLE001 — el snapshot nunca depende de esta serie
+            logger.exception("Capacidad de pago omitida en el snapshot")
         return ProductSnapshot(tier=tier, period=rating.get("period") or "—",
                                payload=payload, entity_name=rating.get("name") or scope)
 
