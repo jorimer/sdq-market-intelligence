@@ -676,7 +676,7 @@ async def generate_report(
         # La inflación del DEUDOR viaja con el mapa: es la capacidad de pago que explica la
         # mora de consumo, y solo significa algo al lado del peso de esa cartera.
         try:
-            from modules.banking_score.reports.capacidad_de_pago import (
+            from shared.capacidad_de_pago import (
                 capacidad_de_pago)
             infl = capacidad_de_pago(db, pe)
             # `scoring_result` es heterogéneo (lleva escalares y dicts), así que el mapa se
@@ -685,7 +685,7 @@ async def generate_report(
             _mapa = scoring_result.get("mapa_sectorial")
             _provs = _mapa.get("provincias") if isinstance(_mapa, dict) else None
             if infl and isinstance(_provs, list) and _provs:
-                from modules.banking_score.reports.capacidad_de_pago import (
+                from shared.capacidad_de_pago import (
                     holgura_donde_presta)
                 donde = holgura_donde_presta(db, pe, _provs)
                 if donde:

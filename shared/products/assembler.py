@@ -53,6 +53,22 @@ logger = logging.getLogger("sdq.products.assembler")
 NARRATIVE_CACHE_VERSION = "2"
 
 
+def ruta_de_contexto(rel: str, modulo: str) -> pathlib.Path:
+    """Dónde vive un archivo declarado en ``AI_CONTEXT_FILES``.
+
+    Una ruta que empieza en ``shared/`` se resuelve desde la RAÍZ del repo; cualquier otra,
+    desde la carpeta del módulo. La regla vive ACÁ y no repetida en cada consumidor porque ya
+    tiene tres —el ensamblador que computa la huella y los dos tests estructurales que la
+    vigilan— y dos copias de una resolución de rutas se desincronizan: la primera vez que se
+    admitió `shared/` en el ensamblador, los dos guards siguieron buscando
+    `modules/<mod>/shared/...` y declararon inexistente un archivo que sí estaba.
+    """
+    repo = pathlib.Path(__file__).resolve().parents[2]
+    if str(rel).startswith("shared/"):
+        return repo / rel
+    return repo / "modules" / modulo / rel
+
+
 def _contexto_ia_version(modulo_producto: Optional[str]) -> str:
     """Huella del CONSTRUCTOR DE CONTEXTO del sector (``modules/<mod>/ai_context.py``).
 
@@ -91,7 +107,7 @@ def _contexto_ia_version(modulo_producto: Optional[str]) -> str:
         except Exception:  # noqa: BLE001 — la huella nunca debe tumbar la entrega
             pass
         return ""
-    raiz = pathlib.Path(__file__).resolve().parents[2] / "modules" / partes[1]
+    modulo = partes[1]
 
     # Por defecto `ai_context.py`. Un módulo que arma el contexto en otro lado lo DECLARA con
     # `AI_CONTEXT_FILES`: banca lo construye en `reports/narrative.py` y en su propio
@@ -109,8 +125,12 @@ def _contexto_ia_version(modulo_producto: Optional[str]) -> str:
     h = hashlib.sha256()
     visto = False
     for rel in archivos:
+        # La resolución vive en `ruta_de_contexto`: un constructor de contexto puede ser
+        # TRANSVERSAL —la capacidad de pago del hogar la leen cuatro ejes— y vivir en
+        # `shared/`. Sin admitir esa ruta, el archivo quedaba fuera de la huella de todos y
+        # un arreglo de lo que el modelo lee no invalidaba nada, con la caché sin TTL.
         try:
-            h.update((raiz / rel).read_bytes())
+            h.update(ruta_de_contexto(rel, modulo).read_bytes())
             visto = True
         except OSError:
             continue          # archivo declarado que no existe: se ignora, no se falla

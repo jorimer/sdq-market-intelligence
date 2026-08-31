@@ -514,6 +514,17 @@ def _anon_pulse_context(payload: Dict[str, Any]) -> Dict[str, Any]:
     }
 
 
+
+#: Dónde vive el contexto que ve el modelo. Se declara porque este eje ahora lee un
+#: constructor TRANSVERSAL —la capacidad de pago del hogar, en `shared/`— y sin declararlo
+#: ese archivo queda FUERA de la huella de caché: un arreglo de lo que el modelo lee no
+#: invalidaría nada, y `ProductReportCache` no tiene TTL.
+AI_CONTEXT_FILES = (
+    "ai_context.py",
+    "shared/capacidad_de_pago.py",
+)
+
+
 class PensionProduct:
     """``SectorProduct`` de Pensiones. ``db`` opcional: las muestras sintéticas usan
     solo ``narratives``/``render`` (sin DB)."""
@@ -673,6 +684,23 @@ class PensionProduct:
             payload["headline_line"] = headline
         if caveat:
             payload["caveat"] = caveat
+        # LA CAPACIDAD DE PAGO DEL HOGAR. Acá es capacidad de COTIZAR, que es otra lectura:
+        # la informalidad define quién queda FUERA del sistema —más de la mitad de los
+        # ocupados— y el piso de ingreso define sobre qué se cotiza. Un fondo no crece por
+        # rentabilidad si la mitad del país no aporta.
+        #
+        # Vive en `shared/` porque la leen cuatro ejes y no tiene nada de pensiones adentro:
+        # son series nacionales del BCRD y del MHE. Lo que cambia entre ejes es la LECTURA,
+        # no el dato, y ésa la fija la regla de la plantilla — no se copia el bloque.
+        try:
+            from datetime import date as _date
+
+            from shared.capacidad_de_pago import capacidad_de_pago
+            _cap = capacidad_de_pago(db, _date.today())
+            if _cap:
+                payload["capacidad_de_pago"] = _cap
+        except Exception:  # noqa: BLE001 — el snapshot nunca depende de esta serie
+            logger.exception("Capacidad de pago omitida en el snapshot de pensiones")
         return ProductSnapshot(
             tier=tier, period=rating.get("period") or "—",
             payload=payload, entity_name=entity)

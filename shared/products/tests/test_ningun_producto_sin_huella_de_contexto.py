@@ -67,10 +67,13 @@ def test_dos_productos_del_MISMO_modulo_comparten_la_lista_declarada():
 def test_los_archivos_declarados_EXISTEN(clave):
     """Un archivo declarado que no existe se hashea como nada: la lista parece cubrirlo y no
     cubre. Es la familia «un binding a una serie inexistente no falla»."""
-    import pathlib
-
     from modules.banking_score.ai_context_files import AI_CONTEXT_FILES
+    from shared.products.assembler import ruta_de_contexto
 
-    raiz = pathlib.Path(__file__).resolve().parents[3] / "modules" / "banking_score"
-    faltan = [f for f in AI_CONTEXT_FILES if not (raiz / f).is_file()]
+    # La resolución se pide al ENSAMBLADOR, no se reimplementa: una ruta que empieza en
+    # `shared/` sale de la raíz del repo y el resto del módulo. Cuando este test resolvía por
+    # su cuenta, admitir `shared/` en el ensamblador lo dejó buscando
+    # `modules/banking_score/shared/...` y declaró ausente un archivo que sí estaba.
+    faltan = [f for f in AI_CONTEXT_FILES
+              if not ruta_de_contexto(f, "banking_score").is_file()]
     assert faltan == [], f"Declarados y ausentes: {faltan}"

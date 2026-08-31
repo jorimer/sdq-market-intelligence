@@ -94,5 +94,9 @@ def test_ninguna_excepcion_sin_motivo():
 
 def test_no_se_declara_un_archivo_que_no_existe():
     """Una entrada muerta hace creer que algo está cubierto cuando ya no está."""
-    faltan = sorted(d for d in _declarados() if not (RAIZ / d).exists())
+    from shared.products.assembler import ruta_de_contexto
+
+    # Misma resolución que el ensamblador, pedida y no copiada: `shared/...` sale de la raíz.
+    faltan = sorted(d for d in _declarados()
+                    if not ruta_de_contexto(d, "banking_score").exists())
     assert not faltan, f"AI_CONTEXT_FILES declara archivos inexistentes: {faltan}"

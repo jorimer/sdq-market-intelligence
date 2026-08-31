@@ -126,6 +126,14 @@ def _track_record(db: Session) -> Dict[str, Any]:
         return {"has_data": False, "n_scored": 0}
 
 
+#: Este producto NO vive bajo `modules/`, así que el ensamblador hashea su propio archivo.
+#: Eso deja fuera el constructor TRANSVERSAL que ahora lee —la capacidad de pago del hogar,
+#: en `shared/`— y un arreglo de lo que el modelo lee no invalidaría nada. Se declara.
+AI_CONTEXT_FILES = (
+    "shared/capacidad_de_pago.py",
+)
+
+
 class MonetaryPolicyProduct:
 
     ESTADO_BACKTEST = EstadoBacktest(
@@ -235,6 +243,22 @@ class MonetaryPolicyProduct:
                 "modelo y su track record en vivo. Para esta fecha histórica no se "
                 "reconstruye un pronóstico retroactivo; la lectura se basa en la "
                 "trayectoria y el contexto macro tal como eran a esa fecha.")}
+        # LA CAPACIDAD DE PAGO DEL HOGAR. Acá es la lectura DISTRIBUTIVA de la postura:
+        # la inflación del titular es un promedio de la economía, y la del quintil 1 corrió
+        # seis puntos por encima de la del quintil 5 en la ventana medida. Una política que
+        # se juzga contra el índice general se juzga contra un hogar que no existe.
+        #
+        # Vive en `shared/` porque la leen cuatro ejes. Lo que cambia entre ejes es la
+        # LECTURA, no el dato, y ésa la fija la regla de la plantilla.
+        try:
+            from datetime import date as _date
+
+            from shared.capacidad_de_pago import capacidad_de_pago
+            _cap = capacidad_de_pago(db, _date.today())
+            if _cap:
+                payload["capacidad_de_pago"] = _cap
+        except Exception:  # noqa: BLE001 — el snapshot nunca depende de esta serie
+            logger.exception("Capacidad de pago omitida en el snapshot de política monetaria")
         # Nacional/agregado: sin entidad (system) → el período es la fecha de la decisión servida.
         return ProductSnapshot(tier=tier, period=str(latest.get("fecha") or period or ""),
                                payload=payload, entity_name=None)

@@ -1107,7 +1107,13 @@ THIN_TEMPLATES = {
         "un emisor. Usa solo las cifras del contexto (montos RD$ y %)."
     ),
     "pension_entity": (
-        "Explica el FUNDAMENTO del Índice de Solidez (ISA) de esta AFP, con dato real de SIPEN.\n"
+        "LA CAPACIDAD DE COTIZAR, si el contexto trae 'capacidad_de_pago'. Un fondo no crece "
+        "por rentabilidad si la mitad del país no aporta: 'mercado_laboral.ocupacion_informal_pct' "
+        "es la porción de ocupados SIN seguridad social —o sea, fuera del sistema— y el "
+        "salario mínimo es el piso sobre el que se cotiza. Úsalo para encuadrar el "
+        "TAMAÑO POSIBLE del sistema, nunca como un juicio sobre la gestión de la AFP: "
+        "son cosas distintas y confundirlas le atribuye a una administradora un problema "
+        "del mercado laboral. Cita solo las claves que el contexto traiga.\n"        "Explica el FUNDAMENTO del Índice de Solidez (ISA) de esta AFP, con dato real de SIPEN.\n"
         "Contexto:\n{context}\n\n"
         "Máximo 350 palabras. NO es un rating crediticio. El ENCUADRE lo define el contexto, no "
         "este prompt: si el contexto trae una 'band' y su 'note' indica que la SOLVENCIA está "
@@ -1209,7 +1215,12 @@ THIN_TEMPLATES = {
         "el 'y por tanto' competitivo para la audiencia."
     ),
     "insurance_entity": (
-        "Explica el FUNDAMENTO del Índice de Solidez de la Aseguradora (ISF), con dato real de "
+        "LA CAPACIDAD DE PAGO DEL HOGAR, si el contexto trae 'capacidad_de_pago'. Una póliza "
+        "voluntaria compite con la canasta: si 'cobertura_del_piso_de_ingreso' muestra que "
+        "el salario mínimo no cubre la canasta de los quintiles bajos, la persistencia de "
+        "cartera en los ramos de personas enfrenta una presión que no está en el balance. "
+        "Es contexto de DEMANDA, no un juicio sobre la suscripción de la aseguradora, y "
+        "no aplica a los ramos corporativos. Cita solo las claves que el contexto traiga.\n"        "Explica el FUNDAMENTO del Índice de Solidez de la Aseguradora (ISF), con dato real de "
         "la SIS.\nContexto:\n{context}\n\n"
         "Máximo 350 palabras. NO es un rating de crédito ni un dictamen de solvencia. Apóyate "
         "en: el score y la banda de solidez, la posición relativa (rank) frente a las "
@@ -1350,6 +1361,13 @@ THIN_TEMPLATES = {
         "la coyuntura; el resto del contexto oficial úsalo como telón y cítalo breve."
     ),
     "mp_evaluation": (
+        "LA LECTURA DISTRIBUTIVA, si el contexto trae 'capacidad_de_pago'. La inflación del "
+        "titular es un promedio de la economía; 'inflacion_del_deudor' la abre por quintil "
+        "de ingreso y 'brecha_quintil_1_menos_quintil_5_pp' viene computada. Una postura "
+        "que se juzga contra el índice general se juzga contra un hogar que no existe: "
+        "decí a QUIÉN le está costando más el nivel de precios, con la ventana en que se "
+        "mide. NO lo conviertas en una recomendación de política — esta plataforma "
+        "describe, no le aconseja al emisor. Cita solo las claves que el contexto traiga.\n"
         "Evalúa la POSTURA de política monetaria del BCRD y su impacto macro (dato real BCRD).\n"
         "Contexto:\n{context}\n\n"
         "Máximo 380 palabras. Lee la 'trayectoria_reciente' y el 'ciclo' (holds/cortes/alzas, "

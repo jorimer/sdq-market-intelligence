@@ -285,14 +285,14 @@ def _amplitud_al_cierre(db: Session, bank: Bank, anio: int) -> Dict[str, Any]:
         # La CAPACIDAD DE PAGO del deudor. En su PROPIO try y no dentro del anterior: son
         # dos lecturas distintas, y un fallo del mapa no tiene por qué llevarse puesta la
         # otra — es cómo un bloque se apaga por un motivo que no es el suyo.
-        from modules.banking_score.reports.capacidad_de_pago import capacidad_de_pago
+        from shared.capacidad_de_pago import capacidad_de_pago
         cap = capacidad_de_pago(db, cierre)
         # El cruce con el TERRITORIO, cuando el mapa del bloque anterior salió. Se lee de
         # `out` y no de una variable: si el mapa falló, acá no hay provincias que cruzar y
         # el bloque queda sin esa lectura en vez de con una vacía.
         provincias = (out.get("mapa_sectorial") or {}).get("provincias") or []
         if cap and provincias:
-            from modules.banking_score.reports.capacidad_de_pago import (
+            from shared.capacidad_de_pago import (
                 holgura_donde_presta)
             donde = holgura_donde_presta(db, cierre, provincias)
             if donde:
