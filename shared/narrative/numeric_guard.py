@@ -17,6 +17,7 @@ guardrail nunca debe empeorar la salida ni romper el endpoint.
 import json
 import logging
 import math
+from decimal import Decimal, InvalidOperation, ROUND_HALF_UP
 import re
 import unicodedata
 from typing import Any, Dict, List, Optional, Tuple
@@ -386,6 +387,19 @@ def context_figures(context: Any) -> set:
     return out
 
 
+def _half_up(x: float, d: int) -> float:
+    """`x` acortado a `d` decimales con redondeo HALF-UP — la convención humana.
+
+    Se pasa por `str(x)` a propósito: `Decimal(43.925)` toma la expansión binaria
+    (43.92499…) y volvería a dar 43.92, que es exactamente lo que este helper viene a
+    resolver. `Decimal(str(43.925))` es el 43,925 decimal que la fuente quiso decir.
+    """
+    try:
+        return float(Decimal(str(x)).quantize(Decimal(1).scaleb(-d), rounding=ROUND_HALF_UP))
+    except (InvalidOperation, ValueError, OverflowError):
+        return float("nan")
+
+
 def _decimales(literal: str) -> int:
     """Decimales que DECLARA la cita: '69' → 0, '69,1' → 1, '69,46' → 2."""
     normal = literal.replace(",", ".")
@@ -650,8 +664,25 @@ def deterministic_uncited_figures(context: dict, text: str) -> List[str]:
 
             def _cubre(candidatos: set, valor: float = value, d: int = dp,
                        e: int = escala) -> bool:
-                # Redondeo Y truncación, las dos formas legítimas de acortar una cifra.
+                # TRES formas legítimas de acortar una cifra, no dos.
+                #
+                # `round()` de Python usa half-EVEN, y sobre un float el empate casi nunca
+                # es exacto en binario: `round(43.925, 2)` da 43.92. La truncación da lo
+                # mismo. Falta la convención que usan las personas y las planillas —half-UP,
+                # 43.93— que es justamente la que el modelo imita.
+                #
+                # Costó un informe REAL: el SDQ Rating de Caribe Internacional al 2026-06-30
+                # no se entregaba porque la prosa decía «43.93%» de un `cost_to_income`
+                # servido como 43.925. La cifra era correcta; lo que faltaba era la tercera
+                # forma. Es el mismo modo de falla que el «5,4 puntos» de un 5,47 que ya
+                # motivó aceptar la truncación.
+                #
+                # La apertura es MÍNIMA por construcción: half-up y half-even solo difieren
+                # en el empate exacto a esa precisión, así que esto suma como mucho un valor
+                # aceptado por número servido, y solo cuando ese número cae justo en la
+                # mitad. No se parece a las familias que ensanchan el rango.
                 return any(round(x, d) == valor or math.floor(x * e) / e == valor
+                           or _half_up(x, d) == valor
                            for x in candidatos)
 
             if _cubre(known) or _cubre(derivadas) or m.group(0).strip() in seen:
