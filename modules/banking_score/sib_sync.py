@@ -758,7 +758,11 @@ def recompute_carteras_metrics(period: str, write_status=None) -> Dict:
                 # los 22 trimestres de 89 entidades. Vivió un día en producción y se descubrió
                 # al comparar 1.681 puntos de score contra la línea base: 680 se habían
                 # movido, y el «cambio» era en realidad la corrección.
-                _guardar_cartera_sectorial(db, bank.id, pe, cm.get("por_sector") or {})
+                # Las celdas vienen YA serializadas del cliente: `_compute_carteras_metrics`
+                # las pasa por `_celdas_serializadas`, que deriva `tasa_ponderada`. Antes las
+                # armaba con una copia a mano de esa función que no derivaba nada, y esta
+                # ruta escribía la tasa en NULL mientras el backfill la escribía bien.
+                _guardar_cartera_sectorial(db, bank.id, pe, cm.get("por_sector") or [])
                 updated += 1
                 affected_periods.add(pe)
         db.commit()
