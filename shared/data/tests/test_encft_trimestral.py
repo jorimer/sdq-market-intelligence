@@ -153,3 +153,54 @@ class TestLasCuatroMedidasDeSubutilizacion:
         thin = THIN_TEMPLATES["banking_sector_map"]
         assert "citá la AMPLIA" in thin
         assert "holgura_que_SU1_no_ve_pp" in thin
+
+
+class TestLaPrecisionDeCadaEstimacion:
+    """La ENCFT es una encuesta y su precisión venía publicada al lado, sin usar.
+
+    Dos hojas del mismo libro —1.434 filas— con error estándar, intervalo al 95% y
+    coeficiente de variación de cada estimación trimestral. Servíamos las cifras desnudas.
+    """
+
+    RAW = None
+
+    def _raw(self):
+        import pathlib
+        p = pathlib.Path("/Users/ricardomercado/Downloads/00_Indicadores.xlsx")
+        return p.read_bytes() if p.exists() else None
+
+    def test_el_puente_entre_los_DOS_vocabularios_esta_declarado(self):
+        """La hoja de indicadores dice «SU1: Tasa de Desocupación» y la de precisión «Tasa
+        de desocupación (SU1)». Emparejarlos por parecido pegaría la precisión de una serie
+        a los valores de otra, y el resultado se vería perfectamente normal."""
+        from shared.data.bcrd_labor import PRECISION_POR_ETIQUETA
+        assert PRECISION_POR_ETIQUETA["SU1: Tasa de Desocupación"] == \
+            "Tasa de desocupación (SU1)"
+        assert len(PRECISION_POR_ETIQUETA) >= 9
+
+    def test_el_ano_se_lee_venga_como_numero_o_como_TEXTO(self):
+        """La misma columna de la misma hoja mezcla los dos tipos: 195 celdas de texto y una
+        numérica. Leer solo el numérico dejaba `anio` sin propagar durante bloques enteros y
+        la serie salía VACÍA sin error — el parser «funcionaba»."""
+        from shared.data.bcrd_labor import _anio
+        assert _anio(2014) == 2014
+        assert _anio("2014") == 2014
+        assert _anio(" 2015 ") == 2015
+        assert _anio("Año") is None
+        assert _anio(1999) is None and _anio("3000") is None
+        assert _anio(None) is None and _anio(True) is None
+
+    def test_las_series_que_se_CITAN_llevan_su_precision(self):
+        from shared.data.bcrd_labor import _PRECISION_DE_LAS_SERVIDAS
+        for clave in ("unemployment_rate_trimestral", "underutilization_su4_trimestral",
+                      "informality_rate_trimestral"):
+            assert clave in _PRECISION_DE_LAS_SERVIDAS
+
+    def test_la_precision_se_PERSISTE_como_temas_propios(self):
+        """El CV y los extremos del intervalo son magnitudes distintas del valor: meterlos
+        en `disaggregation` los volvería texto y nadie podría compararlos."""
+        import inspect
+        from modules.social_dev import social_sync
+        src = inspect.getsource(social_sync._sync_bcrd_mercado_laboral)
+        for sufijo in ("_cv", "_ic95_inf", "_ic95_sup"):
+            assert sufijo in src

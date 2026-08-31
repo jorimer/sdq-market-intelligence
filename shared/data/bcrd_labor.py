@@ -28,7 +28,7 @@ import io
 import logging
 import re
 import unicodedata
-from typing import List, Optional, Tuple
+from typing import Dict, List, Optional, Tuple
 
 logger = logging.getLogger("sdq.data.bcrd_labor")
 
@@ -150,6 +150,118 @@ _NOTA_AL_PIE = re.compile(r"\s*\d+/\s*$")
 def _sin_nota(txt: str) -> str:
     """Quita la marca de nota al pie que el BCRD pega al final de algunas etiquetas."""
     return _NOTA_AL_PIE.sub("", txt or "").strip()
+
+
+SHEET_PRECISION = "Precisión Estadística Indicador"
+
+#: De la etiqueta de la hoja «Indicadores» a la de la hoja de PRECISIÓN. Son dos vocabularios
+#: del mismo emisor para la misma serie —«SU1: Tasa de Desocupación» allá,
+#: «Tasa de desocupación (SU1)» acá— y se declara el puente en vez de emparejarlos por
+#: parecido: un emparejamiento laxo pegaría la precisión de una serie a los valores de otra,
+#: y el resultado se vería perfectamente normal.
+PRECISION_POR_ETIQUETA = {
+    "SU1: Tasa de Desocupación": "Tasa de desocupación (SU1)",
+    "SU2: Desocupación y Subocupación": "Desocupación y Subocupación (SU2)",
+    "SU3: Desocupación y Fuerza de Trabajo Potencial":
+        "Desocupación y Fuerza de Trabajo Potencial (SU3)",
+    "SU4: Desocupación + Subocupación + Fuerza de Trabajo Potencial":
+        "Desocupación + Subocupación + Fuerza de Trabajo Potencial (SU4)",
+    "Ocupación Informal": "Ocupación Informal",
+    "Ocupación Formal": "Ocupación Formal",
+    "Tasa de Ocupación": "Tasa de ocupación",
+    "Tasa de subocupación por horas": "Tasa de subocupación por horas",
+    "Tasa de Inactividad": "Tasa de inactividad",
+}
+
+
+def _anio(cell: object) -> Optional[int]:
+    """El año de una celda, venga como número o como texto.
+
+    Existe porque la hoja de precisión mezcla los dos tipos en la MISMA columna. Un parser
+    que solo acepte el numérico deja de propagar el año en los bloques donde vino como texto
+    y devuelve una serie vacía o —peor— con el año del bloque anterior."""
+    if isinstance(cell, (int, float)) and not isinstance(cell, bool):
+        return int(cell) if 2000 < cell < 2100 else None
+    if isinstance(cell, str):
+        t = cell.strip()
+        if t.isdigit() and 2000 < int(t) < 2100:
+            return int(t)
+    return None
+
+
+#: Qué series servidas llevan su precisión. Son las que un informe cita, no las nueve: la
+#: precisión existe para juzgar una AFIRMACIÓN, y las que no se afirman no la necesitan.
+_PRECISION_DE_LAS_SERVIDAS = {
+    "unemployment_rate_trimestral": "SU1: Tasa de Desocupación",
+    "underutilization_su4_trimestral":
+        "SU4: Desocupación + Subocupación + Fuerza de Trabajo Potencial",
+    "informality_rate_trimestral": "Ocupación Informal",
+    "underemployment_rate_trimestral": "Tasa de subocupación por horas",
+}
+
+
+def parse_precision(content: bytes, label: str) -> List[Tuple[str, Dict[str, Optional[float]]]]:
+    """La PRECISIÓN de cada estimación trimestral: `[('YYYY-Qn', {...})]`.
+
+    **Por qué importa.** La ENCFT es una ENCUESTA: cada cifra que publicamos es una
+    estimación con error de muestreo, y el BCRD publica el error estándar, el intervalo de
+    confianza al 95% y el coeficiente de variación de cada una — en dos hojas del mismo libro
+    que ya descargamos. Servíamos las estimaciones sin ninguna medida de precisión.
+
+    Para qué sirve en un informe: una diferencia menor que los intervalos NO es una
+    diferencia. Sin el intervalo, el modelo (y el lector) leen como señal lo que puede ser
+    ruido de muestreo, y eso es exactamente lo que la doctrina de esta casa llama ordenar lo
+    que no es comparable.
+
+    El coeficiente de variación es el resumen operativo: por convención estadística, hasta
+    15% la estimación es fiable, entre 15 y 25 se usa con cautela y por encima de 25 no se
+    publica. Se sirve el número, no el veredicto: el umbral lo aplica quien lee.
+    """
+    import openpyxl
+
+    etiqueta = PRECISION_POR_ETIQUETA.get(label, label)
+    wb = openpyxl.load_workbook(io.BytesIO(content), data_only=True, read_only=True)
+    try:
+        if SHEET_PRECISION not in wb.sheetnames:
+            raise BcrdLaborUnavailable(
+                f"el libro no trae la hoja '{SHEET_PRECISION}' (hojas: {wb.sheetnames})")
+        rows = [list(r) for r in wb[SHEET_PRECISION].iter_rows(values_only=True)]
+    finally:
+        wb.close()
+
+    objetivo = _norm(_sin_nota(etiqueta))
+    out: List[Tuple[str, Dict[str, Optional[float]]]] = []
+    # Indicador y año vienen en celdas COMBINADAS: aparecen una vez y valen hasta el próximo.
+    # Se propagan explícitamente; leerlos fila por fila daría un `None` en casi todas.
+    indicador, anio, dentro = "", None, False
+    for fila in rows:
+        if not fila:
+            continue
+        if isinstance(fila[0], str) and fila[0].strip():
+            indicador = _norm(_sin_nota(fila[0]))
+            dentro = indicador == objetivo
+        # El año viene como NÚMERO en unas filas y como TEXTO en otras: la misma columna de
+        # la misma hoja mezcla los dos tipos. Leer solo el numérico dejaba `anio` en None
+        # durante bloques enteros y la serie salía vacía sin error — el parser «funcionaba».
+        y = _anio(fila[1]) if len(fila) > 1 else None
+        if y is not None:
+            anio = y
+        if not dentro or anio is None or len(fila) < 8:
+            continue
+        q = _trimestre(fila[2])
+        if q is None or not isinstance(fila[3], (int, float)):
+            continue
+        out.append((f"{anio}-Q{q}", {
+            "estimacion": round(float(fila[3]), 4),
+            "error_estandar": round(float(fila[4]), 4) if isinstance(fila[4], (int, float)) else None,
+            "ic95_inferior": round(float(fila[5]), 4) if isinstance(fila[5], (int, float)) else None,
+            "ic95_superior": round(float(fila[6]), 4) if isinstance(fila[6], (int, float)) else None,
+            "coeficiente_de_variacion_pct": round(float(fila[7]), 4) if isinstance(fila[7], (int, float)) else None,
+        }))
+    if not out:
+        raise BcrdLaborUnavailable(
+            f"no se encontró '{etiqueta}' en la hoja '{SHEET_PRECISION}'")
+    return out
 
 
 def parse_trimestral(content: bytes, label: str) -> List[Tuple[str, float]]:
@@ -483,4 +595,13 @@ def fetch_bcrd_labor_market() -> dict:  # pragma: no cover - network I/O
         # «formal» e «informal» no siempre suman cien —hay categorías fuera de ambas— y
         # derivar una de la otra fabricaría el resto.
         "formality_rate_trimestral": parse_trimestral(r.content, "Ocupación Formal"),
+        # LA PRECISIÓN de cada estimación. La ENCFT es una ENCUESTA: cada cifra que
+        # publicamos tiene error de muestreo, y el BCRD publica el intervalo de confianza y
+        # el coeficiente de variación de todas — en otra hoja del MISMO libro. Servíamos las
+        # estimaciones desnudas, y una diferencia menor que los intervalos no es una
+        # diferencia. Se emiten aparte y no mezcladas con el valor: son otra magnitud.
+        "precision_trimestral": {
+            clave: parse_precision(r.content, etiqueta)
+            for clave, etiqueta in _PRECISION_DE_LAS_SERVIDAS.items()
+        },
     }

@@ -292,6 +292,22 @@ def _sync_bcrd_mercado_laboral(db: Session, set_phase: Callable[[str], None]) ->
                               value=float(value), source=SOURCE, disagg="nacional",
                               unit=unidad)
             synced += 1
+    # LA PRECISIÓN de las series que se citan, como temas propios. El coeficiente de
+    # variación y los dos extremos del intervalo son magnitudes distintas del valor, así que
+    # van en su propia clave: meterlos en `disaggregation` los volvería texto y nadie podría
+    # compararlos.
+    for clave, puntos in (series.get("precision_trimestral") or {}).items():
+        for periodo, d in puntos:
+            for campo, sufijo, unidad in (
+                    ("coeficiente_de_variacion_pct", "_cv", "%"),
+                    ("ic95_inferior", "_ic95_inf", "%"),
+                    ("ic95_superior", "_ic95_sup", "%")):
+                if d.get(campo) is None:
+                    continue
+                _upsert_indicator(db, theme=f"{clave}{sufijo}"[:60], entity=HEALTH_ENTITY,
+                                  period=str(periodo), value=float(d[campo]),
+                                  source=SOURCE, disagg="nacional", unit=unidad)
+                synced += 1
     logger.info("[social] mercado laboral BCRD: %d puntos en %d series (%s)",
                 synced, len(_MERCADO_LABORAL) + len(_MERCADO_LABORAL_TRIMESTRAL),
                 LICENSE[:40])

@@ -231,6 +231,12 @@ _TEMAS_LABORALES = {
 }
 
 
+def _ultimo_valor(db: Session, tema: str, hasta: str) -> Optional[float]:
+    """El último valor de un tema social hasta *hasta*, o None."""
+    puntos = [(p, v) for p, v in _puntos_sociales(db, tema, hasta)]
+    return puntos[-1][1] if puntos else None
+
+
 def mercado_laboral(db: Session, corte: date) -> Optional[Dict[str, Any]]:
     """Desocupación, ocupación e informalidad al TRIMESTRE del corte.
 
@@ -256,6 +262,42 @@ def mercado_laboral(db: Session, corte: date) -> Optional[Dict[str, Any]]:
     angosta = out.get("desocupacion_abierta_su1_pct")
     if ancha is not None and angosta is not None:
         out["holgura_que_SU1_no_ve_pp"] = round(ancha - angosta, 2)
+
+    # LA PRECISIÓN. La ENCFT es una encuesta: cada cifra tiene error de muestreo, y una
+    # diferencia menor que los intervalos NO es una diferencia. El BCRD publica el intervalo
+    # de confianza al 95% y el coeficiente de variación de cada estimación; servíamos las
+    # estimaciones desnudas y el lector —y el modelo— no tenían cómo saber qué es señal.
+    #
+    # La comprobación de solapamiento se COMPUTA acá porque es la que decide si la brecha
+    # entre las dos medidas se puede afirmar. Sin ella, «5,60 puntos» se lee como un hecho
+    # exacto de una encuesta que no lo es.
+    intervalos = {}
+    for clave, tema in (("desocupacion_abierta_su1", "unemployment_rate_trimestral"),
+                        ("subutilizacion_amplia_su4", "underutilization_su4_trimestral"),
+                        ("ocupacion_informal", "informality_rate_trimestral")):
+        inf = _ultimo_valor(db, f"{tema}_ic95_inf", trimestre)
+        sup = _ultimo_valor(db, f"{tema}_ic95_sup", trimestre)
+        cv = _ultimo_valor(db, f"{tema}_cv", trimestre)
+        if inf is not None and sup is not None:
+            intervalos[clave] = {"ic95_inferior": inf, "ic95_superior": sup,
+                                 "coeficiente_de_variacion_pct": cv}
+    if intervalos:
+        out["precision_de_la_encuesta"] = intervalos
+        a, b = intervalos.get("desocupacion_abierta_su1"), intervalos.get(
+            "subutilizacion_amplia_su4")
+        techo_angosta = (a or {}).get("ic95_superior")
+        piso_ancha = (b or {}).get("ic95_inferior")
+        if techo_angosta is not None and piso_ancha is not None:
+            # Se solapan si el techo de la angosta llega al piso de la ancha. Los dos se
+            # estrechan antes de comparar: `None` no se ordena, y compararlo daría un error
+            # en producción sobre un corte al que le falte un extremo.
+            out["la_brecha_entre_SU1_y_SU4_es_significativa"] = bool(
+                techo_angosta < piso_ancha)
+        out["que_es_la_precision"] = (
+            "la ENCFT es una encuesta: cada cifra es una estimación con error de muestreo. "
+            "El intervalo al 95% es el rango en que está el valor real, y una diferencia "
+            "menor que los intervalos no se puede afirmar. El coeficiente de variación "
+            "resume la precisión: por convención, hasta 15% la estimación es fiable")
     out["por_que_importa_en_credito"] = (
         "un ocupado informal no tiene ingreso verificable, y el crédito de consumo se "
         "origina contra ingreso declarado: la informalidad acota a qué parte de la "
