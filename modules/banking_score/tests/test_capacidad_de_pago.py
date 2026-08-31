@@ -266,7 +266,7 @@ class TestLaFormalidadDelEmpleo:
         r = I.mercado_laboral(db, CORTE)
         assert r["trimestre"] == "2026-Q1"
         assert r["ocupacion_informal_pct"] == 54.1
-        assert r["desocupacion_pct"] == 4.95
+        assert r["desocupacion_abierta_su1_pct"] == 4.95
 
     def test_sin_informalidad_no_hay_lectura(self, db):
         """Es la que responde la pregunta de crédito —ingreso verificable—; las otras dos
@@ -379,3 +379,37 @@ def test_las_cinco_series_de_canasta_estan_en_el_registro_CANONICO():
     claves = {c.key for c in REGISTRY}
     for q in I.QUINTILES:
         assert f"costo_canasta_quintil_{q}" in claves
+
+
+class TestLaHolguraQueLaMedidaAngostaNoVe:
+    """SU1 = 4,95% y SU4 = 10,55% al primer trimestre de 2026. La resta es el punto."""
+
+    @pytest.fixture()
+    def db_laboral(self, db):
+        for tema, v in (("informality_rate_trimestral", 54.10),
+                        ("unemployment_rate_trimestral", 4.95),
+                        ("underutilization_su4_trimestral", 10.55),
+                        ("underemployment_rate_trimestral", 1.91),
+                        ("employment_rate_trimestral", 63.00)):
+            _sembrar_social(db, tema, [("2026-Q1", v)], unidad="%")
+        return db
+
+    def test_sirve_las_DOS_medidas_con_su_nombre(self, db_laboral):
+        r = I.mercado_laboral(db_laboral, CORTE)
+        assert r["desocupacion_abierta_su1_pct"] == 4.95
+        assert r["subutilizacion_amplia_su4_pct"] == 10.55
+
+    def test_la_brecha_se_COMPUTA_y_no_se_le_pide_al_modelo(self, db_laboral):
+        r = I.mercado_laboral(db_laboral, CORTE)
+        assert r["holgura_que_SU1_no_ve_pp"] == 5.60
+
+    def test_sin_la_ANCHA_no_hay_brecha_inventada(self, db):
+        for tema, v in (("informality_rate_trimestral", 54.10),
+                        ("unemployment_rate_trimestral", 4.95)):
+            _sembrar_social(db, tema, [("2026-Q1", v)], unidad="%")
+        r = I.mercado_laboral(db, CORTE)
+        assert "holgura_que_SU1_no_ve_pp" not in r
+
+    def test_la_lectura_EXPLICA_por_qué_la_ancha_importa_en_crédito(self, db_laboral):
+        r = I.mercado_laboral(db_laboral, CORTE)
+        assert "ingreso insuficiente" in r["por_que_importa_en_credito"]
