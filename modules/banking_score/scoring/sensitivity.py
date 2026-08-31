@@ -192,6 +192,65 @@ def nivel_de_referencia(clave: str, raw_actual: float,
         return None
 
 
+#: DOMINIO POSIBLE de cada indicador con curva: (mínimo, máximo), `None` = sin cota.
+#:
+#: Por qué existe. La tabla de sensibilidades invierte la curva —`to_raw(score_objetivo)`— y
+#: publicaba el resultado sin preguntarse si ese valor puede existir. Así el Deep Dive de
+#: Caribe Internacional al 2026-06-30 listó como riesgo a la baja «Exposición inmobiliaria ·
+#: actual 11.46 · umbral -5.02%». Una exposición es una porción de la cartera: no puede ser
+#: negativa. Lo que el número decía en realidad es que esa banda NO ES ALCANZABLE por ese
+#: indicador, y una fila así no es un riesgo — es ruido que además desplaza a un riesgo real
+#: de una tabla que solo muestra tres.
+#:
+#: No se deduce de la unidad. ROA, ROE, margen de intermediación y las razones de capital
+#: pueden ser NEGATIVOS de verdad —una entidad con patrimonio negativo existe, y este repo ya
+#: tuvo un defecto por suponer lo contrario—, mientras que una porción de cartera no. Por eso
+#: se DECLARA indicador por indicador, y ante la duda se deja sin cota: equivocarse hacia lo
+#: permisivo no publica nada falso; hacia lo restrictivo borraría un riesgo real.
+DOMINIO_DEL_INDICADOR: Dict[str, tuple] = {
+    # sujeto-ok: esto NO es contexto del modelo. Es una tabla de dominios indexada por la
+    # CLAVE del indicador —las mismas claves de `_CURVES`—, y nunca se serializa hacia la
+    # narrativa: sus valores son cotas numéricas, no cuotas atribuibles a una población.
+    # Porciones y razones de magnitudes no negativas.
+    "castigos_pct": (0.0, None),
+    "cobertura_provisiones": (0.0, None),
+    "concentracion_top10": (0.0, 100.0),  # sujeto-ok: clave de indicador, no de contexto
+    "exposicion_re": (0.0, 100.0),
+    "liquidez_ajustada": (0.0, None),
+    "liquidez_inmediata": (0.0, None),
+    "ltd": (0.0, None),
+    "migracion": (0.0, None),
+    "morosidad": (0.0, 100.0),
+    "pct_cartera_a": (0.0, 100.0),
+    # sujeto-ok: ver arriba — clave de indicador, no clave de contexto.
+    # El HHI vive en 0–10.000 por construcción.
+    "hhi_ingresos": (0.0, 10000.0),
+    "hhi_sectorial": (0.0, 10000.0),
+    # SIN COTA a propósito: el capital puede ser negativo y el resultado también, así que
+    # una cota inferior acá borraría escenarios que sí pueden ocurrir.
+    "cost_to_income": (None, None),
+    "leverage": (None, None),
+    "margen_financiero": (None, None),
+    "patrimonio_activos": (None, None),
+    "roa": (None, None),
+    "roe": (None, None),
+    "solvencia": (None, None),
+    "tier1_ratio": (None, None),
+}
+
+
+def umbral_alcanzable(clave: str, umbral: float) -> bool:
+    """¿El valor que llevaría a `clave` a esa banda puede existir?
+
+    Un indicador sin dominio declarado se considera alcanzable: el test estructural exige la
+    declaración, y suponer una cota que nadie escribió sería inventar el dato que decide.
+    """
+    minimo, maximo = DOMINIO_DEL_INDICADOR.get(clave, (None, None))
+    if minimo is not None and umbral < minimo:
+        return False
+    return not (maximo is not None and umbral > maximo)
+
+
 def sensitivity_table(indicators: Dict[str, Any], entity_type: Optional[str] = None,
                       top: int = 3) -> Dict[str, Any]:
     """Tabla de sensibilidades simétrica para la entidad.
@@ -240,7 +299,7 @@ def sensitivity_table(indicators: Dict[str, Any], entity_type: Optional[str] = N
             umbral = curve.to_raw(target, float(raw), entity_type)
             new_overall = _recompute_overall(indicators, key, target, weights)
             delta = round(new_overall - base, 2)
-            if delta > 0.01:
+            if delta > 0.01 and umbral_alcanzable(key, umbral):
                 up.append({
                     "indicador": key, "label": label, "sub": sub,
                     "raw_actual": round(float(raw), 2), "score_actual": round(float(score), 1),
@@ -256,7 +315,7 @@ def sensitivity_table(indicators: Dict[str, Any], entity_type: Optional[str] = N
             umbral = curve.to_raw(target, float(raw), entity_type)
             new_overall = _recompute_overall(indicators, key, target, weights)
             delta = round(new_overall - base, 2)
-            if delta < -0.01:
+            if delta < -0.01 and umbral_alcanzable(key, umbral):
                 down.append({
                     "indicador": key, "label": label, "sub": sub,
                     "raw_actual": round(float(raw), 2), "score_actual": round(float(score), 1),

@@ -256,6 +256,50 @@ def sistema_por_sector(db: Session, corte: date) -> Dict[str, Any]:
     }
 
 
+#: Por qué no hay mapa sectorial en un corte. Se DECLARA, no se omite: una sección que
+#: desaparece se lee como que el producto no la trae, y la pregunta que el lector se hace
+#: —«¿este banco no presta por sector, o ustedes no lo tienen?»— queda sin responder.
+#:
+#: Los dos motivos son distintos y solo uno es nuestro. Vive como constante y no incrustado
+#: en la función porque un literal se parte por ancho de línea y deja de existir en el fuente.
+MOTIVO_FUENTE_SIN_PUBLICAR = (
+    "El desglose sectorial de este corte no está disponible: la Superintendencia de Bancos "
+    "todavía no ha publicado el cubo de crédito del período. No es una omisión del análisis "
+    "ni una característica de la entidad — es un dato que la fuente aún no emitió, y se "
+    "declara en vez de sustituirse. La sección se incorpora cuando el cubo se publique."
+)
+
+MOTIVO_ENTIDAD_SIN_DESGLOSE = (
+    "Esta entidad no registra cartera clasificada por sector económico en este corte, aunque "
+    "el desglose del sistema sí está publicado. La comparación contra el resto del sistema "
+    "necesita el libro sectorial propio, y sin él no se computa: se declara la ausencia en "
+    "lugar de presentar una posición que no se midió."
+)
+
+MOTIVO_SISTEMA_SIN_PUBLICAR = (
+    "El libro de crédito del sistema abierto por sector no está disponible para este corte: "
+    "la Superintendencia de Bancos todavía no ha publicado el cubo de crédito del período. "
+    "Se declara en vez de sustituirse por el corte anterior, que describiría otro trimestre."
+)
+
+
+def motivo_sin_mapa(db: Session, corte: date,
+                    bank: Optional[Bank] = None) -> str:
+    """Por qué este corte no tiene mapa sectorial — distinguiendo de QUIÉN es la ausencia.
+
+    Sin celdas para el corte, la fuente no publicó el cubo. Con celdas pero ninguna de la
+    entidad, el hueco es de la entidad. Confundirlos haría que un trimestre sin publicar se
+    leyera como una característica del banco evaluado, que es exactamente la lectura que un
+    informe de calificación no puede permitirse inducir.
+    """
+    hay_corte = bool(_celdas(db, corte))
+    if bank is None:
+        return "" if hay_corte else MOTIVO_SISTEMA_SIN_PUBLICAR
+    if not hay_corte:
+        return MOTIVO_FUENTE_SIN_PUBLICAR
+    return MOTIVO_ENTIDAD_SIN_DESGLOSE
+
+
 def posicion_de_la_entidad(db: Session, bank: Bank, corte: date) -> Optional[Dict[str, Any]]:
     """Dónde presta esta entidad, y cómo le va ahí contra el RESTO del sistema."""
     celdas = _celdas(db, corte)

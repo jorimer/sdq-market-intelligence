@@ -673,6 +673,17 @@ async def generate_report(
             mapa = None
         if mapa:
             scoring_result["mapa_sectorial"] = mapa
+        else:
+            # LA AUSENCIA SE DECLARA. Sin esto la sección desaparecía del informe sin decir
+            # por qué, y la lectura que quedaba era la peor: que la entidad evaluada carece
+            # de algo. En el Deep Dive de 2026-06-30 lo que faltaba era el cubo de crédito
+            # del trimestre, que la fuente no había publicado. El motivo se COMPUTA acá,
+            # que es donde viven la sesión y la entidad.
+            from modules.banking_score.reports.mapa_sectorial import motivo_sin_mapa
+            try:
+                scoring_result["mapa_sectorial_no_publicado"] = motivo_sin_mapa(db, pe, bank)
+            except Exception:  # noqa: BLE001 — declarar el hueco no puede tumbar el informe
+                logger.exception("No se pudo declarar la ausencia del mapa de %s", bank.name)
         # La inflación del DEUDOR viaja con el mapa: es la capacidad de pago que explica la
         # mora de consumo, y solo significa algo al lado del peso de esa cartera.
         try:
@@ -703,6 +714,13 @@ async def generate_report(
             sis = None
         if sis and sis.get("sectores"):
             scoring_result["mapa_sectorial_sistema"] = sis
+        else:
+            from modules.banking_score.reports.mapa_sectorial import motivo_sin_mapa
+            try:
+                scoring_result["mapa_sectorial_sistema_no_publicado"] = motivo_sin_mapa(
+                    db, pe, None)
+            except Exception:  # noqa: BLE001
+                logger.exception("No se pudo declarar la ausencia del mapa del sistema")
 
     # REVISIÓN ANUAL: sujeto de entidad, unidad de AÑO. Se computa antes de narrar y se exige
     # el año CERRADO por el mismo motivo que el anuario del sistema — sin diciembre esto es un
