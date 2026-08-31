@@ -199,11 +199,20 @@ class TestLasMedidasQueSeSumanEnLaMISMA_pasada:
         assert c["tasa_ponderada"] is None
 
     def test_una_celda_sin_tasa_no_entra_en_la_BASE_del_promedio(self, monkeypatch):
-        """Si entrara con cero, bajaría el promedio de todas las demás."""
+        """Si entrara con cero, bajaría el promedio de todas las demás.
+
+        Se lee sobre `tasa_ponderada` y `deuda_con_tasa`, que es lo que se PERSISTE. Antes
+        se leía el numerador crudo `tasa_por_deuda`, que ya no viaja en la celda: la aserción
+        describía una forma intermedia y no la que llega a la base.
+        """
         c = self._celda(monkeypatch, [self._fila(deuda=500, tasaPorDeuda=6000.0),
                                       self._fila(deuda=500, provincia="AZUA")])[0:2]
-        assert sum(x["deuda_con_tasa"] for x in c) == 500
-        assert sum(x["tasa_por_deuda"] for x in c) / 500 == 12.0
+        con_base = [x for x in c if x["deuda_con_tasa"]]
+        assert sum(x["deuda_con_tasa"] for x in c) == 500, "la celda sin tasa no aporta base"
+        assert [x["tasa_ponderada"] for x in c if not x["deuda_con_tasa"]] == [None], (
+            "la celda sin tasa declara el hueco, no un 0% que arrastraría el promedio")
+        # Re-ponderar sobre las que SÍ tienen base: 6000 / 500.
+        assert sum(x["tasa_ponderada"] * x["deuda_con_tasa"] for x in con_base) / 500 == 12.0
 
     def test_moneda_y_persona_entran_como_MEDIDA_no_como_dimension(self, monkeypatch):
         """Dos valores cada una: como grano cuadruplicarían las filas para decir lo mismo.
@@ -232,7 +241,8 @@ class TestLasMedidasQueSeSumanEnLaMISMA_pasada:
     def test_un_campo_ausente_deja_CERO_medido_y_no_rompe(self, monkeypatch):
         """Las filas reales no siempre traen todos los campos."""
         c = self._celda(monkeypatch, [self._fila(deuda=100)])[0]
-        assert c["desembolso"] == 0.0 and c["tasa_por_deuda"] == 0.0
+        assert c["desembolso"] == 0.0
+        assert c["tasa_ponderada"] is None, "sin base no hay tasa que derivar, y None lo dice"
         assert c["deuda"] == 100
 
 

@@ -1069,11 +1069,13 @@ class SIBDataClient:
                 sectors = b["sectors"]
                 stot = sum(sectors.values())
                 hhi = (sum((v / stot) ** 2 for v in sectors.values()) * 10000.0) if stot > 0 else None
-                por_sector = [
-                    {k: (round(v, 2) if isinstance(v, float) else v)
-                     for k, v in vals.items()}
-                    for vals in b["por_sector"].values()
-                ]
+                # LA MISMA función que usa `on_quarter`, no una copia. Acá vivía el
+                # redondeo duplicado a mano: hacía lo mismo salvo DERIVAR `tasa_ponderada`
+                # y descartar el numerador crudo. Los dos consumidores de este retorno —el
+                # recompute y el `_por_sector` que viaja en `_map_to_sdq_fields`— escribían
+                # entonces la tasa en NULL, mientras el backfill, que emite por `on_quarter`,
+                # la escribía bien. Dos caminos que hacen «lo mismo» y uno se quedó atrás.
+                por_sector = _celdas_serializadas(b["por_sector"])
                 result.setdefault(short, {})[pe] = {
                     "hhi": round(hhi, 4) if hhi is not None else None,
                     "total": round(total, 2),
