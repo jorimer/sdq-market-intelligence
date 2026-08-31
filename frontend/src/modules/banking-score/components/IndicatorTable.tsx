@@ -56,16 +56,30 @@ export function IndicatorTable({ indicators, bankId }: Props) {
               onKeyDown={clickable ? (e) => (e.key === "Enter" || e.key === " ") && (e.preventDefault(), setSelected(key)) : undefined}
             >
               <td className="py-2 px-3 text-body">{t(`indicators.${key}`, key)}</td>
-              <td className="py-2 px-3 text-right text-body mono tabular-nums">
-                {typeof detail.raw === "number" ? detail.raw.toFixed(2) : "—"}
-              </td>
-              <td className="py-2 px-3 text-right">
-                <span
-                  className={`inline-block px-2 py-0.5 rounded text-xs font-semibold tabular-nums ${getScoreColor(detail.score)} ${getScoreBg(detail.score)}`}
-                >
-                  {detail.score.toFixed(1)}
-                </span>
-              </td>
+              {/* Un indicador que el motor declaró NO disponible no tiene valor ni score que
+                  mostrar: su `raw` es el 0.0 por defecto de la estructura y su score, el que
+                  esa curva le da al cero — para los inversos, 100. Publicarlo tal cual decía
+                  «cero concentración, perfecto» cuando lo que pasa es que el insumo no vino.
+                  La fila se LISTA igual: esconderla se lee como que el indicador no existe. */}
+              {detail.available === false ? (
+                <>
+                  <td className="py-2 px-3 text-right text-faint mono tabular-nums">s/d</td>
+                  <td className="py-2 px-3 text-right text-faint">—</td>
+                </>
+              ) : (
+                <>
+                  <td className="py-2 px-3 text-right text-body mono tabular-nums">
+                    {typeof detail.raw === "number" ? detail.raw.toFixed(2) : "—"}
+                  </td>
+                  <td className="py-2 px-3 text-right">
+                    <span
+                      className={`inline-block px-2 py-0.5 rounded text-xs font-semibold tabular-nums ${getScoreColor(detail.score)} ${getScoreBg(detail.score)}`}
+                    >
+                      {detail.score.toFixed(1)}
+                    </span>
+                  </td>
+                </>
+              )}
               {clickable && (
                 <td className="py-2 pr-3 text-right">
                   <ChevronRight className="w-4 h-4 text-faint inline-block" />
