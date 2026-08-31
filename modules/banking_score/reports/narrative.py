@@ -723,25 +723,19 @@ async def generate_report_narratives(
     # por completo. El gate gemelo vive en la ruta de productos; acá faltaba porque esta
     # ruta arma su `scoring_result` a mano, que es la misma grieta de siempre.
     #
-    # PERO LA AUSENCIA SE DECLARA. Descartar la sección en silencio deja al lector con la
-    # pregunta sin responder —«¿este banco no presta por sector, o ustedes no lo tienen?»— y
-    # con la lectura peor: que la entidad evaluada carece de algo. En el Deep Dive de
-    # 2026-06-30 el cubo del trimestre no estaba publicado por la fuente y el informe
-    # simplemente no traía la sección, sin decirlo en ninguna parte.
+    # Y LA AUSENCIA NO SE INVENTARÍA. Hubo una versión que ponía en el lugar de la sección un
+    # párrafo explicando por qué faltaba. Correcta hacia adentro y dañina hacia afuera: dejaba
+    # en el índice del documento un título cuyo contenido entero era «esto no lo tenemos», y
+    # un lector de un informe de calificación no lee eso como rigor sino como producto
+    # incompleto. Decisión del dueño (2026-08-31): lo que no se puede afirmar no se menciona.
     #
-    # El motivo se COMPUTA (mirando si hay celdas del corte y si alguna es de la entidad) y
-    # entra como TEXTO de la sección. No lo escribe el modelo: narrar un contexto vacío
-    # produce una sección hueca, que es justo lo que el descarte evita, y `full_rating` falla
-    # cerrado ante una sección degradada. Un texto determinista no es un fallback estático,
-    # así que no dispara ese gate.
-    _motivos: Dict[str, str] = {}
-    _orden = list(sections)  # ANTES de sacar nada: es el orden en que se numeran las secciones
+    # Lo que se conserva es la afirmación de MÉTODO, una sola vez y en Limitaciones. Y la
+    # regla que sí protege: si una conclusión del texto DEPENDÍA del dato que falta, se cae
+    # la conclusión también — callar el hueco es defendible, sostener lo que lo necesitaba
+    # no. Acá se cumple por construcción: sin la sección, su contexto no viaja al modelo.
     for clave in ("mapa_sectorial", "mapa_sectorial_sistema"):
         if clave in sections and not scoring_result.get(clave):
             sections = [s for s in sections if s != clave]
-            motivo = scoring_result.get(f"{clave}_no_publicado")
-            if isinstance(motivo, str) and motivo:
-                _motivos[clave] = motivo
 
     for section in sections:
         if section == "anuario":
@@ -789,12 +783,7 @@ async def generate_report_narratives(
         )
         narratives[section] = result.text
 
-    # La ausencia declarada va EN SU LUGAR, no al final. El PDF numera las secciones por el
-    # orden del dict, así que anexarla dejaba «10. Mapa Sectorial del Crédito» después de la
-    # Recomendación — un documento que se vende no puede tener su índice desordenado porque
-    # un dato faltó.
-    narratives.update(_motivos)
-    return {k: narratives[k] for k in _orden if k in narratives}
+    return narratives
 
 
 async def generate_named_narratives(

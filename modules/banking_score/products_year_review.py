@@ -506,20 +506,13 @@ class BankingYearReviewProduct:
         # que narre un mapa que no existe produce una sección hueca — y el gate de
         # degradación tumba el informe entero.
         #
-        # PERO LA AUSENCIA SE DECLARA, igual que en la ruta de informes. Una sección que
-        # desaparece en silencio deja la peor lectura posible: que la entidad evaluada
-        # carece de algo, cuando lo que falta puede ser un trimestre que la fuente no
-        # publicó. El motivo lo computó el data-pull y viaja en el payload; acá solo se
-        # coloca como TEXTO de la sección, sin pasar por el modelo — narrar un contexto
-        # vacío es justo lo que este filtro evita.
-        motivos: Dict[str, str] = {}
-        orden = list(secciones)  # ANTES de sacar nada: numera las secciones del documento
+        # Y NO SE INVENTARÍA: la sección se omite sin un párrafo que explique el hueco. Ver
+        # el comentario gemelo en `reports/narrative.py` — decisión del dueño del
+        # 2026-08-31: lo que no se puede afirmar no se menciona, y la afirmación de método
+        # vive una sola vez, en Limitaciones.
         for clave in ("mapa_sectorial", "mapa_sectorial_sistema"):
             if clave in secciones and not (snapshot.payload or {}).get(clave):
                 secciones = [s for s in secciones if s != clave]
-                motivo = (snapshot.payload or {}).get(f"{clave}_no_publicado")
-                if isinstance(motivo, str) and motivo:
-                    motivos[clave] = motivo
         for seccion in secciones:
             plantilla = ("banking_sector_map_system" if seccion == "mapa_sectorial_sistema"
                          else "anio_del_sistema" if seccion == "anio_del_sistema"
@@ -535,10 +528,7 @@ class BankingYearReviewProduct:
                 axis="banking",
                 audience="inversionista" if tier == ProductTier.pulse else "comite_credito")
             out[seccion] = res.text
-        # EN SU LUGAR, no al final: el PDF numera por el orden del dict, y anexarla dejaba
-        # el mapa después de la recomendación.
-        out.update(motivos)
-        return {k: out[k] for k in orden if k in out}
+        return out
 
     # ── Muestra curada ──
     def sample_snapshot(self, tier: ProductTier) -> ProductSnapshot:

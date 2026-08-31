@@ -388,16 +388,6 @@ def _rotulo_y_valor(clave: str, crudo) -> tuple:
     return rotulo, texto
 
 
-#: Por qué una fila dice «s/d». Vive como constante y no incrustada en la función porque un
-#: literal partido por ancho de línea deja de existir en el fuente: un test que busque la
-#: frase fallaría sin motivo, o pasaría sin protegerte.
-_NOTA_SIN_DATO = (
-    "s/d = el insumo de ese indicador no vino en este corte. El indicador se excluye del "
-    "promedio de su dimensión y los pesos se renormalizan sobre lo medido, de modo que la "
-    "calificación no acredita ni penaliza un dato ausente."
-)
-
-
 def _build_indicators_table(indicators: Dict[str, Dict], styles,
                             percentiles: Optional[Dict] = None,
                             trajectories: Optional[Dict] = None) -> List:
@@ -414,34 +404,27 @@ def _build_indicators_table(indicators: Dict[str, Dict], styles,
     if has_amplitude:
         header += ["Percentil sist.", "Tendencia"]
     rows = [header]
-    hubo_sin_dato = False
     for name, data in indicators.items():
         if not isinstance(data, dict):
             continue
-        # UN INDICADOR NO DISPONIBLE NO TIENE VALOR NI SCORE QUE PUBLICAR.
+        # UN INDICADOR NO DISPONIBLE NO SE PUBLICA. Ni con su valor ni marcado.
         #
         # Cuando falta un insumo, el motor lo marca `available=False`, lo excluye del
-        # promedio de su dimensión y renormaliza los pesos — eso ya funcionaba. Lo que esta
-        # tabla hacía era leer igual su `raw` y su `score`: el `raw` es el 0.0 por defecto
-        # de la estructura de datos y el score, el que la curva le da al cero. Para los
-        # indicadores INVERSOS —donde menos es mejor— ese cero puntúa 100.
+        # promedio de su dimensión y renormaliza los pesos. Esta tabla llegó a leer igual su
+        # `raw` —el 0.0 por defecto de la estructura— y su score: en los indicadores
+        # INVERSOS ese cero puntúa 100, así que un dato ausente salía como desempeño
+        # perfecto. Eso no puede volver, y el test lo vigila.
         #
-        # Así, el Deep Dive de Caribe Internacional al 2026-06-30 publicó «Concentración
-        # top-10: 0.00% · score 100.0» y «HHI sectorial de cartera: 0 · score 100.0» para el
-        # corte cuyo cubo de crédito la SIB no ha publicado. Al cierre de 2025 la
-        # concentración real era 34,90%. La calificación estaba bien; el documento no, y es
-        # el documento lo que se vende.
+        # La primera cura fue publicar la fila marcada «s/d». Correcta hacia adentro y
+        # dañina hacia afuera: el lector de un informe de calificación no lee rigor en un
+        # inventario de faltantes, lee un producto incompleto. Decisión del dueño
+        # (2026-08-31): lo que no se puede afirmar no se menciona. La fila se omite y la
+        # afirmación de MÉTODO —que el índice se sostiene solo en dato real y que un
+        # indicador sin insumo se excluye renormalizando— vive una sola vez, en
+        # Limitaciones, que es donde ese lector la busca.
         #
-        # La fila se LISTA marcada, no se esconde: una fila ausente se lee como que el
-        # indicador no existe, y lo que hay que decir es que no vino el dato.
-        sin_dato = data.get("available") is False
-        hubo_sin_dato = hubo_sin_dato or sin_dato
-        if sin_dato:
-            rotulo, _ = _rotulo_y_valor(name, None)
-            row = [rotulo, "s/d", "—"]
-            if has_amplitude:
-                row += ["—", "—"]
-            rows.append(row)
+        # Lo que NO cambia es hacia adentro: nunca se fabrica, nunca se acredita el hueco.
+        if data.get("available") is False:
             continue
         rotulo, valor = _rotulo_y_valor(name, data.get("raw"))
         row = [rotulo, valor, f"{data.get('score', 0):.1f}"]
@@ -463,9 +446,6 @@ def _build_indicators_table(indicators: Dict[str, Dict], styles,
                 "Percentil sist. = posición del score del indicador vs todas las entidades "
                 "calificadas en el período (p50 = mediana). Tendencia = variación del score "
                 "entre el primer y el último trimestre disponible.", styles["SDQSmall"]))
-        if hubo_sin_dato:
-            elements.append(Spacer(1, 0.05 * inch))
-            elements.append(Paragraph(_NOTA_SIN_DATO, styles["SDQSmall"]))
 
         # Tres de los cinco indicadores de Solidez —solvencia, solvencia de capital primario
         # y capital primario/activos ponderados— miden capital sobre activos ponderados por

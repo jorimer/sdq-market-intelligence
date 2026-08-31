@@ -47,7 +47,14 @@ export function IndicatorTable({ indicators, bankId }: Props) {
           </tr>
         </thead>
         <tbody>
-          {entries.map(([key, detail]) => (
+          {/* Un indicador que el motor declaró NO disponible no se dibuja. Su `raw` es el
+              0.0 por defecto de la estructura y su score, el que la curva le da al cero —
+              para los inversos, 100—, así que llegó a mostrarse como desempeño perfecto.
+              La cura intermedia fue marcarlo «s/d»; el dueño decidió (2026-08-31) que lo
+              que no se puede afirmar no se menciona: un inventario de faltantes desvaloriza
+              el producto. El score ya los excluye renormalizando, así que omitir la fila no
+              publica nada falso. */}
+          {entries.filter(([, d]) => d.available !== false).map(([key, detail]) => (
             <tr
               key={key}
               className={`border-b border-line ${clickable ? "cursor-pointer hover:bg-surface2" : ""}`}
@@ -61,25 +68,16 @@ export function IndicatorTable({ indicators, bankId }: Props) {
                   esa curva le da al cero — para los inversos, 100. Publicarlo tal cual decía
                   «cero concentración, perfecto» cuando lo que pasa es que el insumo no vino.
                   La fila se LISTA igual: esconderla se lee como que el indicador no existe. */}
-              {detail.available === false ? (
-                <>
-                  <td className="py-2 px-3 text-right text-faint mono tabular-nums">s/d</td>
-                  <td className="py-2 px-3 text-right text-faint">—</td>
-                </>
-              ) : (
-                <>
-                  <td className="py-2 px-3 text-right text-body mono tabular-nums">
-                    {typeof detail.raw === "number" ? detail.raw.toFixed(2) : "—"}
-                  </td>
-                  <td className="py-2 px-3 text-right">
-                    <span
-                      className={`inline-block px-2 py-0.5 rounded text-xs font-semibold tabular-nums ${getScoreColor(detail.score)} ${getScoreBg(detail.score)}`}
-                    >
-                      {detail.score.toFixed(1)}
-                    </span>
-                  </td>
-                </>
-              )}
+              <td className="py-2 px-3 text-right text-body mono tabular-nums">
+                {typeof detail.raw === "number" ? detail.raw.toFixed(2) : "—"}
+              </td>
+              <td className="py-2 px-3 text-right">
+                <span
+                  className={`inline-block px-2 py-0.5 rounded text-xs font-semibold tabular-nums ${getScoreColor(detail.score)} ${getScoreBg(detail.score)}`}
+                >
+                  {detail.score.toFixed(1)}
+                </span>
+              </td>
               {clickable && (
                 <td className="py-2 pr-3 text-right">
                   <ChevronRight className="w-4 h-4 text-faint inline-block" />

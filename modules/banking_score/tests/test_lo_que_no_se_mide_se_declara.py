@@ -66,44 +66,23 @@ class TestUnUmbralFueraDelDominioNoEsUnRiesgo:
             f"publica un umbral fuera del dominio: {t['riesgos_baja']}")
 
 
-# ── 2. La ausencia del mapa, declarada ─────────────────────────────
+# ── 2. La ausencia del mapa NO se inventaría ───────────────────
 
-class TestLaAusenciaDelMapaSeDECLARA:
-    """El informe de 2026-06-30 simplemente no traía la sección. La lectura que quedaba era
-    la peor: que la entidad evaluada carece de algo, cuando lo que faltaba era un trimestre
-    que la fuente no publicó."""
+class TestLaAusenciaDelMapaNOseInventaria:
+    """Hubo una versión que ponía en el lugar de la sección un párrafo explicando el hueco.
 
-    def test_los_dos_motivos_son_DISTINTOS(self):
-        from modules.banking_score.reports import mapa_sectorial as m
-        assert m.MOTIVO_FUENTE_SIN_PUBLICAR != m.MOTIVO_ENTIDAD_SIN_DESGLOSE
-        assert "Superintendencia" in m.MOTIVO_FUENTE_SIN_PUBLICAR
-        assert "esta entidad" in m.MOTIVO_ENTIDAD_SIN_DESGLOSE.lower()
+    Dejaba en el índice del documento un título —«Mapa Sectorial del Crédito»— cuyo contenido
+    entero era «esto no lo tenemos». El dueño lo revirtió el 2026-08-31: un lector de un
+    informe de calificación no lee eso como rigor, lo lee como producto incompleto. Lo que no
+    se puede afirmar no se menciona.
 
-    def test_sin_celdas_del_corte_la_culpa_es_de_la_FUENTE(self, monkeypatch):
-        from modules.banking_score.reports import mapa_sectorial as m
-        monkeypatch.setattr(m, "_celdas", lambda db, corte: [])
-        assert m.motivo_sin_mapa(None, date(2026, 6, 30), object()) == (
-            m.MOTIVO_FUENTE_SIN_PUBLICAR)
-
-    def test_con_celdas_pero_no_de_la_entidad_el_hueco_es_de_la_ENTIDAD(self, monkeypatch):
-        """Confundirlos haría que un trimestre sin publicar se leyera como una
-        característica del banco evaluado."""
-        from modules.banking_score.reports import mapa_sectorial as m
-        monkeypatch.setattr(m, "_celdas", lambda db, corte: [object()])
-        assert m.motivo_sin_mapa(None, date(2026, 3, 31), object()) == (
-            m.MOTIVO_ENTIDAD_SIN_DESGLOSE)
-
-    def test_el_mapa_del_SISTEMA_no_habla_de_ninguna_entidad(self, monkeypatch):
-        from modules.banking_score.reports import mapa_sectorial as m
-        monkeypatch.setattr(m, "_celdas", lambda db, corte: [])
-        motivo = m.motivo_sin_mapa(None, date(2026, 6, 30), None)
-        assert motivo == m.MOTIVO_SISTEMA_SIN_PUBLICAR
-        assert "entidad" not in motivo.lower()
+    Lo que SÍ se conserva —y este test lo exige— es que la sección se siga descartando: narrar
+    un contexto vacío produce una sección hueca y `full_rating` falla cerrado ante una
+    degradada. Y la afirmación de MÉTODO, una sola vez, en Limitaciones.
+    """
 
     @pytest.mark.parametrize("ruta", ["informes", "productos"])
-    def test_las_DOS_rutas_colocan_el_motivo_como_texto_de_la_seccion(self, ruta):
-        """El gate gemelo: el filtro que descarta la sección vive en las dos rutas, así que
-        la declaración tiene que vivir en las dos o el informe de una saldrá mudo."""
+    def test_la_seccion_se_descarta_y_NO_se_reemplaza_por_un_parrafo(self, ruta):
         import ast
         import inspect
         if ruta == "informes":
@@ -115,40 +94,30 @@ class TestLaAusenciaDelMapaSeDECLARA:
         fn = next(n for n in ast.walk(ast.parse(inspect.getsource(mod)))
                   if isinstance(n, ast.FunctionDef | ast.AsyncFunctionDef)
                   and n.name == fn_name)
-        # Se exige la LLAMADA a update con los motivos, no la mención del nombre: un test
-        # que buscara el string pasaría en verde contra el código roto, porque el comentario
-        # que explica el arreglo menciona el nombre.
-        updates = [n for n in ast.walk(fn)
-                   if isinstance(n, ast.Call) and isinstance(n.func, ast.Attribute)
-                   and n.func.attr == "update"
-                   and any(isinstance(a, ast.Name) and "motivo" in a.id for a in n.args)]
-        assert updates, (
-            f"la ruta de {ruta} descarta la sección sin colocar el motivo: el informe queda "
-            "mudo sobre por qué falta el mapa")
+        src = ast.unparse(fn)
+        assert "mapa_sectorial" in src, f"la ruta de {ruta} dejó de filtrar la sección sin dato"
+        assert "_no_publicado" not in src, (
+            f"la ruta de {ruta} volvió a poner un párrafo en el lugar de la sección ausente")
 
+    def test_la_afirmacion_de_METODO_sigue_estando_una_vez(self):
+        from modules.banking_score.products import _LIMITATIONS_TEXT
+        assert "se renormalizan sobre lo efectivamente medido" in _LIMITATIONS_TEXT
 
-class TestLaSeccionDeclaradaVaEnSuLUGAR:
-    """El PDF numera las secciones por el orden del dict. Anexar la declarada al final dejó
-    «10. Mapa Sectorial del Crédito» DESPUÉS de la Recomendación en el informe real de
-    2026-06-30: un documento que se vende no puede tener el índice desordenado porque faltó
-    un dato."""
+    def test_la_COBERTURA_no_anuncia_huecos(self):
+        """La frase terminaba en «lo no cubierto se declara como rúbrica o brecha — nunca se
+        fabrica»: cierta, y le anunciaba al comprador que tenemos huecos.
 
-    @pytest.mark.parametrize("ruta", ["informes", "productos"])
-    def test_el_retorno_respeta_el_orden_declarado(self, ruta):
+        Se leen los LITERALES vía `ast` y no el fuente en crudo: la primera versión de este
+        test buscaba la frase en el texto del módulo y fallaba por el COMENTARIO que explica
+        justamente este cambio. Es el mismo modo de falla que ya se documentó hoy — un test
+        que se satisface con su propia documentación, acá en la dirección contraria.
+        """
         import ast
         import inspect
-        if ruta == "informes":
-            from modules.banking_score.reports import narrative as mod
-            fn_name = "generate_report_narratives"
-        else:
-            from modules.banking_score import products_year_review as mod
-            fn_name = "narratives"
-        fn = next(n for n in ast.walk(ast.parse(inspect.getsource(mod)))
-                  if isinstance(n, ast.FunctionDef | ast.AsyncFunctionDef)
-                  and n.name == fn_name)
-        # El último `return` tiene que ser una comprensión de dict guiada por el orden
-        # original, no el dict crudo al que se le anexó.
-        returns = [n for n in ast.walk(fn) if isinstance(n, ast.Return) and n.value]
-        assert any(isinstance(r.value, ast.DictComp) for r in returns), (
-            f"la ruta de {ruta} devuelve el dict tal cual: la sección declarada queda al "
-            "final y el índice del documento sale desordenado")
+
+        from shared.products import report_sections
+        literales = [n.value for n in ast.walk(ast.parse(inspect.getsource(report_sections)))
+                     if isinstance(n, ast.Constant) and isinstance(n.value, str)]
+        assert not any("rúbrica o brecha" in t for t in literales), (
+            "la cobertura volvió a anunciarle al comprador que tenemos huecos")
+        assert any("se construye sobre dato" in t for t in literales)
