@@ -132,9 +132,11 @@ def note_for(series_code: str) -> str:
 # en los quintiles bajos, así que ésta es la variable de capacidad de pago que faltaba.
 #
 # Se ingiere el ÍNDICE y la variación se deriva como YoY, igual que el IPC general. Las
-# columnas de tasa de la planilla se descartan a propósito: la inferencia las nombra por
-# coordenada de columna (`..._c5`) sin decir de qué quintil son, y una tasa que no nombra su
-# población es exactamente lo que la doctrina prohíbe servir.
+# columnas de tasa de la planilla —variación MENSUAL de cada quintil— ya no se pierden: la
+# inferencia las califica con el encabezado de su grupo (`quintil_2 · tasa de inflación`) en
+# vez de desempatarlas por coordenada de columna. Antes salían como `..._c5` y se creyó que
+# eran innombrables; se verificó contra el dato que cada una coincide con error 0,00000 pp
+# con la variación mensual del índice de su quintil.
 _IPC_QUINTILES = [
     CanonicalSeries(
         key=f"ipc_quintil_{q}", concept=f"IPC del quintil {q} de ingreso", sector="precios",
@@ -144,6 +146,33 @@ _IPC_QUINTILES = [
                    "de un hogar de ingreso bajo pesa distinto. Es la medida de capacidad de "
                    "pago que explica el deterioro de la cartera de consumo, que se concentra "
                    "en los quintiles bajos."),
+        robustness="green", api_series=None, api_transform="yoy",
+        excel_series_suffix=f"quintil_{q}",
+    )
+    for q in (1, 2, 3, 4, 5)
+]
+
+# El COSTO de la canasta familiar en RD$, por quintil de ingreso. Es la otra mitad de la
+# capacidad de pago y la que se lee sin traducción: el IPC dice cuánto SUBIÓ la canasta de un
+# hogar; esto dice cuánto CUESTA. Contra el salario mínimo da una frase que no necesita
+# índices —«el piso de ingreso cubre el 94% de la canasta del quintil más pobre»— y el propio
+# documento metodológico del BCRD señala esa comparación como la referencia de las
+# discusiones sobre el salario mínimo del sector privado no sectorizado.
+#
+# Importa en crédito porque el consumo se origina contra ingreso: un hogar cuyo piso legal no
+# cubre su canasta financia el faltante, y ese faltante es cartera. Mensual desde 2018.
+_COSTO_CANASTA = [
+    CanonicalSeries(
+        key=f"costo_canasta_quintil_{q}",
+        concept=f"Costo de la canasta familiar del quintil {q} de ingreso (RD$)",
+        sector="precios",
+        source_file="Costo_Canasta_quintiles_base_2019-2020.xlsx", base="2019-2020",
+        frequency="mensual",
+        homogenization="nivel en RD$ corrientes; la variación se deriva como YoY",
+        rationale=("Cuánto CUESTA en pesos la canasta de cada quintil, no cuánto subió. "
+                   "Contra el salario mínimo mide directamente si el piso de ingreso alcanza, "
+                   "y el faltante de un hogar que no llega es exactamente lo que financia el "
+                   "crédito de consumo."),
         robustness="green", api_series=None, api_transform="yoy",
         excel_series_suffix=f"quintil_{q}",
     )
@@ -226,6 +255,7 @@ REGISTRY: List[CanonicalSeries] = [
         robustness="green", api_series="bcrd.inflacion.inflacion.interanual", api_transform="identity",
     ),
     *_IPC_QUINTILES,
+    *_COSTO_CANASTA,
     *_IPC_GRUPOS,
     *_IPC_REGIONES,
     CanonicalSeries(

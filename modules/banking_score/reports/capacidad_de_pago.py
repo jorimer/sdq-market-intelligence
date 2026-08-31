@@ -240,6 +240,74 @@ def mercado_laboral(db: Session, corte: date) -> Optional[Dict[str, Any]]:
     return out
 
 
+# ── Lo que CUESTA la canasta, en pesos ───────────────────────────────────────────────
+#
+# El IPC dice cuánto SUBIÓ la canasta de un hogar; esto dice cuánto CUESTA. Contra el piso de
+# ingreso da la frase que no necesita índices —«el salario mínimo cubre el 94% de la canasta
+# del quintil más pobre»— y el documento metodológico del BCRD señala esa comparación como la
+# referencia de las discusiones sobre el salario mínimo del sector privado no sectorizado.
+_PREFIJO_CANASTA = "bcrd.xls.costo_canasta_quintiles_base_2019_2020.quintil_"
+
+
+def costo_de_la_canasta(db: Session, corte: date) -> Optional[Dict[str, Any]]:
+    """Lo que cuesta al mes la canasta de cada quintil, en RD$ corrientes."""
+    from modules.macro_monitor.models.models import MacroSeries
+
+    hasta = f"{corte.year}-{corte.month:02d}"
+    costo: Dict[int, float] = {}
+    periodo = ""
+    for q in QUINTILES:
+        fila = (db.query(MacroSeries.period, MacroSeries.value)
+                .filter(MacroSeries.series_code == f"{_PREFIJO_CANASTA}{q}",
+                        MacroSeries.value.isnot(None),
+                        MacroSeries.period <= hasta)
+                .order_by(MacroSeries.period.desc())
+                .first())
+        if fila is None:
+            logger.info("Costo de canasta omitido hasta %s: falta el quintil %s", hasta, q)
+            return None
+        periodo, costo[q] = str(fila[0]), round(float(fila[1]), 2)
+    return {
+        "periodo": periodo,
+        # El SUJETO en la clave: es el costo mensual de la canasta de CADA quintil de
+        # ingreso, no el de una canasta única ni el de una región.
+        "costo_mensual_de_la_canasta_por_quintil_de_ingreso_rd": {
+            f"quintil_{q}": v for q, v in costo.items()},
+        "que_es": ("lo que cuesta al mes, en RD$ corrientes, la canasta de consumo de un "
+                   "hogar de cada quintil de ingreso, según el BCRD"),
+    }
+
+
+def cobertura_del_piso_de_ingreso(salario: Optional[Dict[str, Any]],
+                                  canasta: Optional[Dict[str, Any]]) -> Optional[Dict[str, Any]]:
+    """Qué porción de la canasta de cada quintil cubre el piso de ingreso.
+
+    LA RELACIÓN SE COMPUTA ACÁ. Es una división de dos cifras que el informe también sirve,
+    y pedirle al modelo que la haga es pedirle que invente el resultado: ya pasó con una
+    suma de dos porcentajes que vetó un informe entero.
+
+    Una cobertura por debajo de 100 significa que un hogar de ese quintil, con un solo
+    ingreso al piso legal, NO llega a su propia canasta. No dice que ese hogar tenga ese
+    ingreso: dice qué alcanza el piso, que es lo que fija el suelo de la capacidad de pago."""
+    if not salario or not canasta:
+        return None
+    piso = salario.get("salario_minimo_mensual_de_empresa_grande_no_sectorizada_rd")
+    costos = canasta.get("costo_mensual_de_la_canasta_por_quintil_de_ingreso_rd") or {}
+    if not piso or not costos:
+        return None
+    cobertura = {k: round(float(piso) / float(v) * 100.0, 1)
+                 for k, v in costos.items() if v}
+    if not cobertura:
+        return None
+    return {
+        "cobertura_de_la_canasta_por_el_salario_minimo_pct": cobertura,
+        "quintiles_que_el_piso_NO_cubre": sorted(k for k, v in cobertura.items() if v < 100),
+        "lectura": ("porcentaje de la canasta mensual de cada quintil que alcanza a cubrir "
+                    "un salario mínimo de empresa grande no sectorizada; por debajo de 100 "
+                    "el piso legal no llega a esa canasta"),
+    }
+
+
 def capacidad_de_pago(db: Session, corte: date) -> Optional[Dict[str, Any]]:
     """Las tres lecturas juntas. Devuelve ``None`` solo si NINGUNA está disponible: cada
     una responde algo distinto y media respuesta es mejor que ninguna, siempre que se
@@ -247,6 +315,7 @@ def capacidad_de_pago(db: Session, corte: date) -> Optional[Dict[str, Any]]:
     bloque: Dict[str, Any] = {}
     for clave, fn in (("inflacion_del_deudor", inflacion_por_quintil),
                       ("salario_minimo", salario_minimo),
+                      ("costo_de_la_canasta", costo_de_la_canasta),
                       ("mercado_laboral", mercado_laboral)):
         try:
             valor = fn(db, corte)
@@ -255,4 +324,10 @@ def capacidad_de_pago(db: Session, corte: date) -> Optional[Dict[str, Any]]:
             valor = None
         if valor:
             bloque[clave] = valor
+    # La relación entre las dos: se computa acá y el modelo la copia. Solo existe si están
+    # las dos patas; con una sola no hay cociente, y media respuesta parece una medición.
+    cobertura = cobertura_del_piso_de_ingreso(bloque.get("salario_minimo"),
+                                              bloque.get("costo_de_la_canasta"))
+    if cobertura:
+        bloque["cobertura_del_piso_de_ingreso"] = cobertura
     return bloque or None

@@ -292,3 +292,90 @@ class TestElBloqueCompleto:
                             lambda *a, **k: (_ for _ in ()).throw(RuntimeError("boom")))
         r = I.capacidad_de_pago(db_con_quintiles, CORTE)
         assert "inflacion_del_deudor" in r
+
+
+def _sembrar_canasta(db, quintil, puntos):
+    from modules.macro_monitor.models.models import MacroSeries
+    for periodo, valor in puntos:
+        db.add(MacroSeries(series_code=f"{I._PREFIJO_CANASTA}{quintil}", period=periodo,
+                           value=valor, unit="RD$", frequency="monthly", source="BCRD"))
+    db.commit()
+
+
+@pytest.fixture()
+def db_con_canasta(db):
+    """Cifras REALES del BCRD a julio de 2026, redondeadas. A nivel de módulo porque la usan
+    la clase que lee el costo y la que computa la cobertura."""
+    for q, v in ((1, 29662.0), (2, 38669.0), (3, 45581.0), (4, 52701.0), (5, 80666.0)):
+        _sembrar_canasta(db, q, [("2026-02", v - 500), ("2026-03", v)])
+    return db
+
+
+class TestLoQueCuestaLaCanasta:
+    """El IPC dice cuánto SUBIÓ la canasta; esto dice cuánto CUESTA. Contra el piso de
+    ingreso da la frase que no necesita índices, y el documento metodológico del BCRD señala
+    esa comparación como la referencia de las discusiones sobre el salario mínimo."""
+
+    def test_toma_el_ULTIMO_costo_hasta_el_corte(self, db_con_canasta):
+        r = I.costo_de_la_canasta(db_con_canasta, CORTE)
+        assert r["periodo"] == "2026-03"
+        assert r["costo_mensual_de_la_canasta_por_quintil_de_ingreso_rd"]["quintil_1"] == 29662.0
+
+    def test_sin_UN_quintil_no_hay_lectura(self, db):
+        for q in (1, 2, 3, 4):
+            _sembrar_canasta(db, q, [("2026-03", 30000.0)])
+        assert I.costo_de_la_canasta(db, CORTE) is None
+
+    def test_la_clave_nombra_su_poblacion_y_su_unidad(self, db_con_canasta):
+        r = I.costo_de_la_canasta(db_con_canasta, CORTE)
+        assert any("por_quintil_de_ingreso_rd" in k for k in r)
+
+
+class TestLaCoberturaDelPisoDeIngreso:
+    def test_se_COMPUTA_y_el_modelo_la_copia(self, db_con_canasta):
+        _sembrar_social(db_con_canasta, I._TEMA_SALARIO_REFERENCIA, [("2026-03", 27989.0)])
+        sal = I.salario_minimo(db_con_canasta, CORTE)
+        can = I.costo_de_la_canasta(db_con_canasta, CORTE)
+        r = I.cobertura_del_piso_de_ingreso(sal, can)
+        cob = r["cobertura_de_la_canasta_por_el_salario_minimo_pct"]
+        assert cob["quintil_1"] == 94.4
+        assert cob["quintil_5"] == 34.7
+
+    def test_declara_QUÉ_quintiles_no_cubre(self, db_con_canasta):
+        _sembrar_social(db_con_canasta, I._TEMA_SALARIO_REFERENCIA, [("2026-03", 27989.0)])
+        r = I.cobertura_del_piso_de_ingreso(
+            I.salario_minimo(db_con_canasta, CORTE),
+            I.costo_de_la_canasta(db_con_canasta, CORTE))
+        assert r["quintiles_que_el_piso_NO_cubre"] == [f"quintil_{q}" for q in (1, 2, 3, 4, 5)]
+
+    @pytest.mark.parametrize("sal,can", [(None, {"x": 1}), ({"x": 1}, None), (None, None)])
+    def test_con_una_sola_pata_NO_inventa_un_cociente(self, sal, can):
+        assert I.cobertura_del_piso_de_ingreso(sal, can) is None
+
+    def test_si_la_clave_del_salario_cambia_la_cuenta_se_APAGA(self, db_con_canasta):
+        """En vez de dividir por algo que no es el piso."""
+        can = I.costo_de_la_canasta(db_con_canasta, CORTE)
+        assert I.cobertura_del_piso_de_ingreso({"otra": 28000.0}, can) is None
+
+    def test_el_bloque_completo_la_INCLUYE_cuando_estan_las_dos(self, db_con_canasta):
+        _sembrar_social(db_con_canasta, I._TEMA_SALARIO_REFERENCIA, [("2026-03", 27989.0)])
+        r = I.capacidad_de_pago(db_con_canasta, CORTE)
+        assert "cobertura_del_piso_de_ingreso" in r
+
+
+def test_la_plantilla_declara_la_cobertura_como_COPIADA():
+    from shared.narrative.claude_engine import THIN_TEMPLATES
+    thin = THIN_TEMPLATES["banking_sector_map"]
+    assert "cobertura_del_piso_de_ingreso" in thin
+    assert "cópiala, no la calcules" in thin
+    assert "no como que ese hogar gane el mínimo" in thin, (
+        "la cobertura dice qué alcanza el PISO, no cuánto gana el deudor")
+
+
+def test_las_cinco_series_de_canasta_estan_en_el_registro_CANONICO():
+    """Sin esto la ingesta no las trae, y la lectura de arriba queda computando sobre nada —
+    que es exactamente lo que pasó con el IPC por quintil durante veintiocho meses."""
+    from shared.data.bcrd_excel.canonical import REGISTRY
+    claves = {c.key for c in REGISTRY}
+    for q in I.QUINTILES:
+        assert f"costo_canasta_quintil_{q}" in claves
