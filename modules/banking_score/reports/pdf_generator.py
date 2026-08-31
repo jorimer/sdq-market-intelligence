@@ -49,6 +49,22 @@ LIGHT_GRAY = HexColor(brand.CANVAS)
 GRAY = HexColor(brand.MUTED)
 WHITE = HexColor(brand.WHITE)
 
+#: La única afirmación sobre el método que el documento publica, y va UNA vez por documento.
+#:
+#: El informe dejó de inventariar lo que le falta (decisión del dueño, 2026-08-31): un lector
+#: de un documento de calificación no lee un inventario de faltantes como rigor, lo lee como
+#: producto incompleto. Lo que sí suma es la afirmación de MÉTODO — que es sobre cómo se
+#: construye el índice, no sobre qué nos falta— y por eso sobrevive, consolidada.
+#:
+#: Vive acá y no duplicada: `_LIMITATIONS_TEXT` la COMPONE, y la ruta de calificación la
+#: emite al pie. Dos textos que dicen «lo mismo» es exactamente como uno se queda atrás.
+NOTA_DE_METODO_DEL_INDICE = (
+    "Todo indicador del índice se sostiene en dato medido en la fuente: cuando un insumo no "
+    "está disponible en el período, el indicador se excluye del promedio de su dimensión y "
+    "los pesos se renormalizan sobre lo efectivamente medido, de modo que la calificación no "
+    "acredita ni penaliza un dato ausente."
+)
+
 DISCLAIMER_ES = (
     "Las calificaciones y opiniones expresadas en este informe son las de "
     "SDQ Consulting y no constituyen una recomendación para comprar, vender "
@@ -1114,8 +1130,17 @@ def _build_narrative_sections(narratives: Dict[str, str], styles,
     return elements
 
 
-def _build_disclaimer(styles) -> List:
+def _build_disclaimer(styles, con_nota_de_metodo: bool = False) -> List:
+    """El pie del documento. `con_nota_de_metodo` lo enciende quien publicó el índice.
+
+    Se ata a la PRESENCIA de la tabla de indicadores y no a una lista de tipos de informe:
+    una lista es lo que alguien olvida actualizar al agregar un tipo, y este repo ya tiene
+    el antecedente —al anuario le faltaron cuatro registros de a uno y ninguno falló—.
+    """
     elements: List = []
+    if con_nota_de_metodo:
+        elements.append(Spacer(1, 0.35 * inch))
+        elements.append(Paragraph(NOTA_DE_METODO_DEL_INDICE, styles["SDQSmall"]))
     elements.append(Spacer(1, 0.5 * inch))
     elements.append(Paragraph("Disclaimer", styles["SDQSubHeading"]))
     elements.append(Paragraph(DISCLAIMER_ES, styles["SDQSmall"]))
@@ -1575,7 +1600,9 @@ async def generate_pdf_report(
     percentiles = scoring_result.get("percentiles") or {}
 
     # 3. Indicators table (detailed reports only) — con columnas de percentil/tendencia.
-    if indicators and report_type in ("full_rating", "scorecard", "datawatch"):
+    _publico_el_indice = bool(indicators) and report_type in ("full_rating", "scorecard",
+                                                             "datawatch")
+    if _publico_el_indice:
         body.extend(_build_indicators_table(indicators, styles, percentiles, trajectories))
         body.append(Spacer(1, 0.3 * inch))
 
@@ -1678,7 +1705,7 @@ async def generate_pdf_report(
             _order_narratives(narratives, sections), styles, tablas_en_linea))
 
     # 5. Disclaimer (texto propio de banking; el shell no lo añade).
-    body.extend(_build_disclaimer(styles))
+    body.extend(_build_disclaimer(styles, con_nota_de_metodo=_publico_el_indice))
 
     # Portada + chrome de marca compartidos (banda navy + logo Arco + encabezado corrido +
     # nº de página + watermark/estampa) vía el shell de render.py — la calificación va como
