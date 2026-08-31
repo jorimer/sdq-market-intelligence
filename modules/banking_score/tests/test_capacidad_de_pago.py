@@ -23,8 +23,9 @@ from shared.auth.models import User  # noqa: F401 — registra users para las FK
 # los modelos ya registrados en el metadata, y con el import diferido la tabla no existía —
 # el test fallaba con «no such table» y el orden de ejecución decidía a cuál le tocaba.
 from modules.macro_monitor.models.models import MacroSeries  # noqa: F401
+from modules.social_dev.models.models import SocialIndicator  # noqa: F401
 from shared.database.base import Base
-from modules.banking_score.reports import inflacion_del_deudor as I
+from modules.banking_score.reports import capacidad_de_pago as I
 
 CORTE = date(2026, 3, 31)
 
@@ -111,27 +112,33 @@ class TestLlegaAlContextoDelModelo:
         ctx = _build_section_context(
             "mapa_sectorial", "Banco Prueba",
             {"mapa_sectorial": {"sectores": []},
-             "inflacion_del_deudor": {"brecha_quintil_1_menos_quintil_5_pp": 7.1},
+             "capacidad_de_pago": {
+                 "inflacion_del_deudor": {"brecha_quintil_1_menos_quintil_5_pp": 7.1}},
              "indicators": {}},
             "2026-03-31")
-        assert ctx["inflacion_del_deudor"], (
+        assert ctx["capacidad_de_pago"], (
             "el bloque se computa y no llega al modelo: la sección no puede mencionarlo")
 
     def test_la_plantilla_declara_CUANDO_usarlo_y_cuando_no(self):
         from shared.narrative.claude_engine import THIN_TEMPLATES
         thin = THIN_TEMPLATES["banking_sector_map"]
         assert "inflacion_del_deudor" in thin
-        assert "no menciones inflación por quintil" in thin, (
+        assert "no existe para este informe" in thin, (
             "sin la rama negativa, el modelo inventa el bloque cuando falta")
-        assert "NO la presentes como causa probada" in thin, (
+        assert "NO las presentes como causa probada" in thin, (
             "es contexto de capacidad de pago, no la atribución de la mora")
+        # Las tres lecturas nombradas, para que agregar una y olvidar su regla falle.
+        for clave in ("inflacion_del_deudor", "salario_minimo", "mercado_laboral"):
+            assert clave in thin, f"la plantilla no dice qué hacer con «{clave}»"
+        assert "nunca como «el salario mínimo» a secas" in thin, (
+            "hay once categorías y varias congeladas: sin su nombre, el piso no tiene sujeto")
 
     @pytest.mark.parametrize("archivo,ancla", [
-        ("modules/banking_score/products.py", "scoring_result[\"inflacion_del_deudor\"]"),
-        ("modules/banking_score/products.py", "pl[\"inflacion_del_deudor\"]"),
-        ("modules/banking_score/products_year_review.py", "out[\"inflacion_del_deudor\"]"),
+        ("modules/banking_score/products.py", "scoring_result[\"capacidad_de_pago\"]"),
+        ("modules/banking_score/products.py", "pl[\"capacidad_de_pago\"]"),
+        ("modules/banking_score/products_year_review.py", "out[\"capacidad_de_pago\"]"),
         ("modules/banking_score/api/router_reports.py",
-         "scoring_result[\"inflacion_del_deudor\"]"),
+         "scoring_result[\"capacidad_de_pago\"]"),
     ])
     def test_llega_por_los_CUATRO_caminos_que_emiten_un_informe(self, archivo, ancla):
         """Trimestral, año por trimestres, Revisión Anual y la ruta de informes. Cablearlo
@@ -142,22 +149,19 @@ class TestLlegaAlContextoDelModelo:
 
 
 class TestUnaSerieSinSujetoNoSePERSISTE:
-    """El defecto que apareció al ir a buscar el IPC por quintil.
+    """La ÚLTIMA red: una serie que ni siquiera el encabezado del grupo puede nombrar.
 
-    La planilla del BCRD trae, junto a los cinco índices por quintil, cinco columnas de
-    TASA. La inferencia no encuentra un rótulo que las distinga —las cinco se llaman
-    «tasa de inflación»— y las desempata por índice de columna: `tasa_de_inflacion_c5`,
-    `_c7`, `_c9`, `_c11`. Ese nombre no dice de QUÉ quintil es la tasa.
+    El desempate correcto lo hace `inference`, calificando con el encabezado del grupo
+    (`quintil_2 · tasa de inflación`) — ver
+    `shared/data/bcrd_excel/tests/test_el_desempate_nombra_el_grupo.py`. Este veto solo
+    alcanza a lo que queda después: una columna que comparte nombre y cuyo vecino tampoco
+    aporta un rótulo distinto. Ahí la serie es genuinamente innombrable y no se sirve.
 
-    El commit que trajo la planilla lo declaró y dijo que se descartaban «a propósito». La
-    ingesta las persistió igual: la intención estaba escrita y nada la hacía cumplir. En
-    producción quedaron dieciocho series así —también del IMAE y del IPC por región—, una
-    tasa sin su región al lado de índices que sí nombran su población, y quien las consuma
-    después no tiene cómo saber que el rótulo no identifica nada.
-
-    Es la doctrina del sujeto rota en el punto donde se FABRICA el nombre, y por eso el
-    veto va en la frontera de ESCRITURA y no en cada extractor: es la única puerta por la
-    que pasan todos.
+    Vale registrar por qué es la última red y no la primera. La reacción inicial a las
+    dieciocho series `_c<n>` de producción fue vetarlas y listo. Estaba mal: se verificó
+    contra el dato que cada tasa del IPC por quintiles coincide con error 0,00000 pp sobre
+    setenta puntos con la variación mensual de su índice. Eran series bien medidas y mal
+    nombradas, y descartarlas habría sido arreglar el síntoma tirando la medición.
     """
 
     def test_reconoce_un_codigo_desempatado_por_COORDENADA(self):
@@ -176,7 +180,7 @@ class TestUnaSerieSinSujetoNoSePERSISTE:
 
     def test_las_cinco_del_QUINTIL_que_sí_sirven_pasan(self):
         from modules.macro_monitor.service import _sin_sujeto
-        from modules.banking_score.reports.inflacion_del_deudor import _PREFIJO, QUINTILES
+        from modules.banking_score.reports.capacidad_de_pago import _PREFIJO, QUINTILES
         for q in QUINTILES:
             assert not _sin_sujeto(f"{_PREFIJO}{q}")
 
@@ -186,3 +190,105 @@ class TestUnaSerieSinSujetoNoSePERSISTE:
         from modules.macro_monitor import service
         src = inspect.getsource(service._upsert_records)
         assert "logger.info" in src and "descartadas" in src
+
+
+def _sembrar_social(db, tema, puntos, unidad="RD$/mes"):
+    for periodo, valor in puntos:
+        db.add(SocialIndicator(theme=tema, entity_key="salario_minimo", period=periodo,
+                               value=valor, unit=unidad, source="MHE"))
+    db.commit()
+
+
+class TestElPisoDeIngreso:
+    """El salario mínimo dominicano no es UNO: son once combinaciones, y varias llevan años
+    congeladas. Servir una sin decir cuál —y sin decir de cuándo es— publicaría como piso
+    vigente un número que hoy no cobra nadie."""
+
+    def test_toma_el_ultimo_valor_y_FECHA_su_escalon(self, db):
+        _sembrar_social(db, I._TEMA_SALARIO_REFERENCIA,
+                        [("2024-01", 24000.0), ("2024-02", 24000.0),
+                         ("2025-04", 27989.0), ("2025-05", 27989.0), ("2026-03", 27989.0)])
+        r = I.salario_minimo(db, CORTE)
+        assert r["salario_minimo_mensual_de_empresa_grande_no_sectorizada_rd"] == 27989.0
+        assert r["ultimo_ajuste"] == "2025-04"
+        assert r["meses_sin_ajuste"] == 11
+        assert r["congelada"] is False
+
+    def test_una_categoria_CONGELADA_se_declara(self, db):
+        """«Zona franca en áreas deprimidas» no se ajusta desde 2006. Sin la marca, la serie
+        escalonada la hace ver idéntica a una vigente."""
+        _sembrar_social(db, I._TEMA_SALARIO_REFERENCIA,
+                        [("2006-07", 5400.0)] + [(f"{y}-01", 5400.0)
+                                                 for y in range(2007, 2027)])
+        r = I.salario_minimo(db, CORTE)
+        assert r["ultimo_ajuste"] == "2006-07"
+        assert r["congelada"] is True
+
+    def test_la_clave_NOMBRA_su_categoria(self, db):
+        _sembrar_social(db, I._TEMA_SALARIO_REFERENCIA, [("2026-01", 27989.0)])
+        r = I.salario_minimo(db, CORTE)
+        assert any("empresa_grande" in k for k in r), (
+            "«salario mínimo» a secas no dice cuál de las once es")
+
+    def test_sin_serie_devuelve_None_y_no_un_cero(self, db):
+        assert I.salario_minimo(db, CORTE) is None
+
+    def test_no_arrastra_meses_POSTERIORES_al_corte(self, db):
+        _sembrar_social(db, I._TEMA_SALARIO_REFERENCIA,
+                        [("2026-01", 27989.0), ("2026-07", 31000.0)])
+        r = I.salario_minimo(db, CORTE)
+        assert r["salario_minimo_mensual_de_empresa_grande_no_sectorizada_rd"] == 27989.0
+
+
+class TestElCreditoMedidoEnSalariosMinimos:
+    def test_computa_la_escala(self, db):
+        _sembrar_social(db, I._TEMA_SALARIO_REFERENCIA, [("2026-01", 28000.0)])
+        sal = I.salario_minimo(db, CORTE)
+        assert I.credito_en_salarios_minimos(101_410.0, sal) == 3.6
+
+    @pytest.mark.parametrize("credito,salario", [(None, {"x": 1}), (101_410.0, None),
+                                                 (0.0, {"x": 1})])
+    def test_sin_una_de_las_dos_patas_devuelve_None(self, credito, salario):
+        assert I.credito_en_salarios_minimos(credito, salario) is None
+
+    def test_un_salario_sin_su_clave_NO_produce_una_escala(self, db):
+        """Si la clave cambia de nombre, la cuenta debe apagarse en vez de dividir por algo
+        que no es el piso."""
+        assert I.credito_en_salarios_minimos(101_410.0, {"otra_clave": 28000.0}) is None
+
+
+class TestLaFormalidadDelEmpleo:
+    def test_toma_el_TRIMESTRE_del_corte_y_no_un_promedio_anual(self, db):
+        _sembrar_social(db, "informality_rate_trimestral",
+                        [("2025-Q4", 55.0), ("2026-Q1", 54.1)], unidad="%")
+        _sembrar_social(db, "unemployment_rate_trimestral",
+                        [("2026-Q1", 4.95)], unidad="%")
+        r = I.mercado_laboral(db, CORTE)
+        assert r["trimestre"] == "2026-Q1"
+        assert r["ocupacion_informal_pct"] == 54.1
+        assert r["desocupacion_pct"] == 4.95
+
+    def test_sin_informalidad_no_hay_lectura(self, db):
+        """Es la que responde la pregunta de crédito —ingreso verificable—; las otras dos
+        solas no sostienen la sección."""
+        _sembrar_social(db, "unemployment_rate_trimestral", [("2026-Q1", 4.95)], unidad="%")
+        assert I.mercado_laboral(db, CORTE) is None
+
+
+class TestElBloqueCompleto:
+    def test_devuelve_lo_que_HAY_y_omite_lo_que_falta(self, db_con_quintiles):
+        """Media respuesta es mejor que ninguna, siempre que se declare cuál falta — y la
+        forma de declararlo es que la clave no esté."""
+        r = I.capacidad_de_pago(db_con_quintiles, CORTE)
+        assert "inflacion_del_deudor" in r
+        assert "salario_minimo" not in r and "mercado_laboral" not in r
+
+    def test_sin_NINGUNA_lectura_devuelve_None(self, db):
+        assert I.capacidad_de_pago(db, CORTE) is None
+
+    def test_una_lectura_que_falla_NO_se_lleva_puestas_a_las_otras(self, db_con_quintiles,
+                                                                  monkeypatch):
+        monkeypatch.setattr(I, "salario_minimo",
+                            lambda *a, **k: (_ for _ in ()).throw(RuntimeError("boom")))
+        r = I.capacidad_de_pago(db_con_quintiles, CORTE)
+        assert "inflacion_del_deudor" in r

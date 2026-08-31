@@ -31,18 +31,73 @@ def _series_from_columns(grid: Grid, value_cols: List[int], data_row0: int,
     trae, cae a la unidad de hoja (``sheet_default``). Sin ninguna, ``None`` — la serie
     quedará en naturaleza ``unknown`` honesta, nunca inventada. Códigos duplicados se
     desempatan por columna, jamás se fusionan."""
-    series: List[SeriesSpec] = []
-    seen: dict[str, int] = {}
+    crudos = []
     for c in value_cols:
-        raw = _header_name(grid, c, data_row0)
-        name, unit = split_header_unit(raw)
+        name, unit = split_header_unit(_header_name(grid, c, data_row0))
+        crudos.append((c, name, unit))
+
+    # Un nombre que resulta ser COMPARTIDO no nombra a nadie — tampoco al primero que lo
+    # tomó. En el IPC por quintiles la primera columna de tasa es la del quintil 1 y se
+    # quedaba con «tasa de inflación» a secas, que es tan ambiguo como los `_c5` de las
+    # otras cuatro. Por eso el desempate se decide sobre el CONJUNTO y califica a todos los
+    # que comparten un nombre, no solo a los que llegan después.
+    cuantos: dict[str, int] = {}
+    for _c, name, _u in crudos:
+        cuantos[_slug(name)] = cuantos.get(_slug(name), 0) + 1
+
+    series: List[SeriesSpec] = []
+    usados: set[str] = set()
+    for c, name, unit in crudos:
         code = _slug(name)
-        if code in seen:
+        if cuantos[code] > 1:
+            grupo = _grupo_a_la_izquierda(grid, c, data_row0, name)
+            if grupo and _slug(f"{grupo} {name}") not in usados:
+                name = f"{grupo} · {name}"
+                code = _slug(name)
+        if code in usados:
             code = f"{code}_c{c}"
-        seen[code] = c
+        usados.add(code)
         series.append(SeriesSpec(code=code, name=name, unit=unit or sheet_default,
                                  value_col=c))
     return series
+
+
+#: Cuántas columnas a la izquierda se busca el encabezado del GRUPO. Dos alcanza para el
+#: patrón que motiva esto —índice, tasa, índice, tasa…— y no tanto como para arrastrar el
+#: rótulo de un bloque ajeno.
+_COLS_HACIA_LA_IZQUIERDA = 2
+
+
+def _grupo_a_la_izquierda(grid: Grid, value_col: int, data_row0: int,
+                          propio: str) -> Optional[str]:
+    """El encabezado del GRUPO al que pertenece la columna, buscado hacia la izquierda.
+
+    Por qué existe. En el IPC por quintiles el encabezado alterna «Quintil 1», «Tasa de
+    Inflación», «Quintil 2», «Tasa de Inflación»…: las cinco columnas de tasa se llaman
+    IGUAL, y el nombre que las distingue —el quintil— está en la columna del índice, a la
+    izquierda. Sin esto el desempate era el ÍNDICE DE COLUMNA (`tasa_de_inflacion_c5`), un
+    código que no dice de qué quintil es la tasa. Se persistieron dieciocho series así, en
+    quintiles, en el IPC por región y en el IMAE.
+
+    Se verificó contra el dato antes de escribir esto: cada una de las cinco tasas coincide
+    EXACTAMENTE —error 0,00000 pp sobre setenta puntos— con la variación mensual del índice
+    del quintil que este mapeo le asigna. No era una serie inservible: era una serie mal
+    nombrada, y la diferencia entre descartarla y nombrarla son cinco series reales.
+
+    Devuelve ``None`` si a la izquierda no hay un rótulo DISTINTO del propio: repetir el
+    mismo texto no desambigua nada, y ahí sí corresponde caer a la coordenada.
+    """
+    filas = range(max(0, data_row0 - 6), data_row0)
+    propio_l = (propio or "").strip().lower()
+    for c in range(value_col - 1, max(-1, value_col - 1 - _COLS_HACIA_LA_IZQUIERDA), -1):
+        for r in filas:
+            v = grid.cell(r, c)
+            if v is None or isinstance(v, (int, float)):
+                continue
+            txt = str(v).strip()
+            if txt and txt.lower() != propio_l and txt.lower() not in propio_l:
+                return txt
+    return None
 
 _SUBTOTAL_RE = r"promedio\s+(\d{4})"
 _SCAN_HEADER_ROWS = 12  # header region to mine for names / year rows

@@ -278,12 +278,20 @@ def _amplitud_al_cierre(db: Session, bank: Bank, anio: int) -> Dict[str, Any]:
         mapa = posicion_de_la_entidad(db, bank, cierre)
         if mapa:
             out["mapa_sectorial"] = mapa
-        from modules.banking_score.reports.inflacion_del_deudor import inflacion_por_quintil
-        infl = inflacion_por_quintil(db, cierre)
-        if infl:
-            out["inflacion_del_deudor"] = infl
     except Exception:  # noqa: BLE001
         logger.exception("Mapa sectorial omitido en la Revisión Anual %s de %s", anio, bank.name)
+
+    try:
+        # La CAPACIDAD DE PAGO del deudor. En su PROPIO try y no dentro del anterior: son
+        # dos lecturas distintas, y un fallo del mapa no tiene por qué llevarse puesta la
+        # otra — es cómo un bloque se apaga por un motivo que no es el suyo.
+        from modules.banking_score.reports.capacidad_de_pago import capacidad_de_pago
+        cap = capacidad_de_pago(db, cierre)
+        if cap:
+            out["capacidad_de_pago"] = cap
+    except Exception:  # noqa: BLE001
+        logger.exception("Capacidad de pago omitida en la Revisión Anual %s de %s",
+                         anio, bank.name)
 
     try:
         from shared.contracts import load_macro_contract

@@ -917,14 +917,14 @@ class BankingProduct:
                 mapa = posicion_de_la_entidad(db, bank, date(anio, 12, 31))
                 if mapa:
                     pl["mapa_sectorial"] = mapa
-                # La inflación del DEUDOR, abierta por quintil de ingreso: la capacidad de
-                # pago que explica la mora de consumo. Viaja con el mapa porque solo significa
-                # algo al lado del peso de esa cartera.
-                from modules.banking_score.reports.inflacion_del_deudor import (
-                    inflacion_por_quintil)
-                infl = inflacion_por_quintil(db, date(anio, 12, 31))
+                # La CAPACIDAD DE PAGO del deudor: la inflación de su canasta por quintil,
+                # el piso de ingreso y la formalidad del empleo. Viaja con el mapa porque
+                # solo significa algo al lado del peso de la cartera de consumo.
+                from modules.banking_score.reports.capacidad_de_pago import (
+                    capacidad_de_pago)
+                infl = capacidad_de_pago(db, date(anio, 12, 31))
                 if infl:
-                    pl["inflacion_del_deudor"] = infl
+                    pl["capacidad_de_pago"] = infl
 
             except Exception:  # noqa: BLE001 — el snapshot nunca depende de esta tabla
                 logger.exception("Mapa sectorial omitido en el año %s de %s", anio, bank.name)
@@ -1052,17 +1052,17 @@ class BankingProduct:
                 mapa = None
             if mapa:
                 scoring_result["mapa_sectorial"] = mapa
-            # La inflación del DEUDOR, abierta por quintil de ingreso: la capacidad de
-            # pago que explica la mora de consumo. Viaja con el mapa porque solo significa
-            # algo al lado del peso de esa cartera.
+            # La CAPACIDAD DE PAGO del deudor: la inflación de su canasta por quintil,
+            # el piso de ingreso y la formalidad del empleo. Viaja con el mapa porque
+            # solo significa algo al lado del peso de la cartera de consumo.
             try:
-                from modules.banking_score.reports.inflacion_del_deudor import (
-                    inflacion_por_quintil)
-                infl = inflacion_por_quintil(db, cast(date, rr.period_end))
+                from modules.banking_score.reports.capacidad_de_pago import (
+                    capacidad_de_pago)
+                infl = capacidad_de_pago(db, cast(date, rr.period_end))
                 if infl:
-                    scoring_result["inflacion_del_deudor"] = infl
+                    scoring_result["capacidad_de_pago"] = infl
             except Exception:  # noqa: BLE001 — el snapshot nunca depende de esta serie
-                logger.exception("Inflación por quintil omitida para %s", bank.name)
+                logger.exception("Capacidad de pago omitida para %s", bank.name)
 
         # Estructura de mercado + pares NOMBRADOS (mismo patrón que pension/insurance
         # exponen en 'peers'). Solo en los niveles nombrados (el Pulse permanece anonimizado
