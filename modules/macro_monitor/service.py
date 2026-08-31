@@ -42,14 +42,17 @@ DEBT_SERIES = "public_debt_gdp"
 # serie canónica VIVA de cada flujo. Se lee vía :func:`_flow_pct_panel`.
 
 
-#: Un código de serie desempatado por ÍNDICE DE COLUMNA. `inference._series_from_headers`
-#: le pega `_c<n>` cuando dos columnas de la planilla producen el mismo nombre: la serie
-#: resultante se llama «la segunda columna que también se llamaba tasa de inflación», que no
-#: dice de QUÉ es. El caso real: `ipc_quintiles.tasa_de_inflacion_inflacion_c5` —una tasa
-#: sin su quintil— e `ipc_regiones.tasa_de_inflacion_c7` —sin su región—, junto a series de
-#: índice que SÍ nombran su población. Quien las consuma después no tiene cómo saber que el
-#: rótulo no identifica nada, y es la doctrina del sujeto rota en el punto donde se FABRICA
-#: el nombre.
+#: Un código de serie desempatado por ÍNDICE DE COLUMNA: se llama «la segunda columna que
+#: también se llamaba tasa de inflación», y eso no dice de QUÉ es.
+#:
+#: Es la ÚLTIMA red, no la primera. El desempate correcto lo hace `inference`, calificando
+#: con el encabezado del grupo (`quintil_2 · tasa de inflación`); solo cuando ni el vecino
+#: aporta un rótulo distinto queda la coordenada, y ahí la serie es genuinamente
+#: innombrable. La primera reacción a las dieciocho series `_c<n>` de producción fue vetarlas
+#: acá y ya: estaba mal, eran series bien medidas y mal nombradas —se verificó que cada tasa
+#: del IPC por quintiles coincide con error 0,00000 pp con la variación mensual de su
+#: índice—. Descartar un dato porque el nombre está roto es arreglar el síntoma tirando la
+#: medición.
 _CODIGO_SIN_SUJETO = re.compile(r"_c\d+$")
 
 
