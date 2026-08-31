@@ -95,3 +95,61 @@ class TestElLayoutSeBuscaPorCONTENIDO:
         ]
         s = parse_trimestral(_libro(filas), "SU1: Tasa de Desocupación")
         assert s[0] == ("2024-Q1", 5.1) and len(s) == 4
+
+
+# ── Las CUATRO medidas de subutilización ─────────────────────────────────────────────
+
+class TestLasCuatroMedidasDeSubutilizacion:
+    """El BCRD publica SU1 a SU4 en la misma fila del mismo trimestre y se ingería SU1.
+
+    Al primer trimestre de 2026: SU1 = 4,95% y SU4 = 10,55%. Citar la angosta subestima la
+    holgura laboral a MENOS DE LA MITAD, y la diferencia es exactamente la población que le
+    importa al crédito de consumo — el subocupado por horas tiene empleo e ingreso
+    INSUFICIENTE, no aparece en la desocupación y sí aparece en la mora.
+
+    No hubo que escribir un parser: `parse_trimestral` ya sabía leer cualquier fila por su
+    etiqueta. Faltaba pedírselas. Es el patrón de esta base de datos —la fuente publica más
+    de lo que persistimos, y ya la estábamos descargando entera— visto por quinta vez.
+    """
+
+    ETIQUETAS = (
+        "SU1: Tasa de Desocupación",
+        "SU2: Desocupación y Subocupación",
+        "SU3: Desocupación y Fuerza de Trabajo Potencial",
+        "SU4: Desocupación + Subocupación + Fuerza de Trabajo Potencial",
+    )
+
+    def test_el_ensamblado_pide_las_cuatro_y_no_solo_la_angosta(self):
+        import inspect
+        from shared.data import bcrd_labor
+        src = inspect.getsource(bcrd_labor.fetch_bcrd_labor_market)
+        for clave in ("underutilization_su2_trimestral", "underutilization_su3_trimestral",
+                      "underutilization_su4_trimestral"):
+            assert clave in src, f"«{clave}» no se pide: la holgura sale a la mitad"
+
+    def test_las_cuatro_se_PERSISTEN(self):
+        from modules.social_dev.social_sync import _MERCADO_LABORAL_TRIMESTRAL
+        for clave in ("unemployment_rate_trimestral", "underutilization_su2_trimestral",
+                      "underutilization_su3_trimestral", "underutilization_su4_trimestral"):
+            assert clave in _MERCADO_LABORAL_TRIMESTRAL
+
+    def test_cada_serie_lleva_SU_medida_en_la_etiqueta(self):
+        """«subutilización» a secas no dice cuál de las cuatro es, y las cuatro conviven en
+        el mismo informe."""
+        from modules.social_dev.social_sync import _MERCADO_LABORAL_TRIMESTRAL
+        for clave, (etiqueta, _u) in _MERCADO_LABORAL_TRIMESTRAL.items():
+            if "underutilization" in clave:
+                assert clave.split("_")[1].upper() in etiqueta.upper(), (
+                    f"«{etiqueta}» no dice qué medida es")
+
+    def test_el_informe_sirve_la_ANCHA_y_la_angosta_con_su_brecha(self):
+        from modules.banking_score.reports.capacidad_de_pago import _TEMAS_LABORALES
+        assert _TEMAS_LABORALES["unemployment_rate_trimestral"] == "desocupacion_abierta_su1_pct"
+        assert _TEMAS_LABORALES["underutilization_su4_trimestral"] == (
+            "subutilizacion_amplia_su4_pct")
+
+    def test_la_plantilla_pide_la_AMPLIA_si_se_cita_una_sola(self):
+        from shared.narrative.claude_engine import THIN_TEMPLATES
+        thin = THIN_TEMPLATES["banking_sector_map"]
+        assert "citá la AMPLIA" in thin
+        assert "holgura_que_SU1_no_ve_pp" in thin

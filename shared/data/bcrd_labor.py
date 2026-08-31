@@ -455,4 +455,32 @@ def fetch_bcrd_labor_market() -> dict:  # pragma: no cover - network I/O
         "unemployment_rate_trimestral": parse_trimestral(r.content, UNEMPLOYMENT_LABEL),
         "informality_rate_trimestral": parse_trimestral(r.content, "Ocupación Informal"),
         "employment_rate_trimestral": parse_trimestral(r.content, "Tasa de Ocupación"),
+        # LAS CUATRO MEDIDAS DE SUBUTILIZACIÓN, no solo la angosta. El BCRD publica SU1 a
+        # SU4 en la misma fila del mismo trimestre y nosotros citábamos SU1: 4,95% contra
+        # 10,55% de SU4 al primer trimestre de 2026 — menos de la mitad de la holgura real.
+        #
+        # Para capacidad de pago la diferencia es exactamente la que importa: SU1 solo ve a
+        # quien busca y no encuentra, mientras SU2 suma al subocupado por horas —que tiene
+        # empleo e ingreso INSUFICIENTE— y SU3 a la fuerza de trabajo potencial. Un hogar
+        # endeudado con menos horas de las que quiere no aparece en SU1 y sí en su mora.
+        #
+        # SU1 no se retira: es la que la END ata como «desocupación abierta» y la que se
+        # compara internacionalmente. Conviven, cada una con su nombre.
+        "underutilization_su2_trimestral": parse_trimestral(
+            r.content, "SU2: Desocupación y Subocupación"),
+        "underutilization_su3_trimestral": parse_trimestral(
+            r.content, "SU3: Desocupación y Fuerza de Trabajo Potencial"),
+        "underutilization_su4_trimestral": parse_trimestral(
+            r.content, "SU4: Desocupación + Subocupación + Fuerza de Trabajo Potencial"),
+        # Subocupación por horas: insuficiencia de INGRESO en gente que sí trabaja, que es
+        # la población de crédito de consumo que ningún indicador de desempleo alcanza.
+        "underemployment_rate_trimestral": parse_trimestral(
+            r.content, "Tasa de subocupación por horas"),
+        # Inactividad: quién directamente no está en la fuerza de trabajo. Acota el
+        # denominador de todo lo anterior.
+        "inactivity_rate_trimestral": parse_trimestral(r.content, "Tasa de Inactividad"),
+        # Ocupación FORMAL, el complemento explícito de la informal. Se sirve junto porque
+        # «formal» e «informal» no siempre suman cien —hay categorías fuera de ambas— y
+        # derivar una de la otra fabricaría el resto.
+        "formality_rate_trimestral": parse_trimestral(r.content, "Ocupación Formal"),
     }

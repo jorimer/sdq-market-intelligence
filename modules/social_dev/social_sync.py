@@ -250,6 +250,16 @@ _MERCADO_LABORAL_TRIMESTRAL = {
     "unemployment_rate_trimestral": ("desocupación trimestral (BCRD · ENCFT)", "%"),
     "informality_rate_trimestral": ("ocupación informal trim. (BCRD · ENCFT)", "%"),
     "employment_rate_trimestral": ("ocupación trimestral (BCRD · ENCFT)", "%"),
+    # Las CUATRO medidas de subutilización, no solo la angosta: el BCRD publica SU1 a SU4
+    # en la misma fila del mismo trimestre y se ingería SU1 sola. Al primer trimestre de
+    # 2026, SU1 daba 4,95% y SU4 10,55% — citar la primera subestima la holgura laboral a
+    # menos de la mitad.
+    "underutilization_su2_trimestral": ("subutilización SU2 trim. (BCRD · ENCFT)", "%"),
+    "underutilization_su3_trimestral": ("subutilización SU3 trim. (BCRD · ENCFT)", "%"),
+    "underutilization_su4_trimestral": ("subutilización SU4 trim. (BCRD · ENCFT)", "%"),
+    "underemployment_rate_trimestral": ("subocupación por horas trim. (BCRD)", "%"),
+    "inactivity_rate_trimestral": ("inactividad trimestral (BCRD · ENCFT)", "%"),
+    "formality_rate_trimestral": ("ocupación formal trim. (BCRD · ENCFT)", "%"),
 }
 
 

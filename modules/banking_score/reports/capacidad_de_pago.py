@@ -207,9 +207,18 @@ def credito_en_salarios_minimos(credito_promedio: Optional[float],
 
 # ── La FORMALIDAD del empleo ─────────────────────────────────────────────────────────
 
+#: Las series laborales que el informe lee, con el nombre que llevan en el contexto.
+#:
+#: SU1 y SU4 van LAS DOS. El BCRD publica cuatro medidas de subutilización y durante meses se
+#: citó solo SU1 —la desocupación abierta—: 4,95% contra 10,55% de SU4 al primer trimestre de
+#: 2026, menos de la mitad de la holgura real. La diferencia es justo la población de crédito
+#: de consumo: el subocupado por horas tiene empleo e ingreso INSUFICIENTE, no aparece en SU1
+#: y sí aparece en la mora. Servir solo la angosta no es un recorte, es otra conclusión.
 _TEMAS_LABORALES = {
     "informality_rate_trimestral": "ocupacion_informal_pct",
-    "unemployment_rate_trimestral": "desocupacion_pct",
+    "unemployment_rate_trimestral": "desocupacion_abierta_su1_pct",
+    "underutilization_su4_trimestral": "subutilizacion_amplia_su4_pct",
+    "underemployment_rate_trimestral": "subocupacion_por_horas_pct",
     "employment_rate_trimestral": "tasa_de_ocupacion_pct",
 }
 
@@ -233,10 +242,19 @@ def mercado_laboral(db: Session, corte: date) -> Optional[Dict[str, Any]]:
         logger.info("Mercado laboral omitido hasta %s: sin informalidad trimestral",
                     trimestre)
         return None
+    # LA RELACIÓN SE COMPUTA ACÁ: cuánta holgura laboral queda fuera de la medida angosta.
+    # Es la resta que el modelo haría mal —o no haría— y es el punto entero del bloque.
+    ancha = out.get("subutilizacion_amplia_su4_pct")
+    angosta = out.get("desocupacion_abierta_su1_pct")
+    if ancha is not None and angosta is not None:
+        out["holgura_que_SU1_no_ve_pp"] = round(ancha - angosta, 2)
     out["por_que_importa_en_credito"] = (
         "un ocupado informal no tiene ingreso verificable, y el crédito de consumo se "
         "origina contra ingreso declarado: la informalidad acota a qué parte de la "
-        "población se le puede prestar con documentación y a qué parte no")
+        "población se le puede prestar con documentación y a qué parte no. La "
+        "subutilización amplia (SU4) suma al desocupado abierto el subocupado por horas y "
+        "la fuerza de trabajo potencial: es gente con empleo e ingreso insuficiente, que no "
+        "aparece en la desocupación y sí en la mora de consumo")
     return out
 
 
