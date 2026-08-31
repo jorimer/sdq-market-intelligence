@@ -923,6 +923,16 @@ class BankingProduct:
                 from modules.banking_score.reports.capacidad_de_pago import (
                     capacidad_de_pago)
                 infl = capacidad_de_pago(db, date(anio, 12, 31))
+                if infl and mapa:
+                    # El cruce con el TERRITORIO. Este producto computaba la capacidad de
+                    # pago y no le pasaba las provincias, así que se quedaba con la lectura
+                    # del país teniendo la del territorio donde la entidad presta a mano.
+                    from modules.banking_score.reports.capacidad_de_pago import (
+                        holgura_donde_presta)
+                    donde = holgura_donde_presta(db, date(anio, 12, 31),
+                                                 mapa.get("provincias") or [])
+                    if donde:
+                        infl["holgura_donde_presta"] = donde
                 if infl:
                     pl["capacidad_de_pago"] = infl
 

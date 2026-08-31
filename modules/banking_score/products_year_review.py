@@ -67,8 +67,8 @@ def year_review_manifest() -> SectorProductManifest:
         levels={
             ProductTier.pulse: TierLevelSpec(
                 tier=ProductTier.pulse, granularity=Granularity.system,
-                sections=("anio_del_sistema",),
-                narrative_templates=("anio_del_sistema",),
+                sections=("anio_del_sistema", "mapa_sectorial_sistema"),
+                narrative_templates=("anio_del_sistema", "banking_sector_map_system"),
                 audience="mercado", cadence="periodic",
                 watermark="Vista abierta · SDQMIP", price_band="abierto"),
             ProductTier.insight: TierLevelSpec(
@@ -287,6 +287,16 @@ def _amplitud_al_cierre(db: Session, bank: Bank, anio: int) -> Dict[str, Any]:
         # otra — es cómo un bloque se apaga por un motivo que no es el suyo.
         from modules.banking_score.reports.capacidad_de_pago import capacidad_de_pago
         cap = capacidad_de_pago(db, cierre)
+        # El cruce con el TERRITORIO, cuando el mapa del bloque anterior salió. Se lee de
+        # `out` y no de una variable: si el mapa falló, acá no hay provincias que cruzar y
+        # el bloque queda sin esa lectura en vez de con una vacía.
+        provincias = (out.get("mapa_sectorial") or {}).get("provincias") or []
+        if cap and provincias:
+            from modules.banking_score.reports.capacidad_de_pago import (
+                holgura_donde_presta)
+            donde = holgura_donde_presta(db, cierre, provincias)
+            if donde:
+                cap["holgura_donde_presta"] = donde
         if cap:
             out["capacidad_de_pago"] = cap
     except Exception:  # noqa: BLE001
@@ -415,9 +425,23 @@ class BankingYearReviewProduct:
                 raise ValueError(
                     f"No hay Revisión Anual {anio} del sistema: el año no cerró o el panel no "
                     "alcanza. Elegí un año ya cerrado.")
+            payload_sistema = _anio_del_sistema_anonimo(datos)
+            # EL LIBRO DE CRÉDITO DEL PAÍS al cierre del año. Este producto describe el año
+            # del SISTEMA y salía sin la única lectura que abre ese sistema por dentro: a qué
+            # sectores presta el país, con qué mora y a qué precio.
+            #
+            # Es la lectura de SISTEMA, no la de entidad: acá no hay entidad que posicionar, y
+            # además el nivel es anónimo por doctrina. `sistema_por_sector` agrega todas las
+            # supervisadas, así que no introduce ningún identificador.
+            try:
+                from modules.banking_score.reports.mapa_sectorial import sistema_por_sector
+                sis = sistema_por_sector(db, date(anio, 12, 31))
+                if sis and sis.get("sectores"):
+                    payload_sistema["mapa_sectorial_sistema"] = sis
+            except Exception:  # noqa: BLE001 — el snapshot nunca depende de esta tabla
+                logger.exception("Mapa del sistema omitido en el año %s", anio)
             return ProductSnapshot(tier=tier, period=str(anio),
-                                   payload=_anio_del_sistema_anonimo(datos),
-                                   entity_name=None)
+                                   payload=payload_sistema, entity_name=None)
 
         if not scope:
             raise ValueError("Se requiere una entidad para la Revisión Anual.")
@@ -470,10 +494,12 @@ class BankingYearReviewProduct:
         # tiene desglose, y tampoco una entidad sin cartera clasificada. Pedirle al modelo
         # que narre un mapa que no existe produce una sección hueca — y el gate de
         # degradación tumba el informe entero.
-        if "mapa_sectorial" in secciones and not (snapshot.payload or {}).get("mapa_sectorial"):
-            secciones = [s for s in secciones if s != "mapa_sectorial"]
+        for clave in ("mapa_sectorial", "mapa_sectorial_sistema"):
+            if clave in secciones and not (snapshot.payload or {}).get(clave):
+                secciones = [s for s in secciones if s != clave]
         for seccion in secciones:
-            plantilla = ("anio_del_sistema" if seccion == "anio_del_sistema"
+            plantilla = ("banking_sector_map_system" if seccion == "mapa_sectorial_sistema"
+                         else "anio_del_sistema" if seccion == "anio_del_sistema"
                          else "revision_anual_mercado" if seccion == "contexto_de_mercado"
                          else "banking_sector_map" if seccion == "mapa_sectorial"
                          else "revision_anual")
@@ -520,7 +546,8 @@ class BankingYearReviewProduct:
         return await generate_pdf_report(
             report_type="revision_anual",
             bank_name=snapshot.entity_name or "Sistema Bancario",
-            scoring_result={k: v for k, v in payload.items() if k == "mapa_sectorial"},
+            scoring_result={k: v for k, v in payload.items()
+                            if k in ("mapa_sectorial", "mapa_sectorial_sistema")},
             period=str(snapshot.period),
             narratives=narratives,
             output_dir=output_dir,
@@ -613,6 +640,29 @@ SAMPLE_MERCADO = {
 
 #: Prosa CURADA. No sale del motor: es el material con el que se vende.
 SAMPLE_NARRATIVES = {
+    "mapa_sectorial_sistema": (
+        "El crédito del sistema se concentra en **hogares, no en empresas**: consumo "
+        "(26.50%) y vivienda (19.00%) suman casi la mitad del libro del país, y son dos "
+        "negocios opuestos. La vivienda se coloca a 11.47% con el 84.25% de la cartera "
+        "respaldada por garantía y una mora de 0.78%. El consumo se coloca a 26.58% con "
+        "apenas 11.81% de garantía y una mora de 4.31% — cinco veces y media la de "
+        "vivienda. El precio no es una anomalía: es el reflejo de que una cartera está "
+        "colateralizada y la otra no.\n\n"
+        "**El sector a vigilar no es el de mayor mora, sino el de mayor mora TEMPRANA.** "
+        "Construcción registra 0.45% de mora de 31 a 90 días —la más alta del sistema, "
+        "cuatro veces la de comercio— sobre una mora vencida de apenas 1.13%. Ese "
+        "diferencial es la señal: lo que hoy está entre 31 y 90 días es lo que en el "
+        "próximo corte será vencido, y ordena por anticipación en vez de por daño ya "
+        "consumado.\n\n"
+        "**Alojamiento y servicios de comida es el sector con el perfil más particular del "
+        "sistema:** 88.72% de su deuda está en moneda extranjera y 82.19% respaldada por "
+        "garantía, con la tasa más baja del libro (7.74%) y la mora más baja (0.33%). Es "
+        "coherente: un sector con ingresos en divisas, activos hipotecables y por tanto "
+        "acceso al crédito más barato del mercado. El riesgo de ese perfil no está en la "
+        "mora sino en la exposición cambiaria, que no aparece en esta tabla.\n\n"
+        "Al próximo cierre, la mora temprana de construcción es el indicador que confirmaría "
+        "o descartaría un deterioro que la mora vencida todavía no muestra."
+    ),
     # «mapa_sectorial» NO está acá: su prosa se REUSA del producto trimestral —el mapa al
     # cierre del año ES el mapa de ese corte, y una segunda redacción del mismo hecho puede
     # terminar contradiciendo a la primera— y `products` importa de este módulo, así que
@@ -672,6 +722,41 @@ def _resolver_narrativa_del_mapa() -> None:
         SAMPLE_NARRATIVES["mapa_sectorial"] = TRIMESTRAL["mapa_sectorial"]
 
 
+#: El libro del PAÍS por sector, para la muestra del nivel abierto. Cifras sintéticas pero
+#: coherentes entre sí: los pesos suman cien y la tasa de cada sector se explica por su
+#: garantía —consumo caro y sin garantía, vivienda barata y colateralizada—, que es lo que
+#: hace que una tabla parezca real cuando alguien la mira con criterio.
+SAMPLE_MAPA_SISTEMA: Dict[str, Any] = {
+    "corte": f"{SAMPLE_ANIO}-12-31",
+    "credito_total_del_sistema": 2_100_000_000_000.0,
+    "sectores": [
+        {"sector": "Y - CONSUMO DE BIENES Y SERVICIOS", "deuda": 556_500_000_000.0,
+         "peso_en_el_sistema_pct": 26.50, "entidades_que_prestan": 38, "mora_pct": 4.31,
+         "mora_temprana_31_90_pct": 0.26, "tasa_promedio_ponderada_pct": 26.58,
+         "garantia_sobre_deuda_pct": 11.81, "dolarizacion_de_la_deuda_pct": 4.96},
+        {"sector": "Z - COMPRA Y REMODELACIÓN DE VIVIENDA", "deuda": 399_000_000_000.0,
+         "peso_en_el_sistema_pct": 19.00, "entidades_que_prestan": 31, "mora_pct": 0.78,
+         "mora_temprana_31_90_pct": 0.04, "tasa_promedio_ponderada_pct": 11.47,
+         "garantia_sobre_deuda_pct": 84.25, "dolarizacion_de_la_deuda_pct": 9.64},
+        {"sector": "G - COMERCIO AL POR MAYOR Y AL POR MENOR", "deuda": 252_000_000_000.0,
+         "peso_en_el_sistema_pct": 12.00, "entidades_que_prestan": 36, "mora_pct": 1.70,
+         "mora_temprana_31_90_pct": 0.11, "tasa_promedio_ponderada_pct": 13.65,
+         "garantia_sobre_deuda_pct": 22.14, "dolarizacion_de_la_deuda_pct": 12.06},
+        {"sector": "F - CONSTRUCCIÓN", "deuda": 134_400_000_000.0,
+         "peso_en_el_sistema_pct": 6.40, "entidades_que_prestan": 29, "mora_pct": 1.13,
+         "mora_temprana_31_90_pct": 0.45, "tasa_promedio_ponderada_pct": 11.82,
+         "garantia_sobre_deuda_pct": 69.98, "dolarizacion_de_la_deuda_pct": 19.98},
+        {"sector": "H - ALOJAMIENTO Y SERVICIOS DE COMIDA", "deuda": 126_000_000_000.0,
+         "peso_en_el_sistema_pct": 6.00, "entidades_que_prestan": 24, "mora_pct": 0.33,
+         "mora_temprana_31_90_pct": 0.10, "tasa_promedio_ponderada_pct": 7.74,
+         "garantia_sobre_deuda_pct": 82.19, "dolarizacion_de_la_deuda_pct": 88.72},
+    ],
+    "que_es": ("el crédito de TODAS las entidades supervisadas abierto por sector "
+               "económico; la mora temprana de 31 a 90 días se deteriora antes que la "
+               "vencida, así que ordena por anticipación y no por daño consumado"),
+}
+
+
 def _sample_mapa() -> Dict[str, Any]:
     """El mapa de la muestra anual: el MISMO del producto trimestral, con el sujeto y el
     corte de este producto.
@@ -689,7 +774,7 @@ def _sample_mapa() -> Dict[str, Any]:
 
 def _sample_payload(tier: ProductTier) -> Dict[str, Any]:
     if tier == ProductTier.pulse:
-        return dict(SAMPLE_SISTEMA)
+        return {**SAMPLE_SISTEMA, "mapa_sectorial_sistema": SAMPLE_MAPA_SISTEMA}
     payload: Dict[str, Any] = {"revision_anual": dict(SAMPLE_REVISION)}
     if tier == ProductTier.deep_dive:
         payload["contexto_de_mercado"] = dict(SAMPLE_MERCADO)

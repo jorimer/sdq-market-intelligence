@@ -122,3 +122,68 @@ class TestLosProductosDelCatalogo:
 def test_el_barrido_encontro_los_tipos():
     """Una aserción de presencia sobre una lista vacía pasa sola."""
     assert set(CON_LECTURA_DE_ENTIDAD) | set(CON_LECTURA_DE_SISTEMA) <= set(REPORT_SECTIONS)
+
+
+class TestNingunProductoQuedaCONel_COMPUTO_Y_SIN_LA_LECTURA:
+    """El hueco de esta ronda: computar un bloque y no pasarle lo que necesita.
+
+    Los dos productos ANUALES computaban `capacidad_de_pago` y no le pasaban las provincias
+    del mapa, así que se quedaban con la lectura del país teniendo la del territorio donde la
+    entidad presta a mano. Y el producto del anuario no recibía el mapa del SISTEMA por su
+    camino —solo por la ruta de informes—, que es la misma grieta que ya costó que el mapa
+    estuviera en un informe de cuatro.
+
+    No alcanza con que el cómputo exista: cada superficie tiene que PEDIRLO.
+    """
+
+    @pytest.mark.parametrize("archivo", [
+        "modules/banking_score/products.py",                 # trimestral y año por trimestres
+        "modules/banking_score/products_year_review.py",     # Revisión Anual
+        "modules/banking_score/api/router_reports.py",       # full_rating y revision_anual
+    ])
+    def test_toda_ruta_de_ENTIDAD_cruza_con_el_territorio(self, archivo):
+        """Se exige la ASIGNACIÓN, no el nombre. La primera versión buscaba
+        «holgura_donde_presta» en el archivo y pasaba con el import y la llamada presentes
+        aunque el resultado no se guardara en ningún lado — verificado por mutación: quitar
+        las dos líneas que lo asignan la dejaba en verde."""
+        import pathlib
+        import re
+        src = pathlib.Path(archivo).read_text()
+        assert re.search(r'\["holgura_donde_presta"\]\s*=', src), (
+            f"«{archivo}» computa la capacidad de pago y no GUARDA el cruce con las "
+            f"provincias: sale con la holgura del país en vez de la del territorio")
+
+    def test_el_ANIO_POR_TRIMESTRES_lo_pide_en_su_propia_rama(self):
+        """`products.py` tiene dos ramas y el grep del archivo entero no distingue: la del
+        año arma su payload aparte y podía quedarse sin el cruce con el archivo «en verde»."""
+        import pathlib
+        src = pathlib.Path("modules/banking_score/products.py").read_text()
+        import re
+        i = src.index("if _ES_ANIO.match")
+        j = src.index("q = db.query(RatingResult)")
+        assert re.search(r'\["holgura_donde_presta"\]\s*=', src[i:j])
+
+    def test_el_ANUARIO_recibe_el_mapa_del_sistema_por_su_producto(self):
+        from shared.products.tiers import ProductTier
+        from modules.banking_score.products_year_review import (
+            _sample_payload, year_review_manifest,
+        )
+        secs = year_review_manifest().levels[ProductTier.pulse].sections
+        assert "mapa_sectorial_sistema" in secs
+        assert _sample_payload(ProductTier.pulse).get("mapa_sectorial_sistema")
+
+    def test_el_anuario_usa_la_lectura_de_SISTEMA_y_no_la_de_entidad(self):
+        """Su nivel es anónimo por doctrina: la lectura de entidad introduciría un sujeto que
+        el documento no puede nombrar."""
+        from shared.products.tiers import ProductTier
+        from modules.banking_score.products_year_review import year_review_manifest
+        secs = year_review_manifest().levels[ProductTier.pulse].sections
+        assert "mapa_sectorial" not in secs
+
+    def test_la_muestra_del_anuario_trae_su_prosa(self):
+        from shared.products.tiers import ProductTier
+        from modules.banking_score.products_year_review import (
+            BankingYearReviewProduct,
+        )
+        narr = BankingYearReviewProduct(None).sample_narratives(ProductTier.pulse)
+        assert narr.get("mapa_sectorial_sistema")
