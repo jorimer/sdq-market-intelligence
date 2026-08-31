@@ -11,6 +11,12 @@ export interface SubComponents {
 export interface IndicatorDetail {
   raw: number;
   score: number;
+  /** El motor lo declara false cuando falta algún insumo del indicador. Entonces `raw` es
+   *  el 0.0 por defecto de la estructura y `score` es el que la curva le da al cero — para
+   *  los inversos (concentración, HHI), 100. El compuesto ya los excluye y renormaliza; lo
+   *  que faltaba era que las superficies no publicaran ese cero como si fuera una medición.
+   *  El campo viaja en la respuesta desde siempre: lo que lo hacía invisible era este tipo. */
+  available?: boolean;
 }
 
 export interface ScoringResult {
