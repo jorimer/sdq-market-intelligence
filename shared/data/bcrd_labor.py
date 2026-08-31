@@ -480,6 +480,83 @@ BROAD_UNEMPLOYMENT_LABEL = "SU2"
 _COLS_REGION = (2, 6)
 
 
+#: Los indicadores de la hoja `Regiones` que se persisten, con la clave con que viajan. Son
+#: los mismos SU1..SU4 que la serie nacional, ahora por dominio geográfico. La ENCFT publica
+#: la apertura regional solo ANUAL —la trimestral es nacional— así que la cadencia va en la
+#: clave para que nadie promedie un año contra un trimestre.
+REGIONALES_A_PERSISTIR = {
+    "Total Global de Participación": "participacion_regional_anual",
+    "Tasa de Ocupación": "ocupacion_regional_anual",
+    "SU1: Tasa de Desocupación": "desocupacion_su1_regional_anual",
+    "SU2: Desocupación y Subocupación": "subutilizacion_su2_regional_anual",
+    "SU3: Desocupación y Fuerza de Trabajo Potencial": "subutilizacion_su3_regional_anual",
+    "SU4: Desocupación + Subocupación + Fuerza de Trabajo Potencial":
+        "subutilizacion_su4_regional_anual",
+    "Tasa de Inactividad": "inactividad_regional_anual",
+}
+
+
+def parse_regiones(content: bytes) -> Dict[Tuple[str, str], List[Tuple[int, float]]]:
+    """La hoja `Regiones` completa: `{(indicador, dominio): [(año, valor)]}`.
+
+    **Qué había y qué faltaba.** De esta hoja solo se computaba UNA brecha anual —máximo
+    menos mínimo de SU2— para un indicador de la END. Las tasas por dominio no se
+    persistían, y son siete indicadores × cinco dominios × once años.
+
+    **Por qué importan en crédito.** La holgura laboral no es nacional: en 2015 SU4 iba de
+    13,5% en el Cibao a 26,1% en el Sur — casi el doble. El libro de crédito que esta
+    plataforma abre tiene provincia, así que la condición laboral del territorio donde se
+    presta deja de ser un promedio del país.
+
+    **Los dominios se leen del ENCABEZADO, no se declaran acá.** Si el BCRD agrega o
+    renombra una región, entra sola; una lista fija dejaría de verla en silencio. Lo que sí
+    se declara es qué indicadores se persisten, porque eso es una decisión nuestra.
+
+    La hoja son once bloques —uno por año— con la misma cabecera. El año se busca hacia
+    arriba desde la cabecera y no por posición: los bloques no están a distancia fija.
+    """
+    import openpyxl
+
+    wb = openpyxl.load_workbook(io.BytesIO(content), data_only=True, read_only=True)
+    try:
+        if SHEET_REGIONS not in wb.sheetnames:
+            raise BcrdLaborUnavailable(
+                f"el libro no trae la hoja '{SHEET_REGIONS}' (hojas: {wb.sheetnames})")
+        rows = [list(r) for r in wb[SHEET_REGIONS].iter_rows(values_only=True)]
+    finally:
+        wb.close()
+
+    out: Dict[Tuple[str, str], List[Tuple[int, float]]] = {}
+    for i, fila in enumerate(rows):
+        if not fila or _norm(fila[0]) != "indicador":
+            continue
+        dominios = [str(c).strip() for c in fila[1:] if isinstance(c, str) and str(c).strip()]
+        if not dominios:
+            continue
+        anio = next((_anio(rows[j][0]) for j in range(i - 1, max(-1, i - 6), -1)
+                     if rows[j] and _anio(rows[j][0]) is not None), None)
+        if anio is None:
+            continue
+        for f in rows[i + 1:]:
+            if not f or not isinstance(f[0], str):
+                continue
+            etiqueta = _sin_nota(f[0]).strip()
+            if not etiqueta:
+                continue
+            if _norm(etiqueta).startswith(("fuente", "banco central", "departamento",
+                                           "division", "principales")):
+                break                       # terminó el bloque
+            for k, dominio in enumerate(dominios, start=1):
+                if k < len(f) and isinstance(f[k], (int, float)):
+                    out.setdefault((etiqueta, dominio), []).append((anio, float(f[k])))
+    if not out:
+        raise BcrdLaborUnavailable(
+            f"la hoja '{SHEET_REGIONS}' no produjo ninguna serie por dominio")
+    for serie in out.values():
+        serie.sort()
+    return out
+
+
 def parse_regional_gap(content: bytes) -> List[Tuple[int, float]]:
     """`[(año, brecha entre la región peor y la mejor)]` en puntos porcentuales.
 
@@ -600,6 +677,11 @@ def fetch_bcrd_labor_market() -> dict:  # pragma: no cover - network I/O
         # el coeficiente de variación de todas — en otra hoja del MISMO libro. Servíamos las
         # estimaciones desnudas, y una diferencia menor que los intervalos no es una
         # diferencia. Se emiten aparte y no mezcladas con el valor: son otra magnitud.
+        # LA APERTURA REGIONAL. Siete indicadores × cinco dominios × once años, de la hoja
+        # `Regiones` del mismo libro. De ahí solo se computaba una brecha anual para un
+        # indicador de la END; las tasas por dominio no se persistían. La holgura laboral no
+        # es nacional: en 2025 SU4 va de 6,5% en el Cibao a 14,0% en el Sur.
+        "regionales_anuales": parse_regiones(r.content),
         "precision_trimestral": {
             clave: parse_precision(r.content, etiqueta)
             for clave, etiqueta in _PRECISION_DE_LAS_SERVIDAS.items()

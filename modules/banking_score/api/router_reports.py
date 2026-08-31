@@ -130,6 +130,9 @@ async def _generate_system_report(
     # cifras sectoriales; esa negativa quedaba impresa como cuerpo del PDF. Se resuelven acá
     # y no en cada endpoint para que el próximo boletín no pueda nacer con el mismo hueco.
     if benchmarks is None and report_type in _NARRATED_SYSTEM_TYPES:
+        # SIN exclusión: el sujeto de un boletín de sistema ES el sistema, y el promedio del
+        # sistema los incluye a todos por definición. La exclusión existe para que una
+        # ENTIDAD no se compare contra sí misma; acá no hay entidad que excluir.
         benchmarks = panel_benchmarks(db, pe)
     # El ANUARIO trae además los hechos del año, computados del panel (ver `reports/anuario`):
     # mediana por corte, cambio por tipo, cambios de banda y el universo con sus parciales.
@@ -711,7 +714,7 @@ async def generate_report(
         from modules.banking_score.reports.pdf_generator import generate_pdf_report
         # Benchmarks MEDIDOS del panel en el MISMO corte del informe: comparar un Q1
         # contra una constante ANUAL invertía la conclusión (ver scoring/benchmarks).
-        benchmarks = panel_benchmarks(db, pe)
+        benchmarks = panel_benchmarks(db, pe, excluir_bank_id=str(bank.id))
         # El acumulador se abre alrededor de la generación: el motor deposita ahí las
         # relaciones invertidas que sobrevivieron a la reparación (ver
         # `shared/narrative/relaciones_pendientes`), y la política se decide abajo.

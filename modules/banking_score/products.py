@@ -1087,7 +1087,8 @@ class BankingProduct:
         # la ruta de PRODUCTOS era la que estaba ciega. Misma función a propósito: computa
         # en el período del informe (mismo corte a ambos lados), que es lo que impide el
         # diente de sierra de comparar un Q1 contra una constante ANUAL.
-        peer_block.update(panel_benchmarks(db, cast(date, rr.period_end)))
+        peer_block.update(panel_benchmarks(db, cast(date, rr.period_end),
+                                   excluir_bank_id=str(bank.id)))
         return ProductSnapshot(
             tier=tier, period=str(rr.period_end),
             payload={"scoring_result": scoring_result, "peer_block": peer_block or None},

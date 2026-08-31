@@ -204,3 +204,54 @@ class TestLaPrecisionDeCadaEstimacion:
         src = inspect.getsource(social_sync._sync_bcrd_mercado_laboral)
         for sufijo in ("_cv", "_ic95_inf", "_ic95_sup"):
             assert sufijo in src
+
+
+class TestLaAperturaRegional:
+    """Siete indicadores × cinco dominios × once años, en una hoja que ya descargábamos.
+
+    De `Regiones` solo se computaba UNA brecha anual —máximo menos mínimo de SU2— para un
+    indicador de la END. Las tasas por dominio no se persistían, y la holgura laboral no es
+    nacional: en 2025 la subutilización amplia va de 6,5% en el Cibao a 14,0% en el Sur, más
+    del doble. Un informe que cite solo el número del país describe un promedio que no le
+    ocurre a ningún territorio.
+    """
+
+    def test_los_dominios_se_leen_del_ENCABEZADO_y_no_se_declaran(self):
+        """Si el BCRD agrega o renombra un dominio, entra solo. Una lista fija dejaría de
+        verlo en silencio, que es como se pierde una serie sin que nada falle."""
+        import inspect
+        from shared.data import bcrd_labor
+        src = inspect.getsource(bcrd_labor.parse_regiones)
+        assert "dominios = [" in src and "fila[1:]" in src
+        # Lo que SÍ se declara es qué indicadores se persisten: eso es decisión nuestra.
+        assert len(bcrd_labor.REGIONALES_A_PERSISTIR) == 7
+
+    def test_las_cuatro_medidas_de_holgura_estan_entre_los_persistidos(self):
+        from shared.data.bcrd_labor import REGIONALES_A_PERSISTIR
+        for su in ("SU1", "SU2", "SU3", "SU4"):
+            assert any(su in e for e in REGIONALES_A_PERSISTIR), f"falta {su} por región"
+
+    def test_la_clave_lleva_la_CADENCIA(self):
+        """La apertura regional es ANUAL y la nacional es trimestral. Sin la cadencia en la
+        clave, alguien promedia un año contra un trimestre — que es el mismo cuidado que ya
+        se tuvo al separar la ENCFT anual de la trimestral."""
+        from shared.data.bcrd_labor import REGIONALES_A_PERSISTIR
+        for clave in REGIONALES_A_PERSISTIR.values():
+            assert clave.endswith("_regional_anual"), clave
+
+    def test_el_dominio_va_en_entity_key_y_no_en_el_tema(self):
+        """Así una serie es (indicador, dominio, año) y se comparan dominios sin parsear
+        texto. En el tema, cada dominio sería una serie distinta y no habría con qué
+        ordenarlos."""
+        import inspect
+        from modules.social_dev import social_sync
+        src = inspect.getsource(social_sync._sync_bcrd_mercado_laboral)
+        assert "entity=_slug_dominio(dominio)" in src
+
+    def test_dos_dominios_no_colapsan_en_la_misma_clave(self):
+        from modules.social_dev.social_sync import _slug_dominio
+        dominios = ("Total País", "Región Ozama o Metropolitana", "Región Norte o Cibao",
+                    "Región Sur", "Región Este")
+        claves = [_slug_dominio(d) for d in dominios]
+        assert len(claves) == len(set(claves)), f"colisión: {claves}"
+        assert _slug_dominio("Total País") == "nacional"

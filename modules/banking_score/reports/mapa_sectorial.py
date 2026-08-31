@@ -181,12 +181,22 @@ def _por_provincia(celdas: List[CarteraSectorial], total: float) -> List[Dict[st
     sectores puede estar mejor diversificada por monto que otra con diez— así que se sirve el
     conteo con su nombre y nada más.
     """
+    # La región es un atributo de la provincia, no una medida: se toma la primera no vacía.
+    region_de: Dict[str, Any] = {}
+    for c in celdas:
+        if c.region and str(c.provincia) not in region_de:
+            region_de[str(c.provincia)] = str(c.region)
     filas = []
     for provincia, acc in _agregar_por(celdas, lambda c: c.provincia).items():
         # «SIN PROVINCIA» NO se descarta: es una porción real del libro cuyo rótulo la
         # fuente no trae, y esconderla haría que las cuotas no sumaran cien sin decir por qué.
         fila = {
             "provincia": provincia,
+            # La región TAL COMO LA TRAE LA SIB. Se expone sin traducir a ningún otro
+            # vocabulario: cruzarla con los dominios de la ENCFT exige comprobar antes que
+            # las dos nomenclaturas hablen de lo mismo, y un mapa inventado en el medio es
+            # exactamente lo que este repo no hace.
+            "region_segun_la_sib": region_de.get(provincia),
             "deuda": round(acc["deuda"], 2),
             # El SUJETO en la clave: es la cuota sobre el crédito clasificado de la
             # población que la función recibe —el sistema o una entidad—, no sobre el sector.

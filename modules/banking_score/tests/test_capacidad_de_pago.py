@@ -514,3 +514,52 @@ class TestLaPrecisionDeLaEncuesta:
         thin = THIN_TEMPLATES["banking_sector_map"]
         assert "la_brecha_entre_SU1_y_SU4_es_significativa" in thin
         assert "los intervalos se solapan" in thin
+
+
+class TestLaHolguraPorRegion:
+    """La holgura laboral no es nacional, y el informe citaba solo el país."""
+
+    @pytest.fixture()
+    def db_regional(self, db):
+        from modules.social_dev.models.models import SocialIndicator
+        # Cifras REALES de la ENCFT 2025.
+        for dom, su4, su1 in (("ozama", 13.70, 6.31), ("norte", 6.52, 2.24),
+                              ("sur", 14.00, 5.60), ("este", 9.35, 4.11)):
+            for tema, v in (("subutilizacion_su4_regional_anual", su4),
+                            ("desocupacion_su1_regional_anual", su1)):
+                db.add(SocialIndicator(theme=tema, entity_key=dom, period="2025",
+                                       value=v, unit="%", source="BCRD"))
+        db.commit()
+        return db
+
+    def test_sirve_la_tabla_por_dominio(self, db_regional):
+        r = I.mercado_laboral_por_region(db_regional, CORTE)
+        assert r["por_dominio"]["sur"]["subutilizacion_amplia_su4_pct"] == 14.00
+        assert r["por_dominio"]["norte"]["subutilizacion_amplia_su4_pct"] == 6.52
+
+    def test_la_DISPERSION_se_computa_y_nombra_los_extremos(self, db_regional):
+        r = I.mercado_laboral_por_region(db_regional, CORTE)
+        assert r["dispersion_de_la_subutilizacion_pp"] == pytest.approx(7.48, abs=.01)
+        assert r["dominio_con_mas_holgura"] == "sur"
+        assert r["dominio_con_menos_holgura"] == "norte"
+
+    def test_el_TOTAL_PAIS_no_entra_entre_los_que_se_comparan(self):
+        """Meterlo produciría una «dispersión» contra un promedio, que es otra cuenta."""
+        assert "nacional" not in I._DOMINIOS_ENCFT
+
+    def test_con_un_solo_dominio_NO_hay_dispersion(self, db):
+        from modules.social_dev.models.models import SocialIndicator
+        db.add(SocialIndicator(theme="subutilizacion_su4_regional_anual", entity_key="sur",
+                               period="2025", value=14.0, unit="%", source="BCRD"))
+        db.commit()
+        assert I.mercado_laboral_por_region(db, CORTE) is None
+
+    def test_DECLARA_que_no_cruza_con_las_provincias_del_credito(self, db_regional):
+        """Los dominios de la encuesta y las provincias del libro son nomenclaturas
+        distintas. Inventar el mapa en el medio es lo que este repo no hace."""
+        r = I.mercado_laboral_por_region(db_regional, CORTE)
+        assert "nomenclaturas distintas" in r["que_es"]
+
+    def test_entra_al_bloque_de_capacidad_de_pago(self, db_regional):
+        r = I.capacidad_de_pago(db_regional, CORTE)
+        assert "holgura_por_region" in r

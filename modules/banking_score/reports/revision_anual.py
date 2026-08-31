@@ -414,8 +414,9 @@ def revision_anual(db: Session, bank: Bank, anio: int) -> Optional[Dict[str, Any
     bench_ap: Optional[Dict[str, Any]]
     bench_ci: Optional[Dict[str, Any]]
     try:
-        bench_ap = panel_benchmarks(db, date.fromisoformat(cortes[0]))
-        bench_ci = panel_benchmarks(db, cierre)
+        bench_ap = panel_benchmarks(db, date.fromisoformat(cortes[0]),
+                                    excluir_bank_id=str(bank.id))
+        bench_ci = panel_benchmarks(db, cierre, excluir_bank_id=str(bank.id))
     except Exception:  # noqa: BLE001 — el informe nunca se cae por el benchmark
         logger.exception("Panel de benchmarks no disponible para la Revisión Anual %s", anio)
         bench_ap = bench_ci = None
