@@ -656,7 +656,12 @@ async def generate_report(
                              bank.name)
 
     from modules.banking_score.reports.narrative import REPORT_SECTIONS
-    if "mapa_sectorial" in (REPORT_SECTIONS.get(report_type) or []):
+    _secs = REPORT_SECTIONS.get(report_type) or []
+    # DOS LECTURAS DEL MISMO CUBO, y cada informe pide la suya. La de ENTIDAD compara su
+    # mora y su tasa contra el resto del sistema en cada sector; la de SISTEMA abre el
+    # libro del país. Un boletín de sistema con la lectura de entidad hablaría de alguien
+    # que el documento no nombra, y al revés perdería la comparación que es todo el valor.
+    if "mapa_sectorial" in _secs:
         from modules.banking_score.reports.mapa_sectorial import posicion_de_la_entidad
         try:
             mapa = posicion_de_la_entidad(db, bank, pe)
@@ -665,6 +670,15 @@ async def generate_report(
             mapa = None
         if mapa:
             scoring_result["mapa_sectorial"] = mapa
+    if "mapa_sectorial_sistema" in _secs:
+        from modules.banking_score.reports.mapa_sectorial import sistema_por_sector
+        try:
+            sis = sistema_por_sector(db, pe)
+        except Exception:  # noqa: BLE001
+            logger.exception("No se pudo computar el mapa del sistema en %s", pe)
+            sis = None
+        if sis and sis.get("sectores"):
+            scoring_result["mapa_sectorial_sistema"] = sis
 
     # REVISIÓN ANUAL: sujeto de entidad, unidad de AÑO. Se computa antes de narrar y se exige
     # el año CERRADO por el mismo motivo que el anuario del sistema — sin diciembre esto es un

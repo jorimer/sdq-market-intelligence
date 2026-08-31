@@ -79,8 +79,9 @@ def year_review_manifest() -> SectorProductManifest:
                 base_report_type="revision_anual", price_band="medio"),
             ProductTier.deep_dive: TierLevelSpec(
                 tier=ProductTier.deep_dive, granularity=Granularity.named_entity,
-                sections=("revision_anual", "contexto_de_mercado"),
-                narrative_templates=("revision_anual", "revision_anual_mercado"),
+                sections=("revision_anual", "mapa_sectorial", "contexto_de_mercado"),
+                narrative_templates=("revision_anual", "banking_sector_map",
+                                     "revision_anual_mercado"),
                 audience="comite_credito", cadence="on_demand",
                 base_report_type="revision_anual", price_band="alto"),
         },
@@ -265,6 +266,22 @@ def _amplitud_al_cierre(db: Session, bank: Bank, anio: int) -> Dict[str, Any]:
         logger.exception("Propensión omitida en la Revisión Anual %s de %s", anio, bank.name)
 
     try:
+        # MAPA SECTORIAL al CIERRE del año. La lectura que exige el libro de las otras
+        # noventa y una entidades, y la única del documento que un banco no puede
+        # reproducir con su propia API. Vivía solo en el trimestral: los dos productos
+        # ANUALES salían sin ella, que es justamente donde el comité mira el año entero.
+        #
+        # Al cierre y no al último corte disponible, por la misma razón que todo lo demás
+        # de este payload: un año que se resume con el mapa de marzo se contradice con su
+        # propio encabezado.
+        from modules.banking_score.reports.mapa_sectorial import posicion_de_la_entidad
+        mapa = posicion_de_la_entidad(db, bank, cierre)
+        if mapa:
+            out["mapa_sectorial"] = mapa
+    except Exception:  # noqa: BLE001
+        logger.exception("Mapa sectorial omitido en la Revisión Anual %s de %s", anio, bank.name)
+
+    try:
         from shared.contracts import load_macro_contract
 
         from modules.banking_score.products import _posterior_al_corte
@@ -436,9 +453,17 @@ class BankingYearReviewProduct:
         from shared.narrative.claude_engine import narrative_engine
         manifest = self.product_manifest().require_level(tier)
         out: Dict[str, str] = {}
-        for seccion in manifest.sections:
+        secciones = list(manifest.sections)
+        # SIN DATO NO HAY SECCIÓN. El cubo de créditos empieza en 2021: un año anterior no
+        # tiene desglose, y tampoco una entidad sin cartera clasificada. Pedirle al modelo
+        # que narre un mapa que no existe produce una sección hueca — y el gate de
+        # degradación tumba el informe entero.
+        if "mapa_sectorial" in secciones and not (snapshot.payload or {}).get("mapa_sectorial"):
+            secciones = [s for s in secciones if s != "mapa_sectorial"]
+        for seccion in secciones:
             plantilla = ("anio_del_sistema" if seccion == "anio_del_sistema"
                          else "revision_anual_mercado" if seccion == "contexto_de_mercado"
+                         else "banking_sector_map" if seccion == "mapa_sectorial"
                          else "revision_anual")
             ctx: Dict[str, Any] = {"period": snapshot.period}
             if snapshot.entity_name:
@@ -465,6 +490,7 @@ class BankingYearReviewProduct:
     def sample_narratives(self, tier: ProductTier) -> Dict[str, str]:
         """Prosa CURADA del exemplar. NO usa el motor: lo que se usa para vender no puede
         depender de que el modelo tenga un buen día."""
+        _resolver_narrativa_del_mapa()
         secciones = self.product_manifest().require_level(tier).sections
         return {s: SAMPLE_NARRATIVES[s] for s in secciones}
 
@@ -476,10 +502,13 @@ class BankingYearReviewProduct:
         from modules.banking_score.reports.pdf_generator import generate_pdf_report
         manifest = self.product_manifest().require_level(tier)
         payload = snapshot.payload or {}
+        # `scoring_result` NO va vacío: el generador lee de ahí el mapa sectorial para
+        # dibujar su tabla. Con `{}` la sección salía con su párrafo y sin las nueve
+        # columnas que el párrafo interpreta — que es la mitad del entregable.
         return await generate_pdf_report(
             report_type="revision_anual",
             bank_name=snapshot.entity_name or "Sistema Bancario",
-            scoring_result={},
+            scoring_result={k: v for k, v in payload.items() if k == "mapa_sectorial"},
             period=str(snapshot.period),
             narratives=narratives,
             output_dir=output_dir,
@@ -572,6 +601,12 @@ SAMPLE_MERCADO = {
 
 #: Prosa CURADA. No sale del motor: es el material con el que se vende.
 SAMPLE_NARRATIVES = {
+    # «mapa_sectorial» NO está acá: su prosa se REUSA del producto trimestral —el mapa al
+    # cierre del año ES el mapa de ese corte, y una segunda redacción del mismo hecho puede
+    # terminar contradiciendo a la primera— y `products` importa de este módulo, así que
+    # resolverla en el literal daría un ciclo. La inserta `_resolver_narrativa_del_mapa`.
+    # Tampoco va como `None`: dejaría el dict con valores opcionales y cada consumidor
+    # tendría que defenderse de una clave que en la práctica siempre está.
     "anio_del_sistema": (
         "El sistema bancario cerró 2025 prácticamente donde lo abrió, y esa quietud aparente "
         "esconde el hecho del año: la mediana cayó 0,41 puntos mientras la media subió 0,58. "
@@ -615,12 +650,38 @@ SAMPLE_NARRATIVES = {
 }
 
 
+def _resolver_narrativa_del_mapa() -> None:
+    """`SAMPLE_NARRATIVES` se declara arriba y la prosa del mapa vive en `products`, que
+    importa de este módulo: resolverla en el literal daría un ciclo. Se completa acá, una
+    vez, y el test estructural exige que quede resuelta."""
+    if "mapa_sectorial" not in SAMPLE_NARRATIVES:
+        from modules.banking_score.products import SAMPLE_NARRATIVES as TRIMESTRAL
+
+        SAMPLE_NARRATIVES["mapa_sectorial"] = TRIMESTRAL["mapa_sectorial"]
+
+
+def _sample_mapa() -> Dict[str, Any]:
+    """El mapa de la muestra anual: el MISMO del producto trimestral, con el sujeto y el
+    corte de este producto.
+
+    Se reusa en vez de escribir una segunda tabla sintética a mano. Dos muestras del mismo
+    concepto se desincronizan —y la muestra es lo único del payload que nadie recomputa—,
+    así que la segunda copia sería la que termina diciendo algo que la primera no dice."""
+    from modules.banking_score.products import SAMPLE_MAPA_SECTORIAL
+
+    mapa = dict(SAMPLE_MAPA_SECTORIAL)
+    mapa["entidad"] = SAMPLE_ENTIDAD
+    mapa["corte"] = f"{SAMPLE_ANIO}-12-31"
+    return mapa
+
+
 def _sample_payload(tier: ProductTier) -> Dict[str, Any]:
     if tier == ProductTier.pulse:
         return dict(SAMPLE_SISTEMA)
     payload: Dict[str, Any] = {"revision_anual": dict(SAMPLE_REVISION)}
     if tier == ProductTier.deep_dive:
         payload["contexto_de_mercado"] = dict(SAMPLE_MERCADO)
+        payload["mapa_sectorial"] = _sample_mapa()
     return payload
 
 

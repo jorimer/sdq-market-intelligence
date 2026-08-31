@@ -102,16 +102,21 @@ def test_los_tres_niveles_y_su_granularidad():
         assert m.levels[t].granularity is Granularity.named_entity
 
 
-def test_el_DEEP_DIVE_agrega_el_contraste_contra_el_mercado():
-    """Es lo único que lo separa del Insight: «bajó 4 puntos» contra «bajó 4 puntos mientras
-    su tipo subió 1». Sin esta sección los dos niveles serían el mismo documento."""
+def test_el_DEEP_DIVE_agrega_lo_que_exige_el_panel_COMPLETO():
+    """Lo que separa al Deep Dive del Insight son las dos lecturas que necesitan el libro de
+    las otras noventa y una entidades, no una redacción más larga:
+
+    * `contexto_de_mercado` — «bajó 4 puntos» contra «bajó 4 puntos mientras su tipo subió 1»;
+    * `mapa_sectorial` — su mora y su tasa por sector contra el RESTO del sistema.
+
+    Sin ellas los dos niveles serían el mismo documento a dos precios."""
     from modules.banking_score.products_year_review import year_review_manifest
 
     m = year_review_manifest()
     insight = set(m.levels[ProductTier.insight].sections)
     deep = set(m.levels[ProductTier.deep_dive].sections)
     assert insight < deep
-    assert deep - insight == {"contexto_de_mercado"}
+    assert deep - insight == {"contexto_de_mercado", "mapa_sectorial"}
 
 
 def test_sus_plantillas_van_por_la_ruta_con_GUARDRAIL():
