@@ -413,3 +413,41 @@ class TestLaHolguraQueLaMedidaAngostaNoVe:
     def test_la_lectura_EXPLICA_por_qué_la_ancha_importa_en_crédito(self, db_laboral):
         r = I.mercado_laboral(db_laboral, CORTE)
         assert "ingreso insuficiente" in r["por_que_importa_en_credito"]
+
+
+def test_la_referencia_del_salario_EXISTE_en_la_fuente():
+    """Un binding a una serie inexistente no falla: DESAPARECE.
+
+    La primera versión declaró `sm_empresa_grande_no_sectorizado` — plausible, y falsa. La
+    clave real la produce `social_sync._tema_salario` sobre la fuente, y con la equivocada
+    `salario_minimo()` devolvía `None`, la cobertura no se computaba y el informe salía sin
+    la lectura sin que nada fallara. Se descubrió comparando contra la fuente, no corriendo
+    el código: el código «funcionaba».
+
+    Este test reconstruye las claves desde el mismo slug que usa la ingesta, así que sigue
+    valiendo si la fuente cambia el nombre de una categoría.
+    """
+    from modules.social_dev.social_sync import _tema_salario
+
+    class _Serie:
+        def __init__(self, tamano, area):
+            self.tamano, self.area = tamano, area
+
+    # Las categorías tal como las publica el MHE en datos.gob.do.
+    reales = [_Serie("Empresa grande", "Empresas del sector no sectorizado"),
+              _Serie("Empresa mediana", "Empresas del sector no sectorizado"),
+              _Serie("Microempresa", "Empresas del sector no sectorizado"),
+              _Serie("Zona franca en áreas geográficas deprimidas", "Zona franca")]
+    temas = {_tema_salario(s) for s in reales}
+    assert I._TEMA_SALARIO_REFERENCIA in temas, (
+        f"«{I._TEMA_SALARIO_REFERENCIA}» no es ninguna de las claves que la ingesta "
+        f"produce: {sorted(temas)}. La lectura devolvería None en silencio.")
+
+
+def test_la_referencia_es_la_categoria_VIGENTE_y_no_una_congelada():
+    """Zona franca deprimida (RD$3.600, sin ajuste desde 2006) y Gobierno Central
+    (RD$10.000, desde 2019) siguen publicándose. Tomar una de ésas como «el salario mínimo»
+    publicaría como piso de hoy un número de hace veinte años."""
+    assert "zona_franca" not in I._TEMA_SALARIO_REFERENCIA
+    assert "gobierno" not in I._TEMA_SALARIO_REFERENCIA
+    assert "empresa_grande" in I._TEMA_SALARIO_REFERENCIA
