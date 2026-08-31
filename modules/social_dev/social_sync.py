@@ -292,6 +292,21 @@ def _sync_bcrd_mercado_laboral(db: Session, set_phase: Callable[[str], None]) ->
                               value=float(value), source=SOURCE, disagg="nacional",
                               unit=unidad)
             synced += 1
+    # LA APERTURA REGIONAL, anual. El dominio va en `entity_key` —que existe justamente
+    # para «la región o grupo al que pertenece el valor»— y no en el tema: así una serie es
+    # (indicador, dominio, año) y se puede comparar un dominio contra otro sin parsear texto.
+    from shared.data.bcrd_labor import REGIONALES_A_PERSISTIR
+
+    for etiqueta, clave in REGIONALES_A_PERSISTIR.items():
+        for (ind, dominio), puntos in (series.get("regionales_anuales") or {}).items():
+            if _sin_tildes(ind).lower() != _sin_tildes(etiqueta).lower():
+                continue
+            for anio, valor in puntos:
+                _upsert_indicator(db, theme=clave, entity=_slug_dominio(dominio),
+                                  period=str(anio), value=float(valor), source=SOURCE,
+                                  disagg=dominio[:60], unit="%")
+                synced += 1
+
     # LA PRECISIÓN de las series que se citan, como temas propios. El coeficiente de
     # variación y los dos extremos del intervalo son magnitudes distintas del valor, así que
     # van en su propia clave: meterlos en `disaggregation` los volvería texto y nadie podría
@@ -322,6 +337,18 @@ def _sync_bcrd_mercado_laboral(db: Session, set_phase: Callable[[str], None]) ->
 #: El tema lleva el tamaño y el área porque «Empresa grande» vale RD$27.989 fuera de
 #: hotelería y RD$16.800 dentro: sin esa distinción en la clave, un régimen pisaría al otro.
 _SALARIO_MINIMO_ENTIDAD = "salario_minimo"
+
+
+def _slug_dominio(nombre: str) -> str:
+    """El dominio geográfico de la ENCFT como clave estable.
+
+    «Región Ozama o Metropolitana» → `region_ozama`. Se acorta pero se conserva lo que
+    IDENTIFICA: dos dominios no pueden colapsar en la misma clave, que es lo que pasaría
+    truncando a ciegas «Región Norte o Cibao» y «Región Nordeste» si algún día existiera."""
+    import re
+    base = _sin_tildes(nombre).lower().replace("region ", "").replace("total pais", "nacional")
+    base = re.sub(r"\s+o\s+.*$", "", base)          # «ozama o metropolitana» → «ozama»
+    return re.sub(r"[^a-z0-9]+", "_", base).strip("_")[:60]
 
 
 def _tema_salario(serie) -> str:

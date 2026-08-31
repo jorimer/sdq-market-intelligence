@@ -231,6 +231,21 @@ _TEMAS_LABORALES = {
 }
 
 
+def _ultimo_valor_de(db: Session, tema: str, entidad: str,
+                     hasta: str) -> Optional[float]:
+    """El último valor de un tema para UNA entidad (un dominio geográfico)."""
+    from modules.social_dev.models.models import SocialIndicator
+
+    fila = (db.query(SocialIndicator.value)
+            .filter(SocialIndicator.theme == tema,
+                    SocialIndicator.entity_key == entidad,
+                    SocialIndicator.value.isnot(None),
+                    SocialIndicator.period <= hasta)
+            .order_by(SocialIndicator.period.desc())
+            .first())
+    return float(fila[0]) if fila else None
+
+
 def _ultimo_valor(db: Session, tema: str, hasta: str) -> Optional[float]:
     """El último valor de un tema social hasta *hasta*, o None."""
     puntos = [(p, v) for p, v in _puntos_sociales(db, tema, hasta)]
@@ -376,6 +391,56 @@ def cobertura_del_piso_de_ingreso(salario: Optional[Dict[str, Any]],
     }
 
 
+#: Los dominios de la ENCFT, con la clave que usa la ingesta. `nacional` va aparte: es el
+#: total, no un dominio, y meterlo entre los que se comparan produciría una «dispersión»
+#: contra un promedio, que es otra cuenta.
+_DOMINIOS_ENCFT = ("ozama", "norte", "sur", "este")
+
+
+def mercado_laboral_por_region(db: Session, corte: date) -> Optional[Dict[str, Any]]:
+    """La holgura laboral por dominio geográfico, anual.
+
+    Por qué importa acá. La holgura no es nacional: en 2025 la subutilización amplia iba de
+    6,5% en el Cibao a 14,0% en el Sur, más del doble. Un informe que cite solo el número del
+    país describe un promedio que no le ocurre a ningún territorio.
+
+    Qué NO se hace, y se declara. El libro de crédito de esta plataforma tiene provincia y la
+    región que copia de la SIB; la ENCFT usa sus propios cuatro dominios. Cruzar las dos
+    nomenclaturas exige comprobar antes que hablen de lo mismo — no se inventa un mapa
+    provincia→dominio en el medio. Hasta entonces esto es contexto del PAÍS, servido con su
+    dispersión, y no una atribución al territorio donde presta la entidad.
+    """
+    anio = str(corte.year)
+    tabla: Dict[str, Dict[str, Any]] = {}
+    for clave, etiqueta in (("subutilizacion_su4_regional_anual", "subutilizacion_amplia_su4_pct"),
+                            ("desocupacion_su1_regional_anual", "desocupacion_abierta_su1_pct"),
+                            ("ocupacion_regional_anual", "tasa_de_ocupacion_pct")):
+        for dominio in _DOMINIOS_ENCFT:
+            v = _ultimo_valor_de(db, clave, dominio, anio)
+            if v is not None:
+                tabla.setdefault(dominio, {})[etiqueta] = v
+    if len(tabla) < 2:
+        logger.info("Holgura por región omitida hasta %s: menos de dos dominios", anio)
+        return None
+    anchas = {d: v["subutilizacion_amplia_su4_pct"] for d, v in tabla.items()
+              if v.get("subutilizacion_amplia_su4_pct") is not None}
+    out: Dict[str, Any] = {"anio": anio, "por_dominio": tabla}
+    if len(anchas) >= 2:
+        peor = max(anchas, key=lambda d: anchas[d])
+        mejor = min(anchas, key=lambda d: anchas[d])
+        # LA RELACIÓN SE COMPUTA ACÁ: máximo menos mínimo, no contra el promedio. Contra el
+        # promedio daría otro número y otra conclusión, y la elección tiene que ser explícita.
+        out["dispersion_de_la_subutilizacion_pp"] = round(anchas[peor] - anchas[mejor], 2)
+        out["dominio_con_mas_holgura"] = peor
+        out["dominio_con_menos_holgura"] = mejor
+    out["que_es"] = (
+        "subutilización, desocupación y ocupación por dominio geográfico de la ENCFT "
+        "(anual: la apertura regional no se publica por trimestre). Es contexto del PAÍS: "
+        "los dominios de la encuesta y las provincias del libro de crédito son "
+        "nomenclaturas distintas y no se cruzan sin comprobar que hablen de lo mismo")
+    return out
+
+
 def capacidad_de_pago(db: Session, corte: date) -> Optional[Dict[str, Any]]:
     """Las tres lecturas juntas. Devuelve ``None`` solo si NINGUNA está disponible: cada
     una responde algo distinto y media respuesta es mejor que ninguna, siempre que se
@@ -384,7 +449,8 @@ def capacidad_de_pago(db: Session, corte: date) -> Optional[Dict[str, Any]]:
     for clave, fn in (("inflacion_del_deudor", inflacion_por_quintil),
                       ("salario_minimo", salario_minimo),
                       ("costo_de_la_canasta", costo_de_la_canasta),
-                      ("mercado_laboral", mercado_laboral)):
+                      ("mercado_laboral", mercado_laboral),
+                      ("holgura_por_region", mercado_laboral_por_region)):
         try:
             valor = fn(db, corte)
         except Exception:  # noqa: BLE001 — ninguna lectura tumba al informe

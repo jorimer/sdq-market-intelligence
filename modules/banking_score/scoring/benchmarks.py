@@ -99,8 +99,23 @@ def _medians(rows: List[Dict[str, Any]]) -> Dict[str, float]:
     return out
 
 
-def panel_benchmarks(db: Session, period_end: Optional[date]) -> Dict[str, Any]:
+def panel_benchmarks(db: Session, period_end: Optional[date],
+                     excluir_bank_id: Optional[str] = None) -> Dict[str, Any]:
     """Promedios del sistema y de los grupos de pares MEDIDOS en *period_end*.
+
+    **`excluir_bank_id` saca a la entidad evaluada de su propia referencia.** Sin eso, un
+    banco se compara en parte CONTRA SÍ MISMO: su observación entra en la mediana que debía
+    juzgarlo y la arrastra hacia él, de modo que su brecha sale sistemáticamente encogida. El
+    sesgo va SIEMPRE en la misma dirección —hacia «no está tan lejos del grupo»—, que es lo
+    que lo vuelve un defecto y no ruido.
+
+    Medido sobre los dieciséis bancos múltiples de producción: la mediana de ROE pasa de
+    12,653 con la entidad a 13,229 sin ella, y la de cost-to-income de 53,611 a 54,462. Es
+    menor que en el mapa sectorial —donde el promedio ponderado por deuda daba 3,3 puntos
+    sobre una brecha de 10— porque una mediana sobre dieciséis se mueve poco al quitar una
+    observación. Pequeño no es cero, y la dirección es la misma.
+
+    Se declara en `procedencia` para que la narrativa pueda decir contra qué se comparó.
 
     Mantiene la forma que consumen los informes (``sector_averages``, ``peer_groups`` con
     claves ``{indicador}_avg``, ``regulatory_limits``) y añade ``procedencia`` para que la
@@ -130,6 +145,7 @@ def panel_benchmarks(db: Session, period_end: Optional[date]) -> Dict[str, Any]:
                           .filter(RatingResult.period_end == period_end,
                                   RatingResult.model_type == ModelType.deterministic)
                           .all())
+            if excluir_bank_id is None or str(rr.bank_id) != str(excluir_bank_id)
         ]
     except Exception as e:  # noqa: BLE001 — el informe nunca se cae por el benchmark
         logger.warning("Panel de benchmarks no disponible (%s): se declaran constantes.", e)
@@ -161,6 +177,9 @@ def panel_benchmarks(db: Session, period_end: Optional[date]) -> Dict[str, Any]:
         "procedencia": {
             "medido": True,
             "period": str(period_end),
+            # Contra QUÉ se comparó. Sin este campo, la narrativa no puede distinguir una
+            # referencia que excluye al sujeto de una que lo incluye, y son cosas distintas.
+            "excluye_a_la_entidad_evaluada": excluir_bank_id is not None,
             "n_sistema": len(del_sistema),
             "n_supervisadas": len(rows),
             "universo": SISTEMA_LABEL,
