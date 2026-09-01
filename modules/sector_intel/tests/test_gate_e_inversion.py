@@ -215,3 +215,128 @@ def test_sin_una_de_las_dos_cifras_el_veredicto_no_se_inventa():
                    veredicto_de_control(-0.3, [-0.5, -0.1], None)):
         assert juicio["veredicto"] == VEREDICTO_CONTROL_NO_EVALUABLE
         assert juicio["el_tamano_alcanza_al_score"] is False
+
+
+# ── El encabezado PLANO lleva el desenlace primario ───────────────
+#
+# Hasta el 2026-09-01 el encabezado llevaba el desenlace de EMPLEO «por continuidad con lo ya
+# publicado», mientras `outcome_primario` decía `inversion`. Un consumidor que no bajaba a
+# `outcomes` leía el desenlace que este mismo reporte declara que el índice NO dice anticipar,
+# sin control y sin veredicto. El comentario del código ya anticipaba el fallo —«le pasó a la
+# tabla comercial»— y volvió a pasar: se reportó como «significativamente negativa» una cifra
+# que la plataforma computa como EMPATE con el tamaño.
+
+_PRIMARIO = {
+    "n_observations": 144, "n_branches": 9, "years": ["2009", "2024"],
+    "mean_yearly_ic": -0.274, "n_years": 16, "ic_t_stat": -3.1,
+    "ic_ci": [-0.46, -0.088], "spearman_pooled": -0.3,
+    "spearman_pooled_ci": [-0.45, -0.15], "spearman_partial_growth": -0.3,
+    "spearman_partial_n": 144, "by_year": [], "quintile_spread": None,
+    "conclusive": False, "invertido": True,
+    "que_mide": "intensidad de IED realizada en T+1 — el desenlace que el IAI targetea",
+    "resolucion": "9 actividades de IED del BCRD",
+    "fuente": "BCRD", "contraste_nivel": {"mean_yearly_ic": 0.326},
+    "nota_contraste": "el nivel lo domina el tamaño",
+    "control_solo_tamano": {
+        "intensidad": {"mean_yearly_ic": -0.323, "ic_ci": [-0.521, -0.124],
+                       "veredicto": "empate: el tamaño solo alcanza…",
+                       "el_tamano_alcanza_al_score": True, "empata_con_el_score": True},
+        "nivel": {"mean_yearly_ic": 0.377, "veredicto": "empate: …"},
+    },
+}
+
+
+def test_el_encabezado_plano_lleva_las_cifras_del_PRIMARIO():
+    from modules.sector_intel.validation.report import _bloque_plano
+
+    plano = _bloque_plano(_PRIMARIO)
+    assert plano["mean_yearly_ic"] == -0.274
+    assert plano["ic_ci"] == [-0.46, -0.088]
+    assert plano["outcome"] == _PRIMARIO["que_mide"]
+    assert plano["resolution"] == _PRIMARIO["resolucion"]
+
+
+def test_el_encabezado_NO_descarta_invertido_ni_conclusive():
+    """Los descartaba a propósito (`if k not in ("conclusive", "invertido")`), así que la UI
+    no podía saber si la cifra que renderizaba estaba invertida — y `ciExcludesZero` da True
+    también para un intervalo entero por DEBAJO de cero. Un −0,274 concluyente hacia abajo se
+    pintaba «Significativo»."""
+    from modules.sector_intel.validation.report import _bloque_plano
+
+    plano = _bloque_plano(_PRIMARIO)
+    assert plano["invertido"] is True
+    assert plano["conclusive"] is False
+
+
+def test_el_VEREDICTO_contra_el_tamano_viaja_en_el_encabezado():
+    """Vivía dos niveles más abajo (`outcomes.inversion.control_solo_tamano.intensidad`). Una
+    cifra cuyo calificador está en otra rama del payload se publica sin el calificador: es la
+    misma regla que el sujeto viajando con el número."""
+    from modules.sector_intel.validation.report import _bloque_plano
+
+    plano = _bloque_plano(_PRIMARIO)
+    assert plano["veredicto_contra_el_tamano"].startswith("empate")
+    assert plano["control_solo_tamano"]["mean_yearly_ic"] == -0.323
+
+
+def test_sin_control_el_veredicto_dice_NO_SE_SABE_y_no_calla():
+    """Un `None` mudo se leería como que la cifra no necesita calificador — el defecto del
+    `stale=null`, donde «no sé de cuándo es» y «está al día» se volvían indistinguibles."""
+    from shared.validation.control_tamano import VEREDICTO_CONTROL_NO_EVALUABLE
+    from modules.sector_intel.validation.report import _bloque_plano
+
+    plano = _bloque_plano({k: v for k, v in _PRIMARIO.items() if k != "control_solo_tamano"})
+    assert plano["veredicto_contra_el_tamano"] == VEREDICTO_CONTROL_NO_EVALUABLE
+
+
+def test_las_DOS_PUNTAS_no_se_desincronizan():
+    """El encabezado se DERIVA del primario; copiarlo a mano es cómo se desincroniza sin que
+    nada falle. Toda clave de métrica del primario tiene que estar arriba con su mismo valor.
+    """
+    from modules.sector_intel.validation.report import (_NO_SE_COPIAN_TAL_CUAL,
+                                                        _bloque_plano)
+
+    plano = _bloque_plano(_PRIMARIO)
+    faltan = {k: v for k, v in _PRIMARIO.items()
+              if k not in _NO_SE_COPIAN_TAL_CUAL and plano.get(k) != v}
+    assert not faltan, f"el encabezado no copió, o copió distinto: {sorted(faltan)}"
+    # Y las que se republican con otra forma NO pueden simplemente desaparecer: cada una
+    # tiene que estar arriba bajo su nombre nuevo, o el encabezado pierde información.
+    for nativa, arriba in (("que_mide", "outcome"), ("resolucion", "resolution"),
+                           ("control_solo_tamano", "control_solo_tamano")):
+        assert plano.get(arriba) is not None, (
+            f"«{nativa}» se excluyó de la copia verbatim y no se republicó como «{arriba}»")
+
+
+def test_el_encabezado_se_ARMA_llamando_al_derivador_y_no_a_mano():
+    """El guard de reincidencia. Los tests de valor de arriba pasarían igual si alguien
+    volviera a escribir las claves a mano con los nombres correctos de hoy — y el encabezado
+    volvería a envejecer en silencio el día que el primario gane una clave."""
+    import ast
+    import inspect
+
+    from modules.sector_intel.validation import report as mod
+
+    fn = next(n for n in ast.walk(ast.parse(inspect.getsource(mod)))
+              if isinstance(n, ast.FunctionDef) and n.name == "gate_e_report")
+    llama = any(isinstance(n, ast.Call) and isinstance(n.func, ast.Name)
+                and n.func.id == "_bloque_plano" for n in ast.walk(fn))
+    assert llama, "`gate_e_report` dejó de derivar su encabezado del desenlace primario"
+    literales = {n.value for n in ast.walk(fn)
+                 if isinstance(n, ast.Constant) and isinstance(n.value, str)}
+    assert "crecimiento del empleo formal (Δ% T+1, ENCFT)" not in literales, (
+        "el encabezado volvió a nombrar el desenlace de empleo a mano")
+
+
+def test_el_veredicto_viaja_tambien_como_BOOLEANO_y_no_solo_como_prosa():
+    """La UI tiene que decidir si pinta «Significativo». Buscar la palabra «empate» dentro de
+    un texto no es un contrato: esa prosa se traduce y se reescribe."""
+    from modules.sector_intel.validation.report import _bloque_plano
+
+    plano = _bloque_plano(_PRIMARIO)
+    assert plano["empata_con_el_score"] is True
+    assert plano["el_tamano_alcanza_al_score"] is True
+    sin = _bloque_plano({k: v for k, v in _PRIMARIO.items() if k != "control_solo_tamano"})
+    assert sin["empata_con_el_score"] is False, (
+        "sin control no se puede afirmar que empata — pero tampoco que NO empata; lo que "
+        "dice «no lo sé» es `veredicto_contra_el_tamano`, y por eso los dos viajan juntos")

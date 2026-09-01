@@ -184,6 +184,31 @@ export function ValidationTab() {
         />
       </div>
 
+      {/* EL CONTROL POR TAMAÑO, pegado a la cifra que califica.
+          La intensidad de IED se divide por el tamaño del sector y el tamaño es una variable
+          del IAI, así que sin esta línea «el índice ordena al revés la inversión» y «el
+          deflactor produce el signo» son indistinguibles — y son conclusiones opuestas. El
+          veredicto lo computa el backend; acá no se re-juzga, se lee. */}
+      {report.veredicto_contra_el_tamano && (
+        <div
+          className={`mb-5 rounded-[10px] p-3.5 text-xs ${
+            report.empata_con_el_score ? "bg-warn-soft text-body" : "bg-surface-2 text-body"
+          }`}
+        >
+          <span className="font-semibold text-ink">{t("sector.valSizeControlTitle")}</span>{" "}
+          {report.control_solo_tamano?.mean_yearly_ic != null && (
+            <>
+              {t("sector.valSizeControlValue", {
+                ic: fmtRho(report.control_solo_tamano.mean_yearly_ic),
+                lo: fmtRho(report.control_solo_tamano.ic_ci?.[0] ?? null),
+                hi: fmtRho(report.control_solo_tamano.ic_ci?.[1] ?? null),
+              })}{" "}
+            </>
+          )}
+          <span className="text-muted">{report.veredicto_contra_el_tamano}</span>
+        </div>
+      )}
+
       {/* Secundario, etiquetado: el ρ apilado (sobrestima la precisión) */}
       <p className="text-xs text-faint mb-5">
         {t("sector.valPooledPrefix", { rho: fmtRho(report.spearman_pooled) })}

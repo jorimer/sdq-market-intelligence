@@ -18,7 +18,8 @@ from modules.sector_intel.validation.historical import build_iai_panel, build_ia
 from modules.sector_intel.validation.outcomes import (
     employment_by_branch, ied_by_activity, label_panel, label_panel_ied,
 )
-from shared.validation.control_tamano import veredicto_de_control
+from shared.validation.control_tamano import (VEREDICTO_CONTROL_NO_EVALUABLE,
+                                              veredicto_de_control)
 from shared.validation.metrics import mean_ic_with_t, spearman, spearman_bootstrap_ci
 
 
@@ -120,8 +121,8 @@ def _quintile_spread_by_year(by_year: Dict[str, List[Dict]], k: int = 5,
 # que una se quede sin empleo comparable. Es la misma forma del defecto que el IRMP publicó
 # («5 países» contra un panel de 24) y que el eje social tenía latente.
 _METODO_TITULAR = (
-    "Validación DIRECCIONAL, no grado-Basilea. Mide si el IAI en T ordena el crecimiento del "
-    "empleo formal por rama en T+1 (IC de rango de Spearman). TITULAR: el IC MEDIO de las "
+    "Validación DIRECCIONAL, no grado-Basilea. Mide si el IAI en T ordena el desenlace que "
+    "encabeza este bloque, en T+1 (IC de rango de Spearman). TITULAR: el IC MEDIO de las "
     "cross-sections anuales, con CI de Student-t sobre la serie de IC por año (la inferencia "
     "correcta para un panel sector-año, que respeta el clustering por año). El IC apilado "
     "(pooled) se reporta como SECUNDARIO: su bootstrap remuestrea pares como si fueran "
@@ -142,10 +143,12 @@ def _resolucion(n_ramas: int) -> str:
 
 
 _METODO_DOS_DESENLACES = (
-    "El eje se valida contra DOS desenlaces y no contra uno: el empleo formal (el que este "
-    "bloque encabeza, por continuidad con lo ya publicado) y la INVERSIÓN realizada (IED del "
-    "BCRD por actividad), que es la que el índice dice anticipar. `headline_outcome` nombra "
-    "cuál de los dos sostiene una afirmación; si es `null`, ninguno la sostiene"
+    "El eje se valida contra DOS desenlaces y no contra uno: la INVERSIÓN realizada (IED del "
+    "BCRD por actividad), que es la que el índice dice anticipar y la que encabeza este "
+    "bloque, y el empleo formal, que está en `outcomes` y que el índice NO dice anticipar. "
+    "`headline_outcome` nombra cuál de los dos sostiene una afirmación; si es `null`, ninguno "
+    "la sostiene. Y toda cifra de este bloque viaja con `veredicto_contra_el_tamano`: sin él, "
+    "«el índice ordena» y «el tamaño ordena y el índice lo copia» son indistinguibles"
 )
 
 
@@ -156,6 +159,56 @@ def _disclaimer(n_ramas: int, n_years: int) -> str:
         f"Panel chico ({n_ramas} ramas × {n_years} años); con n por año ≈{n_ramas} el IC "
         f"mínimo detectable es alto. {_METODO_POTENCIA} {_METODO_DOS_DESENLACES}."
     )
+
+
+#: Claves que el encabezado republica bajo OTRO nombre o con otra forma, en vez de copiarlas
+#: tal cual: `que_mide`/`resolucion` salen como `outcome`/`resolution` —los nombres que los
+#: consumidores ya leen— y `control_solo_tamano` sube aplanado al del desenlace primario, con
+#: su veredicto al lado. El resto se copia verbatim, y hay un test que lo exige: copiar a mano
+#: un subconjunto es cómo el encabezado se desincroniza del primario sin que nada falle.
+_NO_SE_COPIAN_TAL_CUAL = ("que_mide", "resolucion", "contraste_nivel", "nota_contraste",
+                          "fuente", "control_solo_tamano")
+
+
+def _bloque_plano(primario: Dict) -> Dict:
+    """El encabezado plano del reporte, DERIVADO del desenlace primario.
+
+    **Por qué existe.** Estas claves —`outcome`, `mean_yearly_ic`, `ic_ci`, `n_observations`—
+    son las que lee cualquier consumidor que no baje a `outcomes`, y hasta el 2026-09-01
+    llevaban el desenlace de EMPLEO «por continuidad con lo ya publicado», mientras
+    `outcome_primario` decía `inversion` y este mismo reporte declaraba que el empleo «NO es
+    lo que el IAI dice anticipar». El comentario que estaba acá ya anticipaba el fallo —«le
+    pasó a la tabla comercial»— y volvió a pasar: se leyó el IC de inversión sin su control y
+    se reportó como «significativamente negativa» un resultado que la plataforma computa como
+    EMPATE con el tamaño. Un campo que hay que saber no leer es una trampa, no un contrato.
+
+    **Se DERIVA y no se escribe.** Copiar las claves a mano es cómo el encabezado se
+    desincroniza de `outcomes[outcome_primario]` sin que nada falle; hay un test que compara
+    las dos puntas.
+
+    **Y el veredicto contra el tamaño viaja ACÁ**, no dos niveles más abajo. Es la misma regla
+    que el sujeto con el número: una cifra cuyo calificador vive en otra rama del payload se
+    publica sin el calificador.
+    """
+    control = ((primario.get("control_solo_tamano") or {}).get("intensidad")
+               if primario.get("control_solo_tamano") else None)
+    plano = {k: v for k, v in primario.items() if k not in _NO_SE_COPIAN_TAL_CUAL}
+    plano["outcome"] = primario.get("que_mide")
+    plano["resolution"] = primario.get("resolucion")
+    plano["control_solo_tamano"] = control
+    # Sin control el veredicto NO es «bien»: es «no lo sé», y se dice. Un `None` mudo acá se
+    # leería como que la cifra no necesita calificador, que es el defecto del `stale=null`.
+    plano["veredicto_contra_el_tamano"] = (
+        control.get("veredicto") if control else VEREDICTO_CONTROL_NO_EVALUABLE)
+    # Y los BOOLEANOS al lado de la prosa. La UI tiene que decidir si pinta «Significativo» y
+    # no puede hacerlo buscando la palabra «empate» dentro de un texto: esa prosa se traduce,
+    # se reescribe y no es un contrato. Se conservan los mismos nombres que dentro del
+    # control — es el mismo hecho, y dos vocabularios para el mismo hecho es cómo dos
+    # superficies del documento terminan diciendo cosas distintas.
+    plano["el_tamano_alcanza_al_score"] = bool(control and control.get(
+        "el_tamano_alcanza_al_score"))
+    plano["empata_con_el_score"] = bool(control and control.get("empata_con_el_score"))
+    return plano
 
 
 def _titular(empleo: Dict, inversion: Optional[Dict]) -> Optional[str]:
@@ -277,31 +330,29 @@ def gate_e_report(db: Session) -> Dict:
         partial_n = len(g_rows)
 
     n_ramas = len({r["branch"] for r in labeled})
-    empleo = _metricas_gate_e(labeled, "emp_growth_next")
+    empleo = {**_metricas_gate_e(labeled, "emp_growth_next"),
+              "que_mide": ("crecimiento del empleo formal por rama (Δ% T+1, ENCFT) — NO es lo "
+                           "que el IAI dice anticipar"),
+              "resolucion": _resolucion(n_ramas)}
     inversion = _gate_e_inversion(db)
+
+    # QUÉ desenlace targetea el índice. Es un hecho de DISEÑO y no el veredicto de la última
+    # corrida: `headline_outcome` dice cuál SOSTIENE una afirmación —y puede ser None—
+    # mientras que éste dice cuál hay que MIRAR aunque no concluya.
+    outcomes = {"empleo": empleo, **({"inversion": inversion} if inversion else {})}
+    primario_clave = "inversion" if inversion else "empleo"
 
     return {
         "has_data": True,
-        # El desenlace de EMPLEO se conserva arriba —es el que ya está publicado y citado—
-        # pero deja de ser el único: `outcomes` trae los dos y `headline_outcome` dice cuál
-        # sostiene una afirmación. Ver la nota del disclaimer.
-        "outcome": "crecimiento del empleo formal (Δ% T+1, ENCFT)",
-        "resolution": _resolucion(n_ramas),
-        **{k: v for k, v in empleo.items() if k not in ("conclusive", "invertido")},
+        # EL ENCABEZADO LLEVA EL PRIMARIO, derivado. Hasta el 2026-09-01 llevaba el de empleo
+        # «por continuidad con lo ya publicado», y el consumidor que no bajaba a `outcomes`
+        # leía el desenlace que este mismo reporte declara que el índice NO dice anticipar.
+        **_bloque_plano(outcomes[primario_clave]),
         "spearman_pooled_note": ("pooled sobre los pares sector-año apilados (sin "
                                  "clustering año/sector) — sobrestima la precisión; "
                                  "el titular es el IC medio anual con t"),
-        "outcomes": {"empleo": {**empleo,
-                                "que_mide": "crecimiento del empleo formal por rama (Δ% T+1, "
-                                            "ENCFT) — NO es lo que el IAI dice anticipar"},
-                     **({"inversion": inversion} if inversion else {})},
+        "outcomes": outcomes,
         "headline_outcome": _titular(empleo, inversion),
-        # QUÉ desenlace targetea el índice. Es un hecho de DISEÑO y no el veredicto de la
-        # última corrida: `headline_outcome` dice cuál sostiene una afirmación —y puede ser
-        # None— mientras que éste dice cuál hay que MIRAR aunque no concluya. Sin la
-        # distinción, un consumidor que no encuentra titular cae al primer bloque que haya,
-        # y acá el primero es el de empleo: el que este mismo reporte declara que «NO es lo
-        # que el IAI dice anticipar». Le pasó a la tabla comercial.
-        "outcome_primario": "inversion" if inversion else "empleo",
+        "outcome_primario": primario_clave,
         "disclaimer": _disclaimer(n_ramas, empleo["n_years"] or 0),
     }

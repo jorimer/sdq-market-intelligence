@@ -104,8 +104,23 @@ function mapIrmp(t: TFunction, d: any): VRow {
 function mapSector(t: TFunction, d: any): VRow {
   const base = { axis: t("platform.methodology.axes.n3Name"), source: t(V("mSectorSource")), metric: t(V("mSectorMetric")) };
   if (!d?.has_report || d?.has_data === false || d?.mean_yearly_ic == null) return notCalc(t, base);
-  const sig = ciExcludesZero(d.ic_ci);
-  return { ...base, value: fmtNum(d.mean_yearly_ic, 2), ci: fmtCI(d.ic_ci), n: `${t(V("obs"), { n: fmtNum(d.n_observations, 0) })} · ${t(V("years"), { n: d.n_years ?? "—" })}`, sig, verdict: sig ? t(V("vSignificant")) : t(V("vInconclusivePower")) };
+  // `ciExcludesZero` da true TAMBIÉN para un intervalo entero por DEBAJO de cero, así que
+  // por sí solo pintaba «Significativo» sobre un resultado INVERTIDO. Y un resultado que
+  // empata con el tamaño no es una credencial: significa que ordenar por tamaño del sector
+  // consigue lo mismo. Los dos hechos los computa el backend y viajan en el encabezado;
+  // acá no se re-juzgan, se leen.
+  const excluyeCero = ciExcludesZero(d.ic_ci);
+  const invertido = d.invertido === true;
+  const empata = d.empata_con_el_score === true;
+  const acredita = excluyeCero && !invertido && !empata;
+  const verdict = !excluyeCero
+    ? t(V("vInconclusivePower"))
+    : invertido
+      ? t(V("vInverted"))
+      : empata
+        ? t(V("vTiedWithSize"))
+        : t(V("vSignificant"));
+  return { ...base, value: fmtNum(d.mean_yearly_ic, 2), ci: fmtCI(d.ic_ci), n: `${t(V("obs"), { n: fmtNum(d.n_observations, 0) })} · ${t(V("years"), { n: d.n_years ?? "—" })}`, sig: acredita, verdict };
 }
 function mapSocial(t: TFunction, d: any): VRow {
   const base = { axis: t("platform.methodology.axes.n6Name"), source: t(V("mSocialSource")), metric: t(V("mSocialMetric")) };

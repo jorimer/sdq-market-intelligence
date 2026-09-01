@@ -181,6 +181,24 @@ export interface SectorGateEReport {
   spearman_partial_n?: number | null;
   by_year?: GateEByYear[];
   quintile_spread?: GateEQuintileSpread | null;
+  // El desenlace primario ES el del encabezado desde el 2026-09-01: antes el encabezado
+  // llevaba el de empleo, que este mismo reporte declara que el índice NO dice anticipar.
+  outcome_primario?: string;
+  headline_outcome?: string | null;
+  // CONTROL POR TAMAÑO. La intensidad de IED se divide por el tamaño del sector, y el tamaño
+  // es una variable del IAI: sin este control, «el índice ordena al revés» y «el deflactor
+  // produce el signo» son indistinguibles. No se re-juzga acá: el veredicto lo computa el
+  // backend y esta pantalla lo lee.
+  control_solo_tamano?: {
+    mean_yearly_ic?: number | null;
+    ic_ci?: [number | null, number | null];
+    n_observations?: number;
+  } | null;
+  veredicto_contra_el_tamano?: string;
+  empata_con_el_score?: boolean;
+  el_tamano_alcanza_al_score?: boolean;
+  invertido?: boolean;
+  conclusive?: boolean;
   disclaimer?: string;
   generated_at?: string;
 }
