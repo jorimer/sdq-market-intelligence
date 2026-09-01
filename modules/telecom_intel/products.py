@@ -329,7 +329,19 @@ class TelecomProduct:
             return ProductSnapshot(tier=tier, period=period or "—",
                                    payload={"has_score": False}, entity_name=entity,
                                    entity_roster=())
-        payload = {"has_score": True, "index": _index_dict(s)}
+        payload: Dict[str, Any] = {"has_score": True, "index": _index_dict(s)}
+        # LA CAPACIDAD DE PAGO DEL HOGAR. Vive en `shared/` porque la leen varios ejes;
+        # lo que cambia entre ellos es la LECTURA, no el dato, y ésa la fija la regla de
+        # la plantilla. Al MISMO corte que el resto del informe.
+        try:
+            from shared.capacidad_de_pago import (capacidad_de_pago,
+                                                  corte_del_periodo)
+            _cap = capacidad_de_pago(self._require_db(),
+                                     corte_del_periodo(s.period))
+            if _cap:
+                payload["capacidad_de_pago"] = _cap
+        except Exception:  # noqa: BLE001 — el snapshot nunca depende de esta serie
+            logger.exception("Capacidad de pago omitida en el snapshot de telecom_intel")
         if tier == ProductTier.pulse:
             return ProductSnapshot(tier=tier, period=s.period, payload=payload,
                                    entity_name=None, entity_roster=())
@@ -370,6 +382,13 @@ class TelecomProduct:
 
         from shared.narrative.claude_engine import narrative_engine
         base_ctx = telecom_ai_context(snapshot.payload["index"], snapshot.period)
+        # LA CAPACIDAD DE PAGO VIAJA AL CONTEXTO, no solo al payload. Es la mitad que
+        # se olvida: en la fase 4 el financiamiento llegó al payload y la prosa no lo
+        # usó nunca porque el contexto no lo tenía. Servir el dato no alcanza — tiene
+        # que llegar al modelo Y la plantilla tiene que pedirlo.
+        _cap = (snapshot.payload or {}).get("capacidad_de_pago")
+        if _cap:
+            base_ctx = {**base_ctx, "capacidad_de_pago": _cap}
         audience = "inversionista"
         trend = _trend_series(self._db)  # trayectoria para la sección de posición (best-effort)
         templates = {"recommendation": "sector_decision", "positioning": "sector_positioning"}

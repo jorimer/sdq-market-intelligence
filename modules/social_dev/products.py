@@ -975,9 +975,25 @@ class SocialDevProduct:
         sources = (_safe(db, lambda: assemble_idm_dataset(db, period=resolved_period), {})
                    .get("sources") or {}).get(scope)
         name = dict(region_catalog()).get(scope, scope)
+        # LA CONDICIÓN LABORAL DE SU TERRITORIO. `parse_regiones` persiste siete indicadores
+        # por cinco dominios y once años, y hasta la fase 6 del plan sectorial solo los leía
+        # banca —agregados y ponderados por exposición crediticia—. Este producto YA es
+        # regional: los quiere de la forma más directa.
+        #
+        # El IDM trae pobreza, informalidad e ingreso; NO trae subutilización laboral, y la
+        # SU4 es justamente lo que la desocupación abierta no ve. En 2015 iba de 13,5% en el
+        # Cibao a 26,1% en el Sur: casi el doble.
+        _holgura = None
+        try:
+            from shared.capacidad_de_pago import (corte_del_periodo,
+                                                  holgura_de_la_region)
+            _holgura = holgura_de_la_region(db, corte_del_periodo(resolved_period), scope)
+        except Exception:  # noqa: BLE001 — el snapshot nunca depende de esta serie
+            logger.exception("Holgura regional omitida en el snapshot de %s", scope)
         return ProductSnapshot(
             tier=tier, period=resolved_period, entity_name=name,
             payload={"has_score": True, "entity_key": scope, "region_name": name,
+                     **({"holgura_laboral_de_la_region": _holgura} if _holgura else {}),
                      "score": {"development_score": row.development_score, "band": row.band,
                                "period": row.period, "breakdown": row.breakdown},
                      "rank": rank, "n_entities": len(panel), "distribution": dist,
@@ -1043,6 +1059,12 @@ class SocialDevProduct:
                 payload["entity_key"], payload["score"], region_name=payload.get("region_name"),
                 sources=payload.get("sources"), rank=payload.get("rank"),
                 n_regions=payload.get("n_entities"), distribution=payload.get("distribution"))
+            # AL CONTEXTO, no solo al payload: es la mitad que se olvida. En la fase 4 el
+            # financiamiento llegó al payload y la prosa no lo usó nunca porque el contexto
+            # no lo tenía.
+            _hol = payload.get("holgura_laboral_de_la_region")
+            if _hol:
+                base_ctx = {**base_ctx, "holgura_laboral_de_la_region": _hol}
             audience = "formulador_politica"
 
         out: Dict[str, str] = {}

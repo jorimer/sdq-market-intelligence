@@ -85,3 +85,25 @@ def dominio_de_la_provincia(provincia: str) -> str | None:
         if objetivo in provincias_del_dominio(dominio):
             return dominio
     return None
+
+
+#: Región de desarrollo → dominio ENCFT. Se DERIVA de `DOMINIOS` y no se escribe: una segunda
+#: tabla del mismo mapa es como las dos se desincronizan.
+_DOMINIO_POR_REGION = {region: dominio
+                       for dominio, regiones in DOMINIOS.items()
+                       for region in regiones}
+
+
+def dominio_de_la_region(region: str) -> str | None:
+    """El dominio ENCFT de una región de desarrollo, o ``None``.
+
+    Acepta el rótulo de la fuente («CIBAO NORDESTE») y la clave con guiones bajos que usan
+    los productos regionales («cibao_nordeste»), porque las dos formas circulan en el repo y
+    exigir una sola obligaría a normalizar en cada llamador.
+
+    ``None`` cuando la región no pertenece a la regionalización: asignarle un dominio le
+    atribuiría condiciones laborales de un territorio que no le corresponde.
+    """
+    if not region:
+        return None
+    return _DOMINIO_POR_REGION.get(str(region).strip().upper().replace("_", " "))

@@ -298,6 +298,42 @@ class ConstructionProduct:
                 payload["perfil_del_sector"] = _perfil
         except Exception:  # noqa: BLE001 — el snapshot nunca depende de esta lectura
             logger.exception("Perfil del sector omitido en el snapshot de construcción")
+        # LA CAPACIDAD DE PAGO DEL HOGAR. Vive en `shared/` porque la leen varios ejes;
+        # lo que cambia entre ellos es la LECTURA, no el dato, y ésa la fija la regla de
+        # la plantilla. Al MISMO corte que el resto del informe.
+        try:
+            from shared.capacidad_de_pago import (capacidad_de_pago,
+                                                  corte_del_periodo)
+            _cap = capacidad_de_pago(self._require_db(),
+                                     corte_del_periodo(s.period))
+            if _cap:
+                payload["capacidad_de_pago"] = _cap
+        except Exception:  # noqa: BLE001 — el snapshot nunca depende de esta serie
+            logger.exception("Capacidad de pago omitida en el snapshot de construction_intel")
+        # DÓNDE SE CONSTRUYE contra la holgura laboral de ESE territorio. El cruce que
+        # ninguna otra fuente del sector arma: los permisos traen provincia y la ENCFT
+        # trae subutilización por dominio, y nadie los junta. Se pondera por m²
+        # licenciados —lo que la fuente mide— y no por un promedio simple de
+        # provincias, que daría la holgura de un desarrollador que construyera igual
+        # en las treinta y dos.
+        #
+        # Se lee de `payload` y no de una variable: si el índice no trajo desglose,
+        # acá no hay provincias que cruzar y el bloque queda sin esa lectura en vez de
+        # con una vacía.
+        try:
+            from shared.capacidad_de_pago import (corte_del_periodo,
+                                                  holgura_donde_opera)
+            _provs = ((payload.get("index") or {}).get("geography") or {}).get(
+                "breakdown") or []
+            if _provs:
+                _donde = holgura_donde_opera(
+                    self._require_db(), corte_del_periodo(s.period), _provs,
+                    clave_peso="sqm", sujeto="pipeline")
+                if _donde:
+                    payload.setdefault("capacidad_de_pago", {})[
+                        "holgura_donde_construye"] = _donde
+        except Exception:  # noqa: BLE001 — el snapshot nunca depende de esta serie
+            logger.exception("Holgura territorial omitida en construcción")
         if tier == ProductTier.pulse:
             return ProductSnapshot(tier=tier, period=s.period, payload=payload,
                                    entity_name=None, entity_roster=())
@@ -385,6 +421,13 @@ class ConstructionProduct:
         from shared.narrative.claude_engine import narrative_engine
         base_ctx = construction_ai_context(snapshot.payload["index"], snapshot.period,
                                            snapshot.payload.get("perfil_del_sector"))
+        # LA CAPACIDAD DE PAGO VIAJA AL CONTEXTO, no solo al payload. Es la mitad que
+        # se olvida: en la fase 4 el financiamiento llegó al payload y la prosa no lo
+        # usó nunca porque el contexto no lo tenía. Servir el dato no alcanza — tiene
+        # que llegar al modelo Y la plantilla tiene que pedirlo.
+        _cap = (snapshot.payload or {}).get("capacidad_de_pago")
+        if _cap:
+            base_ctx = {**base_ctx, "capacidad_de_pago": _cap}
         audience = "inversionista"
         templates = {"recommendation": "sector_decision", "positioning": "sector_positioning"}
         out: Dict[str, str] = {}

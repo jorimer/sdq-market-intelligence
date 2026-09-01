@@ -164,6 +164,18 @@ def compute_construction_index(
     # el baseline de mypy — no introduce ni resuelve violaciones.
     typology_out = {**typology,
                     "breakdown": _typology_breakdown(latest.get("by_typology_detail") or {})}
+    # EL DESGLOSE POR PROVINCIA, por el mismo motivo y con la misma forma que el de
+    # tipología: el índice solo publicaba el HHI, la provincia líder y su cuota, y con eso no
+    # se puede cruzar DÓNDE se construye contra la holgura laboral de ese territorio. La
+    # mezcla ya se computa acá para el HHI; lo único que faltaba era servirla.
+    #
+    # `sqm` es la clave del peso porque es lo que la fuente mide: metros cuadrados
+    # licenciados. Se ordena de mayor a menor para que un consumidor que recorte a los N
+    # primeros se quede con los que pesan.
+    geography_out = {**geography, "breakdown": [
+        {"provincia": prov, "sqm": round(float(v), 2)}
+        for prov, v in sorted((latest.get("by_province") or {}).items(),
+                              key=lambda kv: -float(kv[1] or 0)) if v]}
 
     dims = {
         "production": {"score": production["score"], "weight": W_PRODUCTION, "provenance": "real"},
@@ -193,7 +205,7 @@ def compute_construction_index(
         "production": production,
         "pipeline": pipeline,
         "typology": typology_out,
-        "geography": geography,
+        "geography": geography_out,
         "levels": {  # contexto del año del índice
             "permits": latest.get("permits"),
             "sqm": round(latest.get("sqm"), 0) if latest.get("sqm") is not None else None,

@@ -253,11 +253,41 @@ sectores del IAI/SGPS no es enriquecer una narrativa: es cambiar los insumos de 
 publicado. Eso mueve un número que ya se citó y merece su propia decisión, no colarse en una
 fase de cableado.
 
-### Fase 6 — `capacidad_de_pago` y holgura donde signifiquen algo
+### Fase 6 — `capacidad_de_pago` y holgura donde signifiquen algo · CERRADA (#1042)
 
-Construcción (demanda de vivienda), telecom (asequibilidad), tourism (demanda interna),
-free_zones (salario vs. mínimo), social_dev. **No** en `law`, `esg`, `trade` ni `macro`: ahí
-sería relleno.
+Repartida SOLO donde la lectura significa algo, y **la lectura cambia por eje** — un test
+exige que las cuatro sean distintas, porque cuatro plantillas con el mismo párrafo serían
+relleno repartido:
+
+| eje | su lectura |
+|---|---|
+| `construction` | la DEMANDA de vivienda: el piso de ingreso contra la canasta |
+| `free_zones` | el COSTO LABORAL y la disponibilidad de mano de obra |
+| `tourism` | la DEMANDA INTERNA que amortigua una caída de llegadas |
+| `telecom` | la ASEQUIBILIDAD: lo que queda en el hogar después de comer |
+
+**Deliberadamente NO** en `law`, `esg`, `trade` ni `macro`: ahí sería relleno, y hay un test
+que lo frena si alguien la agrega sin una lectura propia.
+
+**Dos cruces nuevos que ninguna otra fuente arma:**
+
+- **Dónde se construye contra la holgura de ESE territorio.** Los permisos traen provincia y
+  la ENCFT trae subutilización por dominio, y nadie los junta. Se pondera por m² licenciados
+  y no por promedio simple de provincias, que daría la holgura de un desarrollador que
+  construyera igual en las treinta y dos. Para esto hubo que EXPONER el desglose provincial
+  del índice, que se computaba para el HHI y no se servía.
+- **La holgura laboral de una región del IDM.** `parse_regiones` persistía 7 indicadores × 5
+  dominios × 11 años y solo los leía banca. `social_dev` YA es regional: los recibe directos.
+  El IDM trae pobreza, informalidad e ingreso pero NO subutilización, que es la diferencia
+  entre «hay poco empleo» y «hay gente disponible que el mercado no absorbe».
+
+`holgura_donde_presta` se GENERALIZÓ a `holgura_donde_opera(clave_peso, sujeto)` —banca
+delega— porque el peso territorial de construcción son m², no saldo adeudado, y el sujeto
+tiene que viajar en las claves.
+
+**La ENCFT publica por DOMINIO (cuatro), no por región de desarrollo (diez).** La respuesta
+lo dice y la plantilla obliga a decirlo: atribuirlo a la región afirmaría una precisión que
+la fuente no tiene.
 
 ## Riesgos
 
@@ -291,4 +321,4 @@ sería relleno.
 | 3 · `perfil_del_sector` | **cerrada** 2026-08-31 (#1036) |
 | 4 · construction + medición | **cerrada** 2026-08-31 (#1037 + #1038) |
 | 5 · resto de los ejes | **cerrada** 2026-09-01 (#1040 + #1041) · `sector_intel` aparte |
-| 6 · capacidad de pago y holgura | pendiente |
+| 6 · capacidad de pago y holgura | **cerrada** 2026-09-01 (#1042) |
