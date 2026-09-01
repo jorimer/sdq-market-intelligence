@@ -68,12 +68,17 @@ base nombrada. Ver la regla del sujeto en `CLAUDE.md`.
 
 ## Fases
 
-### Fase 0 — La capa macro sigue al corte del documento
+### Fase 0 — La capa macro sigue al corte del documento · CERRADA (#1033)
 
-`app/products_monetary_policy.py` computa un `as_of` para una decisión histórica y después
+`app/products_monetary_policy.py` computaba un `as_of` para una decisión histórica y después
 llama `capacidad_de_pago(db, date.today())`, ignorándolo. `modules/pension_intel/products.py`
-hace lo mismo y su producto también lleva período. `insurance_intel` lo hace bien
-(`_corte_del_periodo(rating["period"])`).
+hacía lo mismo y su producto también lleva período. `insurance_intel` lo hacía bien.
+
+Cerrado subiendo el helper a `shared.capacidad_de_pago.corte_del_periodo` —seguros tenía el
+único cuerpo correcto y ya iba camino a la tercera copia; un módulo no puede importar de
+otro, así que la única forma de no duplicarlo era que viviera junto a la lectura—. Lo vigila
+`shared/tests/test_la_capa_macro_sigue_al_corte.py`, que lee la LLAMADA con `ast` en las tres
+superficies.
 
 Es la familia del #992 —la frescura envejeciendo sola dentro de un documento fechado— en dos
 productos ya publicados. Va primero para no propagar el patrón al repartirlo a once ejes más.
@@ -170,7 +175,7 @@ sería relleno.
 
 | fase | estado |
 |---|---|
-| 0 · la capa macro sigue al corte | **en curso** (2026-08-31) |
+| 0 · la capa macro sigue al corte | **cerrada** 2026-08-31 (#1033) |
 | 1 · `CarteraSectorial` a `shared/reference/` | pendiente |
 | 2 · letra CIIU en el crosswalk | pendiente |
 | 3 · `perfil_del_sector` | pendiente |

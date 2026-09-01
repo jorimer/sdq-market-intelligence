@@ -79,6 +79,33 @@ def _acumulada(puntos: List[Tuple[str, float]]) -> Optional[float]:
     return round((puntos[-1][1] / base - 1.0) * 100.0, 2)
 
 
+def corte_del_periodo(periodo: Any) -> date:
+    """El período de un producto como fecha de corte para esta lectura.
+
+    **Por qué vive acá.** Toda superficie que sirve `capacidad_de_pago` dentro de un
+    documento FECHADO necesita esta conversión, y ya iba camino a la tercera copia: seguros
+    la tenía privada y bien, mientras pensiones y política monetaria pasaban `date.today()`
+    —o sea, un documento con corte 2024 traía la inflación por quintil de hoy—. Un módulo no
+    puede importar de otro, así que la única forma de no duplicarla es que viva junto a la
+    lectura que la necesita.
+
+    Acepta ``AAAA-MM-DD`` y ``AAAA-MM`` (que resuelve al 28, seguro en cualquier mes).
+
+    Un período ilegible cae a HOY y NO a una fecha inventada: la lectura se poda por corte,
+    así que una fecha falsa serviría contexto de un momento que el informe no describe.
+    """
+    from datetime import date as _d
+    try:
+        t = str(periodo or "").strip()
+        if len(t) >= 10:
+            return _d.fromisoformat(t[:10])
+        if len(t) >= 7:
+            return _d(int(t[:4]), int(t[5:7]), 28)
+    except (ValueError, TypeError):
+        pass
+    return _d.today()
+
+
 def inflacion_por_quintil(db: Session, corte: date) -> Optional[Dict[str, Any]]:
     """La inflación acumulada por quintil de ingreso hasta *corte*, con su brecha.
 

@@ -250,11 +250,22 @@ class MonetaryPolicyProduct:
         #
         # Vive en `shared/` porque la leen cuatro ejes. Lo que cambia entre ejes es la
         # LECTURA, no el dato, y ésa la fija la regla de la plantilla.
+        #
+        # AL CORTE SERVIDO, no a hoy. Este producto sirve una vista AS-OF cuando se pide una
+        # decisión histórica —lo dice el `as_of` de arriba— y la capa macro se leía igual con
+        # `date.today()`: un documento fechado en la decisión de 2024 traía la inflación por
+        # quintil de hoy. Es la frescura envejeciendo sola dentro de un documento fechado
+        # (#992), acá al revés: no envejece, se adelanta. `insurance_intel` ya lo hacía bien.
+        #
+        # La fecha es la MISMA que sella el snapshot cinco líneas más abajo, y por eso se
+        # deriva de `latest["fecha"]` y no del `period` del selector: con período vacío el
+        # selector no dice nada y la decisión servida sí.
         try:
             from datetime import date as _date
 
             from shared.capacidad_de_pago import capacidad_de_pago
-            _cap = capacidad_de_pago(db, _date.today())
+            _corte = _parse_iso(str(latest.get("fecha") or period or "")) or _date.today()
+            _cap = capacidad_de_pago(db, _corte)
             if _cap:
                 payload["capacidad_de_pago"] = _cap
         except Exception:  # noqa: BLE001 — el snapshot nunca depende de esta serie

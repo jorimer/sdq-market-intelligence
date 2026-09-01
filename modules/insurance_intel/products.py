@@ -298,20 +298,14 @@ def _pulse_table(pulse: Dict[str, Any]) -> Optional[tuple]:
 
 
 def _corte_del_periodo(periodo):
-    """El período del producto como fecha de corte. Un período que no se puede leer cae a
-    HOY y no a una fecha inventada: la lectura se poda por corte, así que una fecha falsa
-    serviría contexto de un momento que el informe no describe."""
-    from datetime import date as _d
-    try:
-        t = str(periodo or "").strip()
-        if len(t) >= 10:
-            return _d.fromisoformat(t[:10])
-        if len(t) >= 7:
-            y, m = int(t[:4]), int(t[5:7])
-            return _d(y, m, 28)
-    except (ValueError, TypeError):
-        pass
-    return _d.today()
+    """Delega en `shared.capacidad_de_pago.corte_del_periodo`.
+
+    El cuerpo vivía acá y era el único correcto de los tres: pensiones y política monetaria
+    pasaban `date.today()` dentro de documentos fechados. Subió a `shared/` para que el
+    arreglo de esos dos no fuera una copia —un módulo no puede importar de otro— y se
+    conserva el nombre local porque es el que usan los llamadores de este módulo."""
+    from shared.capacidad_de_pago import corte_del_periodo
+    return corte_del_periodo(periodo)
 
 
 

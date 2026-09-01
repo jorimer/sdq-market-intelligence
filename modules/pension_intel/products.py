@@ -692,11 +692,15 @@ class PensionProduct:
         # Vive en `shared/` porque la leen cuatro ejes y no tiene nada de pensiones adentro:
         # son series nacionales del BCRD y del MHE. Lo que cambia entre ejes es la LECTURA,
         # no el dato, y ésa la fija la regla de la plantilla — no se copia el bloque.
+        #
+        # AL CORTE DEL INFORME, no a hoy. El snapshot se sella con `rating["period"]` tres
+        # líneas más abajo, y esta capa se leía con `date.today()`: un documento fechado
+        # traía la informalidad y el piso de ingreso del día en que se descargó. Es la
+        # frescura envejeciendo sola dentro de un documento fechado (#992).
         try:
-            from datetime import date as _date
-
-            from shared.capacidad_de_pago import capacidad_de_pago
-            _cap = capacidad_de_pago(db, _date.today())
+            from shared.capacidad_de_pago import (capacidad_de_pago,
+                                                  corte_del_periodo)
+            _cap = capacidad_de_pago(db, corte_del_periodo(rating.get("period")))
             if _cap:
                 payload["capacidad_de_pago"] = _cap
         except Exception:  # noqa: BLE001 — el snapshot nunca depende de esta serie
