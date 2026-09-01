@@ -29,6 +29,24 @@ dimension_variables:
                             # fuera del marco ENAE (≈9 de 17) la dejan AUSENTE y el motor
                             # la omite (no se falsea a 50 → cero distorsión min-max). Es la
                             # excepción honesta al "all-or-nothing" de operating_cost/labor.
+    - credit_cost           # COSTO DEL CAPITAL: tasa promedio ponderada que el sistema
+                            # financiero le cobra al sector (cubo `carteras/creditos` de la
+                            # SIB, re-derivada del agregado por deuda — NUNCA promediando
+                            # tasas). mayor = peor → va en `risk_increasing`. Es el hermano
+                            # de `operating_cost`: uno es el precio del trabajo y el otro el
+                            # precio del capital, y hasta ahora el índice solo miraba uno.
+                            # SIN rúbrica default, como `profitability`: `comunicaciones` es
+                            # el único slug que la SIB no cubre con ninguna letra CIIU y lo
+                            # deja AUSENTE. Cobertura 16/17.
+                            # POR QUÉ LA TASA Y NO LA MORA: se midieron las dos sobre el cubo
+                            # y correlacionan a r=+0,65 — el precio del crédito ES, en buena
+                            # parte, la lectura que el mercado hace del riesgo del sector, y
+                            # meter las dos sería el mismo hecho votando dos veces. La tasa es
+                            # además lo que un inversionista PAGA, no un desenlace realizado.
+                            # La cobertura de provisiones se descartó por medición, no por
+                            # gusto: energía marca 4.031% contra un rango de 124-483% del
+                            # resto, y bajo el min-max crudo de este motor ese único valor
+                            # comprimiría a los otros once contra el piso.
   talent:
     - labor_availability    # disponibilidad de mano de obra 0-100 mayor = mejor
     - skills_index          # nivel de competencias 0-100 mayor = mejor
@@ -44,6 +62,7 @@ dimension_variables:
 # Variables donde MAYOR valor = MENOR atractivo → se invierten.
 risk_increasing:
   - operating_cost
+  - credit_cost
   - regulatory_volatility
 
 # Alcance de la medición por variable (default: per_subject). "national" = dato real de
@@ -107,7 +126,7 @@ bands:
 # de CI (test_provenance_vocabulary_gate) hace cumplir esta separación.
 dimension_rationales:
   macro: "Mide cómo las condiciones macroeconómicas del país golpean específicamente a este sector — no el macro genérico, sino su exposición particular (ver Doctrina · Contrato macro→sectorial). Es la dimensión de mayor peso porque ningún sector opera aislado del ciclo nacional."
-  business: "Clima de negocios del sector: facilidad de operar, costo operativo y rentabilidad. La rentabilidad se toma de la Encuesta Nacional de Actividad Económica donde el sector está cubierto; donde no, la variable queda ausente en vez de rellenarse, para no distorsionar el índice con un valor inventado. Pesa igual que el entorno macro porque las condiciones operativas son el segundo determinante del atractivo después del ciclo."
+  business: "Clima de negocios del sector: facilidad de operar, costo del trabajo, costo del capital y rentabilidad. El costo del capital es la tasa promedio ponderada a la que el sistema financiero le presta al sector, y entra junto al costo laboral porque las dos son el precio de los insumos con que un sector opera. La rentabilidad se toma de la Encuesta Nacional de Actividad Económica donde el sector está cubierto; donde no, la variable queda ausente en vez de rellenarse, para no distorsionar el índice con un valor inventado. Pesa igual que el entorno macro porque las condiciones operativas son el segundo determinante del atractivo después del ciclo."
   talent: "Disponibilidad de fuerza laboral y nivel de competencias relevantes para el sector — empleo por rama de actividad y capital humano. Pesa por debajo de macro y negocios porque el talento condiciona la ejecución a mediano plazo más que el resultado inmediato."
   regulation: "Calidad del marco regulatorio que enmarca al sector y su estabilidad en el tiempo. Pesa menos que las dimensiones operativas porque el marco regulatorio actúa sobre el sector de forma más indirecta que sus condiciones de operación."
   sector: "Crecimiento y tamaño relativo del sector dentro del valor agregado nacional. Junto con el entorno macro, es la dimensión que más diferencia a un sector de otro en el ranking, porque se mide por sector y no a nivel país."

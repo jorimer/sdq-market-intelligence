@@ -88,13 +88,17 @@ _LIMITATIONS = (
     "El Índice de Atractividad de Inversión (IAI), junto con su momentum (SGPS), se calcula "
     "por sector a la fecha de corte. Con dato real por sector: tamaño y crecimiento (valor "
     "agregado del BCRD), exposición macro (contrato macro→sectorial), costo operativo "
-    "(salario TSS por actividad), mano de obra (empleo ENCFT por rama) y, donde la ENAE "
+    "(salario TSS por actividad), costo del capital (tasa promedio ponderada a la que el "
+    "sistema financiero le presta al sector, Superintendencia de Bancos), mano de obra "
+    "(empleo ENCFT por rama) y, donde la ENAE "
     "cubre el sector, rentabilidad real (utilidad/ingresos). Con dato real nacional (común a "
     "todos los sectores, no diferencia el ranking): calidad y volatilidad regulatoria (WGI). "
     "La facilidad de negocios y el índice de competencias se mantienen sobre rúbrica "
     "declarada y se incorporarán como dato real al disponer de su fuente. Donde la ENAE no "
     "cubre un sector, esa variable se omite —no se estima—, por lo que el atractivo de esos "
-    "sectores se lee con menor profundidad."
+    "sectores se lee con menor profundidad. El costo del capital se lee al corte del año "
+    "evaluado y está disponible desde 2021, que es donde arranca el desglose sectorial de "
+    "crédito publicado; los períodos anteriores se calculan sin esa variable."
 )
 _NO_DATA = (
     "No hay score persistido para este sector: el producto está cableado pero su "
@@ -324,6 +328,14 @@ def _nota_validacion_iai(db) -> str:
     return ". ".join(partes) + "."
 
 
+#: Las fuentes que alimentan el IAI, en UN solo lugar. Estaban escritas dos veces —en
+#: `data_signals` y en `variable_signals`— con la misma tupla literal, que es cómo una se
+#: queda atrás: al declarar `credit_cost` habría que acordarse de las dos. La ENAE faltaba
+#: en las dos aunque `profitability` y el estructural del SGPS salen de ahí, y una fuente que
+#: alimenta el score sin estar declarada es una brecha de procedencia, no un detalle.
+FUENTES_DEL_IAI = ("BCRD", "contrato macro→sectorial", "TSS", "ENCFT", "ENAE", "SIB", "WGI")
+
+
 class SectorIntelProduct:
     """``SectorProduct`` de un sector económico (parametrizado). ``db`` opcional: las
     muestras sintéticas usan solo ``narratives``/``render`` (sin DB)."""
@@ -378,7 +390,7 @@ class SectorIntelProduct:
         except (ValueError, TypeError):
             pass
         return DataHealth(coverage=coverage, freshness_days=freshness, cadence="annual",
-                          sources=("BCRD", "contrato macro→sectorial", "TSS", "ENCFT", "WGI"),
+                          sources=FUENTES_DEL_IAI,
                           detail=f"IAI {_fmt(s.iai_score)} ({s.iai_band}) en {s.period} · {prov}")
 
     def has_engine(self) -> bool:
@@ -395,7 +407,7 @@ class SectorIntelProduct:
             return {"period": None, "signals": []}
         signals = nested_breakdown_signals(
             breakdown=s.iai_breakdown, axis="sectoral",
-            source_label=", ".join(("BCRD", "contrato macro→sectorial", "TSS", "ENCFT", "WGI")),
+            source_label=", ".join(FUENTES_DEL_IAI),
             cadence="annual",
         )
         return {"period": str(s.period), "signals": signals}
