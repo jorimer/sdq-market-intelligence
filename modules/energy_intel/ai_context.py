@@ -5,7 +5,7 @@ two real dimensions with their contributions, and the declared transition gap) �
 never raw series — so prompts stay cheap and honest about provenance. Module-local,
 mirrors :mod:`trade_intel.ai_context`.
 """
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Optional
 from shared.data.generation_client import GenerationMixClient
 from shared.data.sie_client import SIEClient
 from shared.narrative.atribucion import Fuente, bloque_de_atribucion
@@ -25,7 +25,19 @@ _DIM_LABELS = {
 }
 
 
-def energy_ai_context(index: Dict[str, Any], period: str) -> Dict[str, Any]:
+def _financiamiento(perfil: Optional[Dict[str, Any]]) -> Dict[str, Any]:
+    """El crédito y el costo laboral del sector, para el contexto del modelo.
+
+    Delega en `shared.perfil_del_sector.contexto_de_financiamiento`, que es el ÚNICO cuerpo:
+    lo comparten los cuatro ejes cableados. Cuatro copias de la misma forma es como una se
+    queda atrás, y este repo lo pagó con un serializador copiado a mano.
+    """
+    from shared.perfil_del_sector import contexto_de_financiamiento
+    return contexto_de_financiamiento(perfil, "energia")
+
+
+def energy_ai_context(index: Dict[str, Any], period: str,
+                      perfil: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
     """Compact context for the national electric-sector resilience assessment.
 
     *index* is the ``compute_energy_index`` output (energy_score, band, coverage,
@@ -64,6 +76,7 @@ def energy_ai_context(index: Dict[str, Any], period: str) -> Dict[str, Any]:
         # canónico (cerebro): el score global; el detector determinista no aplica
         # (cuando alguna dimensión es brecha) → el guard es el LLM.
         "score_global": index.get("energy_score"),
+        **_financiamiento(perfil),
         **bloque_de_atribucion(_SIE, _ONE_GEN),
         "note": (
             "Sobre dato real: capacidad instalada + reclamaciones (SIE) y penetración "

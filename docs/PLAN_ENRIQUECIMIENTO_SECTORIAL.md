@@ -215,9 +215,34 @@ el modelo citó la fecha de la capa como se le pidió.
 **Consecuencia para las fases 5 y 6:** cada eje necesita DOS trabajos, no uno — el cableado y
 su plantilla. Presupuestar los dos.
 
-### Fase 5 — El resto
+### Fase 5 — El resto · CERRADA (#1040)
 
-`free_zones`, `energy`, `tourism`, y `sector_intel` con los 19 como insumo del IAI/SGPS.
+Cableados `free_zones` (`zonas_francas`), `energy` (`energia`) y `tourism` (`turismo`), cada
+uno con sus DOS mitades —el bloque en el contexto y su plantilla pidiéndolo— según lo que
+enseñó la fase 4.
+
+El bloque se GENERALIZÓ a `shared.perfil_del_sector.contexto_de_financiamiento(perfil,
+sufijo)`: un solo cuerpo para los cuatro ejes, y construcción pasó a delegar. Cuatro copias
+de la misma forma es como una se queda atrás.
+
+`zonas_francas` es el primer caso REAL de agregado: sale de la letra `D`, que la SIB no
+separa de la manufactura local. Su plantilla lo dice explícitamente —«si viene marcada como
+AGREGADO, decí de qué agregado es y no la atribuyas solo a zonas francas»— y el aviso viaja
+en el contexto.
+
+**Un defecto que esta fase destapó y que yo había desplegado en la 4:** al renombrar una
+clave del perfil no cambié el `.get()` que la lee del otro lado, así que `peso` llegó a
+producción en `None` y el informe citó deuda, entidades, tasa y mora pero nunca el peso del
+sector. Los tests no lo vieron porque su fixture estaba escrita a mano y arrastraba el
+nombre viejo: fixture y código derivaron juntos. La cura no fue renombrar con más cuidado
+sino atar las dos puntas —`test_las_DOS_PUNTAS_del_contrato_usan_las_mismas_claves` compara
+las claves que el lector pide contra las que el emisor REAL produce, en los dos casos
+(directo y agregado)—.
+
+**`sector_intel` queda APARTE, y es una decisión del dueño.** Sumar el crédito a los 19
+sectores del IAI/SGPS no es enriquecer una narrativa: es cambiar los insumos de un SCORE
+publicado. Eso mueve un número que ya se citó y merece su propia decisión, no colarse en una
+fase de cableado.
 
 ### Fase 6 — `capacidad_de_pago` y holgura donde signifiquen algo
 
@@ -256,5 +281,5 @@ sería relleno.
 | 2 · letra CIIU en el crosswalk | **cerrada** 2026-08-31 (#1035) |
 | 3 · `perfil_del_sector` | **cerrada** 2026-08-31 (#1036) |
 | 4 · construction + medición | **cerrada** 2026-08-31 (#1037 + #1038) |
-| 5 · resto de los ejes | pendiente |
+| 5 · resto de los ejes | **cerrada** 2026-09-01 (#1040) · `sector_intel` aparte |
 | 6 · capacidad de pago y holgura | pendiente |
