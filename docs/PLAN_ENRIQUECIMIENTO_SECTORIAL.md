@@ -171,15 +171,22 @@ habría repetido el defecto que ese mismo día borró la tasa de 38 entidades.
 habilitaría las otras dos lecturas. No se hizo por cuenta propia porque es la misma decisión
 de arquitectura que se tomó explícitamente en la fase 1.
 
-### Fase 4 — Un solo eje, y medir
+### Fase 4 — Un solo eje, y medir · CERRADA (#1037)
 
 `construction_intel`: hoy mide permisos, m², HHI por tipología y HHI por provincia, y **no
 tiene ninguna dimensión de financiamiento**. Además tiene provincia, así que le aplica la
 holgura laboral.
 
-Antes de seguir se mide: ¿mejoró el texto?, ¿cuántas marcas nuevas del guard?, ¿cuánto subió
-el tiempo de ensamblado? (`GET /api/v1/operations/tiempos-de-narrativa` y
-`GET /api/v1/operations/marcas-del-guard`).
+El perfil entra al payload AL CIERRE del año —el producto es anual y el cubo trimestral—
+y viaja al contexto con el sujeto en cada clave y las relaciones ya computadas.
+
+**Línea base medida antes de desplegar** (nivel `pulse`, 2026-08-31): 26 s, cero menciones de
+financiamiento, y `n=0` ensamblados de este eje en la ventana de siete días.
+
+Una clave se RENOMBRÓ por precisión, no para pasar un test: el guard del sujeto marcó
+`peso_..._en_el_credito_del_pais_pct` y tenía razón en el fondo — el denominador es la
+cartera clasificada del sistema (el cubo de la SIB), no la economía del país. Quedó
+`peso_de_la_construccion_en_la_cartera_del_sistema_pct`.
 
 ### Fase 5 — El resto
 
@@ -221,6 +228,6 @@ sería relleno.
 | 1 · `CarteraSectorial` a `shared/reference/` | **cerrada** 2026-08-31 (#1034) |
 | 2 · letra CIIU en el crosswalk | **cerrada** 2026-08-31 (#1035) |
 | 3 · `perfil_del_sector` | **cerrada** 2026-08-31 (#1036) |
-| 4 · construction + medición | pendiente |
+| 4 · construction + medición | **cerrada** 2026-08-31 (#1037) |
 | 5 · resto de los ejes | pendiente |
 | 6 · capacidad de pago y holgura | pendiente |

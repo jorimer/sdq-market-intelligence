@@ -98,7 +98,7 @@ class TestElSujetoViajaConElNumero:
         _celda(db_session, "b2", "Y - CONSUMO DE BIENES Y SERVICIOS", 750.0)
         db_session.commit()
         r = credito_al_sector(db_session, "construccion", CORTE)
-        assert r["peso_del_sector_en_el_credito_del_pais_pct"] == 25.0, (
+        assert r["peso_del_sector_en_la_cartera_del_sistema_pct"] == 25.0, (
             "el denominador es el crédito del PAÍS, hogares incluidos: casi la mitad del "
             "libro dominicano no va a un sector productivo")
 
