@@ -8,8 +8,20 @@ resultado no determinista y gasto por corrida. El fixture autouse de abajo neutr
 la key en CADA test, así local == CI y ningún test gasta llamadas reales. Un test que
 necesite simular una key la setea explícitamente con monkeypatch DESPUÉS del autouse
 (p. ej. shared/source_intel/tests), lo cual sigue funcionando.
+
+**Y el metadata COMPLETO, una vez, para toda la suite.** Una veintena de fixtures llama a
+`Base.metadata.create_all` sobre una base en memoria, y qué tablas hay ahí dependía de qué
+módulos hubiera importado algún test ANTERIOR. `cartera_sectorial` vive en `shared/reference/`
+con una FK a `banks`, que sigue en `banking_score`: en cuanto un test importa la primera sin
+la segunda, todos los `create_all` posteriores del proceso mueren con
+`NoReferencedTableError`. Se vio corriendo `pytest shared/tests/` sola —45 errores— mientras
+CI daba verde porque el barrido completo importaba `banking_score` antes. Un test cuyo
+resultado depende del ORDEN de importación no está probando lo que dice, así que el registro
+se hace acá y deja de ser una carrera.
 """
 import pytest
+
+import app.main  # noqa: F401 — registra TODOS los modelos antes de cualquier create_all
 
 
 @pytest.fixture(autouse=True)

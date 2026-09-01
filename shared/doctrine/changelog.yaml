@@ -31,6 +31,34 @@
 version: "1.0"
 
 cambios:
+  - id: 2026-09-01-costo-del-capital-en-el-iai
+    fecha_efectiva: "2026-09-01"
+    sectores: [agribusiness]
+    titulo: "El costo del capital entra al Índice de Atractividad de Inversión"
+    que_cambio: >-
+      La dimensión de clima de negocios del IAI suma una cuarta variable: el costo del
+      capital, medido como la tasa promedio ponderada a la que el sistema financiero le
+      presta al sector (desglose sectorial de crédito de la Superintendencia de Bancos). Va
+      en sentido inverso —más cara la tasa, menor el atractivo— y se lee al corte del año
+      evaluado, no como una foto reciente aplicada hacia atrás. Cubre 16 de los 17 sectores
+      del marco; el sector que la fuente no desagrega la deja ausente en vez de estimarla. La
+      variable está disponible desde 2021, que es donde arranca el desglose publicado: los
+      períodos anteriores se calculan sin ella.
+    por_que: >-
+      El índice ya medía el precio del trabajo y no medía el del capital, que para varios
+      sectores es el insumo que decide una inversión. Entre las lecturas disponibles del
+      desglose de crédito se eligió la tasa y no la morosidad porque las dos miden en buena
+      parte lo mismo —el precio del crédito incorpora la lectura que el mercado hace del
+      riesgo del sector— y porque la tasa es lo que un inversionista paga, no un resultado ya
+      ocurrido.
+    impacto:
+      medido_al_publicar: >-
+        Doce de los diecisiete sectores cambian de posición en el ranking y el movimiento
+        medio del índice es de 2,08 puntos sobre 100. El mayor descenso es Otros Servicios
+        (−5,69) y el mayor ascenso Energía (+4,00). Un solo sector cambia de banda:
+        Agropecuario pasa de Medio a Bajo (42,75 a 38,80). Medido sobre el período 2025, con
+        el desglose de crédito al 31 de diciembre de 2025.
+    pr: 1045
   - id: 2026-08-05-perfil-sdq
     fecha_efectiva: "2026-08-05"
     sectores: [banking, insurance, pension]

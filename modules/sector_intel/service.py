@@ -510,6 +510,53 @@ def _load_sgps_structural(db: Session) -> Dict[str, float]:
             for slug, m in margins.items()}
 
 
+def _load_credit_cost(db: Session, target: Optional[str]) -> Dict[str, float]:
+    """Per-slug ``credit_cost``: la tasa promedio ponderada a la que el sistema financiero le
+    presta al sector, leída del cubo `carteras/creditos` de la SIB — el PRECIO DEL CAPITAL.
+
+    **Es el hermano de `operating_cost`.** El índice ya mide el precio del trabajo (salario
+    cotizable de la TSS) y no medía el del capital, que para varios sectores es el insumo que
+    decide una inversión. Va en `risk_increasing`: más caro el crédito, menos atractivo.
+
+    **La tasa se RE-DERIVA del agregado, nunca se promedia.** Una letra CIIU puede alimentar
+    a más de un slug y varias celdas suman al mismo sector: promediar tasas de carteras de
+    tamaños distintos da un número que no es la tasa de nadie. `credito_al_sector` la computa
+    del numerador y el denominador con el mismo cuerpo que usa el mapa sectorial de banca.
+
+    **El corte es EL DEL AÑO que se está puntuando**, no una foto reciente aplicada hacia
+    atrás. Es la diferencia con el patrón TSS/ENAE, y no es purismo: se midió sobre los 21
+    cortes que el cubo tiene (2021-Q1 → 2026-Q1) y el ORDEN transversal de las tasas se
+    mueve —rho de Spearman de +0,69 entre el primer corte y el último—, así que una foto de
+    2026 aplicada a 2021 no describiría ese año, lo reescribiría.
+
+    **Antes de 2021 el cubo no existe y NADIE recibe la variable en ese período** — no
+    algunos sí y otros no. Es la propiedad que importa: dentro de un período el motor
+    normaliza contra sus pares, así que una cobertura parcial POR PERÍODO movería el ranking
+    por presencia y no por dato. Que un período histórico tenga tres variables de negocio y
+    uno reciente cuatro no rompe nada comparable: el IAI se normaliza DENTRO de cada período,
+    y sus niveles nunca fueron comparables entre años.
+
+    `comunicaciones` queda AUSENTE siempre: es el único de los 17 slugs que la SIB no cubre
+    con ninguna letra CIIU. El motor omite la variable faltante (sin rúbrica-50 falsa), igual
+    que con `profitability`.
+    """
+    from shared.perfil_del_sector import (corte_del_cubo_para_el_anio,
+                                          credito_al_sector)
+
+    if not target or not str(target)[:4].isdigit():
+        return {}
+    corte = corte_del_cubo_para_el_anio(db, int(str(target)[:4]))
+    if corte is None:
+        return {}   # el cubo no llega a este año: nadie recibe la variable, ni parcialmente
+    out: Dict[str, float] = {}
+    for slug, _name in sector_catalog():
+        fila = credito_al_sector(db, slug, corte)
+        tasa = (fila or {}).get("tasa_promedio_ponderada_pct")
+        if tasa is not None:
+            out[slug] = float(tasa)
+    return out
+
+
 def assemble_iai_dataset(db: Session, period: Optional[str] = None) -> Dict[str, Any]:
     """Full IAI dataset per sector for *period*: declared rubric (doctrine) + real
     data (BCRD sector dim, contract-derived macro_exposure). Single source of truth
@@ -557,6 +604,9 @@ def assemble_iai_dataset(db: Session, period: Optional[str] = None) -> Dict[str,
     # profitability (ENAE rentabilidad, real per-sector) — cobertura PARCIAL honesta:
     # solo los slugs del marco ENAE; el resto la deja ausente (el motor la omite).
     enae_profit = _load_enae_profitability(db)
+    # credit_cost (tasa del cubo de la SIB, per slug) — el precio del CAPITAL, hermano de
+    # operating_cost. Al corte del AÑO que se puntúa; sin cubo para ese año, {} para todos.
+    credit_cost = _load_credit_cost(db, target)
     # SGPS histórico (BCRD sector_growth, all-17) + estructural (ENAE margen, ~9/17):
     # dato real por factor, escala absoluta (el SGPS es mezcla directa, no min-max).
     sgps_hist = _load_sgps_historical(db)
@@ -607,6 +657,10 @@ def assemble_iai_dataset(db: Session, period: Optional[str] = None) -> Dict[str,
         if enae_profit.get(slug) is not None:
             merged["profitability"] = enae_profit[slug]
             smap["profitability"] = "live"
+        # credit_cost (SIB) — 16 de 17; `comunicaciones` sin letra CIIU queda ausente.
+        if credit_cost.get(slug) is not None:
+            merged["credit_cost"] = credit_cost[slug]
+            smap["credit_cost"] = "live"
         dataset[slug] = merged
         sources[slug] = smap
         # SGPS: dato real donde lo hay (histórico all-17, estructural ~9/17), rúbrica
