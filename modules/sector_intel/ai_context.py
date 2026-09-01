@@ -21,25 +21,35 @@ _DIM_LABELS = {
 #: servir así: la rentabilidad es una razón (0,048) que el modelo escribe como «4,8 %» —la
 #: familia de falso positivo del guard que ya costó tres informes— y el empleo viene en
 #: personas con decimales. Se transforman acá, una vez, y viajan listos para citar.
+#: `(nombre citable con su unidad, nombre CORTO para la frase del puesto, forma de citarlo)`.
+#: El corto existe por la regla del sujeto: el puesto se escribe «13 de los 16 sectores con
+#: dato de costo del capital» y no «13 de 16», porque el modelo reatribuye el denominador al
+#: sujeto más cercano. Verificado en producción: con «2 de 17» servido para el salario y
+#: «13 de 16» para la tasa, el informe publicó «segundo puesto entre los dieciséis sectores
+#: con dato» — se llevó el denominador de la línea de al lado.
 _VARIABLES = {
     "macro_exposure": ("exposición macro del sector (0-100, mayor = el ciclo lo favorece más)",
-                       lambda v: round(v, 1)),
-    "ease_of_business": ("facilidad de hacer negocios (0-100)", lambda v: round(v, 1)),
+                       "exposición macro", lambda v: round(v, 1)),
+    "ease_of_business": ("facilidad de hacer negocios (0-100)",
+                         "facilidad de hacer negocios", lambda v: round(v, 1)),
     "operating_cost": ("costo laboral: salario promedio cotizable del sector, RD$/mes",
-                       lambda v: round(v, 2)),
+                       "costo laboral", lambda v: round(v, 2)),
     "credit_cost": ("costo del capital: tasa promedio ponderada que el sistema financiero le "
-                    "cobra al sector, en POR CIENTO", lambda v: round(v, 2)),
+                    "cobra al sector, en POR CIENTO", "costo del capital", lambda v: round(v, 2)),
     "profitability": ("rentabilidad del sector (utilidad sobre ingresos), en POR CIENTO",
-                      lambda v: round(v * 100.0, 2)),
+                      "rentabilidad", lambda v: round(v * 100.0, 2)),
     "labor_availability": ("ocupados en la rama de actividad del sector, en personas",
-                           lambda v: round(v)),
-    "skills_index": ("índice de capital humano del país (0-100)", lambda v: round(v, 2)),
-    "regulatory_quality": ("calidad regulatoria del país (0-100)", lambda v: round(v, 2)),
+                           "ocupados de la rama", lambda v: round(v)),
+    "skills_index": ("índice de capital humano del país (0-100)",
+                     "capital humano", lambda v: round(v, 2)),
+    "regulatory_quality": ("calidad regulatoria del país (0-100)",
+                           "calidad regulatoria", lambda v: round(v, 2)),
     "regulatory_volatility": ("volatilidad regulatoria del país (desviación de la serie)",
-                              lambda v: round(v, 3)),
-    "sector_growth": ("crecimiento real del sector, en POR CIENTO", lambda v: round(v, 2)),
+                              "volatilidad regulatoria", lambda v: round(v, 3)),
+    "sector_growth": ("crecimiento real del sector, en POR CIENTO",
+                      "crecimiento real", lambda v: round(v, 2)),
     "sector_size": ("peso del sector en el valor agregado nacional, en POR CIENTO",
-                    lambda v: round(v, 3)),
+                    "peso en el valor agregado", lambda v: round(v, 3)),
 }
 
 
@@ -90,7 +100,7 @@ def _variables_de_la_dimension(detalle, puestos=None):
     puestos = puestos or {}
     filas = []
     for var, det in sorted((detalle.get("variables") or {}).items()):
-        etiqueta, forma = _VARIABLES.get(var, (var, lambda v: v))
+        etiqueta, corto, forma = _VARIABLES.get(var, (var, var, lambda v: v))
         crudo = det.get("raw")
         fila = {
             "variable": etiqueta,
@@ -105,8 +115,11 @@ def _variables_de_la_dimension(detalle, puestos=None):
         if p:
             # LA relación que el lector quiere, computada contra los sectores que TIENEN la
             # variable — que no son siempre 17: el crédito lo tienen 16 y la rentabilidad 8.
-            fila["puesto_entre_los_sectores_que_tienen_esta_variable"] = (
-                f"{p['puesto']} de {p['de']} (1 = el más favorable)")
+            # LA POBLACIÓN DENTRO DE LA FRASE. «13 de 16» a secas se lo lleva el sujeto más
+            # cercano; con el nombre de la variable adentro, la frase no se puede reatribuir.
+            fila["puesto_del_sector"] = (
+                f"{p['puesto']} de los {p['de']} sectores con dato de {corto} "
+                f"(1 = el más favorable)")
         filas.append(fila)
     return filas
 

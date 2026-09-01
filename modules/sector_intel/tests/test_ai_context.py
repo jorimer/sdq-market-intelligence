@@ -183,8 +183,10 @@ def test_el_puesto_se_computa_contra_los_sectores_que_TIENEN_la_variable():
             "credit_cost": {"raw": 13.61, "normalized": 25.35, "source": "live"}}}}}
     ctx = sector_ai_context(latest, puestos={"credit_cost": {"puesto": 14, "de": 16}})
     fila = ctx["dimensions"][0]["que_hay_dentro"][0]
-    assert fila["puesto_entre_los_sectores_que_tienen_esta_variable"] == (
-        "14 de 16 (1 = el más favorable)")
+    assert fila["puesto_del_sector"] == (
+        "14 de los 16 sectores con dato de costo del capital (1 = el más favorable)"), (
+        "el puesto viaja sin su población: «14 de 16» a secas se lo lleva el sujeto más "
+        "cercano, y en producción el informe escribió el denominador de la línea de al lado")
     assert "percentil" not in str(fila).lower()
 
 
@@ -193,7 +195,7 @@ def test_sin_puestos_la_clave_no_aparece_en_vez_de_inventarse():
         "business": {"score": 56.9, "weight": 0.25, "contribution": 14.2, "variables": {
             "credit_cost": {"raw": 13.61, "normalized": 25.35, "source": "live"}}}}}
     fila = sector_ai_context(latest)["dimensions"][0]["que_hay_dentro"][0]
-    assert "puesto_entre_los_sectores_que_tienen_esta_variable" not in fila
+    assert "puesto_del_sector" not in fila
 
 
 def test_en_una_variable_de_RIESGO_el_puesto_1_es_el_valor_mas_BAJO(db_ranking):
@@ -257,7 +259,24 @@ def test_la_PLANTILLA_prohibe_llamar_percentil_a_la_escala_de_valor():
 
     t = THIN_TEMPLATES["sector_outlook"]
     assert "NO es un percentil" in t
-    assert "puesto_entre_los_sectores_que_tienen_esta_variable" in t
-    assert "sin cambiarlo por 17" in t, (
-        "no prohíbe redondear el denominador a 17: el crédito lo tienen 16 sectores y la "
-        "rentabilidad 8, y cambiar el denominador es reatribuir el sujeto")
+    assert "puesto_del_sector" in t
+    assert "COPIALO CON SU POBLACIÓN" in t and "en CIFRAS" in t, (
+        "no exige copiar el puesto con su población y en cifras: el denominador cambia por "
+        "variable, y un número escrito en palabras no lo puede contrastar nadie")
+
+
+def test_el_puesto_de_CADA_variable_nombra_su_propia_poblacion():
+    """El barrido, con su prueba negativa. Si una variable nueva se sumara a `_VARIABLES` sin
+    nombre corto, su puesto viajaría como «13 de los 16 sectores con dato de credit_cost» —un
+    identificador de código en un informe— o, peor, se caería al nombre largo y la frase
+    dejaría de leerse."""
+    from modules.sector_intel.ai_context import _VARIABLES
+    from shared.doctrine import load_doctrine
+
+    declaradas = {v for vs in load_doctrine("sectoral").dimension_variables.values() for v in vs}
+    assert declaradas, "la doctrina no declaró variables: el barrido estaría vacío"
+    for var in sorted(declaradas):
+        largo, corto, _forma = _VARIABLES[var]
+        assert corto and corto != var, f"{var}: no tiene nombre corto para la frase del puesto"
+        assert len(corto) <= 40, f"{var}: el nombre corto no entra en la frase ({corto!r})"
+        assert "_" not in corto, f"{var}: el nombre corto es un identificador de código"
