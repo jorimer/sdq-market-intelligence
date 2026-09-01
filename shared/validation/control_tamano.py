@@ -171,7 +171,17 @@ def medir_control_de_tamano(
     base: Dict[str, object] = {"variable": variable,
                                "nota": NOTA_CONTROL + (f" — {nota_extra}" if nota_extra else "")}
     if not pares or len({lab for _t, lab in pares}) < 2:
+        # MISMAS CLAVES que la rama sana. Esta rama las omitía, y un consumidor que lee
+        # `ctrl["empata_con_el_score"]` con `.get()` recibía None —que en un `bool()` es
+        # False— o sea «el tamaño NO lo explica» dicho por un control que no se computó.
+        # Es el mismo defecto que el `stale=null`: «no sé» leído como «está bien». Lo
+        # encontró un test de banca que recorre TODAS las familias, incluida una cuya regla
+        # no dispara nunca.
         return {**base, "gini": None, "gini_ci": None, "n": len(pares),
+                "n_del_score": len(labels), "comparable": False,
+                "cobertura_del_panel": 0.0,
+                "gini_del_score": gini_del_score,
+                "el_tamano_alcanza_al_score": False, "empata_con_el_score": False,
                 "veredicto": VEREDICTO_CONTROL_NO_EVALUABLE,
                 "motivo": "el panel no trae el tamaño de sus sujetos, o no tiene las dos "
                           "clases del desenlace: el control no se puede computar"}

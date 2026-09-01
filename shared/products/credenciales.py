@@ -293,6 +293,28 @@ def _grupo(eje: str, estado, cifra: Dict[str, Any], evento_real: bool) -> str:
     return GRUPO_EMPATA_TAMANO if cifra.get("empata_con_el_tamano") else GRUPO_CONCLUYENTE
 
 
+def control_declarado_que_no_llego(filas: List[Dict[str, Any]]) -> List[str]:
+    """Ejes cuyo motor DECLARA que publica control y cuya credencial salió sin él.
+
+    **El instrumento que faltaba.** Un motor puede declarar la clave en el registro
+    (`ControlDeTamano.clave`) y aun así no llegar a la fila: le pasó a banca —el eje
+    insignia— porque el control vivía en la RAÍZ del reporte mientras la credencial publica
+    la señal TITULAR, que es otro desenlace y no lo llevaba. El resultado era
+    `control_medido: false` en una fila del grupo que autoriza a decir «discrimina», y nada
+    en ninguna superficie lo decía.
+
+    Es una CONTRADICCIÓN entre el registro y el reporte, no una ausencia de dato — por eso
+    se reporta aparte de `vetadas_por_frescura`. Un eje sin cifra todavía no puede
+    contradecirse: queda fuera. Lista vacía es el estado sano.
+
+    Vive como función con nombre, y no incrustado en `credenciales`, para que un test pueda
+    ejercitar LA REGLA en vez de una copia a mano de la regla.
+    """
+    return [f["eje"] for f in filas
+            if f.get("control_declarado") and not f.get("control_medido")
+            and f.get("valor") is not None]
+
+
 def credenciales(db: Session) -> Dict[str, Any]:
     """Tabla de credenciales por eje del catálogo, lista para material comercial.
 
@@ -339,10 +361,16 @@ def credenciales(db: Session) -> Dict[str, Any]:
             # vigente. `stale is None` (indeterminado) no pasa, a propósito.
             "publicable": bool(cifra["valor"] is not None and frescura.get("stale") is False),
             "estado_backtest": asdict(estado) if estado is not None else None,
+            # ¿El motor DECLARA que publica control? Se guarda al lado de si el control
+            # efectivamente llegó, porque la contradicción entre las dos cosas es
+            # justamente el defecto que hay que ver.
+            "control_declarado": bool(motor and motor.control_de_tamano
+                                      and motor.control_de_tamano.clave),
         })
 
     vetadas = [f["eje"] for f in filas
                if f["valor"] is not None and not f["publicable"]]
+    sin_llegar = control_declarado_que_no_llego(filas)
     return {
         "ejes": filas,
         "por_grupo": {g: [f["eje"] for f in filas if f["grupo"] == g] for g in GRUPOS},
@@ -350,4 +378,8 @@ def credenciales(db: Session) -> Dict[str, Any]:
         # Cifras que EXISTEN pero no se pueden publicar por frescura. Se listan en vez de
         # desaparecer: un veto silencioso se lee como que el eje no tiene validación.
         "vetadas_por_frescura": vetadas,
+        # Ejes cuyo motor DECLARA control y cuya credencial salió sin él. Es una
+        # inconsistencia entre el registro y el reporte, no una ausencia de dato: lista
+        # vacía es el estado sano.
+        "control_declarado_que_no_llego": sin_llegar,
     }

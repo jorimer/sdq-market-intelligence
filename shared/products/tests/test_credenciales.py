@@ -229,3 +229,59 @@ def test_TODA_cifra_de_la_tabla_trae_su_veredicto_aunque_no_haya_control():
     assert not sin_veredicto, (
         f"{len(sin_veredicto)} de {len(retornos)} caminos devuelven una cifra sin su veredicto "
         "contra el tamaño")
+
+
+# ── El control DECLARADO que no llega a la fila ────────────────────
+
+def test_una_senal_sin_control_no_dice_que_el_tamano_no_explica():
+    """El defecto real, en el eje insignia. Banca publicaba su control en la RAÍZ del
+    reporte —acotando el desenlace agregado— y la credencial publica la señal TITULAR, que
+    es otro desenlace. La fila salía con `control_medido: false` sentada en el grupo que
+    autoriza a decir «discrimina», y nada lo decía."""
+    reporte = {
+        "headline_signal": "resultados",
+        "control_solo_tamano": {"gini": 0.413, "veredicto": "x",
+                                "el_tamano_alcanza_al_score": True},
+        "signals": {"resultados": {"gini": 0.2512, "gini_ci": [0.17, 0.33],
+                                   "conclusive": True, "n_observations": 1693,
+                                   "n_events": 250}},
+    }
+    cifra = _cifra_principal("banking", reporte)
+    assert cifra["control_medido"] is False
+    assert cifra["empata_con_el_tamano"] is False
+    assert "no evaluable" in cifra["veredicto_contra_el_tamano"]
+
+
+def test_el_control_dentro_de_la_senal_SI_llega_a_la_fila():
+    """La cura: viaja pegado al Gini que acota, como en seguros, pensiones y comercio."""
+    reporte = {
+        "headline_signal": "resultados",
+        "signals": {"resultados": {
+            "gini": 0.2512, "gini_ci": [0.17, 0.33], "conclusive": True,
+            "n_observations": 1693, "n_events": 250,
+            "control_solo_tamano": {"gini": 0.2100, "veredicto": "el score ordena mejor",
+                                    "el_tamano_alcanza_al_score": False,
+                                    "empata_con_el_score": True},
+        }},
+    }
+    cifra = _cifra_principal("banking", reporte)
+    assert cifra["control_medido"] is True
+    assert cifra["empata_con_el_tamano"] is True
+    assert cifra["control_de_tamano"]["gini"] == 0.21
+
+
+def test_la_plataforma_REPORTA_el_control_declarado_que_no_llego():
+    """No alcanza con arreglarlo una vez: si vuelve a pasar en otro motor, la plataforma lo
+    dice. Un eje que declara control en el registro y sale sin él en la fila es una
+    CONTRADICCIÓN, no una ausencia de dato — y no tenía dónde verse."""
+    from shared.products.credenciales import control_declarado_que_no_llego
+
+    filas = [
+        {"eje": "banking", "valor": 0.25, "control_declarado": True, "control_medido": False},
+        {"eje": "trade", "valor": 0.30, "control_declarado": True, "control_medido": True},
+        # Declara control pero todavía no tiene cifra: no es el defecto que se busca.
+        {"eje": "esg", "valor": None, "control_declarado": True, "control_medido": False},
+        # No declara control: su ausencia está explicada en el registro.
+        {"eje": "tourism", "valor": 0.1, "control_declarado": False, "control_medido": False},
+    ]
+    assert control_declarado_que_no_llego(filas) == ["banking"]
