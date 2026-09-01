@@ -333,7 +333,11 @@ def _norm_series_map(context: dict) -> Dict[str, List[Dict[str, Any]]]:
 #: Medido sobre los dos corpus: con «puntos», 7 falsos positivos de 23 casos limpios de
 #: banca; sin «puntos», CERO en banca y cero en las nueve secciones reales de marca, a
 #: cambio de perder una de seis detecciones sobre un texto inventado.
-_CLAIM_UNIT = re.compile(r"(\d+(?:[.,]\d+)?)\s*(?:%|por\s+ciento)", re.I)
+# La alternativa AGRUPADA va primero, y el orden importa: sin ella, «4,031.22 %» no casaba
+# entero y el motor de expresiones avanzaba hasta casar la COLA, «031.22» — una cifra que
+# nadie escribió, marcada como inventada. Ver `lecturas_de_la_cifra`.
+_CLAIM_UNIT = re.compile(
+    r"(\d{1,3}(?:[.,]\d{3})+(?:[.,]\d+)?|\d+(?:[.,]\d+)?)\s*(?:%|por\s+ciento)", re.I)
 
 
 def context_values(context: Any) -> set:
@@ -404,6 +408,63 @@ def _decimales(literal: str) -> int:
     """Decimales que DECLARA la cita: '69' → 0, '69,1' → 1, '69,46' → 2."""
     normal = literal.replace(",", ".")
     return len(normal.split(".", 1)[1]) if "." in normal else 0
+
+
+def lecturas_de_la_cifra(literal: str) -> List[Tuple[float, int]]:
+    """Las lecturas PLAUSIBLES de una cifra escrita: ``[(valor, decimales), …]``.
+
+    **Por qué hay más de una.** Un separador es decimal en una notación y de miles en la
+    otra, y la plataforma escribe en las dos. Antes se resolvía con
+    ``float(literal.replace(",", "."))``, que lee «4,031 %» como **4,031** — un número que
+    nadie escribió — y marca como inventada una cobertura de provisiones de 4.031 % que sí
+    estaba servida. Cuatro de las cinco marcas del guard del 2026-09-01 eran esto.
+
+    Las reglas, en orden:
+
+    - **Los dos separadores presentes** → el ÚLTIMO es el decimal y el otro agrupa. «4,031.22»
+      y «4.031,22» son los dos 4031,22. Sin ambigüedad.
+    - **Un separador repetido** → agrupa: «1.234.567» es 1234567.
+    - **Un separador con exactamente TRES dígitos detrás** → AMBIGUO: «4,031» puede ser 4,031
+      (tres decimales) o 4031 (miles). Se devuelven las dos y basta con que UNA esté
+      respaldada. Es la misma política que el resto del módulo: este es el filtro mecánico y
+      barato, el juez semántico corre aparte, y vetar prosa correcta no es ser estricto.
+    - **Cualquier otro caso** → decimal, una sola lectura.
+    """
+    txt = (literal or "").strip()
+    if not txt:
+        return []
+    tiene_coma, tiene_punto = "," in txt, "." in txt
+    if tiene_coma and tiene_punto:
+        decimal = "," if txt.rfind(",") > txt.rfind(".") else "."
+        agrupa = "." if decimal == "," else ","
+        limpio = txt.replace(agrupa, "").replace(decimal, ".")
+        try:
+            return [(abs(float(limpio)), _decimales(limpio))]
+        except ValueError:
+            return []
+    sep = "," if tiene_coma else ("." if tiene_punto else "")
+    if not sep:
+        try:
+            return [(abs(float(txt)), 0)]
+        except ValueError:
+            return []
+    partes = txt.split(sep)
+    if len(partes) > 2:                       # 1.234.567 — repetido, agrupa
+        try:
+            return [(abs(float("".join(partes))), 0)]
+        except ValueError:
+            return []
+    salida: List[Tuple[float, int]] = []
+    try:
+        salida.append((abs(float(txt.replace(sep, "."))), len(partes[1])))
+    except ValueError:
+        pass
+    if len(partes[1]) == 3 and partes[0]:     # AMBIGUO: también puede ser miles
+        try:
+            salida.append((abs(float(partes[0] + partes[1])), 0))
+        except ValueError:
+            pass
+    return salida
 
 
 # ── Formas DERIVADAS de una magnitud relacional ──────────────────────────────
@@ -655,15 +716,14 @@ def deterministic_uncited_figures(context: dict, text: str) -> List[str]:
         seen: set = set()
         for m in _CLAIM_UNIT.finditer(text or ""):
             literal = m.group(1)
-            try:
-                value = abs(float(literal.replace(",", ".")))
-            except ValueError:
+            # UNA cifra escrita puede tener más de una lectura numérica —el separador es
+            # decimal en una notación y de miles en la otra— y basta con que UNA esté
+            # respaldada. Ver `lecturas_de_la_cifra`.
+            lecturas = lecturas_de_la_cifra(literal)
+            if not lecturas:
                 continue
-            dp = _decimales(literal)
-            escala = 10 ** dp
 
-            def _cubre(candidatos: set, valor: float = value, d: int = dp,
-                       e: int = escala) -> bool:
+            def _cubre(candidatos: set, ls=lecturas) -> bool:
                 # TRES formas legítimas de acortar una cifra, no dos.
                 #
                 # `round()` de Python usa half-EVEN, y sobre un float el empate casi nunca
@@ -681,9 +741,10 @@ def deterministic_uncited_figures(context: dict, text: str) -> List[str]:
                 # en el empate exacto a esa precisión, así que esto suma como mucho un valor
                 # aceptado por número servido, y solo cuando ese número cae justo en la
                 # mitad. No se parece a las familias que ensanchan el rango.
-                return any(round(x, d) == valor or math.floor(x * e) / e == valor
-                           or _half_up(x, d) == valor
-                           for x in candidatos)
+                return any(
+                    round(x, d) == valor or math.floor(x * (10 ** d)) / (10 ** d) == valor
+                    or _half_up(x, d) == valor
+                    for valor, d in ls for x in candidatos)
 
             if _cubre(known) or _cubre(derivadas) or m.group(0).strip() in seen:
                 continue
