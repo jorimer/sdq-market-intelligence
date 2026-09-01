@@ -47,7 +47,8 @@ from typing import Any, Dict, List, Optional
 
 from sqlalchemy.orm import Session
 
-from modules.banking_score.models.models import Bank, CarteraSectorial
+from modules.banking_score.models.models import Bank
+from shared.reference.cartera_sectorial import CarteraSectorial
 
 logger = logging.getLogger(__name__)
 

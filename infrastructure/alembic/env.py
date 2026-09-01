@@ -31,6 +31,11 @@ from shared.data_api.models import (  # noqa: F401
     ApiWebhookDelivery,
 )
 from shared.reference.models import DgiiContribuyenteSubclase  # noqa: F401
+# EXPLÍCITO, y por eso con su propia línea. Cuando `cartera_sectorial` vivía en
+# `banking_score/models/models.py` se registraba de PASO —el import de `Bank` de abajo
+# ejecuta ese módulo entero—. Al mudarla a `shared/reference/` ese arrastre desaparece, y
+# sin esta línea `autogenerate` no vería la tabla en el metadata y propondría BORRARLA.
+from shared.reference.cartera_sectorial import CarteraSectorial  # noqa: F401
 from modules.banking_score.models.models import (  # noqa: F401
     Bank, BankingData, RatingResult, RatingAction, Report,
 )
@@ -56,6 +61,12 @@ from modules.esg_climate.models.models import (  # noqa: F401
 from modules.energy_intel.models.models import EnergyScore  # noqa: F401
 from modules.free_zones_intel.models.models import FreeZoneScore  # noqa: F401
 from modules.telecom_intel.models.models import TelecomScore  # noqa: F401
+# Estas TRES faltaban desde antes y nadie lo notó: sin su import, `autogenerate` las ve
+# solo en la base y propone BORRARLAS. Las encontró el test que se escribió al mudar
+# `cartera_sectorial` — no fallaba nada, salía una migración plausible que destruye datos.
+from modules.construction_intel.models.models import ConstructionScore  # noqa: F401
+from modules.tourism_intel.models.models import TourismScore  # noqa: F401
+from shared.source_intel.models import SourceSuggestion  # noqa: F401
 from modules.pension_intel.models.models import (  # noqa: F401
     PensionEntity, PensionRating, PensionSeries, PensionSnapshot,
 )

@@ -16,7 +16,8 @@ from sqlalchemy.pool import StaticPool
 from shared.auth.models import User  # noqa: F401 — registra users para las FK
 from shared.database.base import Base
 from modules.banking_score import operations as ops
-from modules.banking_score.models.models import Bank, BankType, BankingData, CarteraSectorial
+from modules.banking_score.models.models import Bank, BankType, BankingData
+from shared.reference.cartera_sectorial import CarteraSectorial
 
 
 @pytest.fixture()

@@ -15,7 +15,8 @@ from datetime import date
 
 import pytest
 
-from modules.banking_score.models.models import Bank, BankType, CarteraSectorial
+from modules.banking_score.models.models import Bank, BankType
+from shared.reference.cartera_sectorial import CarteraSectorial
 from modules.banking_score.reports.narrative import REPORT_SECTIONS
 from modules.banking_score.tests.test_api import (
     auth_headers, client, register_and_login, seed_test_bank,

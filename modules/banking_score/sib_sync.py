@@ -684,7 +684,7 @@ def _guardar_cartera_sectorial(db, bank_id: str, pe, por_sector: Any) -> None:
     """
     if not por_sector:
         return
-    from modules.banking_score.models.models import CarteraSectorial
+    from shared.reference.cartera_sectorial import CarteraSectorial
     db.query(CarteraSectorial).filter_by(bank_id=bank_id, period_end=pe).delete(
         synchronize_session=False)
     for celda in por_sector:

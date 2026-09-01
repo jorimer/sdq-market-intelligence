@@ -715,7 +715,7 @@ def _corte_del_desglose(db: Session, corte: Optional[str]):
 
     from sqlalchemy import func as _func
 
-    from modules.banking_score.models.models import CarteraSectorial
+    from shared.reference.cartera_sectorial import CarteraSectorial
     if corte:
         try:
             return _date.fromisoformat(corte)

@@ -252,7 +252,8 @@ def cortes_sin_desglose_sectorial(db) -> list:
     computa comparando los dos conjuntos, nunca se lleva una lista a mano: un corte nuevo
     aparece solo, y uno que se completó desaparece solo.
     """
-    from modules.banking_score.models.models import BankingData, CarteraSectorial
+    from modules.banking_score.models.models import BankingData
+    from shared.reference.cartera_sectorial import CarteraSectorial
     con_datos = {r[0] for r in db.query(BankingData.period_end).distinct()}
     con_desglose = {r[0] for r in db.query(CarteraSectorial.period_end).distinct()}
     return sorted(con_datos - con_desglose, reverse=True)
