@@ -2373,6 +2373,7 @@ class NarrativeEngine:
             CORRECTION_NOTICE, DIRECTION_CORRECTION_NOTICE, fragmento_alrededor,
             deterministic_direction_errors, deterministic_uncited_figures,
             deterministic_unsupported, verify_figures)
+        from shared.narrative.presupuesto import cabe, queda
 
         def _gen(user_msg):
             resp = _call_with_transient_retry(
@@ -2418,11 +2419,31 @@ class NarrativeEngine:
                           else "det" if f in en_det else "juez") for f in merged}
             return merged, deterministic_direction_errors(context or {}, text), origen
 
+        # El costo del intento se MIDE, no se supone: una regeneración cuesta
+        # aproximadamente lo mismo que el intento que la precede —misma generación, mismo
+        # juez— y ésa es la mejor estimación local que hay. Estimarla con una constante
+        # daría el mismo número para una sección de 20 s y una de 200 s.
+        _t_intento = time.monotonic()
         result = _gen(user)
         bad, wrong_dir, origen = _check(result.text)
+        costo_del_intento = time.monotonic() - _t_intento
+        sin_reintento_por_tiempo = False
         if bad or wrong_dir:
             try:
                 for intento in range(1, _MAX_REINTENTOS_GUARD + 1):
+                    # ¿ENTRA la regeneración en lo que queda del ensamblado? Si no, se
+                    # devuelve el texto marcado en vez de arrancar un trabajo que va a morir
+                    # con el informe entero: el corte descarta TODAS las secciones, también
+                    # las que ya estaban listas. Sin presupuesto declarado —tests, scripts,
+                    # trabajos de fondo— esto nunca bloquea.
+                    if not cabe(costo_del_intento):
+                        sin_reintento_por_tiempo = True
+                        logger.warning(
+                            "Guardrail (%s): NO se regenera por presupuesto — quedan %.1fs y "
+                            "el intento anterior costó %.1fs. Se entrega el texto con su "
+                            "marca (%s) en vez de arriesgar el ensamblado completo.",
+                            template, queda() or 0.0, costo_del_intento, bad + wrong_dir)
+                        break
                     logger.warning(
                         "Guardrail (%s): cifras sin respaldo %s | relación invertida %s — "
                         "regenerando (intento %d de %d)", template, bad, wrong_dir,
@@ -2434,11 +2455,16 @@ class NarrativeEngine:
                         notice += DIRECTION_CORRECTION_NOTICE.format(bad="; ".join(wrong_dir))
                     if intento == _MAX_REINTENTOS_GUARD:
                         notice += ULTIMO_INTENTO_NOTICE
+                    _t_intento = time.monotonic()
                     corrected = _gen(user + notice)
                     # acumula tokens/costo de TODAS las llamadas (transparencia)
                     corrected.tokens_used += result.tokens_used
                     corrected.cost_estimate += result.cost_estimate
                     bad, wrong_dir, origen = _check(corrected.text)
+                    # Cada intento re-estima con SU propio costo: el segundo puede tardar más
+                    # que el primero (el aviso de corrección alarga el prompt), y arrastrar la
+                    # medición del primero subestimaría justo cuando queda menos margen.
+                    costo_del_intento = time.monotonic() - _t_intento
                     result = corrected
                     if not (bad or wrong_dir):
                         break
@@ -2481,6 +2507,11 @@ class NarrativeEngine:
                     # gasto, no un almacén de texto.
                     detail={"segundos": round(time.monotonic() - _t0, 2),
                             "guard_flags": len(result.guard_unsupported),
+                            # «Reintentó y la marca sobrevivió» y «no llegó a reintentar por
+                            # tiempo» son dos cosas distintas y se ven idénticas en el
+                            # resultado. Sin esta bandera, apagar reintentos por presupuesto
+                            # se leería en la telemetría como un guard que empeoró.
+                            "guard_sin_reintento_por_tiempo": sin_reintento_por_tiempo,
                             "guard_marcas": [str(h)[:180]
                                              for h in result.guard_unsupported[:8]],
                             # Y la FRASE en la que el modelo usó cada cifra marcada. Con la
