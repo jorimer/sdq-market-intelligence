@@ -374,3 +374,47 @@ class TestLaHolguraDeUnaRegion:
         assert "por dominio" in aviso and "no por región de desarrollo" in aviso
         # LA RELACIÓN SE COMPUTA ACÁ: el modelo la copia, no la deriva.
         assert r["mas_subutilizacion_que_el_pais_pp"] == 3.4
+
+
+class TestUnaBaseNEGATIVAnoProducePorcentaje:
+    """La IED se mide NETA y puede venir con signo menos: un año de desinversión.
+
+    Encontrado en producción el 2026-09-01, en la primera verificación del eje telecom:
+    la IED de telecomunicaciones pasó de −32,4 a −44,3 millones de US$ —dos años de
+    desinversión, el segundo peor— y la razón daba **+36,73 %**. Un informe que citara ese
+    número diría que la inversión creció un tercio el año en que se fue más capital del que
+    entró. Es la familia de la relación invertida que este repo ya publicó una vez.
+    """
+
+    def _serie_ied(self, db, actividad, valores):
+        for anio, v in valores.items():
+            _var(db, IED_DIMENSION, actividad, "ied_usd_mm", anio, v)
+        db.commit()
+
+    def test_con_base_NEGATIVA_el_porcentaje_se_declara_ausente(self, db_session):
+        self._serie_ied(db_session, "telecomunicaciones", {"2023": -32.4, "2024": -44.3})
+        r = inversion_extranjera_del_sector(db_session, "comunicaciones", 2024)
+        assert r["variacion_de_la_ied_vs_anio_anterior_pct"] is None, (
+            "con base negativa el porcentaje invierte su sentido y no se publica")
+
+    def test_y_el_CAMBIO_ABSOLUTO_conserva_el_signo(self, db_session):
+        """La dirección tiene que viajar igual: si solo se apagara el porcentaje, el
+        movimiento desaparecería del informe sin que nadie se entere."""
+        self._serie_ied(db_session, "telecomunicaciones", {"2023": -32.4, "2024": -44.3})
+        r = inversion_extranjera_del_sector(db_session, "comunicaciones", 2024)
+        assert r["cambio_de_la_ied_vs_anio_anterior_usd_mm"] == pytest.approx(-11.9), (
+            "el cambio absoluto es lo único que sobrevive a una base negativa")
+
+    def test_con_base_POSITIVA_el_porcentaje_sigue_viajando(self, db_session):
+        """El contra-caso: apagarlo siempre sería tirar la relación buena con la mala."""
+        self._serie_ied(db_session, "turismo", {"2023": 1000.0, "2024": 1200.0})
+        r = inversion_extranjera_del_sector(db_session, "turismo", 2024)
+        assert r["variacion_de_la_ied_vs_anio_anterior_pct"] == pytest.approx(20.0)
+        assert r["cambio_de_la_ied_vs_anio_anterior_usd_mm"] == pytest.approx(200.0)
+
+    def test_una_base_en_CERO_tampoco_produce_porcentaje(self, db_session):
+        """Cero es el otro caso donde la razón no existe, y el guard es el mismo."""
+        self._serie_ied(db_session, "minero", {"2023": 0.0, "2024": 55.0})
+        r = inversion_extranjera_del_sector(db_session, "mineria", 2024)
+        assert r["variacion_de_la_ied_vs_anio_anterior_pct"] is None
+        assert r["cambio_de_la_ied_vs_anio_anterior_usd_mm"] == pytest.approx(55.0)
