@@ -403,9 +403,19 @@ otros dos son propiedades del TEXTO generado.
 
 ### Lo que NO se puede afirmar
 
-El Gate E de este eje corrió después del cambio y **no lo valida**: el desenlace de inversión
-sigue con IC negativo y significativo, y el de empleo sigue sin concluir. Tampoco se puede
-atribuir el movimiento al cambio — el panel corre 2008-2024 y el cubo arranca en 2021, así que
-solo 4 de 16 años llevan la variable. El producto sigue declarado **descriptivo** en su
-`ESTADO_BACKTEST`. El estado vigente se pide a la plataforma
-(`GET /api/v1/sector-intel/validation`), nunca se copia acá.
+El Gate E de este eje corrió después del cambio y **no lo valida**. Pero el modo en que no lo
+valida importa, y la primera redacción de este párrafo lo dijo mal: decía «el desenlace de
+inversión sigue con IC negativo y significativo», que se lee como que el índice ordena la
+inversión al revés. **No es eso.** El veredicto que la plataforma computa —y que se citó sin
+mirar— es **EMPATE**: el mismo desenlace ordenado SOLO por el tamaño del sector alcanza un
+poder estadísticamente indistinguible del índice. El signo negativo lo pone el deflactor,
+porque la intensidad se divide por `sector_size`, que es una variable del propio IAI.
+
+La lección es la de siempre en este repo, y esta vez la pagué yo: **un IC citado sin su
+control es una relación inventada.** Lo que hizo fácil el error fue que el encabezado del
+reporte publicaba el desenlace SECUNDARIO y el control vivía dos niveles más abajo del
+payload; eso se arregló en el PR #1050.
+
+El producto sigue declarado **descriptivo** en su `ESTADO_BACKTEST`. El estado vigente se pide
+a la plataforma (`GET /api/v1/sector-intel/validation`), nunca se copia acá — y al pedirlo, se
+lee `veredicto_contra_el_tamano` junto al IC, no el IC solo.
