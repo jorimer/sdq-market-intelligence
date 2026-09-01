@@ -180,3 +180,62 @@ def perfil_del_sector(db: Session, slug: str, corte: date) -> Optional[Dict[str,
         "lecturas_pendientes": ["ocupacion_encft", "tamano_y_crecimiento_bcrd"],
     }
     return bloque
+
+
+def contexto_de_financiamiento(perfil: Optional[Dict[str, Any]],
+                               sufijo: str) -> Dict[str, Any]:
+    """El perfil, con la forma que consume el contexto del modelo.
+
+    **Un solo cuerpo para los cuatro ejes.** Nació dentro de `construction_intel` y se subió
+    acá al cablear el segundo: cuatro copias de la misma forma es como una se queda atrás, y
+    este repo lo pagó el 2026-08-31 con un serializador copiado a mano que borró la tasa de
+    38 entidades.
+
+    **El SUJETO en cada clave, y por eso el `sufijo`.** `mora_del_sector_turismo_pct` y no
+    `mora_pct`: estos contextos tienen cerca los permisos, los m² o los arribos, y el modelo
+    reatribuye una porción al sujeto más próximo — así se publicó «cuatro compañías
+    concentran el 87,1%» cuando eran cuatro ramos.
+
+    **Cada capa trae SU fecha.** El crédito su corte y el salario su año, porque son de
+    períodos distintos que el índice del eje. Sin eso el modelo las fecha en el encabezado.
+
+    Sin perfil devuelve ``{}``: la clave no existe y el modelo no tiene qué citar. No se
+    declara la ausencia — decisión del dueño del 2026-08-31.
+    """
+    if not perfil:
+        return {}
+    out: Dict[str, Any] = {}
+    c = perfil.get("credito_del_sistema") or {}
+    if c:
+        bloque = {
+            "corte_de_esta_capa": c.get("corte"),
+            f"deuda_del_sistema_al_sector_{sufijo}_dop": c.get("deuda_del_sistema_al_sector"),
+            f"peso_del_sector_{sufijo}_en_la_cartera_del_sistema_pct": c.get(
+                "peso_del_sector_en_la_cartera_del_sistema_pct"),
+            f"entidades_que_le_prestan_al_sector_{sufijo}": c.get("entidades_que_le_prestan"),
+            f"mora_del_sector_{sufijo}_pct": c.get("mora_pct"),
+            f"mora_temprana_31_90_del_sector_{sufijo}_pct": c.get("mora_temprana_31_90_pct"),
+            f"tasa_promedio_ponderada_al_sector_{sufijo}_pct": c.get(
+                "tasa_promedio_ponderada_pct"),
+            f"cobertura_de_provision_sobre_vencida_del_sector_{sufijo}_pct": c.get(
+                "cobertura_de_provision_sobre_vencida_pct"),
+            f"garantia_sobre_deuda_del_sector_{sufijo}_pct": c.get("garantia_sobre_deuda_pct"),
+            f"credito_promedio_por_operacion_en_el_sector_{sufijo}_dop": c.get(
+                "credito_promedio"),
+        }
+        # EL AVISO DE AGREGADO, y acá no es teórico: `zonas_francas` sale de la letra D, que
+        # la SIB no separa de la manufactura local. Sin este aviso el modelo publicaría la
+        # cifra del agregado como si fuera solo de zonas francas.
+        if c.get("es_agregado"):
+            bloque["ojo_la_cifra_es_de_un_agregado_que_incluye"] = c.get("el_agregado_incluye")
+            bloque["por_que_la_fuente_no_los_separa"] = c.get("por_que_es_agregado")
+        out[f"credito_del_sistema_al_sector_{sufijo}"] = bloque
+    sal = perfil.get("costo_laboral") or {}
+    if sal:
+        out[f"costo_laboral_del_sector_{sufijo}"] = {
+            f"salario_promedio_cotizable_del_sector_{sufijo}_dop_mes": sal.get(
+                "salario_promedio_cotizable_del_sector_dop_mes"),
+            "anio_de_esta_capa": sal.get("anio"),
+            "fuente": sal.get("fuente"),
+        }
+    return out

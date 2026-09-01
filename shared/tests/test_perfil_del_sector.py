@@ -194,3 +194,59 @@ def test_las_primitivas_son_LAS_MISMAS_que_usa_el_mapa_de_banca():
     for nombre in ("_medidas", "_sumar", "_vacio"):
         assert _origen(mapa_sectorial, nombre) == "shared.reference.cartera_agregacion"
         assert _origen(perfil, nombre) == "shared.reference.cartera_agregacion"
+
+
+def test_las_DOS_PUNTAS_del_contrato_usan_las_mismas_claves(db_session):
+    """`contexto_de_financiamiento` lee exactamente las claves que `credito_al_sector` emite.
+
+    **Por qué existe.** En la fase 4 renombré una clave del perfil y NO el `.get()` que la
+    lee del otro lado: `peso` llegó a producción en `None`, y el informe generado citó deuda,
+    entidades, tasa y mora pero nunca el peso del sector. Los tests no lo vieron porque su
+    fixture estaba escrita a mano y arrastraba el nombre viejo — fixture y código derivaron
+    juntos, que es la forma en que un test deja de medir la realidad.
+
+    Se comparan CLAVES y no valores: un `None` puede ser legítimo —la celda no trae conteo de
+    créditos y `credito_promedio` no se puede derivar—, pero un nombre que el emisor no emite
+    NUNCA lo es. La primera versión de este test comparaba valores y marcaba ese None
+    legítimo, que es ruido y termina en que alguien lo relaje.
+    """
+    import ast
+    import inspect
+
+    from shared import perfil_del_sector as mod
+
+    # Los DOS casos, porque algunas claves solo aparecen en uno: `por_que_es_agregado`
+    # existe cuando la letra de la SIB alimenta a más de un slug, y construcción (F) no lo
+    # es. Probar solo el caso simple dejaría esas claves fuera del contrato verificado.
+    _celda(db_session, "b1", "F - CONSTRUCCIÓN", 1000.0, vencida=50.0, tasa=11.4)
+    _celda(db_session, "b1", "D - INDUSTRIA MANUFACTURERA", 2000.0, tasa=10.4)
+    db_session.commit()
+    emite = (set(credito_al_sector(db_session, "construccion", CORTE))
+             | set(credito_al_sector(db_session, "manufactura_local", CORTE)))
+
+    fn = next(n for n in ast.walk(ast.parse(inspect.getsource(mod)))
+              if isinstance(n, ast.FunctionDef) and n.name == "contexto_de_financiamiento")
+    # Los `.get("...")` que el bloque hace sobre la fila de crédito.
+    lee = {n.args[0].value for n in ast.walk(fn)
+           if isinstance(n, ast.Call) and isinstance(n.func, ast.Attribute)
+           and n.func.attr == "get" and n.args
+           and isinstance(n.args[0], ast.Constant) and isinstance(n.args[0].value, str)}
+    # `credito_del_sistema` y `costo_laboral` son claves del PERFIL, no de la fila.
+    lee -= {"credito_del_sistema", "costo_laboral"}
+    del_salario = {"salario_promedio_cotizable_del_sector_dop_mes", "anio", "fuente"}
+    huerfanas = lee - emite - del_salario
+    assert not huerfanas, (
+        f"el bloque de contexto lee claves que el perfil NO emite: {sorted(huerfanas)}. "
+        "Llegarían vacías al modelo y la cifra desaparecería del informe sin que nada falle")
+
+
+def test_el_contra_caso_una_clave_inventada_SI_llega_vacia(db_session):
+    """Sin esto, el test de arriba pasaría aunque el bloque no leyera nada del perfil."""
+    from shared.perfil_del_sector import contexto_de_financiamiento
+
+    bloque = contexto_de_financiamiento(
+        {"credito_del_sistema": {"corte": "2025-12-31", "clave_que_no_existe": 1}},
+        "construccion")
+    c = bloque["credito_del_sistema_al_sector_construccion"]
+    assert [k for k, v in c.items() if v is None], (
+        "el lector no está leyendo del perfil: devuelve valores sin que el emisor los dé")

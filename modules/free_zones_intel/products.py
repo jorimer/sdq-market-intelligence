@@ -273,7 +273,24 @@ class FreeZoneProduct:
             return ProductSnapshot(tier=tier, period=period or "—",
                                    payload={"has_score": False}, entity_name=entity,
                                    entity_roster=())
-        payload = {"has_score": True, "index": _index_dict(s)}
+        payload: Dict[str, Any] = {"has_score": True, "index": _index_dict(s)}
+        # EL FINANCIAMIENTO DEL SECTOR (zonas francas), que este eje no tenía. Cuánto
+        # crédito recibe, a qué tasa y con qué mora sale del cubo de la SIB.
+        #
+        # AL CIERRE DEL AÑO: el período de este producto es anual y el cubo es
+        # trimestral. Con el corte de marzo el bloque describiría otro trimestre que
+        # el encabezado del informe. Un año sin cubo no trae el bloque y no se
+        # menciona (decisión del dueño del 2026-08-31).
+        try:
+            from datetime import date as _date
+
+            from shared.perfil_del_sector import perfil_del_sector
+            _perfil = perfil_del_sector(self._require_db(), "zonas_francas",
+                                        _date(int(str(s.period)[:4]), 12, 31))
+            if _perfil:
+                payload["perfil_del_sector"] = _perfil
+        except Exception:  # noqa: BLE001 — el snapshot nunca depende de esta lectura
+            logger.exception("Perfil del sector omitido en el snapshot de zonas_francas")
         if tier == ProductTier.pulse:
             return ProductSnapshot(tier=tier, period=s.period, payload=payload,
                                    entity_name=None, entity_roster=())
@@ -317,7 +334,8 @@ class FreeZoneProduct:
                     for sec in sections}
 
         from shared.narrative.claude_engine import narrative_engine
-        base_ctx = free_zones_ai_context(snapshot.payload["index"], snapshot.period)
+        base_ctx = free_zones_ai_context(snapshot.payload["index"], snapshot.period,
+                            snapshot.payload.get("perfil_del_sector"))
         audience = "inversionista"
         trend = _trend_series(self._db)  # trayectoria para la sección de posición (best-effort)
         templates = {"recommendation": "sector_decision", "positioning": "sector_positioning"}

@@ -19,7 +19,7 @@ _PERFIL = {
     "credito_del_sistema": {
         "sector": "construccion", "corte": "2025-12-31",
         "deuda_del_sistema_al_sector": 161_000_000_000.0,
-        "peso_del_sector_en_el_credito_del_pais_pct": 6.86,
+        "peso_del_sector_en_la_cartera_del_sistema_pct": 6.86,
         "entidades_que_le_prestan": 28,
         "mora_pct": 1.42, "mora_temprana_31_90_pct": 0.31,
         "tasa_promedio_ponderada_pct": 11.4,
@@ -51,7 +51,7 @@ class TestElSujetoViajaEnCadaClave:
         c = _financiamiento(_PERFIL)["credito_del_sistema_al_sector_construccion"]
         assert c["mora_del_sector_construccion_pct"] == 1.42
         assert c["tasa_promedio_ponderada_al_sector_construccion_pct"] == 11.4
-        assert c["peso_de_la_construccion_en_la_cartera_del_sistema_pct"] == 6.86
+        assert c["peso_del_sector_construccion_en_la_cartera_del_sistema_pct"] == 6.86
 
 
 class TestCadaCapaTraeSuFECHA:

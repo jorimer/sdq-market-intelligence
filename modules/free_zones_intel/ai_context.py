@@ -5,7 +5,7 @@ dimensions with their CAGR/contribution, and the latest-year levels) — never r
 series — so prompts stay cheap and honest about provenance. Module-local, mirrors
 :mod:`energy_intel.ai_context`.
 """
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Optional
 from shared.data.cnzfe_client import CNZFEClient
 from shared.narrative.atribucion import Fuente, bloque_de_atribucion
 
@@ -23,7 +23,19 @@ _DIM_LABELS = {
 }
 
 
-def free_zones_ai_context(index: Dict[str, Any], period: str) -> Dict[str, Any]:
+def _financiamiento(perfil: Optional[Dict[str, Any]]) -> Dict[str, Any]:
+    """El crédito y el costo laboral del sector, para el contexto del modelo.
+
+    Delega en `shared.perfil_del_sector.contexto_de_financiamiento`, que es el ÚNICO cuerpo:
+    lo comparten los cuatro ejes cableados. Cuatro copias de la misma forma es como una se
+    queda atrás, y este repo lo pagó con un serializador copiado a mano.
+    """
+    from shared.perfil_del_sector import contexto_de_financiamiento
+    return contexto_de_financiamiento(perfil, "zonas_francas")
+
+
+def free_zones_ai_context(index: Dict[str, Any], period: str,
+                          perfil: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
     """Compact context for the free-zone sector attractiveness assessment.
 
     *index* is the ``compute_free_zone_index`` output. Surfaces the dimensions (score +
@@ -58,6 +70,7 @@ def free_zones_ai_context(index: Dict[str, Any], period: str) -> Dict[str, Any]:
         "investment_musd": levels.get("investment_musd"),
         "parks": levels.get("parks"),
         "score_global": index.get("fz_score"),
+        **_financiamiento(perfil),
         **bloque_de_atribucion(_CNZFE),
         "note": ("Sobre dato real CNZFE: fundamentos anuales del sector de zonas francas "
                  "(exportaciones, inversión acumulada, empleos, empresas). Índice de "
