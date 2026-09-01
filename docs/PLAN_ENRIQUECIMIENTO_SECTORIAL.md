@@ -83,17 +83,29 @@ superficies.
 Era la familia del #992 —la frescura envejeciendo sola dentro de un documento fechado— en dos
 productos ya publicados. Fue primero para no propagar el patrón al repartirlo a once ejes más.
 
-### Fase 1 — `CarteraSectorial` a `shared/reference/`
+### Fase 1 — `CarteraSectorial` a `shared/reference/` · CERRADA (#1034)
 
 8 archivos, todos dentro de `banking_score`. La tabla se llama `cartera_sectorial` antes y
 después: **sin migración**. `shared/reference/` ya guarda datasets nacionales (registro DGII,
 provincias), que es exactamente lo que el cubo es.
 
-**Trampa a verificar explícitamente:** hoy la tabla se registra en Alembic de forma
-transitiva —vive en el mismo archivo que `Bank` y `BankingData`, y el import de `env.py`
-ejecuta el módulo entero—. Al mudarla necesita su propia línea en `env.py`, o `autogenerate`
-propondría **borrar la tabla**. Comprobación de salida: `autogenerate` en limpio no propone
-nada.
+**La trampa era real y se comprobó por mutación:** sin su línea en `env.py`,
+`autogenerate` emite `op.drop_table('cartera_sectorial')` — no falla nada, sale una
+migración plausible que destruye datos. Con la línea, lo único que queda sobre la tabla es
+la nulabilidad de `created_at`/`updated_at`, que es deriva preexistente y afecta a varias.
+
+Lo vigila `shared/tests/test_alembic_ve_todas_las_tablas.py`, que compara en un subproceso
+lo que registra `env.py` contra lo que registra la app. Al escribirlo encontró **tres
+instancias preexistentes** de lo mismo —`const_scores`, `tour_scores` y
+`source_suggestions`—, ya corregidas.
+
+**Lo que NO era como yo lo había medido.** El cubo tiene `bank_id` con FK a `banks` y una
+relación a `Bank`: no es dato nacional puro, está a grano de entidad. La relación no la usaba
+nadie y se quitó; el FK queda, y es la primera FK de `shared/` hacia una tabla de módulo en
+este repo. Se hizo igual porque la alternativa —materializar un agregado de sistema en otra
+tabla— crea dos caminos que tienen que coincidir, que es el defecto que costó la tasa de 38
+entidades ese mismo día. **Deuda anotada:** `banks` es tan nacional como este cubo y debería
+acompañarlo; se referencia en 53 archivos y es otra tarea.
 
 Por qué mover y no leer desde `shared/`: los imports de `shared/` hacia `modules/` existen
 hoy en 3 archivos de todo el repo. Es una excepción, no un patrón, y hacerlo patrón costaría
@@ -176,7 +188,7 @@ sería relleno.
 | fase | estado |
 |---|---|
 | 0 · la capa macro sigue al corte | **cerrada** 2026-08-31 (#1033) |
-| 1 · `CarteraSectorial` a `shared/reference/` | pendiente |
+| 1 · `CarteraSectorial` a `shared/reference/` | **cerrada** 2026-08-31 (#1034) |
 | 2 · letra CIIU en el crosswalk | pendiente |
 | 3 · `perfil_del_sector` | pendiente |
 | 4 · construction + medición | pendiente |
