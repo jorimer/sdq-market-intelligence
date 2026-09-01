@@ -100,12 +100,17 @@ class TestUnAgregadoSeDECLARAenElContexto:
         assert not [k for k in c if "agregado" in k]
 
 
-def test_el_snapshot_pide_el_perfil_al_CIERRE_del_anio():
-    """El período de este producto es anual y el cubo es trimestral: un año se lee con su
-    diciembre. Con el corte de marzo el bloque describiría otro trimestre que el encabezado.
+def test_el_snapshot_deriva_el_corte_DEL_ANIO_del_informe():
+    """El período de este producto es anual y el cubo es trimestral.
 
-    Se lee la LLAMADA con `ast`, no el nombre en el texto: el comentario que explica el
-    arreglo menciona «diciembre» y un test de texto se satisfaría con eso.
+    La fecha NO se arma a mano: la deriva `corte_del_cubo_para_el_anio`, que devuelve el
+    diciembre del año o —si el año está en curso— su último trimestre disponible, y nunca se
+    sale del año. Antes este test exigía literalmente `date(año, 12, 31)`, y eso dejaba a un
+    eje con período de año EN CURSO sin la capa para siempre: energía estaba en 2026 y pedía
+    un `2026-12-31` que no existe.
+
+    Se lee la LLAMADA con `ast`: el comentario que explica esto menciona «diciembre» y un
+    test de texto se satisfaría con eso.
     """
     import ast
     import inspect
@@ -113,15 +118,21 @@ def test_el_snapshot_pide_el_perfil_al_CIERRE_del_anio():
     from modules.construction_intel import products
     fn = next(n for n in ast.walk(ast.parse(inspect.getsource(products)))
               if isinstance(n, ast.FunctionDef) and n.name == "snapshot")
+
+    derivadas = [n for n in ast.walk(fn) if isinstance(n, ast.Call)
+                 and isinstance(n.func, ast.Name)
+                 and n.func.id == "corte_del_cubo_para_el_anio"]
+    assert derivadas, (
+        "el snapshot arma la fecha por su cuenta en vez de derivarla: un año en curso "
+        "quedaría sin la capa de crédito para siempre")
+
+    # Y el AÑO que se le pasa es el del informe, no otro.
+    anio = derivadas[0].args[1]
+    assert isinstance(anio, ast.Call) and getattr(anio.func, "id", "") == "int", anio
+
     llamadas = [n for n in ast.walk(fn) if isinstance(n, ast.Call)
                 and isinstance(n.func, ast.Name) and n.func.id == "perfil_del_sector"]
     assert llamadas, "el snapshot dejó de pedir el perfil del sector"
-    corte = llamadas[0].args[2]
-    assert isinstance(corte, ast.Call) and getattr(corte.func, "id", "") == "date"
-    mes, dia = corte.args[1], corte.args[2]
-    assert (mes.value, dia.value) == (12, 31), (
-        "el perfil se pide a un corte que no es el cierre del año")
-
 
 def test_la_PLANTILLA_pide_el_financiamiento():
     """Servir el dato no alcanza: la plantilla tiene que pedirlo.

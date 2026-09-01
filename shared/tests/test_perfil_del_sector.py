@@ -11,7 +11,8 @@ from datetime import date
 import pytest
 
 from shared.data.bcrd_sectors import sector_catalog
-from shared.perfil_del_sector import (credito_al_sector, letras_del_slug,
+from shared.perfil_del_sector import (corte_del_cubo_para_el_anio,
+                                      credito_al_sector, letras_del_slug,
                                       perfil_del_sector, salario_del_sector)
 from shared.reference.cartera_sectorial import CarteraSectorial
 
@@ -250,3 +251,41 @@ def test_el_contra_caso_una_clave_inventada_SI_llega_vacia(db_session):
     c = bloque["credito_del_sistema_al_sector_construccion"]
     assert [k for k, v in c.items() if v is None], (
         "el lector no está leyendo del perfil: devuelve valores sin que el emisor los dé")
+
+
+class TestUnAnioEnCursoTambienLeeElCubo:
+    """El producto de energía estaba en 2026 y pedía `2026-12-31`, que no existe: la capa de
+    crédito no viajaba y nunca iba a viajar. El año que viene le pasa a todos los ejes.
+
+    La caída al último trimestre DEL AÑO es legítima porque esta capa no es del índice: es
+    contexto agregado, viaja con su propio corte y la plantilla exige citarlo.
+    """
+
+    def test_un_anio_cerrado_usa_su_DICIEMBRE(self, db_session):
+        from shared.perfil_del_sector import corte_del_cubo_para_el_anio
+        for mes_dia in ((3, 31), (6, 30), (9, 30), (12, 31)):
+            _celda(db_session, "b1", "F - CONSTRUCCIÓN", 100.0)
+            db_session.query(CarteraSectorial).filter_by(period_end=CORTE).update(
+                {"period_end": date(2025, *mes_dia)})
+            db_session.commit()
+        assert corte_del_cubo_para_el_anio(db_session, 2025) == date(2025, 12, 31)
+
+    def test_un_anio_EN_CURSO_usa_su_ultimo_trimestre(self, db_session):
+        db_session.add(CarteraSectorial(
+            bank_id="b1", period_end=date(2026, 3, 31), sector="F - CONSTRUCCIÓN",
+            provincia="SIN PROVINCIA", deuda=100.0))
+        db_session.commit()
+        assert corte_del_cubo_para_el_anio(db_session, 2026) == date(2026, 3, 31)
+
+    def test_NUNCA_se_sale_del_anio(self, db_session):
+        """Un informe de 2026 no lee el cubo de 2025: eso sí contradiría el encabezado."""
+        from shared.perfil_del_sector import corte_del_cubo_para_el_anio
+        db_session.add(CarteraSectorial(
+            bank_id="b1", period_end=date(2025, 12, 31), sector="F - CONSTRUCCIÓN",
+            provincia="SIN PROVINCIA", deuda=100.0))
+        db_session.commit()
+        assert corte_del_cubo_para_el_anio(db_session, 2026) is None
+
+    def test_sin_ningun_corte_devuelve_None(self, db_session):
+        from shared.perfil_del_sector import corte_del_cubo_para_el_anio
+        assert corte_del_cubo_para_el_anio(db_session, 2019) is None
