@@ -111,29 +111,35 @@ Por qué mover y no leer desde `shared/`: los imports de `shared/` hacia `module
 hoy en 3 archivos de todo el repo. Es una excepción, no un patrón, y hacerlo patrón costaría
 reescribir el mismo archivo cuando la tabla se mueva igual.
 
-### Fase 2 — La letra CIIU en el crosswalk
+### Fase 2 — La letra CIIU en el crosswalk · CERRADA (#1035)
 
 Construida **contra el catálogo de la SIB**, no deducida de las etiquetas: «el catálogo de la
 SIB define los campos, el portal no» costó tres backfills. `Y`/`Z` y los slugs sin letra se
 marcan como no mapeables con su motivo, hacia adentro.
 
-Lectura **preliminar, a verificar en esta fase** (pesos al corte 2025-12-31):
+Verificado. El catálogo se leyó de los valores DISTINTOS que la fuente emitió en los **nueve
+cortes** persistidos, no de un informe: las 19 etiquetas aparecen en los nueve, así que es
+estable. El mapa vive en `shared/data/sector_crosswalk.py` (`SIB_SECTORS`, `map_sib_label`,
+`sib_members`, `sib_coverage`), con guard fail-closed al importar como el de ENCFT/ENAE/IED.
 
-| slug BCRD | letra SIB | peso |
-|---|---|---|
-| `construccion` | F | 6,86% |
-| `manufactura_local` + `zonas_francas` | D (agregado: la SIB no separa ZF) | 6,91% |
-| `energia` | E | 5,07% |
-| `turismo` | H | 4,94% |
-| `comercio` | G | 12,20% |
-| `transporte` | I | 2,39% |
-| `inmobiliario` | K | 6,50% |
-| `financiero` | J | 2,34% |
-| `agropecuario` | A + B | 1,50% |
-| `mineria` | C | 0,96% |
-| `administracion_publica` | L | 0,64% |
-| `ensenanza` | M | 0,32% |
-| `comunicaciones` · `servicios_profesionales` | sin letra | — |
+**Cobertura: 16 de los 17 slugs.** Diez letras son 1:1; `D` agrupa manufactura local con
+zonas francas y `K` agrupa inmobiliario con servicios profesionales; `A` y `B` comparten
+`agropecuario` y `E` cubre solo la parte eléctrica de «Energía y Agua». Todos los agregados
+declaran su motivo, y el test exige que los directos NO lleven nota — sin ese contra-caso,
+exigir nota a todos no significaría nada.
+
+**La única brecha es `comunicaciones`:** la `J` de la SIB es financiera, no «información y
+comunicaciones» — su marco no sigue la revisión 4 en ese punto.
+
+**Cuatro letras no son sectores** y no alimentan ningún slug: `Y` y `Z` son destinos de
+crédito a hogares (26,72% y 18,75% de la cartera al 2025-12-31) y `P` y `Q` son hogares como
+empleadores y organismos extraterritoriales.
+
+**Lo que el test NO puede detectar,** dicho para que no se le suponga alcance: que la SIB
+renombre un sector mañana. Eso se descubre en producción, y por eso `map_sib_label` cae a la
+letra inicial — una etiqueta reescrita sigue resolviendo, que es lo que evita que media
+cartera desaparezca del agregado por un cambio cosmético. Lo que sí vigila es que la tabla
+declarada no se separe de lo medido.
 
 ### Fase 3 — `shared/perfil_del_sector.py`
 
@@ -189,7 +195,7 @@ sería relleno.
 |---|---|
 | 0 · la capa macro sigue al corte | **cerrada** 2026-08-31 (#1033) |
 | 1 · `CarteraSectorial` a `shared/reference/` | **cerrada** 2026-08-31 (#1034) |
-| 2 · letra CIIU en el crosswalk | pendiente |
+| 2 · letra CIIU en el crosswalk | **cerrada** 2026-08-31 (#1035) |
 | 3 · `perfil_del_sector` | pendiente |
 | 4 · construction + medición | pendiente |
 | 5 · resto de los ejes | pendiente |
