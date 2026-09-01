@@ -167,9 +167,9 @@ que publica la fuente, y la respuesta lo dice en `es_agregado`, `el_agregado_inc
 un solo cuerpo, y hay un test que exige que los dos importen del mismo lugar. Copiarlas
 habría repetido el defecto que ese mismo día borró la tasa de 38 entidades.
 
-**Decisión pendiente para el dueño:** mover `SectorVariable` a `shared/` (o exponerla)
-habilitaría las otras dos lecturas. No se hizo por cuenta propia porque es la misma decisión
-de arquitectura que se tomó explícitamente en la fase 1.
+**Decisión TOMADA el 2026-09-01 (#1043).** `SectorVariable` se mudó a `shared/reference/` y
+habilitó **tres** lecturas, no dos —la tercera es la inversión extranjera realizada por
+actividad, que nadie había listado—. Ver «Las dos decisiones» al final.
 
 ### Fase 4 — Un solo eje, y medir · CERRADA (#1037)
 
@@ -248,10 +248,8 @@ está en curso— su último trimestre DE ESE AÑO. Nunca se sale del año, que 
 encabezado. Es legítimo porque la capa no es del índice: es contexto agregado, viaja con su
 propio corte y la plantilla exige citarlo.
 
-**`sector_intel` queda APARTE, y es una decisión del dueño.** Sumar el crédito a los 19
-sectores del IAI/SGPS no es enriquecer una narrativa: es cambiar los insumos de un SCORE
-publicado. Eso mueve un número que ya se citó y merece su propia decisión, no colarse en una
-fase de cableado.
+**`sector_intel` quedó APARTE, y la decisión se tomó el 2026-09-01 (#1045)**: el costo del
+capital entró al IAI. Ver «Las dos decisiones» al final.
 
 ### Fase 6 — `capacidad_de_pago` y holgura donde signifiquen algo · CERRADA (#1042)
 
@@ -320,5 +318,94 @@ la fuente no tiene.
 | 2 · letra CIIU en el crosswalk | **cerrada** 2026-08-31 (#1035) |
 | 3 · `perfil_del_sector` | **cerrada** 2026-08-31 (#1036) |
 | 4 · construction + medición | **cerrada** 2026-08-31 (#1037 + #1038) |
-| 5 · resto de los ejes | **cerrada** 2026-09-01 (#1040 + #1041) · `sector_intel` aparte |
+| 5 · resto de los ejes | **cerrada** 2026-09-01 (#1040 + #1041) |
 | 6 · capacidad de pago y holgura | **cerrada** 2026-09-01 (#1042) |
+| decisión 1 · `si_variables` a `shared/` + 3 lecturas + telecom | **tomada** 2026-09-01 (#1043) |
+| decisión 2 · el costo del capital en el IAI | **tomada** 2026-09-01 (#1045) |
+| lo que salió de verificar en prod | (#1044 · #1046 · #1047 · #1048) |
+
+
+---
+
+## Las DOS decisiones pendientes — TOMADAS el 2026-09-01
+
+El dueño las desbloqueó con una razón concreta: **aún no hay reportes publicados**, así que
+ningún cliente tiene en la mano una cifra que estos cambios muevan.
+
+### 1 · `SectorVariable` → `shared/reference/` (#1043)
+
+`si_variables` guarda cuatro registros NACIONALES —valor agregado del BCRD, ocupados de la
+ENCFT, panel de la ENAE y flujos de IED por actividad— y `sector_intel` era su primer
+consumidor, no su dueño. El nombre de la tabla **no cambió**: el prefijo `si_` es un contrato
+con la base, y renombrarlo pediría una migración de datos para ganar estética.
+
+De paso, las cuatro dimensiones dejaron de declararse en el sync y viven con el modelo:
+`SECTOR_DIMENSION` estaba escrito **dos veces** con el mismo literal.
+
+**Tres lecturas nuevas, no dos.** La tercera —inversión extranjera realizada por actividad—
+no estaba en la anotación y es el único desenlace de inversión que el país publica abierto.
+
+| lectura | fuente | cobertura de los 17 |
+|---|---|---|
+| crédito y tasa | cubo de la SIB | 16 (4 como agregado declarado) |
+| costo laboral | TSS | 17 |
+| actividad (peso en el VA + crecimiento) | BCRD, cuentas nacionales | 17 |
+| ocupación | ONE · ENCFT | 17 (3 ramas son bundles declarados) |
+| inversión extranjera | BCRD, flujos de IED | 10 |
+
+**Telecom quedó cableado por primera vez.** `comunicaciones` es el único de los 17 slugs que
+la SIB no cubre con ninguna letra CIIU: sin crédito no había bloque, y por eso el eje quedó
+fuera de las fases 3-5. Las tres capas nuevas sí lo alcanzan.
+
+**Construcción omite `actividad`, y es el único.** Ya publica el crecimiento del PIB de
+construcción del BCRD con su propio nombre; servirle la misma lectura con otra clave pondría
+dos cifras de crecimiento del mismo sector en el mismo contexto y el modelo elige la que le
+cae más cerca. La omisión se declara en el código y en el test, y hay un test que exige las
+dos.
+
+### 2 · El costo del capital entra al IAI (#1045)
+
+`credit_cost` = tasa promedio ponderada del cubo de la SIB, dimensión de negocios, en
+`risk_increasing`. Cobertura **16/17**; `comunicaciones` la deja ausente, sin rúbrica-50 falsa.
+
+**La tasa y no la mora, medido y no opinado.** Correlacionan a **r = +0,65** sobre el cubo de
+producción: el precio del crédito ES, en buena parte, la lectura que el mercado hace del
+riesgo del sector, y meter las dos sería el mismo hecho votando dos veces. La cobertura de
+provisiones se descartó por medición: energía marca 4.031 % contra un rango de 124-483 % del
+resto, y el min-max **crudo** de este motor (no usa `robust_bounds`) hundiría a los otros once.
+
+**El corte es el DEL AÑO que se puntúa**, no una foto reciente aplicada hacia atrás: sobre los
+21 cortes reales del cubo (2021-Q1 → 2026-Q1) el orden transversal se mueve, con rho de
+Spearman de +0,69 entre el primero y el último.
+
+**O todos, o ninguno dentro de un período.** El cubo arranca en 2021 y el IAI se puntúa desde
+2007. El motor normaliza contra los pares DE ESE PERÍODO, así que una cobertura parcial por
+período movería el ranking por PRESENCIA y no por dato.
+
+**Impacto medido** con el motor y la doctrina reales contra el dataset de producción (período
+2025, corte 2025-12-31): 12 de 17 cambian de posición, |Δ| medio 2,08 puntos, mayor descenso
+`otros_servicios` (−5,69), mayor ascenso `energia` (+4,00), y **un cambio de banda —
+`agropecuario` 42,75 → 38,80, de Medio a Bajo**. Registrado en `shared/doctrine/changelog.yaml`.
+
+**El SGPS no se tocó:** es una mezcla directa de tres factores que suman 1,0; sumarle un
+cuarto sería re-pesar la fórmula, no agregar un insumo.
+
+### Tres defectos que salieron de VERIFICAR en producción, no de los tests
+
+| # | qué | por qué importa |
+|---|---|---|
+| #1044 | una IED **negativa** servida en porcentaje invertía la dirección (+36,73 % en un año de desinversión) | la relación la computaba yo, y salió invertida |
+| #1046 | el narrador del IAI **no podía citar la variable** que movió el score, y declaraba procedencia a mano (3 dimensiones dadas por rúbrica con 8/9 variables reales) | el producto se subestimaba a sí mismo en el texto que se vende |
+| #1047 · #1048 | llamó «**percentil**» a una posición min-max, y después arrastró el denominador de la línea de al lado | dos afirmaciones falsas en un documento que se vende |
+
+Ninguno lo habría encontrado la suite: el primero necesitaba una serie negativa real, y los
+otros dos son propiedades del TEXTO generado.
+
+### Lo que NO se puede afirmar
+
+El Gate E de este eje corrió después del cambio y **no lo valida**: el desenlace de inversión
+sigue con IC negativo y significativo, y el de empleo sigue sin concluir. Tampoco se puede
+atribuir el movimiento al cambio — el panel corre 2008-2024 y el cubo arranca en 2021, así que
+solo 4 de 16 años llevan la variable. El producto sigue declarado **descriptivo** en su
+`ESTADO_BACKTEST`. El estado vigente se pide a la plataforma
+(`GET /api/v1/sector-intel/validation`), nunca se copia acá.
