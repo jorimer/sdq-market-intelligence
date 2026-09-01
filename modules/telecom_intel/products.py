@@ -330,6 +330,25 @@ class TelecomProduct:
                                    payload={"has_score": False}, entity_name=entity,
                                    entity_roster=())
         payload: Dict[str, Any] = {"has_score": True, "index": _index_dict(s)}
+        # EL PERFIL DEL SECTOR COMUNICACIONES. Sin crédito —la SIB no cubre este slug— pero
+        # con actividad, ocupación e inversión extranjera realizada. Dentro del año: el
+        # período de este producto es anual o trimestral y estas capas son anuales, así que
+        # cada una trae SU fecha y la plantilla exige citarla. Nunca se sale del año.
+        try:
+            from shared.perfil_del_sector import (corte_del_cubo_para_el_anio,
+                                                  perfil_del_sector)
+            from datetime import date as _date
+            _db = self._require_db()
+            _anio = int(str(s.period)[:4])
+            # El corte del cubo es la fecha con la que se leen las capas anuales; si el cubo
+            # no llega a este año se usa su 31 de diciembre, porque las tres capas de este
+            # eje NO salen del cubo y no dependen de que exista.
+            _corte = corte_del_cubo_para_el_anio(_db, _anio) or _date(_anio, 12, 31)
+            _perfil = perfil_del_sector(_db, "comunicaciones", _corte)
+            if _perfil:
+                payload["perfil_del_sector"] = _perfil
+        except Exception:  # noqa: BLE001 — el snapshot nunca depende de esta lectura
+            logger.exception("Perfil del sector omitido en el snapshot de telecom_intel")
         # LA CAPACIDAD DE PAGO DEL HOGAR. Vive en `shared/` porque la leen varios ejes;
         # lo que cambia entre ellos es la LECTURA, no el dato, y ésa la fija la regla de
         # la plantilla. Al MISMO corte que el resto del informe.
@@ -381,7 +400,8 @@ class TelecomProduct:
                     for sec in sections}
 
         from shared.narrative.claude_engine import narrative_engine
-        base_ctx = telecom_ai_context(snapshot.payload["index"], snapshot.period)
+        base_ctx = telecom_ai_context(snapshot.payload["index"], snapshot.period,
+                                      snapshot.payload.get("perfil_del_sector"))
         # LA CAPACIDAD DE PAGO VIAJA AL CONTEXTO, no solo al payload. Es la mitad que
         # se olvida: en la fase 4 el financiamiento llegó al payload y la prosa no lo
         # usó nunca porque el contexto no lo tenía. Servir el dato no alcanza — tiene

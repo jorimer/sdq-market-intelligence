@@ -1,18 +1,20 @@
 """SQLAlchemy models for the Sector Intel module (Eje 3).
 
 Tables:
-  - Sector         — a sector in scope (anchor sectors first).
-  - SectorVariable — raw IAI input per sector/dimension/variable (lineage).
-  - SectorScore    — computed IAI + SGPS for a sector and period.
+  - Sector      — a sector in scope (anchor sectors first).
+  - SectorScore — computed IAI + SGPS for a sector and period.
+
+El panel de insumos crudos (``SectorVariable`` / ``si_variables``) YA NO vive acá: es un
+registro nacional que también leen el perfil sectorial de `shared/` y los ejes que lo
+consumen, así que se mudó a ``shared/reference/sector_variables.py``. Importalo de ahí.
 """
 from sqlalchemy import (
     Boolean,
     Column,
-    Date,
     Float,
-    Index,
     JSON,
     String,
+    Index,
     UniqueConstraint,
 )
 
@@ -26,23 +28,6 @@ class Sector(UUIDMixin, Base):
     code = Column(String(40), unique=True, nullable=False)   # "turismo"
     name = Column(String(120), nullable=False)
     is_active = Column(Boolean, default=True, nullable=False)
-
-
-class SectorVariable(UUIDMixin, Base):
-    """One raw IAI input value (sector x dimension x variable) with provenance."""
-    __tablename__ = "si_variables"
-    __table_args__ = (
-        Index("ix_si_var_sector_period", "sector_code", "period"),
-    )
-
-    sector_code = Column(String(40), nullable=False)
-    dimension = Column(String(40), nullable=False)
-    variable = Column(String(60), nullable=False)
-    value = Column(Float, nullable=True)               # NULL = missing, no interpolation
-    period = Column(String(10), nullable=True)
-    source = Column(String(40), nullable=True)
-    published_at = Column(Date, nullable=True)
-    license = Column(String(120), nullable=True)
 
 
 class SectorScore(UUIDMixin, Base):

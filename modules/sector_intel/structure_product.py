@@ -33,7 +33,7 @@ from shared.products import (
 )
 from shared.products.render import render_product_pdf
 from modules.sector_intel.ai_context import economic_structure_ai_context
-from modules.sector_intel.models.models import SectorVariable
+from shared.reference.sector_variables import SectorVariable
 from modules.sector_intel.service import SECTOR_DIMENSION, get_economic_structure
 
 logger = logging.getLogger("sdq.products.economic_structure")

@@ -26,12 +26,12 @@ _DIM_LABELS = {
 def _financiamiento(perfil: Optional[Dict[str, Any]]) -> Dict[str, Any]:
     """El crédito y el costo laboral del sector, para el contexto del modelo.
 
-    Delega en `shared.perfil_del_sector.contexto_de_financiamiento`, que es el ÚNICO cuerpo:
+    Delega en `shared.perfil_del_sector.contexto_del_perfil_del_sector`, que es el ÚNICO cuerpo:
     lo comparten los cuatro ejes cableados. Cuatro copias de la misma forma es como una se
     queda atrás, y este repo lo pagó con un serializador copiado a mano.
     """
-    from shared.perfil_del_sector import contexto_de_financiamiento
-    return contexto_de_financiamiento(perfil, "zonas_francas")
+    from shared.perfil_del_sector import contexto_del_perfil_del_sector
+    return contexto_del_perfil_del_sector(perfil, "zonas_francas")
 
 
 def free_zones_ai_context(index: Dict[str, Any], period: str,

@@ -11,12 +11,22 @@ from datetime import date
 import pytest
 
 from shared.data.bcrd_sectors import sector_catalog
-from shared.perfil_del_sector import (corte_del_cubo_para_el_anio,
-                                      credito_al_sector, letras_del_slug,
-                                      perfil_del_sector, salario_del_sector)
+from shared.perfil_del_sector import (actividad_del_sector, corte_del_cubo_para_el_anio,
+                                      credito_al_sector,
+                                      inversion_extranjera_del_sector, letras_del_slug,
+                                      ocupacion_del_sector, perfil_del_sector,
+                                      salario_del_sector)
 from shared.reference.cartera_sectorial import CarteraSectorial
+from shared.reference.sector_variables import (IED_DIMENSION, LABOR_ENCFT_DIMENSION,
+                                               SECTOR_DIMENSION, SectorVariable)
 
 CORTE = date(2025, 12, 31)
+
+
+def _var(db, dimension, clave, variable, periodo, valor):
+    """Una fila de `si_variables` — la tabla que el 2026-09-01 se mudó a `shared/`."""
+    db.add(SectorVariable(sector_code=clave, dimension=dimension, variable=variable,
+                          period=str(periodo), value=valor))
 
 
 @pytest.fixture()
@@ -135,14 +145,15 @@ class TestLoQueNoHayNoSeInventa:
         assert "costo_laboral" not in p
         assert p["cobertura"]["lecturas_servidas"] == ["credito_del_sistema"]
 
-    def test_la_cobertura_LISTA_lo_que_todavia_no_se_sirve(self, db_session):
-        """No es un olvido: son tablas de `sector_intel`. Es dato interno del contexto, no
-        texto para el informe."""
+    def test_la_cobertura_LISTA_lo_que_este_sector_no_tiene(self, db_session):
+        """Dato interno del contexto, no texto para el informe: la ausencia no se le declara
+        al lector. Sirve para que el consumidor sepa sobre qué está afirmando."""
         _celda(db_session, "b1", "F - CONSTRUCCIÓN", 1000.0)
         db_session.commit()
         p = perfil_del_sector(db_session, "construccion", CORTE)
-        assert p["cobertura"]["lecturas_pendientes"] == [
-            "ocupacion_encft", "tamano_y_crecimiento_bcrd"]
+        assert p["cobertura"]["lecturas_servidas"] == ["credito_del_sistema"]
+        assert p["cobertura"]["lecturas_sin_dato_para_este_sector"] == [
+            "costo_laboral", "actividad", "ocupacion", "inversion_extranjera"]
 
 
 class TestElSalarioTraeSuAnio:
@@ -198,13 +209,17 @@ def test_las_primitivas_son_LAS_MISMAS_que_usa_el_mapa_de_banca():
 
 
 def test_las_DOS_PUNTAS_del_contrato_usan_las_mismas_claves(db_session):
-    """`contexto_de_financiamiento` lee exactamente las claves que `credito_al_sector` emite.
+    """`contexto_del_perfil_del_sector` lee exactamente las claves que las CINCO lecturas
+    emiten.
 
     **Por qué existe.** En la fase 4 renombré una clave del perfil y NO el `.get()` que la
     lee del otro lado: `peso` llegó a producción en `None`, y el informe generado citó deuda,
     entidades, tasa y mora pero nunca el peso del sector. Los tests no lo vieron porque su
     fixture estaba escrita a mano y arrastraba el nombre viejo — fixture y código derivaron
     juntos, que es la forma en que un test deja de medir la realidad.
+
+    **El emisor es el CÓDIGO REAL, no una fixture.** Se llaman las cinco funciones contra una
+    base cargada y se une lo que devuelven; una fixture escrita a mano volvería a derivar.
 
     Se comparan CLAVES y no valores: un `None` puede ser legítimo —la celda no trae conteo de
     créditos y `credito_promedio` no se puede derivar—, pero un nombre que el emisor no emite
@@ -216,24 +231,46 @@ def test_las_DOS_PUNTAS_del_contrato_usan_las_mismas_claves(db_session):
 
     from shared import perfil_del_sector as mod
 
-    # Los DOS casos, porque algunas claves solo aparecen en uno: `por_que_es_agregado`
-    # existe cuando la letra de la SIB alimenta a más de un slug, y construcción (F) no lo
-    # es. Probar solo el caso simple dejaría esas claves fuera del contrato verificado.
+    # Los DOS casos de cada lectura, porque algunas claves solo aparecen en uno:
+    # `por_que_es_agregado` existe cuando la fuente agrupa —la letra D de la SIB, la rama
+    # «Otros Servicios» de la ENCFT, la actividad «Comercio / Industria» de la IED— y
+    # construcción no lo es en ninguna. Probar solo el caso simple dejaría esas claves fuera.
     _celda(db_session, "b1", "F - CONSTRUCCIÓN", 1000.0, vencida=50.0, tasa=11.4)
     _celda(db_session, "b1", "D - INDUSTRIA MANUFACTURERA", 2000.0, tasa=10.4)
+    for anio in ("2024", "2025"):
+        _var(db_session, SECTOR_DIMENSION, "construccion", "sector_size", anio, 13.4)
+        _var(db_session, SECTOR_DIMENSION, "construccion", "sector_growth", anio, -1.8)
+        _var(db_session, LABOR_ENCFT_DIMENSION, "construccion", "employment", anio, 432957.0)
+        _var(db_session, LABOR_ENCFT_DIMENSION, "otros_servicios", "employment", anio, 1488383.0)
+        _var(db_session, IED_DIMENSION, "turismo", "ied_usd_mm", anio, 1120.5)
+        _var(db_session, IED_DIMENSION, "comercio_industria", "ied_usd_mm", anio, 890.1)
     db_session.commit()
-    emite = (set(credito_al_sector(db_session, "construccion", CORTE))
-             | set(credito_al_sector(db_session, "manufactura_local", CORTE)))
+
+    emisores = (
+        lambda: credito_al_sector(db_session, "construccion", CORTE),
+        lambda: credito_al_sector(db_session, "manufactura_local", CORTE),
+        lambda: actividad_del_sector(db_session, "construccion", 2025),
+        lambda: ocupacion_del_sector(db_session, "construccion", 2025),   # rama directa
+        lambda: ocupacion_del_sector(db_session, "salud", 2025),          # rama agregada
+        lambda: inversion_extranjera_del_sector(db_session, "turismo", 2025),        # directa
+        lambda: inversion_extranjera_del_sector(db_session, "manufactura_local", 2025),  # agg
+    )
+    emite = set()
+    for fn in emisores:
+        fila = fn()
+        assert fila, "un emisor devolvió vacío: el contrato se estaría verificando a ciegas"
+        emite |= set(fila)
 
     fn = next(n for n in ast.walk(ast.parse(inspect.getsource(mod)))
-              if isinstance(n, ast.FunctionDef) and n.name == "contexto_de_financiamiento")
-    # Los `.get("...")` que el bloque hace sobre la fila de crédito.
+              if isinstance(n, ast.FunctionDef) and n.name == "contexto_del_perfil_del_sector")
+    # Los `.get("...")` que el bloque hace sobre las filas de cada lectura.
     lee = {n.args[0].value for n in ast.walk(fn)
            if isinstance(n, ast.Call) and isinstance(n.func, ast.Attribute)
            and n.func.attr == "get" and n.args
            and isinstance(n.args[0], ast.Constant) and isinstance(n.args[0].value, str)}
-    # `credito_del_sistema` y `costo_laboral` son claves del PERFIL, no de la fila.
-    lee -= {"credito_del_sistema", "costo_laboral"}
+    # Éstas son claves del PERFIL (el diccionario de afuera), no de una fila.
+    lee -= {"credito_del_sistema", "costo_laboral", "actividad", "ocupacion",
+            "inversion_extranjera"}
     del_salario = {"salario_promedio_cotizable_del_sector_dop_mes", "anio", "fuente"}
     huerfanas = lee - emite - del_salario
     assert not huerfanas, (
@@ -243,9 +280,9 @@ def test_las_DOS_PUNTAS_del_contrato_usan_las_mismas_claves(db_session):
 
 def test_el_contra_caso_una_clave_inventada_SI_llega_vacia(db_session):
     """Sin esto, el test de arriba pasaría aunque el bloque no leyera nada del perfil."""
-    from shared.perfil_del_sector import contexto_de_financiamiento
+    from shared.perfil_del_sector import contexto_del_perfil_del_sector
 
-    bloque = contexto_de_financiamiento(
+    bloque = contexto_del_perfil_del_sector(
         {"credito_del_sistema": {"corte": "2025-12-31", "clave_que_no_existe": 1}},
         "construccion")
     c = bloque["credito_del_sistema_al_sector_construccion"]

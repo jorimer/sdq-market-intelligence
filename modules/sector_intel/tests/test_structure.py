@@ -5,7 +5,7 @@ from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
 
 from shared.database.base import Base
-from modules.sector_intel.models.models import SectorVariable
+from shared.reference.sector_variables import SectorVariable
 from modules.sector_intel.scoring.structure import compute_economic_structure
 from modules.sector_intel.service import get_economic_structure
 

@@ -17,7 +17,7 @@ de los datos del DataHub **a condición de citarla**. El texto no se escribe ac�
 ``shared.data.licenses``, que es donde vive la obligación, vía
 :func:`modules.telecom_intel.sources.emisor_del_periodo`.
 """
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Optional
 
 from modules.telecom_intel.sources import emisor_del_periodo
 from shared.narrative.atribucion import bloque_de_atribucion
@@ -29,7 +29,25 @@ _DIM_LABELS = {
 }
 
 
-def telecom_ai_context(index: Dict[str, Any], period: str) -> Dict[str, Any]:
+def _financiamiento(perfil: Optional[Dict[str, Any]]) -> Dict[str, Any]:
+    """El perfil del sector comunicaciones, para el contexto del modelo.
+
+    **Este eje entró último y por una razón concreta.** Las cuatro capas que llegaron en la
+    fase 3 arrancan del cubo de crédito de la SIB, y `comunicaciones` es el ÚNICO de los 17
+    slugs que la SIB no cubre con ninguna letra CIIU: sin crédito no había bloque, así que
+    telecom quedó fuera. Las tres capas nuevas —actividad, ocupación e inversión extranjera—
+    no salen de la SIB y sí lo alcanzan, y la de IED lo alcanza DIRECTO: «Telecomunicaciones»
+    es una de las nueve actividades que el BCRD publica sin agrupar.
+
+    Delega en `shared.perfil_del_sector.contexto_del_perfil_del_sector`, que es el ÚNICO
+    cuerpo: lo comparten los cinco ejes cableados.
+    """
+    from shared.perfil_del_sector import contexto_del_perfil_del_sector
+    return contexto_del_perfil_del_sector(perfil, "comunicaciones")
+
+
+def telecom_ai_context(index: Dict[str, Any], period: str,
+                       perfil: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
     """Compact context for the national telecom-development assessment.
 
     *index* is ``compute_telecom_index`` output. Surfaces the real dimensions and the
@@ -57,6 +75,7 @@ def telecom_ai_context(index: Dict[str, Any], period: str) -> Dict[str, Any]:
         "internet_penetration": m.get("internet_penetration"),
         "broadband_share": m.get("broadband_share"),
         "revenue_growth": m.get("revenue_growth"),
+        **_financiamiento(perfil),
         "score_global": index.get("telecom_score"),
         "note": ("Sobre dato real de " + emisor.label + ": penetración móvil, banda ancha "
                  "móvil y fija, y hogares con internet. No inventes cifras."),

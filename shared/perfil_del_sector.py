@@ -11,12 +11,25 @@ llave.
 el crédito es un dato nacional que la SIB publica sobre todas las supervisadas, y se sirve
 AGREGADO — acá no hay ninguna entidad nombrada.
 
-**Lo que NO trae todavía, y por qué.** La ocupación (ENCFT) y el tamaño/crecimiento del
-sector (cuentas nacionales del BCRD) viven en `SectorVariable`, que es tabla de
-`sector_intel`. Traerlas exigiría que `shared/` importe el modelo de un módulo — el patrón
-que la fase 1 evitó mudando la tabla del cubo en vez de leerla desde afuera. Es una decisión
-de arquitectura pendiente, no un olvido, y `cobertura` lo dice en cada respuesta. Además el
-sync del empleo lleva desde junio de 2026 fallando con 403 contra one.gob.do.
+**Las cinco lecturas, y de dónde sale cada una.** Crédito y tasa del cubo de la SIB, costo
+laboral de la TSS, actividad (peso y crecimiento real) de las cuentas nacionales del BCRD,
+ocupación de la ENCFT y inversión extranjera realizada del cuadro de IED del BCRD. Las tres
+últimas se habilitaron el 2026-09-01 al mudar `si_variables` a `shared/reference/`, que era
+la decisión de arquitectura que la fase 3 dejó abierta.
+
+**Cada lectura viaja con SU fecha y con su población.** Son cinco registros con calendarios
+distintos —el cubo es trimestral, las cuentas nacionales y la IED son anuales, la ENCFT va
+por ramas— y ninguna es del corte del informe. Además la fuente agrupa distinto en cada una:
+la SIB no separa manufactura local de zonas francas, la ENCFT mete enseñanza, salud e
+inmobiliario en «Otros Servicios», y el BCRD junta comercio con industria en su cuadro de
+IED. Donde eso pasa, la lectura lo dice y NO se reparte el agregado entre sus miembros.
+
+**Lo que puede faltar.** `encft-empleo-sync` lleva desde junio de 2026 fallando con 403
+contra one.gob.do, así que la ocupación puede venir con un período viejo — que es
+exactamente por qué viaja con el suyo. Y la IED del BCRD no cubre los 17 sectores: no llega
+a agropecuario, construcción, administración pública, enseñanza, salud ni servicios
+profesionales, y esos slugs devuelven ``None`` en vez de un cero que afirmaría que no
+recibieron inversión.
 """
 from __future__ import annotations
 
@@ -28,10 +41,15 @@ from typing import Any, Dict, List, Optional
 from sqlalchemy import func
 from sqlalchemy.orm import Session
 
-from shared.data.bcrd_sectors import sector_catalog
-from shared.data.sector_crosswalk import SIB_SECTORS, sib_members
+from shared.data.bcrd_sectors import VAR_GROWTH, VAR_SIZE, sector_catalog
+from shared.data.encft_employment import VAR_EMPLOYMENT
+from shared.data.ied_bcrd import SERIES as VAR_IED
+from shared.data.sector_crosswalk import (ENCFT_BRANCHES, IED_ACTIVITIES, SIB_SECTORS,
+                                          sib_members)
 from shared.reference.cartera_agregacion import _medidas, _sumar, _vacio
 from shared.reference.cartera_sectorial import CarteraSectorial
+from shared.reference.sector_variables import (IED_DIMENSION, LABOR_ENCFT_DIMENSION,
+                                               SECTOR_DIMENSION, SectorVariable)
 
 logger = logging.getLogger("sdq.perfil_del_sector")
 
@@ -150,6 +168,144 @@ def salario_del_sector(db: Session, slug: str) -> Optional[Dict[str, Any]]:
     }
 
 
+# slug BCRD-17 → rama de la ENCFT / actividad de la IED. Se DERIVAN del crosswalk igual que
+# `_LETRAS_POR_SLUG`: una segunda tabla del mismo mapa es como los dos se desincronizan.
+_RAMA_POR_SLUG: Dict[str, "Any"] = {m: b for b in ENCFT_BRANCHES for m in b.members}
+_ACTIVIDAD_IED_POR_SLUG: Dict[str, "Any"] = {m: a for a in IED_ACTIVITIES for m in a.members}
+
+
+def _ultimo_anio_hasta(periodos: Dict[str, Any], anio: int) -> Optional[str]:
+    """El período más reciente que NO se pasa de *anio* (``None`` si todos son futuros).
+
+    El tope existe porque estas capas se leen desde un informe fechado: servirle a un
+    informe de 2024 el crecimiento de 2025 sería contradecir su encabezado con un dato que
+    en ese momento no existía. Que el resultado quede viejo es legítimo y por eso viaja.
+    """
+    candidatos = [p for p in periodos if str(p).isdigit() and int(p) <= anio]
+    return max(candidatos, key=int) if candidatos else None
+
+
+def _serie(db: Session, dimension: str, clave: str, variable: str) -> Dict[str, float]:
+    """``{período: valor}`` de una variable para una clave, dentro de SU dimensión.
+
+    La `dimension` no es opcional: en `si_variables` conviven cuatro resoluciones del mismo
+    mapa (17 slugs, 10 ramas, 9 sectores ENAE, 9 actividades de IED) y `sector_code` se
+    repite entre ellas. Filtrar solo por la clave mezcla poblaciones que la fuente no unió.
+    """
+    filas = (db.query(SectorVariable)
+             .filter(SectorVariable.dimension == dimension,
+                     SectorVariable.sector_code == clave,
+                     SectorVariable.variable == variable)
+             .all())
+    return {str(f.period): float(f.value) for f in filas if f.value is not None and f.period}
+
+
+def _variacion_pct(serie: Dict[str, float], anio: str) -> Optional[float]:
+    """Variación de *anio* contra el año anterior, COMPUTADA acá.
+
+    Se computa y no se deja para el modelo por la regla de la casa: el modelo acierta las
+    cifras y falla las relaciones. Sin el año previo devuelve ``None`` en vez de cero, que
+    se leería como «no se movió».
+    """
+    previo = serie.get(str(int(anio) - 1))
+    actual = serie.get(anio)
+    if previo is None or actual is None or previo == 0:
+        return None
+    return round(100.0 * (actual / previo - 1.0), 2)
+
+
+def actividad_del_sector(db: Session, slug: str, anio: int) -> Optional[Dict[str, Any]]:
+    """Peso en el valor agregado nacional y crecimiento real del sector (BCRD), con SU año.
+
+    **Los dos valores salen del MISMO año o no salen.** Un peso de 2025 al lado de un
+    crecimiento de 2024 se lee como una sola foto y no lo es; si el año más reciente no trae
+    los dos, se retrocede hasta uno que sí, y si no hay ninguno se devuelve ``None``.
+
+    Es la lectura que ordena por importancia económica, y es distinta del crédito: un sector
+    puede pesar poco en la cartera del sistema y mucho en el valor agregado.
+    """
+    tam = _serie(db, SECTOR_DIMENSION, slug, VAR_SIZE)
+    cre = _serie(db, SECTOR_DIMENSION, slug, VAR_GROWTH)
+    comunes = {p for p in tam if p in cre}
+    usar = _ultimo_anio_hasta({p: 0.0 for p in comunes}, anio)
+    if usar is None:
+        return None
+    return {
+        "anio": usar,
+        "peso_del_sector_en_el_valor_agregado_nacional_pct": round(tam[usar], 3),
+        "crecimiento_real_del_sector_pct": round(cre[usar], 2),
+        "fuente": "BCRD · cuentas nacionales",
+    }
+
+
+def ocupacion_del_sector(db: Session, slug: str, anio: int) -> Optional[Dict[str, Any]]:
+    """Ocupados en la rama de actividad a la que la ENCFT asigna el sector, con SU período.
+
+    **El sujeto acá es la RAMA, no el sector.** La ENCFT publica 10 ramas, no los 17 slugs:
+    «Otros Servicios» absorbe enseñanza, salud, inmobiliario y servicios profesionales, e
+    «Industrias Manufactureras» incluye minas y canteras. Para esos slugs la cifra es de la
+    rama y la respuesta lo dice — repartir la rama entre sus miembros sería fabricar.
+
+    El período puede venir viejo: `encft-empleo-sync` falla contra one.gob.do desde junio de
+    2026. Por eso viaja con el suyo en vez de heredar el del informe.
+    """
+    rama = _RAMA_POR_SLUG.get(slug)
+    if rama is None:
+        return None
+    serie = _serie(db, LABOR_ENCFT_DIMENSION, rama.key, VAR_EMPLOYMENT)
+    usar = _ultimo_anio_hasta(serie, anio)
+    if usar is None:
+        return None
+    es_agregado = len(rama.members) > 1
+    out: Dict[str, Any] = {
+        "periodo": usar,
+        "ocupados_en_la_rama": round(serie[usar], 0),
+        "variacion_de_los_ocupados_vs_anio_anterior_pct": _variacion_pct(serie, usar),
+        "rama_de_la_encft": rama.label,
+        "fuente": "ONE · ENCFT",
+        "es_agregado": es_agregado,
+        "el_agregado_incluye": sorted(rama.members) if es_agregado else None,
+    }
+    if es_agregado:
+        out["por_que_es_agregado"] = rama.note
+    return out
+
+
+def inversion_extranjera_del_sector(db: Session, slug: str,
+                                    anio: int) -> Optional[Dict[str, Any]]:
+    """IED realizada en la actividad del sector (BCRD), con SU año.
+
+    Es el único desenlace de INVERSIÓN que el país publica abierto por actividad, y por eso
+    dice algo que ningún indicador propio del eje dice: si el capital extranjero efectivamente
+    llegó, no si el sector parecía atractivo.
+
+    ``None`` para los seis slugs que el cuadro del BCRD no desagrega —agropecuario,
+    construcción, administración pública, enseñanza, salud y servicios profesionales—. No es
+    un cero: un cero afirmaría que no recibieron inversión, y lo que pasa es que la fuente no
+    los publica.
+    """
+    act = _ACTIVIDAD_IED_POR_SLUG.get(slug)
+    if act is None:
+        return None
+    serie = _serie(db, IED_DIMENSION, act.key, VAR_IED)
+    usar = _ultimo_anio_hasta(serie, anio)
+    if usar is None:
+        return None
+    es_agregado = len(act.members) > 1
+    out: Dict[str, Any] = {
+        "anio": usar,
+        "ied_realizada_en_la_actividad_usd_mm": round(serie[usar], 2),
+        "variacion_de_la_ied_vs_anio_anterior_pct": _variacion_pct(serie, usar),
+        "actividad_del_cuadro_de_ied": act.label,
+        "fuente": "BCRD · flujos de IED por actividad económica",
+        "es_agregado": es_agregado,
+        "el_agregado_incluye": sorted(act.members) if es_agregado else None,
+    }
+    if es_agregado:
+        out["por_que_es_agregado"] = act.note
+    return out
+
+
 def perfil_del_sector(db: Session, slug: str, corte: date) -> Optional[Dict[str, Any]]:
     """Las lecturas disponibles de un sector, juntas. ``None`` si no hay ninguna.
 
@@ -160,9 +316,14 @@ def perfil_del_sector(db: Session, slug: str, corte: date) -> Optional[Dict[str,
     if slug not in {s for s, _n in sector_catalog()}:
         return None
 
+    anio = corte.year
     bloque: Dict[str, Any] = {}
     for clave, fn in (("credito_del_sistema", lambda: credito_al_sector(db, slug, corte)),
-                      ("costo_laboral", lambda: salario_del_sector(db, slug))):
+                      ("costo_laboral", lambda: salario_del_sector(db, slug)),
+                      ("actividad", lambda: actividad_del_sector(db, slug, anio)),
+                      ("ocupacion", lambda: ocupacion_del_sector(db, slug, anio)),
+                      ("inversion_extranjera",
+                       lambda: inversion_extranjera_del_sector(db, slug, anio))):
         try:
             valor = fn()
         except Exception:  # noqa: BLE001 — ninguna lectura tumba al informe
@@ -174,18 +335,25 @@ def perfil_del_sector(db: Session, slug: str, corte: date) -> Optional[Dict[str,
         return None
 
     bloque["sector"] = slug
+    # Qué se sirvió y qué NO, para que el consumidor sepa sobre qué está afirmando. Es dato
+    # interno del contexto, no texto para el informe: la ausencia no se declara al lector.
     bloque["cobertura"] = {
         "lecturas_servidas": [k for k in bloque if k not in ("sector", "cobertura")],
-        # No es un olvido: son tablas de `sector_intel` y traerlas exige que `shared/` importe
-        # el modelo de un módulo — la decisión de arquitectura que la fase 1 evitó.
-        "lecturas_pendientes": ["ocupacion_encft", "tamano_y_crecimiento_bcrd"],
+        "lecturas_sin_dato_para_este_sector": [
+            c for c in ("credito_del_sistema", "costo_laboral", "actividad", "ocupacion",
+                        "inversion_extranjera") if c not in bloque],
     }
     return bloque
 
 
-def contexto_de_financiamiento(perfil: Optional[Dict[str, Any]],
-                               sufijo: str) -> Dict[str, Any]:
+def contexto_del_perfil_del_sector(perfil: Optional[Dict[str, Any]], sufijo: str, *,
+                                   omitir: tuple = ()) -> Dict[str, Any]:
     """El perfil, con la forma que consume el contexto del modelo.
+
+    **Se llamaba `contexto_de_financiamiento`** y se renombró el 2026-09-01, cuando dejó de
+    emitir solo financiamiento: hoy también viajan la actividad, la ocupación y la inversión
+    extranjera. Un nombre que describe una parte del contenido es cómo alguien decide, con
+    razón, no buscar acá lo que necesita.
 
     **Un solo cuerpo para los cuatro ejes.** Nació dentro de `construction_intel` y se subió
     acá al cablear el segundo: cuatro copias de la misma forma es como una se queda atrás, y
@@ -197,8 +365,15 @@ def contexto_de_financiamiento(perfil: Optional[Dict[str, Any]],
     reatribuye una porción al sujeto más próximo — así se publicó «cuatro compañías
     concentran el 87,1%» cuando eran cuatro ramos.
 
-    **Cada capa trae SU fecha.** El crédito su corte y el salario su año, porque son de
-    períodos distintos que el índice del eje. Sin eso el modelo las fecha en el encabezado.
+    **Cada capa trae SU fecha.** El crédito su corte, el salario y la IED su año, la
+    ocupación su período: son cinco registros con calendarios distintos del índice del eje.
+    Sin eso el modelo las fecha en el encabezado.
+
+    **`omitir` existe para no servir DOS VECES el mismo hecho.** `construction_intel` ya
+    publica el crecimiento del PIB de construcción del BCRD con su propio nombre; servirle
+    además `actividad` pondría en el mismo contexto dos cifras de crecimiento del mismo
+    sector con claves distintas —una interanual y una de tres años— y el modelo elige la que
+    le cae más cerca. Un eje que ya trae su lectura de cuentas nacionales omite ésta.
 
     Sin perfil devuelve ``{}``: la clave no existe y el modelo no tiene qué citar. No se
     declara la ausencia — decisión del dueño del 2026-08-31.
@@ -206,7 +381,7 @@ def contexto_de_financiamiento(perfil: Optional[Dict[str, Any]],
     if not perfil:
         return {}
     out: Dict[str, Any] = {}
-    c = perfil.get("credito_del_sistema") or {}
+    c = {} if "credito_del_sistema" in omitir else (perfil.get("credito_del_sistema") or {})
     if c:
         bloque = {
             "corte_de_esta_capa": c.get("corte"),
@@ -231,7 +406,7 @@ def contexto_de_financiamiento(perfil: Optional[Dict[str, Any]],
             bloque["ojo_la_cifra_es_de_un_agregado_que_incluye"] = c.get("el_agregado_incluye")
             bloque["por_que_la_fuente_no_los_separa"] = c.get("por_que_es_agregado")
         out[f"credito_del_sistema_al_sector_{sufijo}"] = bloque
-    sal = perfil.get("costo_laboral") or {}
+    sal = {} if "costo_laboral" in omitir else (perfil.get("costo_laboral") or {})
     if sal:
         out[f"costo_laboral_del_sector_{sufijo}"] = {
             f"salario_promedio_cotizable_del_sector_{sufijo}_dop_mes": sal.get(
@@ -239,6 +414,51 @@ def contexto_de_financiamiento(perfil: Optional[Dict[str, Any]],
             "anio_de_esta_capa": sal.get("anio"),
             "fuente": sal.get("fuente"),
         }
+    act = {} if "actividad" in omitir else (perfil.get("actividad") or {})
+    if act:
+        out[f"actividad_del_sector_{sufijo}_en_las_cuentas_nacionales"] = {
+            "anio_de_esta_capa": act.get("anio"),
+            f"peso_del_sector_{sufijo}_en_el_valor_agregado_nacional_pct": act.get(
+                "peso_del_sector_en_el_valor_agregado_nacional_pct"),
+            f"crecimiento_real_del_sector_{sufijo}_pct": act.get(
+                "crecimiento_real_del_sector_pct"),
+            "fuente": act.get("fuente"),
+        }
+    ocu = {} if "ocupacion" in omitir else (perfil.get("ocupacion") or {})
+    if ocu:
+        bloque_o = {
+            "periodo_de_esta_capa": ocu.get("periodo"),
+            f"ocupados_en_la_rama_de_la_encft_del_sector_{sufijo}": ocu.get(
+                "ocupados_en_la_rama"),
+            f"variacion_de_los_ocupados_de_la_rama_del_sector_{sufijo}_vs_anio_anterior_pct":
+                ocu.get("variacion_de_los_ocupados_vs_anio_anterior_pct"),
+            "rama_de_la_encft": ocu.get("rama_de_la_encft"),
+            "fuente": ocu.get("fuente"),
+        }
+        # El MISMO aviso que el del crédito, y por la misma razón: acá «Otros Servicios»
+        # absorbe enseñanza, salud, inmobiliario y servicios profesionales, y sin este
+        # aviso el modelo publicaría los ocupados de la rama como si fueran del sector.
+        if ocu.get("es_agregado"):
+            bloque_o["ojo_la_cifra_es_de_una_rama_que_incluye"] = ocu.get("el_agregado_incluye")
+            bloque_o["por_que_la_fuente_no_los_separa"] = ocu.get("por_que_es_agregado")
+        out[f"ocupacion_de_la_rama_del_sector_{sufijo}"] = bloque_o
+    ied = ({} if "inversion_extranjera" in omitir
+           else (perfil.get("inversion_extranjera") or {}))
+    if ied:
+        bloque_i = {
+            "anio_de_esta_capa": ied.get("anio"),
+            f"ied_realizada_en_la_actividad_del_sector_{sufijo}_usd_mm": ied.get(
+                "ied_realizada_en_la_actividad_usd_mm"),
+            f"variacion_de_la_ied_del_sector_{sufijo}_vs_anio_anterior_pct": ied.get(
+                "variacion_de_la_ied_vs_anio_anterior_pct"),
+            "actividad_del_cuadro_de_ied": ied.get("actividad_del_cuadro_de_ied"),
+            "fuente": ied.get("fuente"),
+        }
+        if ied.get("es_agregado"):
+            bloque_i["ojo_la_cifra_es_de_una_actividad_que_incluye"] = ied.get(
+                "el_agregado_incluye")
+            bloque_i["por_que_la_fuente_no_los_separa"] = ied.get("por_que_es_agregado")
+        out[f"inversion_extranjera_en_el_sector_{sufijo}"] = bloque_i
     return out
 
 

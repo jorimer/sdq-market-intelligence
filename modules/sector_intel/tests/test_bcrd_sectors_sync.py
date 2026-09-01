@@ -21,10 +21,8 @@ from shared.data.bcrd_sectors import (
     _norm,
     build_sector_records,
 )
-from modules.sector_intel.models.models import (  # noqa: F401 — register tables
-    Sector,
-    SectorVariable,
-)
+from shared.reference.sector_variables import SectorVariable  # noqa: F401 — register tables
+from modules.sector_intel.models.models import Sector  # noqa: F401 — register tables
 from modules.sector_intel.sectors_sync import bcrd_sectores_sync
 
 LABELS = [label for _slug, label, _name in SECTORS]  # all 17 leaf labels

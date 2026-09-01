@@ -10,7 +10,7 @@ from sqlalchemy.pool import StaticPool
 from shared.contracts import APP_SETTING_KEY, sector_macro_exposure
 from shared.database.base import Base
 from shared.settings.models import AppSetting  # noqa: F401 — register table
-from modules.sector_intel.models.models import SectorVariable  # noqa: F401 — register table
+from shared.reference.sector_variables import SectorVariable  # noqa: F401 — register table
 from modules.sector_intel.service import assemble_iai_dataset, get_sector_variables
 
 

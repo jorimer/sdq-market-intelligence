@@ -36,6 +36,9 @@ from shared.reference.models import DgiiContribuyenteSubclase  # noqa: F401
 # ejecuta ese módulo entero—. Al mudarla a `shared/reference/` ese arrastre desaparece, y
 # sin esta línea `autogenerate` no vería la tabla en el metadata y propondría BORRARLA.
 from shared.reference.cartera_sectorial import CarteraSectorial  # noqa: F401
+# Misma razón que la de arriba: `si_variables` se mudó a `shared/reference/` y ya no la
+# arrastra el import de `Sector`/`SectorScore` de `sector_intel`.
+from shared.reference.sector_variables import SectorVariable  # noqa: F401
 from modules.banking_score.models.models import (  # noqa: F401
     Bank, BankingData, RatingResult, RatingAction, Report,
 )
@@ -50,7 +53,7 @@ from modules.trade_intel.models.models import (  # noqa: F401
     TradeFlow, TradeScore,
 )
 from modules.sector_intel.models.models import (  # noqa: F401
-    Sector, SectorVariable, SectorScore,
+    Sector, SectorScore,
 )
 from modules.social_dev.models.models import (  # noqa: F401
     SocialIndicator, DevelopmentScore,

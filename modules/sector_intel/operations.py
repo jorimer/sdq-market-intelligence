@@ -24,7 +24,8 @@ def huella_gate_e(db) -> Dict:
     """
     from sqlalchemy import func
 
-    from modules.sector_intel.models.models import SectorScore, SectorVariable
+    from modules.sector_intel.models.models import SectorScore
+    from shared.reference.sector_variables import SectorVariable
 
     sc = db.query(func.count(SectorScore.id), func.sum(SectorScore.iai_score)).one()
     va = (db.query(func.count(SectorVariable.id), func.max(SectorVariable.period),
