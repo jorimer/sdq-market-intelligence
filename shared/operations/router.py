@@ -198,7 +198,9 @@ async def tiempos_de_narrativa(
     informe que se pasaba del techo de tiempo dejaba al diagnóstico con promedios y conjeturas.
     Se intentó así el 2026-08-26 y no alcanzó.
 
-    Las secciones se generan en PARALELO, así que el total de un informe es aproximadamente el
+    Las secciones se generan en PARALELO —lo exige un test estructural que barre los
+    productos; hasta el 2026-09-01 un producto lo incumplía y por eso su total era la SUMA de
+    sus secciones—, así que el total de un informe es aproximadamente el
     de su sección más lenta y NO la suma. Dentro de una sección el trabajo sí es serial
     —generar, juez, regenerar—, de modo que una sola con reparaciones puede consumir el
     presupuesto entero: por eso la unidad de esta consulta es la sección.

@@ -182,3 +182,97 @@ def test_sin_ningun_ano_cerrado_se_declara_en_vez_de_devolver_vacio(monkeypatch)
 def test_el_ano_en_curso_no_es_un_periodo_disponible(producto):
     """El año sin cerrar no está en la lista: no se puede ni elegir."""
     assert str(datetime.date.today().year + 1) not in producto.available_periods()
+
+
+# ── Las secciones se generan EN PARALELO ──────────────────────────
+#
+# Era el único producto del catálogo que hacía `await` dentro del bucle, así que su tiempo de
+# ensamblado era la SUMA de sus secciones y no la más lenta. Medido en producción sobre la
+# ventana del 25/8 al 1/9: la suma de p90 daba 347,4 s contra un techo de 270 s, y el máximo
+# —lo que tarda faneado— 212,3 s. El test estructural que barre los productos vigila la FORMA;
+# éste vigila la CONSECUENCIA, que es la que importa y la que un refactor puede perder sin
+# tocar el `gather`.
+
+class _MotorLento:
+    """Motor de mentira: cada sección tarda `demora` y anota cuántas corrían a la vez."""
+
+    def __init__(self, demora=0.15):
+        self.demora = demora
+        self.en_vuelo = 0
+        self.max_en_vuelo = 0
+
+    async def generate(self, **kw):
+        import asyncio
+
+        self.en_vuelo += 1
+        self.max_en_vuelo = max(self.max_en_vuelo, self.en_vuelo)
+        try:
+            await asyncio.sleep(self.demora)
+        finally:
+            self.en_vuelo -= 1
+        return type("R", (), {"text": f"texto de {kw['template']}"})()
+
+
+def _producto_con_tres_secciones():
+    from modules.banking_score.products_year_review import BankingYearReviewProduct
+
+    p = BankingYearReviewProduct(None)
+    payload = {"mapa_sectorial": {"hay": True}, "revision": {}}
+    snap = type("S", (), {"period": "2025", "payload": payload,
+                          "entity_name": "Entidad de Prueba"})()
+    return p, snap
+
+
+def test_las_tres_secciones_corren_A_LA_VEZ(monkeypatch):
+    """La consecuencia medible: tres secciones de 0,15 s tardan ~0,15 s, no ~0,45 s."""
+    import asyncio
+    import time
+
+    from shared.narrative import claude_engine
+
+    motor = _MotorLento()
+    monkeypatch.setattr(claude_engine, "narrative_engine", motor)
+    p, snap = _producto_con_tres_secciones()
+
+    t0 = time.monotonic()
+    out = asyncio.run(p.narratives(ProductTier.deep_dive, snap))
+    tardanza = time.monotonic() - t0
+
+    assert len(out) == 3, f"se esperaban tres secciones, llegaron {sorted(out)}"
+    assert motor.max_en_vuelo == 3, (
+        f"solo {motor.max_en_vuelo} sección(es) a la vez: se volvieron a generar de a una, y "
+        "el tiempo del informe vuelve a ser la SUMA en vez de la más lenta")
+    assert tardanza < motor.demora * 2, (
+        f"tardó {tardanza:.2f}s con secciones de {motor.demora}s: no corrieron en paralelo")
+
+
+def test_el_ORDEN_de_las_secciones_se_conserva(monkeypatch):
+    """`gather` devuelve en el orden en que se pidió, no en el que terminó — pero eso hay que
+    comprobarlo: el render arma el documento con estas claves y una sección fuera de lugar
+    saldría en la sección equivocada del PDF."""
+    import asyncio
+
+    from shared.narrative import claude_engine
+
+    monkeypatch.setattr(claude_engine, "narrative_engine", _MotorLento(demora=0.01))
+    p, snap = _producto_con_tres_secciones()
+    out = asyncio.run(p.narratives(ProductTier.deep_dive, snap))
+    esperado = list(p.product_manifest().require_level(ProductTier.deep_dive).sections)
+    assert list(out) == esperado
+
+
+def test_una_seccion_SIN_dato_se_sigue_omitiendo(monkeypatch):
+    """El fan-out no puede haberse llevado puesta la regla de «sin dato no hay sección»: el
+    mapa sectorial se omite cuando el payload no lo trae, porque el cubo empieza en 2021."""
+    import asyncio
+
+    from shared.narrative import claude_engine
+
+    motor = _MotorLento(demora=0.01)
+    monkeypatch.setattr(claude_engine, "narrative_engine", motor)
+    p, _snap = _producto_con_tres_secciones()
+    sin_mapa = type("S", (), {"period": "2019", "payload": {"revision": {}},
+                              "entity_name": "Entidad de Prueba"})()
+    out = asyncio.run(p.narratives(ProductTier.deep_dive, sin_mapa))
+    assert "mapa_sectorial" not in out
+    assert motor.max_en_vuelo == 2, "se pidió una sección que no tenía dato"

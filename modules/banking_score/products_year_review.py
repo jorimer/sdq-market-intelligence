@@ -497,6 +497,8 @@ class BankingYearReviewProduct:
     # ── Narrativa ──
     async def narratives(self, tier: ProductTier, snapshot: ProductSnapshot,
                          lang: str = "es") -> Dict[str, str]:
+        import asyncio
+
         from shared.narrative.claude_engine import narrative_engine
         manifest = self.product_manifest().require_level(tier)
         out: Dict[str, str] = {}
@@ -513,6 +515,20 @@ class BankingYearReviewProduct:
         for clave in ("mapa_sectorial", "mapa_sectorial_sistema"):
             if clave in secciones and not (snapshot.payload or {}).get(clave):
                 secciones = [s for s in secciones if s != clave]
+        # LAS SECCIONES SE GENERAN EN PARALELO, como en los otros doce productos del
+        # catálogo. Este era el ÚNICO que hacía `await` dentro del bucle, así que su tiempo
+        # era la SUMA de sus secciones y no la más lenta — y por eso cruzaba el techo de
+        # ensamblado. Medido sobre la ventana del 25/8 al 1/9, con las tres secciones del
+        # Deep Dive: suma de p90 = 347 s contra un techo de 270 s; el máximo, que es lo que
+        # tarda faneado, es 212 s. La telemetría de tiempos afirmaba que este producto ya
+        # corría en paralelo, y era falso: esa frase mandó el diagnóstico a buscar una cola
+        # larga en vez de una suma.
+        #
+        # No cuesta más: son las mismas llamadas y los mismos tokens, solo que a la vez. La
+        # cota de concurrencia del motor (`NARRATIVE_MAX_CONCURRENCY`, 10) las cubre de
+        # sobra. Lo que sí ahorra es el ensamblado que hoy se corta y se paga DOS veces,
+        # porque el reintento arranca de cero.
+        pedidos = []
         for seccion in secciones:
             plantilla = ("banking_sector_map_system" if seccion == "mapa_sectorial_sistema"
                          else "anio_del_sistema" if seccion == "anio_del_sistema"
@@ -523,11 +539,20 @@ class BankingYearReviewProduct:
             if snapshot.entity_name:
                 ctx["entity_name"] = snapshot.entity_name
             ctx.update(snapshot.payload or {})
-            res = await narrative_engine.generate(
-                context=ctx, template=plantilla, mode="deep",
-                axis="banking",
-                audience="inversionista" if tier == ProductTier.pulse else "comite_credito")
-            out[seccion] = res.text
+            pedidos.append((seccion, dict(
+                context=ctx, template=plantilla, mode="deep", axis="banking",
+                audience=("inversionista" if tier == ProductTier.pulse
+                          else "comite_credito"))))
+
+        async def _generar(seccion: str, kw: Dict[str, Any]):
+            res = await narrative_engine.generate(**kw)
+            return seccion, res.text
+
+        # El ORDEN de `secciones` se conserva: `gather` devuelve en el orden en que se
+        # pidieron, no en el que terminaron, y el render arma el documento con estas claves.
+        for seccion, texto in await asyncio.gather(
+                *(_generar(s_, k) for s_, k in pedidos)):
+            out[seccion] = texto
         return out
 
     # ── Muestra curada ──
