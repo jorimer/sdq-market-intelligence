@@ -5,6 +5,30 @@ class Settings(BaseSettings):
     # Database
     DATABASE_URL: str = "sqlite:///./data/sdq_market_intel.db"
 
+    # Pool de conexiones (solo PostgreSQL). Se DECLARA en vez de heredar en silencio el
+    # default de SQLAlchemy, porque el número que importa no es el de un proceso: cada
+    # worker web y el de Celery abren SU pool, y cada conexión es un backend de Postgres
+    # con su propia memoria. Con 2 workers eso permite hasta 30 conexiones del web más las
+    # de Celery, y nadie había elegido ese techo — era el default de una biblioteca.
+    #
+    # **POR QUÉ EL VALOR NO BAJA TODAVÍA.** Declarar el número y CAMBIARLO son dos cosas
+    # distintas, y la segunda sin medición es sustituir el default de una biblioteca por una
+    # corazonada. El riesgo no es teórico: una generación de narrativa tarda 15-90 s, y si
+    # esa sesión se sostiene mientras el modelo responde, bajar el techo a 10 hace que la
+    # 11ª petición espere hasta `pool_timeout` (30 s) antes de fallar. Se paga en latencia
+    # de cliente para ahorrar memoria que todavía nadie contó.
+    #
+    # Así que estos valores REPRODUCEN el comportamiento de hoy (5 + 10) y lo que este
+    # cambio agrega es el instrumento: `GET /api/v1/operations/base-de-datos` publica el
+    # uso real del pool. Con esa cifra el techo se baja con dato, en un cambio propio y
+    # reversible de una variable de entorno.
+    DB_POOL_SIZE: int = 5
+    DB_MAX_OVERFLOW: int = 10
+    # Railway corta las conexiones ociosas por su lado: sin reciclado, la app se queda con
+    # conexiones muertas que fallan en la primera consulta. `pool_pre_ping` las detecta y
+    # `pool_recycle` las renueva antes de que pase.
+    DB_POOL_RECYCLE_SECONDS: int = 1800
+
     # Claude AI. The model env var is ANTHROPIC_MODEL (the code previously read
     # CLAUDE_MODEL, so a configured ANTHROPIC_MODEL was silently ignored). Default
     # is a current model; override via the ANTHROPIC_MODEL env var.
