@@ -32,6 +32,14 @@ from sqlalchemy.orm import Session
 # el material comercial para no presentar como equivalentes cosas que no lo son.
 GRUPO_EVENTO_REAL = "A · validado contra evento real"
 GRUPO_CONCLUYENTE = "B · discriminación concluyente contra desenlace realizado"
+# Concluye, pero el mismo desenlace ordenado SOLO por el tamaño del sujeto alcanza un poder
+# estadísticamente indistinguible. La cifra es real y la afirmación «discrimina contra un
+# desenlace realizado» sigue siendo cierta; la que NO se puede sostener es la de VENTAJA — que
+# el score aporte algo que el tamaño no explique. Mandarlo a E sería prohibir una afirmación
+# verdadera; dejarlo en B es autorizar una falsa, y eso hacía la tabla: al medirlo el
+# 2026-09-01, TRES de las cinco credenciales del grupo B empataban con el tamaño y la tabla no
+# lo decía en ninguna parte.
+GRUPO_EMPATA_TAMANO = "B2 · concluyente, pero indistinguible de ordenar por tamaño"
 GRUPO_CONVERGENTE = "C · concluyente por validez convergente"
 GRUPO_PARCIAL = "D · validación parcial o acotada"
 # «NO concluyente» era inexacto para una señal cuyo IC no cruza cero pero está del lado
@@ -46,12 +54,54 @@ GRUPO_NO_CONCLUYENTE = "E · corrida y sin credencial a favor (no concluyente o 
 # no de discriminación entre sujetos. El rótulo nombra lo que falta, no lo que no hay.
 GRUPO_SIN_MOTOR = "F · sin backtest de discriminación transversal (obstáculo declarado)"
 
-GRUPOS = (GRUPO_EVENTO_REAL, GRUPO_CONCLUYENTE, GRUPO_CONVERGENTE,
+GRUPOS = (GRUPO_EVENTO_REAL, GRUPO_CONCLUYENTE, GRUPO_EMPATA_TAMANO, GRUPO_CONVERGENTE,
           GRUPO_PARCIAL, GRUPO_NO_CONCLUYENTE, GRUPO_SIN_MOTOR)
 
 # Ejes cuya validación es CONVERGENTE (contra una medida independiente del mismo período),
 # no un backtest temporal. Se declara acá porque es una propiedad del método, no del dato.
 _CONVERGENTES = {"social_dev"}
+
+
+def _veredicto_del_control(blob: Any) -> Dict[str, Any]:
+    """El veredicto contra el tamaño, sacado del control venga en la forma que venga.
+
+    **Por qué hace falta un extractor.** Los motores publican su control en dos formas: PLANA
+    —`{gini, veredicto, empata_con_el_score, …}`, que es lo que hacen irmp, comercio, ESG,
+    seguros y pensiones— y ANIDADA por desenlace, que es lo que hace `sector_intel`
+    (`{intensidad: {...}, nivel: {...}}`) porque mide dos. Un extractor por forma es cómo una
+    se queda atrás.
+
+    **Y por qué `intensidad` cuando hay que elegir:** es el desenlace PRIMARIO de ese motor, o
+    sea el que produce la cifra que esta tabla publica. Emparejar la cifra de un desenlace con
+    el control de otro sería peor que no traer control: diría que se comparó cuando no.
+
+    Sin control NO devuelve silencio: devuelve el veredicto de «no evaluable». «No sé si el
+    tamaño lo explica» y «el tamaño no lo explica» son cosas distintas, y confundirlas es el
+    mismo defecto del `stale=null` que originó este módulo.
+    """
+    from shared.validation.control_tamano import VEREDICTO_CONTROL_NO_EVALUABLE
+
+    sin_control = {"veredicto_contra_el_tamano": VEREDICTO_CONTROL_NO_EVALUABLE,
+                   "empata_con_el_tamano": False, "el_tamano_alcanza": False,
+                   "control_medido": False}
+    if not isinstance(blob, dict):
+        return sin_control
+    fuente: Optional[Dict[str, Any]] = None
+    if "veredicto" in blob or "empata_con_el_score" in blob:
+        fuente = blob
+    elif isinstance(blob.get("intensidad"), dict):
+        fuente = blob["intensidad"]
+    else:
+        fuente = next((v for v in blob.values()
+                       if isinstance(v, dict) and "empata_con_el_score" in v), None)
+    if not fuente or fuente.get("veredicto") is None:
+        return sin_control
+    return {
+        "veredicto_contra_el_tamano": fuente.get("veredicto"),
+        "empata_con_el_tamano": bool(fuente.get("empata_con_el_score")),
+        "el_tamano_alcanza": bool(fuente.get("el_tamano_alcanza_al_score")),
+        "control_medido": True,
+    }
 
 
 def _reporte(db: Session, clave: str) -> Optional[Dict[str, Any]]:
@@ -124,14 +174,16 @@ def _metrica_de_bloque(b: Dict[str, Any], senal: Optional[str]) -> Optional[Dict
                 "n": b.get("n_obs") or b.get("n_observations"), "eventos": b.get("n_events"),
                 "senal": senal, "concluyente": bool(b.get("conclusive")),
                 "invertida": bool(b.get("invertida") or b.get("invertido")),
-                "control_de_tamano": b.get("control_solo_tamano")}
+                "control_de_tamano": b.get("control_solo_tamano"),
+                **_veredicto_del_control(b.get("control_solo_tamano"))}
     if b.get("mean_yearly_ic") is not None:
         return {"metrica": "IC medio anual", "valor": b.get("mean_yearly_ic"),
                 "ic": b.get("ic_ci") or [None, None],
                 "n": b.get("n_observations"), "eventos": None, "senal": senal,
                 "concluyente": bool(b.get("conclusive")),
                 "invertida": bool(b.get("invertido") or b.get("invertida")),
-                "control_de_tamano": b.get("control_solo_tamano")}
+                "control_de_tamano": b.get("control_solo_tamano"),
+                **_veredicto_del_control(b.get("control_solo_tamano"))}
     return None
 
 
@@ -188,7 +240,8 @@ def _cifra_principal(eje: str, reporte: Dict[str, Any]) -> Dict[str, Any]:
                     "n": b.get("n_observations"), "eventos": b.get("n_events"),
                     "senal": bloque, "concluyente": bool(ic[0] is not None and ic[0] > 0),
                     "invertida": bool(b.get("invertida") or b.get("invertido")),
-                    "control_de_tamano": b.get("control_solo_tamano")}
+                    "control_de_tamano": b.get("control_solo_tamano"),
+                **_veredicto_del_control(b.get("control_solo_tamano"))}
     if reporte.get("spearman") is not None:
         ic = reporte.get("spearman_ci") or [None, None]
         concluye = bool(ic[0] is not None and ic[1] is not None and (ic[0] > 0 or ic[1] < 0))
@@ -200,24 +253,26 @@ def _cifra_principal(eje: str, reporte: Dict[str, Any]) -> Dict[str, Any]:
                 # acá marcó como «invertido» el resultado concluyente de ese eje, en el
                 # documento comercial. La dirección buena la sabe el motor, no el consumidor.
                 "invertida": bool(reporte.get("invertida") or reporte.get("invertido")),
-                "control_de_tamano": reporte.get("control_solo_tamano")}
+                "control_de_tamano": reporte.get("control_solo_tamano"),
+                **_veredicto_del_control(reporte.get("control_solo_tamano"))}
     if reporte.get("gini") is not None:
         ic = reporte.get("gini_ci") or [None, None]
         return {"metrica": "Gini", "valor": reporte.get("gini"), "ic": ic,
                 "n": reporte.get("n_observations"), "eventos": reporte.get("n_events"),
                 "senal": None, "concluyente": bool(ic[0] is not None and ic[0] > 0),
                 "invertida": bool(reporte.get("invertida") or reporte.get("invertido")),
-                "control_de_tamano": reporte.get("control_solo_tamano")}
+                "control_de_tamano": reporte.get("control_solo_tamano"),
+                **_veredicto_del_control(reporte.get("control_solo_tamano"))}
     if reporte.get("mean_yearly_ic") is not None:
         ic = reporte.get("ic_ci") or [None, None]
         return {"metrica": "IC medio anual", "valor": reporte.get("mean_yearly_ic"), "ic": ic,
                 "n": reporte.get("n_observations"), "eventos": None, "senal": None,
                 "concluyente": bool(ic[0] is not None and ic[0] > 0),
                 "invertida": bool(reporte.get("invertido") or reporte.get("invertida")),
-                "control_de_tamano": None}
+                "control_de_tamano": None, **_veredicto_del_control(None)}
     return {"metrica": None, "valor": None, "ic": None, "n": None, "eventos": None,
             "senal": None, "concluyente": False, "invertida": False,
-            "control_de_tamano": None}
+            "control_de_tamano": None, **_veredicto_del_control(None)}
 
 
 def _grupo(eje: str, estado, cifra: Dict[str, Any], evento_real: bool) -> str:
@@ -229,7 +284,13 @@ def _grupo(eje: str, estado, cifra: Dict[str, Any], evento_real: bool) -> str:
         return GRUPO_CONVERGENTE if cifra["concluyente"] else GRUPO_NO_CONCLUYENTE
     if cifra["valor"] is None:
         return GRUPO_PARCIAL
-    return GRUPO_CONCLUYENTE if cifra["concluyente"] else GRUPO_NO_CONCLUYENTE
+    if not cifra["concluyente"]:
+        return GRUPO_NO_CONCLUYENTE
+    # CONCLUYE, pero ¿por encima del tamaño del sujeto? Si el control empata, la fila no puede
+    # sentarse en el grupo que autoriza a decir «discrimina» a secas: lo que el material
+    # publicaría es una ventaja que no existe. Medido el 2026-09-01, tres de las cinco filas
+    # del grupo B empataban con el tamaño y nada en la tabla lo decía.
+    return GRUPO_EMPATA_TAMANO if cifra.get("empata_con_el_tamano") else GRUPO_CONCLUYENTE
 
 
 def credenciales(db: Session) -> Dict[str, Any]:
