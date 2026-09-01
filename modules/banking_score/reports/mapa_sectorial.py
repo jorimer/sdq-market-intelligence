@@ -50,6 +50,7 @@ from sqlalchemy.orm import Session
 from modules.banking_score.models.models import Bank
 from shared.reference.cartera_agregacion import (_agregar, _medidas, _pct, _restar,
                                                  _sumar, _tasa, _vacio)
+from shared.narrative.derived import concentracion_top_n
 from shared.reference.cartera_sectorial import CarteraSectorial
 
 logger = logging.getLogger(__name__)
@@ -154,13 +155,27 @@ def sistema_por_sector(db: Session, corte: date) -> Dict[str, Any]:
         fila.update(_medidas(acc))
         sectores.append(fila)
     sectores.sort(key=lambda s: -float(s["deuda"] or 0))
+    # UNA sola vez: computarlo dos veces —una para servir y otra para acumular— es cómo las
+    # dos copias terminan discrepando, que es el defecto que borró la tasa de 38 entidades.
+    provincias = _por_provincia(celdas, total)
     return {
         "corte": str(corte),
         "credito_total_del_sistema": round(total, 2),
         "sectores": sectores,
         # LA GEOGRAFÍA DEL CRÉDITO. El cubo es sector × provincia y la provincia se estaba
         # agregando hasta desaparecer: 33 provincias guardadas y ninguna servida.
-        "provincias": _por_provincia(celdas, total),
+        "provincias": provincias,
+        # LOS ACUMULADOS, COMPUTADOS. Servir 33 provincias y 19 sectores con su peso
+        # individual y ningún total parcial deja al modelo haciendo la suma: el anuario
+        # escribió «ambas jurisdicciones metropolitanas concentran el 68,32 %», que era
+        # 54,64 + 13,68 hecho a mano. Acertó; en comercio la misma cuenta dio 42,2 cuando el
+        # dato era 42,3. Se acumula sobre la DEUDA cruda, no sobre los pesos ya redondeados.
+        "concentracion_por_provincia": concentracion_top_n(
+            provincias, clave_peso="deuda", clave_nombre="provincia",
+            poblacion="provincias del cubo de crédito de la SIB"),
+        "concentracion_por_sector": concentracion_top_n(
+            sectores, clave_peso="deuda", clave_nombre="sector",
+            poblacion="sectores CIIU del cubo de crédito de la SIB"),
         "que_es": ("el crédito de TODAS las entidades supervisadas abierto por sector "
                    "económico; la mora temprana de 31 a 90 días se deteriora antes que la "
                    "vencida, así que ordena por anticipación y no por daño consumado"),
@@ -294,6 +309,13 @@ def posicion_de_la_entidad(db: Session, bank: Bank, corte: date) -> Optional[Dic
                                                  credito_del_sistema),
         "resumen": _resumen(filas, mi_total),
         "sectores": filas,
+        # LOS ACUMULADOS DE LA ENTIDAD, computados por la misma razón que los del sistema:
+        # sin ellos el modelo suma a mano. La marca gemela del 2026-09-01 fue exactamente
+        # ésta, del lado de los sectores — «consumo y construcción juntos representan el
+        # 48,39 % de su cartera clasificada».
+        "concentracion_por_sector": concentracion_top_n(
+            filas, clave_peso="deuda", clave_nombre="sector",
+            poblacion="sectores CIIU en que presta esta entidad"),
         "contra_que_se_compara": (
             "el RESTO del sistema en el mismo sector, EXCLUIDA la entidad; incluirla "
             "haría que se comparase en parte contra sí misma y encogería su brecha tanto "
