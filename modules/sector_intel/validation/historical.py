@@ -40,6 +40,34 @@ def _weighted(members, period, value_map, size) -> Optional[float]:
     return num / den if den > 0 else None
 
 
+def composicion_por_periodo(db: Session) -> Dict[str, frozenset]:
+    """Qué variables tenía el ÍNDICE en cada período, leído del breakdown PERSISTIDO.
+
+    **Por qué hace falta.** El panel del Gate E cubre 2007→ y la composición del IAI no fue la
+    misma todo ese tiempo: cada conector que llegó agregó su variable desde el período en que
+    su fuente empieza. El más reciente es el costo del capital, que existe desde 2021 porque
+    ahí arranca el desglose sectorial de crédito publicado. Un IC medio sobre los 16 años es,
+    entonces, el promedio de VARIOS MODELOS distintos — y presentarlo como el resultado «del
+    índice» esconde que el índice de los últimos años no es el de los primeros.
+
+    Se LEE del breakdown y no se declara en una tabla: una lista escrita a mano de qué
+    variable entró cuándo se desincroniza el día que llega la siguiente, y el reporte seguiría
+    partiendo el panel por una frontera que ya no existe.
+
+    Es la UNIÓN entre sectores, no la intersección: la pregunta es «¿esta variable existía en
+    este período?», y una variable de cobertura parcial —`profitability` llega a unos 8 de 17
+    slugs— existe en el período aunque no la tengan todos.
+    """
+    from collections import defaultdict
+
+    por_periodo: Dict[str, set] = defaultdict(set)
+    for s in db.query(SectorScore).all():
+        for dim in (s.iai_breakdown or {}).values():
+            if isinstance(dim, dict):
+                por_periodo[str(s.period)].update((dim.get("variables") or {}).keys())
+    return {p: frozenset(v) for p, v in por_periodo.items() if v}
+
+
 def build_iai_panel(db: Session) -> List[Dict]:
     """One row per (branch, period): ``{branch, period, iai_score, sector_growth, sector_size}``.
 

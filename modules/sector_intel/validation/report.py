@@ -10,11 +10,12 @@ Honest by construction: the panel is small (~10 branches × ~6 year-pairs), so t
 is a DIRECTIONAL validation reported with its n and CI, never grade-Basel. A weak
 or null IC is a valid result and is shown as-is, not massaged.
 """
-from typing import Dict, List, Optional
+from typing import Any, Dict, List, Optional
 
 from sqlalchemy.orm import Session
 
-from modules.sector_intel.validation.historical import build_iai_panel, build_iai_panel_ied
+from modules.sector_intel.validation.historical import (build_iai_panel, build_iai_panel_ied,
+                                                        composicion_por_periodo)
 from modules.sector_intel.validation.outcomes import (
     employment_by_branch, ied_by_activity, label_panel, label_panel_ied,
 )
@@ -22,6 +23,76 @@ from shared.validation.control_tamano import (VEREDICTO_CONTROL_NO_EVALUABLE,
                                               VEREDICTO_SCORE_SUPERA,
                                               veredicto_de_control)
 from shared.validation.metrics import mean_ic_with_t, spearman, spearman_bootstrap_ci
+
+
+#: Mínimo de años para que un tramo produzca un IC medio con intervalo de Student-t. Con uno
+#: solo no hay dispersión que estimar y el intervalo sería una invención.
+_MIN_ANOS_POR_TRAMO = 2
+
+
+def _tramos_por_composicion(labeled: List[Dict], clave: str,
+                            composicion: Optional[Dict[str, frozenset]]) -> Optional[List[Dict]]:
+    """El mismo desenlace, medido por TRAMO de composición del índice.
+
+    **La pregunta que contesta.** «¿El índice ordena mejor desde que tiene la variable X?» se
+    respondía a mano, leyendo la serie `by_year` y promediando dos pedazos — que es armar una
+    conclusión a ojo, lo mismo que motivó el parcial por tamaño. Acá se computa, sin nombrar
+    ninguna variable: los tramos salen de agrupar los períodos por su conjunto de variables,
+    así que el día que llegue el próximo conector el corte aparece solo.
+
+    Cada tramo trae **su propio control por tamaño**: sin él, un tramo que se separa del
+    tamaño y uno que simplemente tiene otro nivel de IC son indistinguibles — y es justo la
+    comparación que este bloque existe para permitir.
+
+    Trae también `variables_que_suma` contra el tramo anterior, que es lo que un lector quiere
+    saber: no qué variables hay, sino cuál ENTRÓ. Un tramo de pocos años NO concluye y su `n`
+    viaja para que nadie lo lea como el panel entero.
+    """
+    if not composicion:
+        return None
+    grupos: Dict[frozenset, List[Dict]] = {}
+    for r in labeled:
+        comp = composicion.get(str(r.get("period")))
+        if comp:
+            grupos.setdefault(comp, []).append(r)
+    if len(grupos) < 2:
+        return None   # una sola composición: no hay nada que contrastar, y no se finge que sí
+    ordenados = sorted(grupos.items(), key=lambda kv: min(r["period"] for r in kv[1]))
+    salida: List[Dict] = []
+    previa: frozenset = frozenset()
+    for comp, filas in ordenados:
+        anos = sorted({str(r["period"]) for r in filas})
+        bloque: Dict[str, Any] = {
+            "anios": [anos[0], anos[-1]],
+            "n_anios": len(anos),
+            "n_observations": len(filas),
+            "variables_que_suma": sorted(comp - previa) or None,
+            "variables_que_pierde": sorted(previa - comp) or None,
+            "n_variables": len(comp),
+        }
+        if len(anos) >= _MIN_ANOS_POR_TRAMO:
+            m = _metricas_gate_e(filas, clave)
+            solo_tamano = [{**r, "iai_score": r["sector_size"]} for r in filas
+                           if r.get("sector_size") is not None]
+            ctrl = (_metricas_gate_e(solo_tamano, clave)
+                    if len(solo_tamano) >= 3 else None)
+            bloque.update({
+                "mean_yearly_ic": m["mean_yearly_ic"], "ic_ci": m["ic_ci"],
+                "conclusive": m["conclusive"], "invertido": m["invertido"],
+                "spearman_partial_size": m["spearman_partial_size"],
+                "spearman_partial_size_ci": m["spearman_partial_size_ci"],
+                "aporta_sobre_el_tamano": m["aporta_sobre_el_tamano"],
+                "control_solo_tamano_ic": (ctrl or {}).get("mean_yearly_ic"),
+                **veredicto_de_control(m["mean_yearly_ic"], m["ic_ci"],
+                                       (ctrl or {}).get("mean_yearly_ic")),
+            })
+        else:
+            bloque["motivo_sin_metricas"] = (
+                f"el tramo tiene {len(anos)} año(s): con menos de {_MIN_ANOS_POR_TRAMO} no hay "
+                "dispersión que estimar y el intervalo sería una invención")
+        salida.append(bloque)
+        previa = comp
+    return salida
 
 
 def _metricas_gate_e(labeled: List[Dict], clave: str) -> Dict:
@@ -84,6 +155,16 @@ def _metricas_gate_e(labeled: List[Dict], clave: str) -> Dict:
 #: Mínimo de sujetos por año para computar un parcial de primer orden que signifique algo.
 #: Con menos, el parcial es aritmética sobre ruido.
 _MIN_POR_ANO = 4
+
+NOTA_COMPOSICION = (
+    "El panel cubre todos los períodos con IAI persistido, y la COMPOSICIÓN del índice no fue "
+    "la misma en todos: cada conector agregó su variable desde el período en que su fuente "
+    "empieza. Un IC medio sobre el panel entero es el promedio de varios modelos distintos, "
+    "así que acá va el mismo desenlace medido por tramo, con la variable que ENTRA en cada uno "
+    "y con el control por tamaño de ESE tramo. Los tramos recientes son cortos por "
+    "construcción: su n viaja y no concluyen — sirven para ver una dirección, no para "
+    "sostener una afirmación."
+)
 
 NOTA_PARCIAL_TAMANO = (
     "IC de rango PARCIAL: ordena el mismo desenlace con el IAI manteniendo CONSTANTE el "
@@ -340,7 +421,13 @@ def _gate_e_inversion(db: Session) -> Optional[Dict]:
     con_intensidad = [r for r in etiquetado if r.get("ied_intensity_next") is not None]
     if len(con_intensidad) < 3:
         return None
-    primario = _metricas_gate_e(con_intensidad, "ied_intensity_next")
+    composicion = composicion_por_periodo(db)
+    primario = {**_metricas_gate_e(con_intensidad, "ied_intensity_next"),
+                # POR TRAMO DE COMPOSICIÓN. El panel cubre 16 años y el índice no fue el mismo
+                # todo ese tiempo: presentar un IC medio sin decirlo promedia varios modelos.
+                "por_composicion_del_indice": _tramos_por_composicion(
+                    con_intensidad, "ied_intensity_next", composicion),
+                "nota_composicion": NOTA_COMPOSICION}
     contraste = _metricas_gate_e(etiquetado, "ied_next") if len(etiquetado) >= 3 else None
     # CONTROL OBLIGATORIO, no un extra. La intensidad se computa dividiendo por el tamaño, y
     # el tamaño es una VARIABLE del propio IAI: un índice que premia a los sectores grandes
@@ -433,7 +520,11 @@ def gate_e_report(db: Session) -> Dict:
         partial_n = len(g_rows)
 
     n_ramas = len({r["branch"] for r in labeled})
+    composicion = composicion_por_periodo(db)
     empleo = {**_metricas_gate_e(labeled, "emp_growth_next"),
+              "por_composicion_del_indice": _tramos_por_composicion(
+                  labeled, "emp_growth_next", composicion),
+              "nota_composicion": NOTA_COMPOSICION,
               "que_mide": ("crecimiento del empleo formal por rama (Δ% T+1, ENCFT) — NO es lo "
                            "que el IAI dice anticipar"),
               "resolucion": _resolucion(n_ramas)}
