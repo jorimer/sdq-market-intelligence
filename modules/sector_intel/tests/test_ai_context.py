@@ -1,4 +1,6 @@
 """Tests for the sector IAI AI-context builder (Gate D). Pure, offline."""
+import pytest
+
 from modules.sector_intel.ai_context import sector_ai_context
 
 _LATEST = {
@@ -85,7 +87,7 @@ def test_el_contexto_dice_QUE_HAY_DENTRO_de_cada_dimension():
     dentro = {f["variable"]: f for f in sector_ai_context(latest)["dimensions"][0]["que_hay_dentro"]}
     tasa = next(v for k, v in dentro.items() if "costo del capital" in k)
     assert tasa["valor"] == 13.61 and tasa["procedencia"] == "real"
-    assert tasa["posicion_entre_los_17_sectores_0_100"] == 25.35
+    assert tasa["posicion_en_la_escala_de_valor_del_panel_0_100"] == 25.35
     salario = next(v for k, v in dentro.items() if "costo laboral" in k)
     assert salario["valor"] == 28537.27
 
@@ -163,3 +165,99 @@ def test_la_PLANTILLA_no_nombra_dimensiones_como_reales_ni_como_rubrica():
     assert "provenance" in t and "que_hay_dentro" in t, (
         "la plantilla no manda a leer la procedencia computada ni las variables: el bloque "
         "viaja en el contexto y el modelo no lo usa")
+
+
+# ── El puesto: la relación que el lector quiere, y que NO es un percentil ─────
+def test_el_puesto_se_computa_contra_los_sectores_que_TIENEN_la_variable():
+    """El modelo publicó «percentil 25,35» sobre lo que es una posición min-max de VALOR.
+
+    No es lo mismo y la diferencia no es cosmética: sobre el panel
+    [10,11,11,12,12,13,13,14,14,15,60] el valor 15 da posición min-max 10,0 y percentil real
+    81,8 — 72 puntos de distancia. En un documento que se vende eso es una afirmación
+    estadística falsa, así que el puesto se computa y viaja aparte.
+
+    Y el denominador nombra su población: `credit_cost` la tienen 16 sectores, no 17.
+    """
+    latest = {**_LATEST, "iai_breakdown": {
+        "business": {"score": 56.9, "weight": 0.25, "contribution": 14.2, "variables": {
+            "credit_cost": {"raw": 13.61, "normalized": 25.35, "source": "live"}}}}}
+    ctx = sector_ai_context(latest, puestos={"credit_cost": {"puesto": 14, "de": 16}})
+    fila = ctx["dimensions"][0]["que_hay_dentro"][0]
+    assert fila["puesto_entre_los_sectores_que_tienen_esta_variable"] == (
+        "14 de 16 (1 = el más favorable)")
+    assert "percentil" not in str(fila).lower()
+
+
+def test_sin_puestos_la_clave_no_aparece_en_vez_de_inventarse():
+    latest = {**_LATEST, "iai_breakdown": {
+        "business": {"score": 56.9, "weight": 0.25, "contribution": 14.2, "variables": {
+            "credit_cost": {"raw": 13.61, "normalized": 25.35, "source": "live"}}}}}
+    fila = sector_ai_context(latest)["dimensions"][0]["que_hay_dentro"][0]
+    assert "puesto_entre_los_sectores_que_tienen_esta_variable" not in fila
+
+
+def test_en_una_variable_de_RIESGO_el_puesto_1_es_el_valor_mas_BAJO(db_ranking):
+    """Ordenar al revés daría un puesto que contradice al score: el sector con el crédito más
+    caro saldría «puesto 1» mientras su score de negocios es el peor del panel."""
+    from modules.sector_intel.products import _puesto_por_variable
+
+    barato = _puesto_por_variable(db_ranking, "2025", "turismo")
+    caro = _puesto_por_variable(db_ranking, "2025", "otros_servicios")
+    assert barato["credit_cost"] == {"puesto": 1, "de": 3}
+    assert caro["credit_cost"] == {"puesto": 3, "de": 3}
+    # Y en una variable donde MAYOR es mejor, el orden se invierte.
+    assert _puesto_por_variable(db_ranking, "2025", "otros_servicios")["sector_size"] == {
+        "puesto": 1, "de": 3}
+
+
+def test_el_denominador_es_de_los_que_TIENEN_la_variable_no_del_panel(db_ranking):
+    """`credit_cost` la tienen 16 de 17 sectores y `profitability` unos 8: decir «puesto 15
+    de 17» cuando el panel son 16 es reatribuir el sujeto, que es el defecto que publicó
+    «cuatro compañías concentran el 87,1 %» cuando eran cuatro ramos."""
+    from modules.sector_intel.products import _puesto_por_variable
+
+    p = _puesto_por_variable(db_ranking, "2025", "turismo")
+    assert p["credit_cost"]["de"] == 3
+    assert p["profitability"]["de"] == 2, "el denominador contó sectores sin la variable"
+
+
+@pytest.fixture()
+def db_ranking():
+    from sqlalchemy import create_engine
+    from sqlalchemy.orm import sessionmaker
+    from sqlalchemy.pool import StaticPool
+
+    from shared.database.base import Base
+    from modules.sector_intel.models.models import SectorScore
+
+    eng = create_engine("sqlite://", connect_args={"check_same_thread": False},
+                        poolclass=StaticPool)
+    Base.metadata.create_all(eng)
+    db = sessionmaker(bind=eng)()
+    panel = {   # (credit_cost, sector_size, profitability|None)
+        "turismo": (8.39, 8.94, 0.023),
+        "construccion": (11.40, 13.45, None),
+        "otros_servicios": (15.42, 30.0, 0.10),
+    }
+    for slug, (tasa, tam, rent) in panel.items():
+        vs = {"credit_cost": {"raw": tasa, "source": "live"}}
+        if rent is not None:
+            vs["profitability"] = {"raw": rent, "source": "live"}
+        db.add(SectorScore(sector_code=slug, period="2025", iai_score=50.0, iai_breakdown={
+            "business": {"variables": vs},
+            "sector": {"variables": {"sector_size": {"raw": tam, "source": "live"}}}}))
+    db.commit()
+    return db
+
+
+def test_la_PLANTILLA_prohibe_llamar_percentil_a_la_escala_de_valor():
+    """La otra mitad. El contexto puede traer el nombre correcto y el modelo seguir diciendo
+    «percentil» si nadie se lo prohíbe — que es lo que pasó."""
+    from shared.narrative.claude_engine import THIN_TEMPLATES
+
+    t = THIN_TEMPLATES["sector_outlook"]
+    assert "NO es un percentil" in t
+    assert "puesto_entre_los_sectores_que_tienen_esta_variable" in t
+    assert "sin cambiarlo por 17" in t, (
+        "no prohíbe redondear el denominador a 17: el crédito lo tienen 16 sectores y la "
+        "rentabilidad 8, y cambiar el denominador es reatribuir el sujeto")

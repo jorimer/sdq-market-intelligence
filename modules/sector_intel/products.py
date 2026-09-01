@@ -336,6 +336,44 @@ def _nota_validacion_iai(db) -> str:
 FUENTES_DEL_IAI = ("BCRD", "contrato macro→sectorial", "TSS", "ENCFT", "ENAE", "SIB", "WGI")
 
 
+def _puesto_por_variable(db, period: str, sector_code: str) -> Dict[str, Dict[str, Any]]:
+    """El PUESTO del sector en cada variable del índice, entre los sectores que la tienen.
+
+    **Por qué existe.** El contexto llevaba el valor normalizado del motor y el modelo lo
+    publicó como «percentil 25,35». No lo es: `normalize_variable` es un min-max sobre el
+    VALOR (``100·(x−min)/(max−min)``), no sobre el rango. En un panel sesgado los dos números
+    se separan muchísimo — con [10,11,11,12,12,13,13,14,14,15,60] el valor 15 da posición
+    min-max 10,0 y percentil real 81,8—, así que llamarlo percentil es una afirmación
+    estadística falsa en un documento que se vende.
+
+    El puesto es la relación que el lector quiere y se COMPUTA acá, que es la regla de la
+    casa: el modelo acierta las cifras y falla las relaciones.
+
+    **El denominador nombra su población** y no son siempre 17: `credit_cost` la tienen 16
+    sectores y `profitability` unos 8, porque sus fuentes no alcanzan a todos. Decir «puesto
+    15 de 17» cuando el panel son 16 es reatribuir el sujeto.
+    """
+    from shared.doctrine import load_doctrine
+
+    riesgo = set(load_doctrine("sectoral").risk_increasing)
+    filas = db.query(SectorScore).filter(SectorScore.period == period).all()
+    crudos: Dict[str, Dict[str, float]] = {}
+    for f in filas:
+        for dim in (f.iai_breakdown or {}).values():
+            for var, det in (dim.get("variables") or {}).items():
+                if det.get("raw") is not None:
+                    crudos.setdefault(var, {})[str(f.sector_code)] = float(det["raw"])
+    out: Dict[str, Dict[str, Any]] = {}
+    for var, por_sector in crudos.items():
+        if sector_code not in por_sector:
+            continue
+        # Ordenado de MÁS a MENOS favorable: en una variable de riesgo creciente el mejor es
+        # el valor más bajo. Invertirlo acá daría un puesto que contradice al score.
+        orden = sorted(por_sector, key=lambda k: por_sector[k], reverse=var not in riesgo)
+        out[var] = {"puesto": orden.index(sector_code) + 1, "de": len(orden)}
+    return out
+
+
 class SectorIntelProduct:
     """``SectorProduct`` de un sector económico (parametrizado). ``db`` opcional: las
     muestras sintéticas usan solo ``narratives``/``render`` (sin DB)."""
@@ -438,6 +476,14 @@ class SectorIntelProduct:
                                    payload={"has_score": False}, entity_name=entity,
                                    entity_roster=())
         payload: Dict[str, Any] = {"has_score": True, "latest": _latest_dict(s)}
+        # EL PUESTO en cada variable, contra los sectores que la tienen. Se computa acá —con
+        # la DB a mano— porque `narratives()` opera solo sobre el snapshot.
+        try:
+            payload["puesto_por_variable"] = _puesto_por_variable(db, str(s.period),
+                                                                 self._sector_code)
+        except Exception:  # noqa: BLE001 — el informe nunca depende de esta relación
+            logger.exception("Puesto por variable omitido en el snapshot de %s",
+                             self._sector_code)
         if tier == ProductTier.deep_dive:
             payload["sgps_detail"] = s.sgps_breakdown or {}
         if tier == ProductTier.pulse:
@@ -488,7 +534,8 @@ class SectorIntelProduct:
         from shared.narrative.claude_engine import narrative_engine
         base_ctx = sector_ai_context(
             snapshot.payload["latest"], sector_name=self._display,
-            sgps_detail=snapshot.payload.get("sgps_detail"))
+            sgps_detail=snapshot.payload.get("sgps_detail"),
+            puestos=snapshot.payload.get("puesto_por_variable"))
         audience = "inversionista"
         out: Dict[str, str] = {}
         # Secciones con cifras → una llamada IA c/u, generadas en PARALELO (asyncio.gather):

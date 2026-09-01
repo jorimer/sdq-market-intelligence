@@ -77,7 +77,7 @@ def _procedencia_de_la_dimension(detalle):
     return out
 
 
-def _variables_de_la_dimension(detalle):
+def _variables_de_la_dimension(detalle, puestos=None):
     """Las variables de una dimensión, con su nombre citable y su valor ya en la unidad en
     que se va a escribir.
 
@@ -87,16 +87,27 @@ def _variables_de_la_dimension(detalle):
     más bajo del país— y esa frase, que es la única accionable del informe, no se podía
     escribir.
     """
+    puestos = puestos or {}
     filas = []
     for var, det in sorted((detalle.get("variables") or {}).items()):
         etiqueta, forma = _VARIABLES.get(var, (var, lambda v: v))
         crudo = det.get("raw")
-        filas.append({
+        fila = {
             "variable": etiqueta,
             "valor": forma(crudo) if crudo is not None else None,
-            "posicion_entre_los_17_sectores_0_100": det.get("normalized"),
+            # NO es un percentil, y se llamaba de un modo que invitaba a decirlo: el motor
+            # normaliza por min-max sobre el VALOR, no sobre el rango. En un panel sesgado
+            # los dos se separan mucho, y el modelo publicó «percentil 25,35».
+            "posicion_en_la_escala_de_valor_del_panel_0_100": det.get("normalized"),
             "procedencia": "real" if det.get("source") == "live" else "rúbrica declarada",
-        })
+        }
+        p = puestos.get(var)
+        if p:
+            # LA relación que el lector quiere, computada contra los sectores que TIENEN la
+            # variable — que no son siempre 17: el crédito lo tienen 16 y la rentabilidad 8.
+            fila["puesto_entre_los_sectores_que_tienen_esta_variable"] = (
+                f"{p['puesto']} de {p['de']} (1 = el más favorable)")
+        filas.append(fila)
     return filas
 
 
@@ -139,6 +150,7 @@ def sector_ai_context(
     latest: Dict[str, Any],
     sector_name: Optional[str] = None,
     sgps_detail: Optional[Dict[str, Any]] = None,
+    puestos: Optional[Dict[str, Dict[str, Any]]] = None,
 ) -> Dict[str, Any]:
     """Compact context for one sector's IAI attractiveness assessment.
 
@@ -161,7 +173,7 @@ def sector_ai_context(
             "sobre_rubrica_declarada": proc.get("sobre_rubrica_declarada"),
             # LO QUE EXPLICA EL SCORE. Sin esto el modelo dice que una dimensión lastra y no
             # puede decir por qué; con esto nombra la variable y su valor.
-            "que_hay_dentro": _variables_de_la_dimension(d),
+            "que_hay_dentro": _variables_de_la_dimension(d, puestos),
         })
     scored = [r for r in rows if r["score"] is not None]
     strongest = max(scored, key=lambda r: r["score"], default=None)
