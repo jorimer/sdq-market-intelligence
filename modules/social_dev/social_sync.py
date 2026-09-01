@@ -1123,6 +1123,31 @@ def _sync_sisdom_income(db: Session, set_phase: Callable[[str], None]) -> int:
     return synced
 
 
+def _sync_sisdom_poblacion(db: Session, set_phase: Callable[[str], None]) -> int:
+    """Población POR REGIÓN (SISDOM, cuadro 02 3 009b) → ``sd_indicators``.
+
+    **No alimenta el IDM.** Es la variable de TAMAÑO del eje: sin ella `social_dev` era el
+    único motor del catálogo sin control por tamaño, y el motivo declarado era de dato —la
+    población por región no estaba conectada—, no de diseño. Con esto el eje puede responder
+    si el IDM ordena el desarrollo o solo ordena por cuán grande es la región.
+
+    Se persiste como serie propia y no como variable del índice: meterla al IDM cambiaría lo
+    que el índice MIDE. Un control tiene que ser independiente de lo que controla.
+    """
+    from shared.data.sisdom_poblacion import (SOURCE as POB_SOURCE, THEME, UNIT,
+                                              fetch_poblacion_regional)
+
+    set_phase("población por región (SISDOM · proyecciones ONE)")
+    rows = fetch_poblacion_regional()   # la excepción sube a _best_effort
+    synced = 0
+    for slug, year, value in rows:
+        _upsert_indicator(db, theme=THEME, entity=slug, period=str(year),
+                          value=float(value), source=POB_SOURCE,
+                          disagg="region", unit=UNIT)
+        synced += 1
+    return synced
+
+
 def _sync_sisdom_schooling(db: Session, set_phase: Callable[[str], None]) -> int:
     """Escolaridad promedio por región Y TOTAL PAÍS (SISDOM del MEPyD, cuadro 05 3 007).
 
@@ -1454,6 +1479,9 @@ def one_social_sync(db: Session, set_phase: Optional[Callable[[str], None]] = No
     schooling_synced = _best_effort(
         "escolaridad por región (SISDOM · MEPyD)",
         lambda: _sync_sisdom_schooling(db, set_phase), errors)
+    poblacion_synced = _best_effort(
+        "población por región (SISDOM · proyecciones ONE)",
+        lambda: _sync_sisdom_poblacion(db, set_phase), errors)
     findex_synced = _best_effort(
         "inclusión financiera (BM Findex)", lambda: _sync_wb_findex(db, set_phase), errors)
     mortality_synced = _best_effort(
@@ -1488,6 +1516,7 @@ def one_social_sync(db: Session, set_phase: Optional[Callable[[str], None]] = No
         "income_synced": income_synced,
         "coverage_synced": coverage_synced,
         "schooling_synced": schooling_synced,
+        "poblacion_synced": poblacion_synced,
         "findex_synced": findex_synced,
         "provincial_synced": provincial_synced,
         "mortality_synced": mortality_synced,

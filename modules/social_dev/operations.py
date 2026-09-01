@@ -253,13 +253,15 @@ def register() -> None:
     registrar_motor(MotorValidacion(
         eje="social_dev", operacion="idm-convergent-validity", clave=IDM_VALIDITY_KEY,
         partes=huella_convergent, disparado_por=("idm-snapshot",),
+        # El pendiente se cerró el 2026-09-01. Era el ÚNICO motor del catálogo sin control,
+        # y el motivo era de DATO: la población por región no estaba conectada. Se buscaba
+        # en `www.one.gob.do` —403 tras Cloudflare— y la cura fue la de siempre, preguntar
+        # quién PRODUCE el dato: la publica el SISDOM (cuadro 02 3 009b), que ya se baja
+        # para otras dos variables del IDM.
         control_de_tamano=ControlDeTamano(
-            motivo="no_medido", variable="población de la región (Censo 2022, ONE)",
-            nota="ÚNICO motor del catálogo que sigue sin control, y el motivo es de DATO, no "
-                 "de diseño: la población por región de desarrollo no está conectada. La "
-                 "fuente existe (X Censo Nacional 2022) pero `www.one.gob.do` responde 403 "
-                 "detrás de Cloudflare, así que entra por instantánea comiteada o no entra. "
-                 "Las diez regiones sí se ordenarían por tamaño: el control corresponde"),
+            clave="control_solo_tamano",
+            nota="población de la región al período del score, ordenando el MISMO desenlace "
+                 "(el IDHr del PNUD) que ordena el IDM"),
     ))
 
 

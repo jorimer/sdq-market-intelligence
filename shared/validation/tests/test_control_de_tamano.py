@@ -249,31 +249,38 @@ def test_los_dos_motores_que_ya_lo_tienen_no_pueden_perderlo(eje):
 
 # ── 6. El control no puede desaparecer en NINGÚN motor que lo declare ──
 
-def test_siete_de_ocho_motores_publican_su_control():
+def test_todos_los_motores_publican_su_control():
     """La cuenta, computada del registro. Si baja, alguien quitó un control.
 
-    Cuando esta regla se escribió eran DOS de ocho. Los seis restantes se computaron después:
-    seguros (primas), pensiones (AUM), comercio (exportado), IRMP (PIB) y ESG (población).
-    `social_dev` sigue afuera por DATO, no por diseño — su nota lo declara.
+    Cuando esta regla se escribió eran DOS de ocho, y se fueron computando: seguros
+    (primas), pensiones (AUM), comercio (exportado), IRMP (PIB), ESG (población) y, el
+    2026-09-01, `social_dev` — que era el último y estaba afuera por DATO, no por diseño.
+    Su población por región se conectó desde el SISDOM, así que hoy no queda ninguno.
     """
+    todos = sorted(eje for eje, _m in _motores())
     publican = sorted(eje for eje, m in _motores()
                       if m.control_de_tamano and m.control_de_tamano.clave)
-    assert publican == ["banking_score", "esg_climate", "insurance_intel",
-                        "macro_political_risk", "pension_intel", "sector_intel",
-                        "trade_intel"], publican
+    assert publican == todos, (
+        f"quedaron motores sin publicar su control: {sorted(set(todos) - set(publican))}. "
+        "Un motor que calla su control se lee como si lo hubiera hecho.")
 
 
-def test_el_unico_sin_control_declara_que_le_falta_el_DATO_y_cuál():
-    """«No medido» sin decir qué falta es «pendiente», y pendiente no es un motivo."""
-    sin_control = {eje: m.control_de_tamano for eje, m in _motores()
-                   if m.control_de_tamano and m.control_de_tamano.motivo}
-    assert list(sin_control) == ["social_dev"], sin_control
-    c = sin_control["social_dev"]
-    assert c.variable and "Censo" in c.variable
-    assert c.nota and "403" in c.nota, (
-        "El motivo tiene que nombrar el obstáculo real (el portal de la ONE detrás de "
-        "Cloudflare), no encogerse de hombros."
-    )
+def test_un_motor_sin_control_declara_QUE_le_falta_y_cual():
+    """«No medido» sin decir qué falta es «pendiente», y pendiente no es un motivo.
+
+    Hoy no hay ninguno en ese estado (lo asegura el test de arriba). La regla vive igual,
+    porque el que se agregue mañana entra por acá: un motor nuevo que no pueda computar su
+    control tiene que nombrar la variable que usaría y el obstáculo real, no encogerse de
+    hombros. Es la misma forma que `dato_pendiente` en `OBSTACULOS_BACKTEST`.
+    """
+    for eje, m in _motores():
+        motivo = m.control_de_tamano.motivo if m.control_de_tamano else None
+        if motivo != "no_medido":
+            continue
+        assert m.control_de_tamano.variable, (
+            f"{eje} declara «no_medido» sin nombrar la variable de tamaño que usaría.")
+        assert m.control_de_tamano.nota, (
+            f"{eje} declara «no_medido» sin nombrar el obstáculo real.")
 
 
 def test_el_control_de_seguros_viaja_dentro_de_la_senal(monkeypatch):

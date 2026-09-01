@@ -52,6 +52,23 @@ __all__ = ["LICENSE", "SOURCE", "UNIT", "SisdomUnavailable",
 #: forma correcta; si el emisor vuelve a la errata, `discover_book_url` falla nombrándolo en
 #: vez de bajar otro libro.
 BOOK_FRAGMENT = "indicadores de educacion"
+
+#: LA EDICIÓN VIGENTE PUBLICA MENOS AÑOS que la anterior, y no es un defecto del parser.
+#: Medido el 2026-09-01 en producción: la corrida del 2026-08-31 (listado del MEPyD) trajo
+#: 286 filas —11 entidades × 26 años, 2000-2025— y la primera contra Hacienda trajo **110**
+#: —11 × 10, 2016-2025—. El cuadro 05 3 007 de la edición 2025 arranca en 2016; el de
+#: Pobreza/Ingresos del mismo libro sigue en 2000, así que el recorte es POR HOJA y no de la
+#: edición entera.
+#:
+#: No se pierde nada de lo servido: `_upsert_indicator` actualiza por
+#: ``(entidad, tema, período)`` y nunca purga, así que 2000-2015 sigue en `sd_indicators`
+#: (comprobado: `schooling_years` de 2010 vale 9,77 en producción). Lo que se perdió es la
+#: capacidad de RE-leer ese tramo. Se declara acá porque un conteo que baja de 286 a 110 sin
+#: explicación se lee como que el conector se rompió.
+COBERTURA_DE_LA_EDICION = (
+    "la edición vigente republica 2016-2025 en esta hoja; el tramo 2000-2015 quedó "
+    "persistido de ediciones anteriores y ya no se puede volver a leer de la fuente"
+)
 SHEET = "05 3 007"
 INDICATOR = "Escolaridad promedio de la población de 15 años y más"
 UNIT = "años de estudio (15+)"              # ≤40: sd_indicators.unit es VARCHAR(40)
