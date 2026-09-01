@@ -41,9 +41,15 @@ def _weighted(members, period, value_map, size) -> Optional[float]:
 
 
 def build_iai_panel(db: Session) -> List[Dict]:
-    """One row per (branch, period): ``{branch, period, iai_score, sector_growth}``.
+    """One row per (branch, period): ``{branch, period, iai_score, sector_growth, sector_size}``.
 
     Drops a (branch, period) with no member IAI/size data, never fabricated.
+
+    **`sector_size` se emite también acá desde el 2026-09-01.** El panel de IED ya lo traía
+    —lo necesita para deflactar la intensidad— y éste no, así que el desenlace de empleo era
+    el ÚNICO del eje sin control por tamaño de ninguna clase: no se podía contestar si el IAI
+    ordena el crecimiento del empleo por encima de lo que explica cuán grande es la rama. Es
+    la misma suma ponderada que la del otro panel, sobre las mismas variables persistidas.
     """
     iai = {(s.sector_code, s.period): s.iai_score
            for s in db.query(SectorScore).all() if s.iai_score is not None}
@@ -57,11 +63,13 @@ def build_iai_panel(db: Session) -> List[Dict]:
             score = _weighted(branch.members, period, iai, size)
             if score is None:
                 continue
+            tamaño = sum(size.get((slug, period), 0.0) or 0.0 for slug in branch.members)
             panel.append({
                 "branch": branch.key,
                 "period": period,
                 "iai_score": round(score, 3),
                 "sector_growth": _weighted(branch.members, period, growth, size),
+                "sector_size": round(tamaño, 6) if tamaño else None,
             })
     return panel
 
