@@ -71,7 +71,7 @@ base nombrada. Ver la regla del sujeto en `CLAUDE.md`.
 ### Fase 0 — La capa macro sigue al corte del documento · CERRADA (#1033)
 
 `app/products_monetary_policy.py` computaba un `as_of` para una decisión histórica y después
-llama `capacidad_de_pago(db, date.today())`, ignorándolo. `modules/pension_intel/products.py`
+llamaba `capacidad_de_pago(db, date.today())`, ignorándolo. `modules/pension_intel/products.py`
 hacía lo mismo y su producto también lleva período. `insurance_intel` lo hacía bien.
 
 Cerrado subiendo el helper a `shared.capacidad_de_pago.corte_del_periodo` —seguros tenía el
@@ -80,8 +80,8 @@ otro, así que la única forma de no duplicarlo era que viviera junto a la lectu
 `shared/tests/test_la_capa_macro_sigue_al_corte.py`, que lee la LLAMADA con `ast` en las tres
 superficies.
 
-Es la familia del #992 —la frescura envejeciendo sola dentro de un documento fechado— en dos
-productos ya publicados. Va primero para no propagar el patrón al repartirlo a once ejes más.
+Era la familia del #992 —la frescura envejeciendo sola dentro de un documento fechado— en dos
+productos ya publicados. Fue primero para no propagar el patrón al repartirlo a once ejes más.
 
 ### Fase 1 — `CarteraSectorial` a `shared/reference/`
 
