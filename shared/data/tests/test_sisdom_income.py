@@ -5,12 +5,7 @@ import openpyxl
 import pytest
 
 from shared.data.one_client import REGIONS
-from shared.data.sisdom_income import (
-    SHEET,
-    SisdomUnavailable,
-    discover_book,
-    parse_income_per_capita,
-)
+from shared.data.sisdom_income import SHEET, SisdomUnavailable, parse_income_per_capita
 
 _REGION_LABELS = [label for _slug, label in REGIONS]
 
@@ -117,26 +112,10 @@ def test_hoja_ausente_lo_dice_con_su_nombre():
         parse_income_per_capita(_workbook(_year_block("2024", 1, 1), sheet_name="Otra"))
 
 
-def test_discover_book_elige_la_edicion_mas_nueva():
-    """El listado rotula la EDICIÓN y los ids rotan con ella; clavar un id sería atarse a
-    la de hoy. La plantilla Handlebars del plugin comparte la clase y no tiene ids."""
-    html = (
-        '<a href="#" class="wpfd-file-link">{{{crop_title}}}</a>'
-        '<a href="#" data-category_id="22154" data-id="111" class="wpfd-file-link">'
-        'SISDOM 2023 &#8211; Indicadores de Pobreza y Distribuci&#243;n de Ingresos</a>'
-        '<a href="#" data-category_id="22154" data-id="222" class="wpfd-file-link">'
-        'SISDOM 2024 -Indicadores de Pobreza y Distribuci&#243;n de Ingresos</a>'
-        '<a href="#" data-category_id="22154" data-id="333" class="wpfd-file-link">'
-        'SISDOM 2024 &#8211; Indicadores de Salud</a>'
-    )
-    assert discover_book(html) == ("22154", "222")
-
-
-def test_discover_book_sin_coincidencia_devuelve_none():
-    """No se inventa un id: si el libro no está, quien llama declara la falla."""
-    html = ('<a href="#" data-category_id="1" data-id="9" class="wpfd-file-link">'
-            'SISDOM 2024 – Indicadores de Salud</a>')
-    assert discover_book(html) is None
+# El descubrimiento del libro YA NO vive acá: se mudó a `shared.data.sisdom_common` junto
+# con el resto de la plumbing, y sus tests a `test_sisdom_common.py`. Este módulo tenía una
+# COPIA del descubrimiento y por eso se quedó apuntando al host muerto cuando el emisor se
+# mudó — lo vigila `test_una_sola_plumbing_del_sisdom.py`.
 
 
 def _multi_block_workbook():

@@ -25,6 +25,7 @@ distintos: la vieja llega a las líneas base de 2010, la nueva llega al año cor
 """
 from __future__ import annotations
 
+import io
 import logging
 import re
 import unicodedata
@@ -36,15 +37,34 @@ logger = logging.getLogger("sdq.data.sisdom_end")
 SOURCE = "SISDOM"
 LICENSE = "SISDOM (VAES/MEPyD) — indicadores sociales oficiales, uso público con cita"
 
-#: Las dos ediciones que hacen falta, y por qué las dos. La del MEPyD llega hasta las líneas
-#: base de la ley (2000-2024); la de Hacienda arranca en 2016 y trae el año corriente. Quedarse
-#: con una sola pierde un extremo: la migración institucional truncó la serie publicada.
-EDICIONES = {
-    2024: ("https://mepyd.gob.do/wp-admin/admin-ajax.php?juwpfisadmin=false&action=wpfd"
-           "&task=file.download&wpfd_category_id=22154&wpfd_file_id=421934"),
-    2025: ("https://www.hacienda.gob.do/wp-content/uploads/2026/07/"
-           "SISDOM-2025.-Indicadores-Area-Especial-END.xlsx"),
-}
+#: Fragmento del título del libro dentro de la edición. La URL NO se clava: la descubre
+#: `shared.data.sisdom_common`, igual que los otros cuatro libros del SISDOM. Estaba clavada
+#: a la edición 2025 y habría muerto sola en la 2026.
+BOOK_FRAGMENT = "area especial end"
+
+#: LA EDICIÓN QUE SE PERDIÓ, declarada en vez de borrada.
+#:
+#: El 2026-09-01 ``mepyd.gob.do`` dejó de existir —301 a Hacienda, donde el plugin de
+#: descargas no está—, Hacienda publica SOLO la edición vigente y el archivo de 2024 no está
+#: en el Internet Archive (comprobado). Es irrecuperable.
+#:
+#: **Qué se perdió de verdad, medido y no supuesto.** La razón por la que se traían dos
+#: ediciones era que la vigente arrancaba en 2016 y la vieja tenía las líneas base. Al
+#: comprobarlo el 2026-09-01 contra la edición 2025, eso YA NO ES ASÍ: 13 de los 14
+#: indicadores llegan a 2000 o antes (el 2.34 y el 2.35 hasta 1991) y el único que arranca
+#: en 2016 es el **2.40**. O sea que el hueco no es el tramo de las líneas base — es,
+#: exactamente, lo que la edición 2024 tuviera de más, y eso ya no se puede verificar.
+#:
+#: Qué NO significa. Lo ya ingerido sigue: `_upsert_indicator` actualiza por
+#: ``(entidad, tema, período)`` y nunca purga. Lo que se perdió es la capacidad de RE-leerlo.
+#: Por eso se declara acá y viaja en los `fallos` de cada corrida: una serie que se reconstruye
+#: desde una sola edición y no lo dice se lee como si nada hubiera cambiado.
+EDICION_PERDIDA = 2024
+MOTIVO_EDICION_PERDIDA = (
+    "edición 2024 (MEPyD): el host dejó de existir el 2026-09-01 y el archivo no está "
+    "archivado. La serie se reconstruye desde la edición vigente, que cubre 2000-2025 en 13 "
+    "de los 14 indicadores; el 2.40 solo desde 2016. Lo persistido antes no se toca"
+)
 
 #: Cómo empieza el rótulo de la fila del total nacional. Se compara por PREFIJO porque el
 #: libro usa al menos cinco variantes vivas —«Total país», «Total Nacional», «Nacional»,
@@ -67,9 +87,6 @@ INSTRUMENTO_SIN_ASTERISCO = "ENFT"
 #: El año en que conviven las dos encuestas. Es el único con dos observaciones, y es el que
 #: permitiría declarar un factor de empalme — si algún día se decide declararlo.
 ANIO_DE_SOLAPAMIENTO = 2016
-
-_TIMEOUT = 300.0
-
 
 class SisdomError(RuntimeError):
     """No se pudo leer la hoja. NUNCA se degrada a «no hay dato»."""
@@ -233,26 +250,21 @@ def salto_en_el_solapamiento(observaciones: Sequence[Observacion]) -> Optional[T
 
 
 def fetch(indicador: str) -> List[Observacion]:  # pragma: no cover - red + hoja de cálculo
-    """La serie de un indicador, uniendo las dos ediciones publicadas.
+    """La serie de un indicador, uniendo las ediciones que se puedan bajar.
 
     Las ediciones coinciden al dígito en los años que comparten —comprobado el 2026-08-24 en
     el 2.40— así que ante empate gana la más nueva y la discrepancia, si aparece, se registra
-    en el log en vez de resolverse en silencio.
+    en el log en vez de resolverse en silencio. Hoy baja UNA (ver `EDICION_PERDIDA`), y la
+    unión sigue escrita porque el día que vuelva a haber dos no hay nada que reescribir.
     """
-    import io
-
-    import httpx
     import pandas as pd
 
     por_clave: Dict[Tuple[int, str], Observacion] = {}
-    fallos: List[str] = []
-    for edicion, url in sorted(EDICIONES.items()):
+    # La edición perdida encabeza los fallos SIEMPRE, no solo cuando algo se rompe: es la
+    # única forma de que quien lea la serie sepa que el tramo pre-2016 no se re-leyó.
+    fallos: List[str] = [MOTIVO_EDICION_PERDIDA]
+    for edicion, libro in _ediciones_disponibles(fallos):
         try:
-            with httpx.Client(timeout=_TIMEOUT, follow_redirects=True,
-                              headers={"User-Agent": "sdq-mip/1.0"}) as c:
-                r = c.get(url)
-                r.raise_for_status()
-                libro = io.BytesIO(r.content)
             fuente = INDICADORES.get(indicador)
             # La hoja DECLARADA manda sobre la deducida del número. No es un detalle: el 2.8
             # vive en «END 2.8a» y el 2.37 en «END 2.37a», y deducir «END 2.8» del indicador
@@ -283,9 +295,29 @@ def fetch(indicador: str) -> List[Observacion]:  # pragma: no cover - red + hoja
         raise SisdomError(
             f"ninguna edición del libro dio una serie para el indicador {indicador}. "
             + " · ".join(fallos))
-    if fallos:
-        logger.warning("[sisdom] %s: %s", indicador, " · ".join(fallos))
+    logger.warning("[sisdom] %s: %s", indicador, " · ".join(fallos))
     return sorted(por_clave.values(), key=lambda o: (o.anio, o.instrumento))
+
+
+def _ediciones_disponibles(fallos: List[str]) -> List[Tuple[int, "io.BytesIO"]]:  # pragma: no cover - red
+    """``[(año, libro)]`` de las ediciones que HOY se pueden bajar. Hoy es una sola.
+
+    Devuelve una LISTA y no el libro suelto a propósito: el día que el emisor vuelva a
+    publicar dos ediciones —o que se comitee una instantánea del tramo perdido— entra acá y
+    `fetch` no se entera. La unión por ``(año, instrumento)`` que hace `fetch` ya está escrita
+    para varias.
+
+    Una edición que no se puede bajar NO lanza: se anota en *fallos* y se sigue con las que
+    sí. Solo la ausencia TOTAL de series hace fallar a `fetch`, que es donde corresponde.
+    """
+    from shared.data.sisdom_common import SisdomUnavailable, fetch_book_con_edicion
+
+    try:
+        anio, contenido = fetch_book_con_edicion(BOOK_FRAGMENT)
+    except SisdomUnavailable as e:
+        fallos.append(f"edición vigente: {e}")
+        return []
+    return [(anio, io.BytesIO(contenido))]
 
 #: Qué indicadores de la END se sirven desde este libro, con la hoja EXACTA y por qué esa.
 #: Campos con nombre y no una tupla: son cinco datos por entrada y el quinto —la variante
