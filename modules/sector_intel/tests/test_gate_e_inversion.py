@@ -340,3 +340,186 @@ def test_el_veredicto_viaja_tambien_como_BOOLEANO_y_no_solo_como_prosa():
     assert sin["empata_con_el_score"] is False, (
         "sin control no se puede afirmar que empata — pero tampoco que NO empata; lo que "
         "dice «no lo sé» es `veredicto_contra_el_tamano`, y por eso los dos viajan juntos")
+
+
+# ── El parcial por TAMAÑO: un número en vez de dos que hay que comparar a ojo ──
+#
+# El control publica el IC del índice y el del tamaño solo, y deja la conclusión al lector.
+# Eso funciona cuando alguien las mira: el 2026-09-01 se citó el −0,274 sin el −0,323 de al
+# lado y se reportó «el índice ordena la inversión al revés» sobre un resultado que la
+# plataforma computaba como EMPATE. Dos cifras que hay que comparar a ojo son una conclusión
+# sin computar.
+
+def _panel(filas):
+    """`{año: [filas]}` con la forma que consume `_parcial_por_tamano`."""
+    por_ano = {}
+    for f in filas:
+        por_ano.setdefault(f["period"], []).append(f)
+    return por_ano
+
+
+def _ano(ano, pares):
+    """Un año con sus sujetos: `(iai, desenlace, tamaño)`."""
+    return [{"period": ano, "branch": f"s{i}", "iai_score": a, "y": b, "sector_size": c}
+            for i, (a, b, c) in enumerate(pares)]
+
+
+#: Un año donde el IAI y el desenlace están CASI perfectamente correlacionados (ρ = 0,992)
+#: **porque los dos siguen al tamaño**. Es el caso que el parcial existe para separar.
+_X_SIGUEN_AL_TAMANO = [1, 3, 4, 2, 6, 5, 7, 8, 9, 10, 12, 11, 14, 13, 15, 16, 17, 19, 18, 20,
+                       22, 21, 23, 24, 25, 26, 28, 27, 29, 30]
+_Y_SIGUEN_AL_TAMANO = [1, 2, 5, 3, 4, 6, 8, 7, 9, 10, 11, 13, 12, 14, 15, 16, 18, 17, 20, 19,
+                       21, 22, 23, 24, 25, 26, 27, 28, 29, 30]
+
+
+def test_cuando_el_desenlace_lo_explica_SOLO_el_tamano_el_parcial_se_apaga():
+    """La prueba de que mide lo que dice medir, y de por qué hacía falta.
+
+    El IAI y el desenlace correlacionan a **0,992** sin controlar nada. Manteniendo el tamaño
+    constante queda **−0,065**: toda esa correlación era del tamaño. Un lector que viera solo
+    el 0,992 concluiría que el índice ordena; lo que ordena es cuán grande es el sector.
+    """
+    from shared.validation.metrics import spearman
+    from modules.sector_intel.validation.report import _parcial_por_tamano
+
+    tam = list(range(1, 31))
+    assert spearman(_X_SIGUEN_AL_TAMANO, _Y_SIGUEN_AL_TAMANO) > 0.98, (
+        "la fixture perdió su premisa: sin controlar, la correlación tiene que ser altísima")
+    filas = []
+    for ano in ("2020", "2021", "2022"):
+        filas += _ano(ano, list(zip(_X_SIGUEN_AL_TAMANO, _Y_SIGUEN_AL_TAMANO, tam)))
+    r = _parcial_por_tamano(_panel(filas), "y")
+    assert abs(r["spearman_partial_size"]) < 0.2
+    assert r["aporta_sobre_el_tamano"] is False
+
+
+def test_cuando_el_indice_aporta_POR_ENCIMA_del_tamano_el_parcial_lo_detecta():
+    """El contra-caso. Sin él, un parcial que devolviera siempre cero pasaría el test de
+    arriba y parecería correcto. Acá el tamaño es AJENO al desenlace y toda la señal es del
+    índice."""
+    from modules.sector_intel.validation.report import _parcial_por_tamano
+
+    filas = []
+    for ano in ("2020", "2021", "2022", "2023"):
+        filas += _ano(ano, [(1, 1, 3), (2, 2, 1), (3, 3, 5), (4, 4, 2), (5, 5, 6), (6, 6, 4)])
+    r = _parcial_por_tamano(_panel(filas), "y")
+    assert r["spearman_partial_size"] == 1.0
+    assert r["aporta_sobre_el_tamano"] is True
+    assert r["spearman_partial_size_n_years"] == 4
+
+
+def test_un_ano_donde_el_indice_ES_el_tamano_no_produce_parcial_y_no_rompe():
+    """Colinealidad perfecta: el parcial no existe (el denominador es cero), y eso NO es
+    cero. Un año así se descarta y baja la cobertura, que es lo que viaja para que nadie lea
+    un parcial de pocos años como uno de dieciséis."""
+    from modules.sector_intel.validation.report import _parcial_por_tamano
+
+    filas = _ano("2020", [(1, 1, 1), (2, 2, 2), (3, 3, 3), (4, 4, 4), (5, 5, 5)])
+    filas += _ano("2021", [(1, 1, 3), (2, 2, 1), (3, 3, 5), (4, 4, 2), (5, 5, 6), (6, 6, 4)])
+    r = _parcial_por_tamano(_panel(filas), "y")
+    assert r["spearman_partial_size_n_years"] == 1, "el año colineal no puede contar"
+
+
+def test_un_ano_sin_tamano_o_con_pocos_sujetos_NO_produce_parcial_y_se_cuenta():
+    """Un parcial de 2 años no puede leerse como uno de 16: la cobertura viaja."""
+    from modules.sector_intel.validation.report import _parcial_por_tamano
+
+    filas = _ano("2020", [(1, 1, 3), (2, 2, 1), (3, 3, 5), (4, 4, 2), (5, 5, 6)])
+    filas += _ano("2021", [(1, 1, 3), (2, 2, 1)])                    # muy pocos sujetos
+    sin_tamano = _ano("2022", [(1, 1, 3), (2, 2, 1), (3, 3, 5), (4, 4, 2)])
+    for f in sin_tamano:
+        f["sector_size"] = None                                       # sin tamaño
+    r = _parcial_por_tamano(_panel(filas + sin_tamano), "y")
+    assert r["spearman_partial_size_n_years"] == 1
+
+
+def test_sin_ningun_ano_computable_se_declara_ausente_y_NO_aporta():
+    """Ausencia declarada, nunca un cero: un cero se leería como «se midió y dio nulo»."""
+    from modules.sector_intel.validation.report import _parcial_por_tamano
+
+    r = _parcial_por_tamano(_panel(_ano("2020", [(1, 1, None), (2, 2, None)])), "y")
+    assert r["spearman_partial_size"] is None
+    assert r["spearman_partial_size_n_years"] == 0
+    assert r["aporta_sobre_el_tamano"] is False
+
+
+def test_el_desenlace_de_EMPLEO_tambien_recibe_su_tamano():
+    """Era el único del eje sin control por tamaño de ninguna clase: su panel no emitía
+    `sector_size`, así que no se podía contestar si el IAI ordena el empleo por encima de lo
+    que explica cuán grande es la rama.
+
+    Se comprueba sobre las FILAS que el panel DEVUELVE, no sobre el texto del fuente: la
+    primera versión de este test buscaba la cadena «sector_size» en el código de la función y
+    pasaba en verde contra el código roto, porque esa cadena también aparece en la consulta
+    que lee la variable. Comprobado por mutación.
+    """
+    from sqlalchemy import create_engine
+    from sqlalchemy.orm import sessionmaker
+    from sqlalchemy.pool import StaticPool
+
+    from shared.database.base import Base
+    from shared.reference.sector_variables import SectorVariable
+    from modules.sector_intel.models.models import SectorScore
+    from modules.sector_intel.validation.historical import build_iai_panel
+
+    eng = create_engine("sqlite://", connect_args={"check_same_thread": False},
+                        poolclass=StaticPool)
+    Base.metadata.create_all(eng)
+    db = sessionmaker(bind=eng)()
+    # «Construcción» es una rama DIRECTA de la ENCFT: un slug, un tamaño.
+    db.add(SectorScore(sector_code="construccion", period="2024", iai_score=44.2))
+    db.add(SectorVariable(sector_code="construccion", dimension="sector",
+                          variable="sector_size", period="2024", value=13.45))
+    db.commit()
+
+    filas = [f for f in build_iai_panel(db) if f["branch"] == "construccion"]
+    assert filas, "el panel no devolvió la rama sembrada"
+    assert filas[0]["sector_size"] == 13.45, (
+        "el panel de empleo volvió a no emitir el tamaño: sin él ese desenlace se queda otra "
+        "vez sin control de ninguna clase")
+
+
+def test_una_media_POSITIVA_con_el_intervalo_cruzando_cero_NO_aporta():
+    """La razón entera de que el veredicto salga del INTERVALO y no del punto.
+
+    Cinco años de parciales que alternan de signo dan una media de +0,20 —positiva— con un
+    intervalo de [−1,16 · +1,56]. Decidir por el punto publicaría «el índice aporta por encima
+    del tamaño» sobre una serie que no distingue de ruido, que es la afirmación más cara del
+    catálogo. Comprobado por mutación: decidir por el punto rompe este test y ningún otro.
+    """
+    from modules.sector_intel.validation.report import _parcial_por_tamano
+
+    sube = [(1, 1, 3), (2, 2, 1), (3, 3, 5), (4, 4, 2), (5, 5, 6), (6, 6, 4)]
+    baja = [(1, 6, 3), (2, 5, 1), (3, 4, 5), (4, 3, 2), (5, 2, 6), (6, 1, 4)]
+    filas = (_ano("2020", sube) + _ano("2021", sube) + _ano("2022", baja)
+             + _ano("2023", sube) + _ano("2024", baja))
+    r = _parcial_por_tamano(_panel(filas), "y")
+    assert r["spearman_partial_size"] > 0, "la fixture perdió su premisa: la media es positiva"
+    assert r["spearman_partial_size_ci"][0] < 0 < r["spearman_partial_size_ci"][1]
+    assert r["aporta_sobre_el_tamano"] is False
+
+
+# ── Que los DOS instrumentos no cuenten dos historias ─────────────
+
+def test_si_el_parcial_y_el_control_DISCREPAN_el_reporte_lo_dice():
+    """Publicarlos uno al lado del otro sin decirlo deja al lector armando la conclusión, que
+    es el modo de falla que motivó el parcial."""
+    from shared.validation.control_tamano import VEREDICTO_EMPATE, VEREDICTO_SCORE_SUPERA
+    from modules.sector_intel.validation.report import _acuerdo_entre_instrumentos
+
+    discrepan = _acuerdo_entre_instrumentos({"aporta_sobre_el_tamano": True},
+                                            {"veredicto": VEREDICTO_EMPATE})
+    assert discrepan["coinciden"] is False
+    assert "NO coinciden" in discrepan["nota"]
+
+    coinciden = _acuerdo_entre_instrumentos({"aporta_sobre_el_tamano": True},
+                                            {"veredicto": VEREDICTO_SCORE_SUPERA})
+    assert coinciden["coinciden"] is True
+    assert coinciden["el_control_dice_que_aporta"] is True
+
+
+def test_sin_control_el_acuerdo_no_inventa_una_ventaja():
+    from modules.sector_intel.validation.report import _acuerdo_entre_instrumentos
+
+    r = _acuerdo_entre_instrumentos({"aporta_sobre_el_tamano": False}, {})
+    assert r["el_control_dice_que_aporta"] is False and r["coinciden"] is True

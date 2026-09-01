@@ -19,6 +19,7 @@ from modules.sector_intel.validation.outcomes import (
     employment_by_branch, ied_by_activity, label_panel, label_panel_ied,
 )
 from shared.validation.control_tamano import (VEREDICTO_CONTROL_NO_EVALUABLE,
+                                              VEREDICTO_SCORE_SUPERA,
                                               veredicto_de_control)
 from shared.validation.metrics import mean_ic_with_t, spearman, spearman_bootstrap_ci
 
@@ -56,6 +57,7 @@ def _metricas_gate_e(labeled: List[Dict], clave: str) -> Dict:
                                     [r[clave] for r in g_rows],
                                     [r["sector_growth"] for r in g_rows])
         partial_n = len(g_rows)
+    por_tamano = _parcial_por_tamano(by_year, clave)
 
     return {
         "n_observations": len(labeled),
@@ -70,11 +72,82 @@ def _metricas_gate_e(labeled: List[Dict], clave: str) -> Dict:
                                None if pooled_hi is None else round(pooled_hi, 3)],
         "spearman_partial_growth": partial,
         "spearman_partial_n": partial_n,
+        **por_tamano,
         "by_year": per_year,
         "quintile_spread": _quintile_spread_by_year(by_year, clave=clave),
         # Concluyente = el IC medio anual con su intervalo de Student-t no cruza cero.
         "conclusive": bool(ic and ic["ci_lo"] is not None and ic["ci_lo"] > 0),
         "invertido": bool(ic and ic["ci_hi"] is not None and ic["ci_hi"] < 0),
+    }
+
+
+#: Mínimo de sujetos por año para computar un parcial de primer orden que signifique algo.
+#: Con menos, el parcial es aritmética sobre ruido.
+_MIN_POR_ANO = 4
+
+NOTA_PARCIAL_TAMANO = (
+    "IC de rango PARCIAL: ordena el mismo desenlace con el IAI manteniendo CONSTANTE el "
+    "tamaño del sector. Contesta en UN número la pregunta que el control por tamaño obliga a "
+    "contestar comparando dos a ojo — «¿el índice aporta por encima del tamaño?»— y se "
+    "construye igual que el titular: parcial por año y media con intervalo de Student-t sobre "
+    "la serie anual, que es la inferencia que respeta el clustering por año. Ojo con lo que "
+    "NO es: `sector_size` es una VARIABLE del propio IAI, así que mantenerlo constante mide "
+    "el índice SIN su componente de tamaño, no un índice distinto. Un intervalo que no cruza "
+    "cero por arriba es la única forma de sostener que aporta."
+)
+
+
+def _parcial_por_tamano(by_year: Dict[str, List[Dict]], clave: str) -> Dict:
+    """El parcial controlando por TAMAÑO, por año y promediado con su intervalo.
+
+    **Por qué existe.** El control por tamaño publica dos cifras —el IC del índice y el del
+    tamaño solo— y deja la conclusión al lector. Eso funciona cuando alguien las mira; el
+    2026-09-01 se citó el −0,274 sin el −0,323 de al lado y se reportó como «el índice ordena
+    la inversión al revés» un resultado que la plataforma computaba como EMPATE. Dos cifras
+    que hay que comparar a ojo son una conclusión sin computar, y en este repo las relaciones
+    se computan.
+
+    Se construye como el titular —parcial por año, media con t sobre la serie— y no como un
+    parcial apilado: el bootstrap apilado remuestrea pares como si fueran independientes y
+    sobrestima la precisión, que es justo lo que este módulo declara del ρ pooled.
+
+    Un año sin tamaño en sus filas, o con menos de cuatro sujetos, no produce parcial y se
+    cuenta: la cobertura viaja para que un parcial de 3 años no se lea como uno de 16.
+
+    **UN AÑO SUELTO NO SIGNIFICA NADA, y eso se midió.** Con nueve sujetos y un índice que
+    contiene al tamaño, el denominador del parcial de primer orden se acerca a cero y un solo
+    intercambio de posiciones mueve el resultado casi de un extremo al otro: sobre una fixture
+    de seis sujetos donde el parcial verdadero es ~0, un par de swaps daba −0,955. Por eso el
+    titular es la MEDIA anual con su intervalo —el mismo estimador del IC de arriba— y por eso
+    `by_year` no publica esta serie: invitaría a leer un año.
+
+    Y la colinealidad perfecta —un año donde el IAI y el tamaño ordenan idéntico— no devuelve
+    cero sino NADA: el parcial no existe ahí. Ese año se descarta y baja la cobertura.
+    """
+    anuales: List[float] = []
+    for rows in by_year.values():
+        con_tamano = [r for r in rows if r.get("sector_size") is not None]
+        if len(con_tamano) < _MIN_POR_ANO:
+            continue
+        rr = _partial_spearman([r["iai_score"] for r in con_tamano],
+                               [r[clave] for r in con_tamano],
+                               [r["sector_size"] for r in con_tamano])
+        if rr is not None:
+            anuales.append(rr)
+    if not anuales:
+        return {"spearman_partial_size": None, "spearman_partial_size_ci": [None, None],
+                "spearman_partial_size_n_years": 0,
+                "aporta_sobre_el_tamano": False, "nota_partial_size": NOTA_PARCIAL_TAMANO}
+    ic = mean_ic_with_t(anuales)
+    lo = ic["ci_lo"] if ic else None
+    return {
+        "spearman_partial_size": ic["mean_ic"] if ic else None,
+        "spearman_partial_size_ci": [lo, ic["ci_hi"] if ic else None],
+        "spearman_partial_size_n_years": len(anuales),
+        # La conclusión, COMPUTADA: solo un intervalo entero por encima de cero sostiene que
+        # el índice aporta algo que el tamaño no explica.
+        "aporta_sobre_el_tamano": bool(lo is not None and lo > 0),
+        "nota_partial_size": NOTA_PARCIAL_TAMANO,
     }
 
 
@@ -224,6 +297,34 @@ def _titular(empleo: Dict, inversion: Optional[Dict]) -> Optional[str]:
     return None
 
 
+def _acuerdo_entre_instrumentos(primario: Dict, control: Dict) -> Dict:
+    """¿El parcial por tamaño y el control por tamaño dicen lo MISMO?
+
+    Son dos instrumentos para la misma pregunta —«¿el índice aporta por encima del tamaño?»—
+    y podrían discrepar. Publicarlos uno al lado del otro sin decirlo deja al lector armando
+    la conclusión, que es exactamente el modo de falla que motivó el parcial. Si discrepan, lo
+    dice acá; y **discrepar no es un error**: el control compara MAGNITUDES de dos órdenes
+    separados y el parcial mantiene el tamaño constante dentro de cada año, así que sobre un
+    panel chico pueden separarse. Lo que no puede pasar es que el documento no lo mencione.
+    """
+    parcial_aporta = bool(primario.get("aporta_sobre_el_tamano"))
+    control_aporta = (control or {}).get("veredicto") == VEREDICTO_SCORE_SUPERA
+    coinciden = parcial_aporta == control_aporta
+    return {
+        "el_parcial_dice_que_aporta": parcial_aporta,
+        "el_control_dice_que_aporta": control_aporta,
+        "coinciden": coinciden,
+        "nota": ("los dos instrumentos coinciden" if coinciden else
+                 "los DOS instrumentos NO coinciden: el parcial por tamaño dice que el índice "
+                 f"{'sí' if parcial_aporta else 'no'} aporta y el control por tamaño dice que "
+                 f"{'sí' if control_aporta else 'no'}. Con un panel de este tamaño la "
+                 "discrepancia es esperable —el control compara magnitudes de dos órdenes "
+                 "separados y el parcial mantiene el tamaño constante dentro de cada año—, "
+                 "así que NO se puede sostener la afirmación de ventaja apoyándose en uno "
+                 "solo de los dos"),
+    }
+
+
 def _gate_e_inversion(db: Session) -> Optional[Dict]:
     """Gate E contra la IED realizada — el desenlace que el IAI sí pretende anticipar.
 
@@ -281,6 +382,8 @@ def _gate_e_inversion(db: Session) -> Optional[Dict]:
                                               (control_nivel or {}).get("mean_yearly_ic"))}
                       if control_nivel else None),
         },
+        # ¿Los dos instrumentos dicen lo mismo? Computado, no dejado al lector.
+        "acuerdo_entre_los_dos_instrumentos": _acuerdo_entre_instrumentos(primario, control),
         "nota_control": ("`sector_size` es a la vez el deflactor de la intensidad y una "
                          "variable del IAI. El control ordena el mismo desenlace usando solo "
                          "el tamaño: compará su IC con el del índice antes de atribuirle el "
