@@ -44,6 +44,9 @@ SUB_SYNCS_DE_RED = (
     "_sync_participacion_exportadora", "_sync_mem_electrico", "_sync_sisdom_income",
     "_sync_minerd_coverage", "_sync_sisdom_schooling", "_sync_wb_findex",
     "_sync_endesa_child_mortality", "_sync_siuben_provincial",
+    # La POBLACIÓN por región. No alimenta el IDM: es la variable de tamaño con la que el
+    # eje computa su control (`modules/social_dev/validation/report.py`).
+    "_sync_sisdom_poblacion",
     # Baja el CSV del salario mínimo del MHE (vía datos.gob.do).
     "_sync_salario_minimo",
 )
