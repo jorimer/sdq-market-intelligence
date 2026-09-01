@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { useTranslation, Trans } from "react-i18next";
 import type { TFunction } from "i18next";
+import { I18N_DE_VEREDICTO, acredita, claveDeVeredicto } from "@/shared/lib/veredicto";
 import {
   BookOpen,
   Database,
@@ -61,10 +62,6 @@ function DataBadge({ kind, t }: { kind: DataKind; t: TFunction }) {
 type CI = [number | null, number | null] | null | undefined;
 
 /** Una señal es "significativa" solo si su IC bootstrap excluye el cero. */
-function ciExcludesZero(ci: CI): boolean {
-  if (!ci || ci[0] == null || ci[1] == null) return false;
-  return (ci[0] > 0 && ci[1] > 0) || (ci[0] < 0 && ci[1] < 0);
-}
 function fmtCI(ci: CI, digits = 2): string {
   if (!ci || ci[0] == null || ci[1] == null) return "—";
   return `${fmtNum(ci[0], digits)} … ${fmtNum(ci[1], digits)}`;
@@ -91,55 +88,56 @@ const V = (k: string) => `platform.methodology.validation.${k}`;
 function mapBanking(t: TFunction, d: any): VRow {
   const base = { axis: t("platform.methodology.axes.n1Name"), source: t(V("mBankingSource")), metric: t(V("mBankingMetric")) };
   if (!d || !d.computed || d.ok === false || d.gini == null) return notCalc(t, base);
-  const sig = ciExcludesZero(d.gini_ci);
-  return { ...base, value: fmtNum(d.gini, 3), ci: fmtCI(d.gini_ci), n: `${t(V("obs"), { n: fmtNum(d.n_observations, 0) })} · ${t(V("events"), { n: d.n_events })}`, sig, verdict: sig ? t(V("vSignificant")) : t(V("vDirectional")) };
+  // SIN `empata_con_el_score`: el backtest de banca trae su control pero no expone los
+  // booleanos del veredicto, así que esta fila puede acreditar algo que empate con el tamaño.
+  // Es una brecha DECLARADA —está en la lista de excepciones del test— y no un olvido; se
+  // cierra del lado del backend, exponiendo el veredicto como ya hacen irmp, trade y esg.
+  const juzgable = { ic_ci: d.gini_ci };
+  return { ...base, value: fmtNum(d.gini, 3), ci: fmtCI(d.gini_ci), n: `${t(V("obs"), { n: fmtNum(d.n_observations, 0) })} · ${t(V("events"), { n: d.n_events })}`, sig: acredita(juzgable), verdict: t(I18N_DE_VEREDICTO[claveDeVeredicto(juzgable)]) };
 }
 function mapIrmp(t: TFunction, d: any): VRow {
   const base = { axis: t("platform.methodology.axes.n4Name"), source: t(V("mIrmpSource")), metric: t(V("mIrmpMetric")) };
   const g = d?.governance;
   if (!d?.has_report || !g || g.gini == null) return notCalc(t, base);
-  const sig = ciExcludesZero(g.gini_ci);
-  return { ...base, value: fmtNum(g.gini, 3), ci: fmtCI(g.gini_ci), n: `${t(V("obs"), { n: fmtNum(g.n_observations, 0) })} · ${t(V("countries"), { n: d.n_countries ?? "—" })}`, sig, verdict: sig ? t(V("vSignificant")) : t(V("vDirectional")) };
+  const juzgable = { ic_ci: g.gini_ci, empata_con_el_score: g?.control_solo_tamano?.empata_con_el_score };
+  return { ...base, value: fmtNum(g.gini, 3), ci: fmtCI(g.gini_ci), n: `${t(V("obs"), { n: fmtNum(g.n_observations, 0) })} · ${t(V("countries"), { n: d.n_countries ?? "—" })}`, sig: acredita(juzgable), verdict: t(I18N_DE_VEREDICTO[claveDeVeredicto(juzgable)]) };
 }
 function mapSector(t: TFunction, d: any): VRow {
   const base = { axis: t("platform.methodology.axes.n3Name"), source: t(V("mSectorSource")), metric: t(V("mSectorMetric")) };
   if (!d?.has_report || d?.has_data === false || d?.mean_yearly_ic == null) return notCalc(t, base);
-  // `ciExcludesZero` da true TAMBIÉN para un intervalo entero por DEBAJO de cero, así que
-  // por sí solo pintaba «Significativo» sobre un resultado INVERTIDO. Y un resultado que
-  // empata con el tamaño no es una credencial: significa que ordenar por tamaño del sector
-  // consigue lo mismo. Los dos hechos los computa el backend y viajan en el encabezado;
-  // acá no se re-juzgan, se leen.
-  const excluyeCero = ciExcludesZero(d.ic_ci);
-  const invertido = d.invertido === true;
-  const empata = d.empata_con_el_score === true;
-  const acredita = excluyeCero && !invertido && !empata;
-  const verdict = !excluyeCero
-    ? t(V("vInconclusivePower"))
-    : invertido
-      ? t(V("vInverted"))
-      : empata
-        ? t(V("vTiedWithSize"))
-        : t(V("vSignificant"));
-  return { ...base, value: fmtNum(d.mean_yearly_ic, 2), ci: fmtCI(d.ic_ci), n: `${t(V("obs"), { n: fmtNum(d.n_observations, 0) })} · ${t(V("years"), { n: d.n_years ?? "—" })}`, sig: acredita, verdict };
+  // El veredicto NO se decide acá: la regla vive en `shared/lib/veredicto` y la comparten
+  // esta tabla y la pestaña de validación del eje. Escrita dos veces, se arregló una sola.
+  return {
+    ...base,
+    value: fmtNum(d.mean_yearly_ic, 2),
+    ci: fmtCI(d.ic_ci),
+    n: `${t(V("obs"), { n: fmtNum(d.n_observations, 0) })} · ${t(V("years"), { n: d.n_years ?? "—" })}`,
+    sig: acredita(d),
+    verdict: t(I18N_DE_VEREDICTO[claveDeVeredicto(d)]),
+  };
 }
+
 function mapSocial(t: TFunction, d: any): VRow {
   const base = { axis: t("platform.methodology.axes.n6Name"), source: t(V("mSocialSource")), metric: t(V("mSocialMetric")) };
   if (!d || d.spearman == null) return notCalc(t, base);
-  const sig = ciExcludesZero(d.spearman_ci);
-  return { ...base, value: fmtNum(d.spearman, 2), ci: fmtCI(d.spearman_ci), n: t(V("regions"), { n: d.n_regions ?? "—" }), sig, verdict: sig ? t(V("vSignificant")) : t(V("vDirectional")) };
+  // SIN control por tamaño, y el motivo es de DATO: la población por región de desarrollo no
+  // está conectada (X Censo 2022; el portal de la ONE responde 403 detrás de Cloudflare).
+  // Escribir las poblaciones de memoria habría fabricado justo el dato que el control audita.
+  const juzgable = { ic_ci: d.spearman_ci };
+  return { ...base, value: fmtNum(d.spearman, 2), ci: fmtCI(d.spearman_ci), n: t(V("regions"), { n: d.n_regions ?? "—" }), sig: acredita(juzgable), verdict: t(I18N_DE_VEREDICTO[claveDeVeredicto(juzgable)]) };
 }
 function mapTrade(t: TFunction, d: any): VRow {
   const base = { axis: t("platform.methodology.axes.n5Name"), source: t(V("mTradeSource")), metric: t(V("mTradeMetric")) };
   const ec = d?.export_collapse;
   if (!d?.has_report || !ec || ec.gini == null) return notCalc(t, base);
-  const sig = ciExcludesZero(ec.gini_ci);
-  return { ...base, value: fmtNum(ec.gini, 3), ci: fmtCI(ec.gini_ci), n: `${t(V("obs"), { n: fmtNum(ec.n_observations, 0) })} · ${t(V("countries"), { n: d.n_countries ?? "—" })}`, sig, verdict: sig ? t(V("vSignificant")) : t(V("vDirectional")) };
+  const juzgable = { ic_ci: ec.gini_ci, empata_con_el_score: ec?.control_solo_tamano?.empata_con_el_score };
+  return { ...base, value: fmtNum(ec.gini, 3), ci: fmtCI(ec.gini_ci), n: `${t(V("obs"), { n: fmtNum(ec.n_observations, 0) })} · ${t(V("countries"), { n: d.n_countries ?? "—" })}`, sig: acredita(juzgable), verdict: t(I18N_DE_VEREDICTO[claveDeVeredicto(juzgable)]) };
 }
 function mapEsg(t: TFunction, d: any): VRow {
   const base = { axis: t("platform.methodology.axes.n7Name"), source: t(V("mEsgSource")), metric: t(V("mEsgMetric")) };
   if (!d?.computed || d.spearman == null) return notCalc(t, base);
-  const sig = ciExcludesZero(d.spearman_ci);
-  return { ...base, value: fmtNum(d.spearman, 2), ci: fmtCI(d.spearman_ci), n: t(V("countries"), { n: d.n_countries ?? "—" }), sig, verdict: sig ? t(V("vSignificant")) : t(V("vDirectional")) };
+  const juzgable = { ic_ci: d.spearman_ci, empata_con_el_score: d?.control_solo_tamano?.empata_con_el_score };
+  return { ...base, value: fmtNum(d.spearman, 2), ci: fmtCI(d.spearman_ci), n: t(V("countries"), { n: d.n_countries ?? "—" }), sig: acredita(juzgable), verdict: t(I18N_DE_VEREDICTO[claveDeVeredicto(juzgable)]) };
 }
 /* eslint-enable @typescript-eslint/no-explicit-any */
 

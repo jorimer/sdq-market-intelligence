@@ -159,6 +159,37 @@ export interface GateEQuintileSpread {
   spread: number;
   n_years: number;
 }
+/** Un desenlace del Gate E, con su control por tamaño cuando lo tiene. */
+export interface SectorGateEOutcome {
+  que_mide?: string;
+  resolucion?: string;
+  mean_yearly_ic?: number | null;
+  ic_ci?: [number | null, number | null];
+  n_observations?: number;
+  n_years?: number;
+  conclusive?: boolean;
+  invertido?: boolean;
+  contraste_nivel?: SectorGateEOutcome | null;
+  nota_contraste?: string;
+  nota_control?: string;
+  /** `intensidad` califica al desenlace primario; `nivel`, al contraste. Un IC sin su
+   *  control no se renderiza: sin él, «el índice ordena» y «el tamaño ordena y el índice lo
+   *  copia» son indistinguibles. */
+  control_solo_tamano?: {
+    intensidad?: SectorGateEControl | null;
+    nivel?: SectorGateEControl | null;
+  } | null;
+}
+
+export interface SectorGateEControl {
+  mean_yearly_ic?: number | null;
+  ic_ci?: [number | null, number | null];
+  n_observations?: number;
+  veredicto?: string;
+  empata_con_el_score?: boolean;
+  el_tamano_alcanza_al_score?: boolean;
+}
+
 export interface SectorGateEReport {
   has_report: boolean;
   has_data?: boolean;
@@ -185,6 +216,10 @@ export interface SectorGateEReport {
   // llevaba el de empleo, que este mismo reporte declara que el índice NO dice anticipar.
   outcome_primario?: string;
   headline_outcome?: string | null;
+  /** Los DOS desenlaces contra los que se valida el eje, cada uno con lo suyo. El encabezado
+   *  plano de arriba ES el primario; esto trae también el que no encabeza, porque un eje que
+   *  corrió dos backtests y publica uno solo esconde un resultado. */
+  outcomes?: Record<string, SectorGateEOutcome>;
   // CONTROL POR TAMAÑO. La intensidad de IED se divide por el tamaño del sector, y el tamaño
   // es una variable del IAI: sin este control, «el índice ordena al revés» y «el deflactor
   // produce el signo» son indistinguibles. No se re-juzga acá: el veredicto lo computa el
