@@ -397,7 +397,14 @@ async def _content_from_snapshot(
     from shared.narrative.cifras_pendientes import acumulando as acumulando_cifras
     from shared.narrative.relaciones_pendientes import acumulando
     _t0 = time.monotonic()
-    with acumulando() as relaciones_pendientes, acumulando_cifras() as sin_respaldo:
+    # EL PRESUPUESTO VIAJA HACIA ADENTRO, no solo corta desde afuera. `wait_for` mata el
+    # ensamblado al vencer y descarta TODO lo generado; el motor, que no conocía el techo,
+    # podía arrancar una regeneración del guard a los 250 s y garantizar ese final. Con el
+    # vencimiento visible, el motor se abstiene de lo que no cabe y devuelve el texto con su
+    # marca — que además, bajo la regla vigente de dos capas, casi siempre se publica igual.
+    from shared.narrative.presupuesto import con_presupuesto
+    with acumulando() as relaciones_pendientes, acumulando_cifras() as sin_respaldo, \
+            con_presupuesto(PRESUPUESTO_DE_ENSAMBLADO_S):
         try:
             narratives = await asyncio.wait_for(
                 _narratives_cached(product, tier, snapshot, lang, scope),
