@@ -213,6 +213,53 @@ def veredicto_de_movimiento(direccion_escala: Optional[str], subio: bool,
     return _veredicto(direccion_escala, "por encima" if subio else "por debajo")
 
 
+def concentracion_top_n(items: List[Dict[str, Any]], *, clave_peso: str,
+                       clave_nombre: str, enes=(2, 3, 5),
+                       poblacion: str) -> Dict[str, Any]:
+    """La CUOTA ACUMULADA de los N mayores, computada, con sus miembros nombrados.
+
+    **El caso que la motivó (2026-09-01).** El mapa del sistema servía 33 provincias con su
+    peso individual y ningún acumulado. La narrativa del anuario escribió «ambas jurisdicciones
+    metropolitanas concentran el **68,32 %** del crédito del sistema» — una suma que el modelo
+    hizo a mano (54,64 + 13,68 al corte 2025-12-31). El guard la marcó, con razón: el número
+    no estaba servido. Es la regla de siempre —las relaciones se computan, no se derivan— y su
+    corolario menos obvio: **una SUMA de cifras servidas también es una relación.**
+
+    Acá acertó. En comercio, con la misma cuenta, el modelo sacó **42,2 cuando el dato era
+    42,3** — ni la suma real ni la de los porcentajes ya redondeados, sino un tercer número.
+
+    **Se acumula sobre el CRUDO, jamás sobre los porcentajes ya redondeados.** Sumar
+    `[54.64, 13.68]` reproduce exactamente el defecto del 42,2: el redondeo de cada parte se
+    arrastra al total. Se suman los pesos sin redondear y se redondea una sola vez, al final.
+
+    **El SUJETO viaja en la respuesta**, y por eso `poblacion` es obligatorio: quien la
+    consuma tiene que poder nombrar la clave `concentracion_top2_provincias_pct` y no
+    `concentracion_top2_pct`. En el mismo contexto viajan 33 provincias y 19 sectores, y una
+    clave sin población es literalmente cómo se publicó «cuatro compañías concentran el
+    87,1 %» cuando eran cuatro ramos.
+
+    Devuelve ``{}`` con menos de dos elementos: un «top-N» de uno no es una concentración,
+    es el elemento.
+    """
+    filas = [i for i in items if isinstance(i, dict) and i.get(clave_peso) is not None]
+    if len(filas) < 2:
+        return {}
+    ordenadas = sorted(filas, key=lambda i: -float(i[clave_peso] or 0.0))
+    total = sum(float(i[clave_peso] or 0.0) for i in ordenadas)
+    if total <= 0:
+        return {}
+    out: Dict[str, Any] = {"poblacion": poblacion, "de_cuantos": len(ordenadas)}
+    for n in enes:
+        if n >= len(ordenadas):
+            continue          # un acumulado que abarca a todos es 100 %: no informa nada
+        top = ordenadas[:n]
+        out[f"top{n}"] = {
+            "pct": round(100.0 * sum(float(i[clave_peso] or 0.0) for i in top) / total, 2),
+            "miembros": [str(i.get(clave_nombre)) for i in top],
+        }
+    return out
+
+
 def comparaciones_vs_referencia(
     valores: Dict[str, Optional[float]],
     referencias: Dict[str, Dict[str, Optional[float]]],
