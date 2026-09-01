@@ -188,6 +188,33 @@ Una clave se RENOMBRÓ por precisión, no para pasar un test: el guard del sujet
 cartera clasificada del sistema (el cubo de la SIB), no la economía del país. Quedó
 `peso_de_la_construccion_en_la_cartera_del_sistema_pct`.
 
+#### La medición, que es el punto de esta fase
+
+| | antes | después |
+|---|---|---|
+| tiempo de ensamblado (`pulse`) | 26 s | **24-29 s** (mediana 24,16 s sobre 5 corridas) |
+| cortados por tiempo | 0 | **0** |
+| marcas nuevas del guard | — | **0** |
+| menciona el financiamiento | no | **sí** |
+
+**El hallazgo que justifica haber hecho un solo eje.** Con el bloque ya viajando en el
+contexto, la primera generación en producción NO lo usó: la prosa siguió hablando solo de
+permisos, m², tipología y geografía. El modelo hacía lo correcto — la plantilla enumera
+taxativamente qué cifras usar y el financiamiento no estaba en esa lista. **Servir el dato no
+alcanza: hay que pedirlo** (#1038).
+
+Es la familia de «el cómputo existe y la superficie no lo pide», que en esta misma sesión ya
+apareció con el mapa sectorial en 1 de 4 tipos de informe. Acá la superficie es el prompt.
+
+**Con la plantilla corregida, el texto cambia de conclusión:** «El financiamiento del sistema
+al sector (corte: 31 de diciembre de 2025) no amplifica la señal de alarma… Un ciclo de
+permisos a la baja con financiamiento sano es distinto a uno con crédito deteriorado: el
+riesgo aquí es de demanda nueva, no de cartera existente.» Esa lectura era imposible antes, y
+el modelo citó la fecha de la capa como se le pidió.
+
+**Consecuencia para las fases 5 y 6:** cada eje necesita DOS trabajos, no uno — el cableado y
+su plantilla. Presupuestar los dos.
+
 ### Fase 5 — El resto
 
 `free_zones`, `energy`, `tourism`, y `sector_intel` con los 19 como insumo del IAI/SGPS.
@@ -228,6 +255,6 @@ sería relleno.
 | 1 · `CarteraSectorial` a `shared/reference/` | **cerrada** 2026-08-31 (#1034) |
 | 2 · letra CIIU en el crosswalk | **cerrada** 2026-08-31 (#1035) |
 | 3 · `perfil_del_sector` | **cerrada** 2026-08-31 (#1036) |
-| 4 · construction + medición | **cerrada** 2026-08-31 (#1037) |
+| 4 · construction + medición | **cerrada** 2026-08-31 (#1037 + #1038) |
 | 5 · resto de los ejes | pendiente |
 | 6 · capacidad de pago y holgura | pendiente |
