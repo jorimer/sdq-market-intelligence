@@ -3,7 +3,14 @@ import { useTranslation } from "react-i18next";
 import { ShieldCheck, RefreshCw, AlertTriangle, BarChart3 } from "lucide-react";
 import { Card, CardHead, StatTile, StateBlock, Chip } from "@/shared/ui/primitives";
 import { fmtNum } from "@/shared/lib/format";
-import { getSectorValidation, runSectorGateE, SectorGateEReport } from "../api";
+import { I18N_DE_VEREDICTO, acredita, claveDeVeredicto } from "@/shared/lib/veredicto";
+import {
+  getSectorValidation,
+  runSectorGateE,
+  SectorGateEControl,
+  SectorGateEOutcome,
+  SectorGateEReport,
+} from "../api";
 
 function fmtDate(iso?: string): string {
   return iso
@@ -17,10 +24,65 @@ function fmtPp(x: number | null | undefined): string {
   return x == null ? "—" : `${x >= 0 ? "+" : ""}${x.toFixed(2)} pp`;
 }
 
-/** A signal is "significant" only when the bootstrap CI excludes zero. */
-function ciExcludesZero(ci?: [number | null, number | null]): boolean {
-  if (!ci || ci[0] == null || ci[1] == null) return false;
-  return (ci[0] > 0 && ci[1] > 0) || (ci[0] < 0 && ci[1] < 0);
+/**
+ * Una FILA de desenlace: su IC, su intervalo y —pegado— su control por tamaño.
+ *
+ * El control no es un extra: sin él, «el índice ordena» y «el tamaño ordena y el índice lo
+ * copia» son indistinguibles, y son conclusiones opuestas. Por eso esta fila no sabe
+ * renderizar un IC solo: o trae el control, o dice que no lo tiene.
+ */
+function FilaDeDesenlace({
+  titulo,
+  detalle,
+  senal,
+  control,
+  primario,
+}: {
+  titulo?: string;
+  detalle?: string;
+  senal: { mean_yearly_ic?: number | null; ic_ci?: [number | null, number | null];
+           n_observations?: number; invertido?: boolean };
+  control?: SectorGateEControl | null;
+  primario?: boolean;
+}) {
+  const { t } = useTranslation();
+  const juzgable = { ic_ci: senal.ic_ci, invertido: senal.invertido,
+                     empata_con_el_score: control?.empata_con_el_score };
+  const clave = claveDeVeredicto(juzgable);
+  const ci = senal.ic_ci;
+  return (
+    <div className={`rounded-[10px] p-3.5 ${primario ? "bg-surface-2" : "bg-surface"} border border-grid`}>
+      <div className="flex items-start justify-between gap-3 mb-1.5">
+        <div>
+          <p className="text-xs font-semibold text-ink">{titulo ?? "—"}</p>
+          {detalle && <p className="text-xs text-faint mt-0.5">{detalle}</p>}
+        </div>
+        <Chip tone={acredita(juzgable) ? "ok" : "warn"}>{t(I18N_DE_VEREDICTO[clave])}</Chip>
+      </div>
+      <p className="mono text-xs text-body tabular-nums">
+        {fmtRho(senal.mean_yearly_ic)}
+        {ci && ci[0] != null && (
+          <span className="text-faint"> · IC 95% {fmtRho(ci[0])} … {fmtRho(ci[1])}</span>
+        )}
+        {senal.n_observations != null && (
+          <span className="text-faint"> · n={fmtNum(senal.n_observations, 0)}</span>
+        )}
+      </p>
+      {control?.mean_yearly_ic != null ? (
+        <p className="mt-2 text-xs text-muted">
+          <span className="font-semibold text-ink">{t("sector.valSizeControlTitle")}</span>{" "}
+          {t("sector.valSizeControlValue", {
+            ic: fmtRho(control.mean_yearly_ic),
+            lo: fmtRho(control.ic_ci?.[0] ?? null),
+            hi: fmtRho(control.ic_ci?.[1] ?? null),
+          })}{" "}
+          {control.veredicto}
+        </p>
+      ) : (
+        <p className="mt-2 text-xs text-faint">{t("sector.valSizeControlMissing")}</p>
+      )}
+    </div>
+  );
 }
 
 /** Per-year Spearman as a centered diverging bar (−1 … +1). */
@@ -140,11 +202,30 @@ export function ValidationTab() {
     );
   }
 
-  // Headline = mean yearly IC with a Student-t CI; significance = its CI excludes zero.
-  const sig = ciExcludesZero(report.ic_ci);
+  // El veredicto lo decide el cuerpo COMPARTIDO con la tabla de Metodología. Acá vivía
+  // `ciExcludesZero(report.ic_ci)` a secas, y como ese intervalo excluye el cero POR ABAJO,
+  // esta pestaña pintaba un chip verde de «significativo» sobre un resultado invertido que
+  // además empata con ordenar por tamaño del sector.
+  const sig = acredita(report);
   const ci = report.ic_ci;
   const pooledCi = report.spearman_pooled_ci;
   const qs = report.quintile_spread;
+
+  // El PRIMARIO primero: es el desenlace que el índice dice anticipar, y el que encabeza el
+  // reporte. El orden no es estético — quien lea solo la primera fila tiene que leer ésa.
+  const primarioClave = report.outcome_primario;
+  const desenlaces = Object.entries(report.outcomes ?? {})
+    .map(([clave, o]: [string, SectorGateEOutcome]) => ({
+      clave,
+      o,
+      control: o.control_solo_tamano?.intensidad ?? null,
+      esPrimario: clave === primarioClave,
+    }))
+    .sort((a, b) => Number(b.esPrimario) - Number(a.esPrimario));
+  const bloquePrimario = desenlaces.find((d) => d.esPrimario)?.o;
+  const contrasteNivel = bloquePrimario?.contraste_nivel ?? null;
+  const controlNivel = bloquePrimario?.control_solo_tamano?.nivel ?? null;
+  const notaContraste = bloquePrimario?.nota_contraste;
 
   return (
     <div>
@@ -184,28 +265,41 @@ export function ValidationTab() {
         />
       </div>
 
-      {/* EL CONTROL POR TAMAÑO, pegado a la cifra que califica.
-          La intensidad de IED se divide por el tamaño del sector y el tamaño es una variable
-          del IAI, así que sin esta línea «el índice ordena al revés la inversión» y «el
-          deflactor produce el signo» son indistinguibles — y son conclusiones opuestas. El
-          veredicto lo computa el backend; acá no se re-juzga, se lee. */}
-      {report.veredicto_contra_el_tamano && (
-        <div
-          className={`mb-5 rounded-[10px] p-3.5 text-xs ${
-            report.empata_con_el_score ? "bg-warn-soft text-body" : "bg-surface-2 text-body"
-          }`}
-        >
-          <span className="font-semibold text-ink">{t("sector.valSizeControlTitle")}</span>{" "}
-          {report.control_solo_tamano?.mean_yearly_ic != null && (
-            <>
-              {t("sector.valSizeControlValue", {
-                ic: fmtRho(report.control_solo_tamano.mean_yearly_ic),
-                lo: fmtRho(report.control_solo_tamano.ic_ci?.[0] ?? null),
-                hi: fmtRho(report.control_solo_tamano.ic_ci?.[1] ?? null),
-              })}{" "}
-            </>
+      {/* LOS DOS DESENLACES. El eje corrió su backtest contra dos —la inversión realizada,
+          que es la que el índice dice anticipar, y el empleo formal, que NO lo es— y la
+          pantalla mostraba uno solo: el que estuviera en el encabezado plano. Un eje que
+          corre dos backtests y publica uno esconde un resultado.
+          Cada IC va con SU control por tamaño pegado, o con el aviso de que no lo tiene. */}
+      {desenlaces.length > 0 && (
+        <div className="mb-5">
+          <p className="text-xs text-muted mb-2">{t("sector.valOutcomesTitle")}</p>
+          <div className="grid md:grid-cols-2 gap-3">
+            {desenlaces.map(({ clave, o, control, esPrimario }) => (
+              <FilaDeDesenlace
+                key={clave}
+                titulo={o.que_mide}
+                detalle={
+                  esPrimario ? t("sector.valOutcomePrimary") : t("sector.valOutcomeSecondary")
+                }
+                senal={o}
+                control={control}
+                primario={esPrimario}
+              />
+            ))}
+          </div>
+          {/* EL CONTRASTE DE NIVEL, con SU control. Es la cifra que más se parece a una
+              credencial —positiva y con el intervalo del lado bueno— y hasta hoy viajaba en
+              el payload sin el control que la califica. */}
+          {contrasteNivel && (
+            <div className="mt-3">
+              <FilaDeDesenlace
+                titulo={t("sector.valLevelContrastTitle")}
+                detalle={notaContraste}
+                senal={contrasteNivel}
+                control={controlNivel}
+              />
+            </div>
           )}
-          <span className="text-muted">{report.veredicto_contra_el_tamano}</span>
         </div>
       )}
 
