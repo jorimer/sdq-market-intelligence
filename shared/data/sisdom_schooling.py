@@ -46,7 +46,12 @@ logger = logging.getLogger("sdq.data.sisdom_schooling")
 __all__ = ["LICENSE", "SOURCE", "UNIT", "SisdomUnavailable",
            "fetch_sisdom_schooling", "parse_schooling"]
 
-BOOK_FRAGMENT = "indicadore de educacion"   # el título del emisor dice "Indicadore"
+#: El MEPyD escribía el título con una errata —«Indicadore de Educación»— y el fragmento la
+#: copiaba. Al mudarse el sistema a Hacienda el título salió bien escrito y el fragmento dejó
+#: de calzar: una segunda rotura, silenciosa, escondida detrás de la del host. Se ata a la
+#: forma correcta; si el emisor vuelve a la errata, `discover_book_url` falla nombrándolo en
+#: vez de bajar otro libro.
+BOOK_FRAGMENT = "indicadores de educacion"
 SHEET = "05 3 007"
 INDICATOR = "Escolaridad promedio de la población de 15 años y más"
 UNIT = "años de estudio (15+)"              # ≤40: sd_indicators.unit es VARCHAR(40)

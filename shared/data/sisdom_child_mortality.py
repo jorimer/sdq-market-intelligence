@@ -41,6 +41,22 @@ logger = logging.getLogger("sdq.data.sisdom_child_mortality")
 # ENDESA termina en 2013 —no sirve para juzgar una meta de 2025— y el único indicador de la
 # END sobre mortalidad de menores es el 2.22, que mide menores de 5 AÑOS mientras esta es
 # INFANTIL (menores de 1). Ninguna transformación las convierte.
+#: LA HOJA SE RETIRÓ, y no se sustituye. Verificado el 2026-09-01 contra la edición 2025 del
+#: libro de Salud (la primera que publica Hacienda tras absorber al MEPyD): el cuadro
+#: ``04 3 035b`` ya no está. Lo que sí está son ``04 3 035a`` —tasa ESTIMADA, registros del
+#: SINAVE— y ``04 3 035d`` —tasa PROYECTADA, proyecciones de población—, y ninguna de las dos
+#: es la ronda ENDESA: son un registro administrativo y una proyección demográfica. Tomarlas
+#: publicaría otra magnitud bajo la etiqueta «(ENDESA)», que es exactamente el defecto que la
+#: hoja DECLARADA existe para impedir en este repo.
+#:
+#: Lo ya persistido (2002 y 2007 por provincia) no se toca: `_upsert_indicator` nunca purga.
+#: Lo que se perdió es la relectura, y el conector lo dice en vez de degradar a «sin dato».
+HOJA_RETIRADA = (
+    "la edición vigente del libro de Salud ya no trae el cuadro {hoja} (rondas ENDESA por "
+    "provincia). Trae «04 3 035a» (estimada, registros SINAVE) y «04 3 035d» (proyectada), "
+    "que miden otra cosa: no se sustituyen. Lo ya ingerido de 2002 y 2007 sigue en la base"
+)
+
 SIN_TOTAL_NACIONAL = (
     "la fila `Nacional` existe y se descarta a propósito: la serie ENDESA termina en 2013 "
     "y mide mortalidad INFANTIL (menores de 1 año), no la de menores de 5 del indicador "
@@ -124,5 +140,17 @@ def parse_child_mortality(content: bytes) -> List[Tuple[str, int, float]]:
 
 
 def fetch_endesa_child_mortality() -> List[Tuple[str, int, float]]:  # pragma: no cover - network I/O
-    """Live: descubre el libro de Salud en el listado del SISDOM y lo parsea."""
-    return parse_child_mortality(fetch_book(BOOK_FRAGMENT))
+    """Live: descubre el libro de Salud de la edición vigente y lo parsea.
+
+    Si la hoja no está, el error lleva el MOTIVO —no solo el hecho—: hoy no está porque el
+    emisor la retiró, y las candidatas que quedan miden otra cosa. Sin eso, el mensaje
+    «el libro no trae la hoja» se lee como un cambio de nombre que alguien va a "arreglar"
+    apuntando a la hoja de al lado.
+    """
+    contenido = fetch_book(BOOK_FRAGMENT)
+    try:
+        return parse_child_mortality(contenido)
+    except SisdomUnavailable as e:
+        if "no trae la hoja" in str(e):
+            raise SisdomUnavailable(HOJA_RETIRADA.format(hoja=SHEET)) from e
+        raise

@@ -34,12 +34,20 @@ que es como la usa el IDM, no deflactada a lo largo del tiempo.
 """
 from __future__ import annotations
 
-import io
 import logging
 import re
-import unicodedata
-from html import unescape
 from typing import Dict, List, Optional, Tuple
+
+from shared.data.sisdom_common import (
+    BLOCK_HEADER,
+    LICENSE,
+    REGIONALIZATIONS,
+    SOURCE,
+    SisdomUnavailable,
+    fetch_book,
+    norm,
+    open_sheet,
+)
 
 logger = logging.getLogger("sdq.data.sisdom")
 
@@ -56,11 +64,6 @@ SIN_TOTAL_NACIONAL = (
 )
 
 
-LISTING_URL = "https://mepyd.gob.do/sisdom/areas-tematicas"
-DOWNLOAD_URL = "https://mepyd.gob.do/wp-admin/admin-ajax.php"
-
-SOURCE = "MEPyD"
-LICENSE = "SISDOM (VAES/MEPyD) — indicadores sociales oficiales, uso público con cita"
 UNIT = "RD$/mes por persona (corrientes)"   # ≤40: sd_indicators.unit es VARCHAR(40)
 
 # Fragmento del título del libro en el listado, insensible a acentos. El listado rotula
@@ -70,13 +73,6 @@ BOOK_FRAGMENT = "pobreza y distribucion de ingresos"
 SHEET = "03 3 021"          # el libro escribe el nombre con espacio final
 INDICATOR = "Ingreso familiar mensual oficial por persona en pesos corrientes"
 
-_HEADERS = {"User-Agent": "Mozilla/5.0 (SDQ-MIP SISDOM connector)"}
-# Ancla del plugin WP File Download: el id del archivo y el de su categoría viajan en
-# atributos, no en el href (el href es "#" y la descarga la arma un AJAX).
-_WPFD_ANCHOR = re.compile(r'<a\b([^>]*wpfd-file-link[^>]*)>(.*?)</a>', re.S | re.I)
-_ATTR = {"file": re.compile(r'data-id="(\d+)"'),
-         "category": re.compile(r'data-category_id="(\d+)"')}
-_TAGS = re.compile(r"<[^>]+>")
 _YEAR = re.compile(r"^((?:19|20)\d{2})")
 _ANNUAL_ROW = "ano"          # la fila "Año" (vs. "Marzo"/"Septiembre")
 _HEADER_SCAN_ROWS = 15
@@ -89,45 +85,8 @@ _MAX_REASONABLE = 10_000_000.0   # RD$/mes por persona: un valor mayor es basura
 # mismo sistema traen las tres apiladas: si una edición futura las agrega acá, elegir "el
 # bloque cuyas etiquetas resuelvan" agarraría la vieja y entregaría otra regionalización sin
 # que nada lo advirtiera. Por eso el bloque se elige por lo que el emisor DECLARA.
-_REGIONALIZATIONS = ("345-22", "710-04")
-_BLOCK_HEADER = "regiones de desarrollo"
-
-
-class SisdomUnavailable(RuntimeError):
-    """No se pudo obtener el cuadro. Lleva el motivo, no solo el hecho."""
-
-
-def _norm(s: object) -> str:
-    if s is None:
-        return ""
-    t = unicodedata.normalize("NFKD", str(s))
-    t = "".join(c for c in t if not unicodedata.combining(c))
-    return " ".join(t.casefold().split())
-
-
-def _edition_year(title: str) -> int:
-    """Mayor año de 4 dígitos del título ('SISDOM 2024 – …') → 2024, o 0."""
-    return max((int(y) for y in re.findall(r"(?:19|20)\d{2}", title)), default=0)
-
-
-def discover_book(html_text: str, fragment: str = BOOK_FRAGMENT) -> Optional[Tuple[str, str]]:
-    """``(category_id, file_id)`` del libro cuyo título contiene *fragment*, o ``None``.
-
-    Si hay varias ediciones publicadas gana la de año más alto (mismo desempate
-    determinista que el conector de la ONE). El listado incluye una plantilla Handlebars
-    con la misma clase y sin ids: se descarta sola al exigir ambos atributos."""
-    best: Optional[Tuple[int, str, str]] = None
-    for attrs, inner in _WPFD_ANCHOR.findall(html_text):
-        fid, cid = _ATTR["file"].search(attrs), _ATTR["category"].search(attrs)
-        if not fid or not cid:
-            continue
-        title = unescape(_TAGS.sub("", inner)).strip()
-        if fragment not in _norm(title):
-            continue
-        year = _edition_year(title)
-        if best is None or year > best[0]:
-            best = (year, cid.group(1), fid.group(1))
-    return (best[1], best[2]) if best else None
+REGIONALIZATIONS = ("345-22", "710-04")
+BLOCK_HEADER = "regiones de desarrollo"
 
 
 def parse_income_per_capita(content: bytes) -> List[Tuple[str, int, float]]:
@@ -136,19 +95,9 @@ def parse_income_per_capita(content: bytes) -> List[Tuple[str, int, float]]:
     Pura (sin red) para poder fijarla en tests. Ver el encabezado del módulo por las dos
     trampas del cuadro: las columnas se ubican por rótulo y el 2016 duplicado se resuelve
     por el asterisco del emisor."""
-    import openpyxl
-
     from shared.data.one_client import region_slug
 
-    wb = openpyxl.load_workbook(io.BytesIO(content), data_only=True, read_only=True)
-    try:
-        name = next((n for n in wb.sheetnames if _norm(n) == _norm(SHEET)), None)
-        if name is None:
-            raise SisdomUnavailable(
-                f"el libro no trae la hoja '{SHEET}' (hojas: {wb.sheetnames[:12]}…)")
-        rows = [list(r) for r in wb[name].iter_rows(values_only=True)]
-    finally:
-        wb.close()
+    rows = open_sheet(content, SHEET)
 
     # 1) fila de encabezado = la que resuelve MÁS rótulos contra el padrón de regiones.
     #    'Nacional', 'Urbana' y 'Rural' no resuelven, así que quedan fuera solas.
@@ -181,7 +130,7 @@ def parse_income_per_capita(content: bytes) -> List[Tuple[str, int, float]]:
         m = _YEAR.match(label)
         if m:
             year, starred = int(m.group(1)), "*" in label
-        if year is None or len(r) < 2 or _norm(r[1]) != _ANNUAL_ROW:
+        if year is None or len(r) < 2 or norm(r[1]) != _ANNUAL_ROW:
             continue
         obs = [(slug, year, round(float(r[ci]), 2))
                for ci, slug in col_slug.items()
@@ -214,18 +163,18 @@ def _restrict_to_declared_block(head: List[list], col_slug: Dict[int, str]) -> D
     blocks: List[Tuple[int, str]] = []       # (columna de inicio, texto declarado)
     for r in head:
         for ci, cell in enumerate(r):
-            if isinstance(cell, str) and _BLOCK_HEADER in _norm(cell):
+            if isinstance(cell, str) and BLOCK_HEADER in norm(cell):
                 blocks.append((ci, cell))
     if len(blocks) < 2:
         return col_slug
 
     starts = sorted(ci for ci, _t in blocks)
-    chosen = next((ci for tag in _REGIONALIZATIONS
+    chosen = next((ci for tag in REGIONALIZATIONS
                    for ci, text in sorted(blocks) if tag in text), None)
     if chosen is None:
         raise SisdomUnavailable(
             f"el cuadro {SHEET} declara {len(blocks)} regionalizaciones y ninguna es "
-            f"{' ni '.join(_REGIONALIZATIONS)}: elegir sería adivinar "
+            f"{' ni '.join(REGIONALIZATIONS)}: elegir sería adivinar "
             f"({[t for _c, t in blocks]})")
     later = [s for s in starts if s > chosen]
     end = later[0] if later else max(col_slug, default=chosen) + 1
@@ -239,31 +188,10 @@ def _region_slugs() -> set:
 
 
 def fetch_sisdom_income_per_capita() -> List[Tuple[str, int, float]]:  # pragma: no cover - network I/O
-    """Live: descubre el libro en el listado del SISDOM, lo baja y lo parsea."""
-    import httpx
+    """Live: descubre el libro de Pobreza/Ingresos en la edición vigente y lo parsea.
 
-    try:
-        with httpx.Client(timeout=180, follow_redirects=True, headers=_HEADERS) as client:
-            listing = client.get(LISTING_URL)
-            listing.raise_for_status()
-            found = discover_book(listing.text)
-            if found is None:
-                raise SisdomUnavailable(
-                    f"no se encontró el libro '{BOOK_FRAGMENT}' en {LISTING_URL} "
-                    "(¿cambió el título o se despublicó la edición?)")
-            category_id, file_id = found
-            book = client.get(DOWNLOAD_URL, params={
-                "juwpfisadmin": "false", "action": "wpfd", "task": "file.download",
-                "wpfd_category_id": category_id, "wpfd_file_id": file_id,
-            })
-            book.raise_for_status()
-    except httpx.HTTPError as e:
-        raise SisdomUnavailable(
-            f"no se pudo bajar el libro del SISDOM ({type(e).__name__}: {e})")
-    if not book.content.startswith(b"PK"):
-        # El plugin devuelve 200 con HTML cuando el id ya no existe: sin esto, openpyxl
-        # fallaría con un error de zip que no dice nada sobre la causa real.
-        raise SisdomUnavailable(
-            f"la descarga del libro {file_id} no es un .xlsx "
-            f"({len(book.content)} bytes, {book.headers.get('content-type')})")
-    return parse_income_per_capita(book.content)
+    El descubrimiento y la descarga viven en :mod:`shared.data.sisdom_common`. Este módulo
+    tenía su propia copia y por eso se quedó apuntando a ``mepyd.gob.do`` cuando el emisor
+    se mudó a Hacienda: el arreglo se hizo una sola vez, del otro lado.
+    """
+    return parse_income_per_capita(fetch_book(BOOK_FRAGMENT))
