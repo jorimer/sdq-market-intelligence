@@ -365,3 +365,142 @@ def ied_coverage() -> Dict[str, object]:
         "covered": covered,
         "uncovered": sorted(_CATALOG_SLUGS - _IED_MEMBER_SLUGS),
     }
+
+
+# ─── SIB (cubo de crédito) ↔ BCRD-17 ──────────────────────────────────────────
+#
+# El cubo `carteras/creditos` de la Superintendencia de Bancos rotula cada fila con una
+# letra CIIU en `sectorEconomico`. Es la única fuente de este mapa que trae CRÉDITO —cuánto
+# se le presta a un sector, a qué tasa, con qué mora y con qué cobertura de provisiones—, y
+# hasta la fase 2 del plan de enriquecimiento sectorial era la única que no estaba acá.
+#
+# **De dónde salen las 19 etiquetas.** De los valores DISTINTOS que la fuente emitió en los
+# nueve cortes persistidos (2024-03 a 2026-03), no de un informe ni de una lista recordada:
+# las 19 aparecen en los nueve, así que el catálogo es estable. Leerlo de un solo corte
+# habría perdido cualquier etiqueta intermitente, y deducirlo de las etiquetas «como suenan»
+# es el error que ya costó tres backfills en este repo.
+#
+# **La SIB es una fuente PARCIAL, como la ENAE**, y en dos direcciones a la vez:
+#
+#   * `comunicaciones` NO tiene letra. La `J` de la SIB es financiera, no «información y
+#     comunicaciones» — su marco no sigue la revisión 4 en ese punto. Es el único de los 17
+#     que queda sin crédito atribuible.
+#   * Cuatro letras NO son sectores productivos y no alimentan ningún slug: `Y` y `Z` son
+#     DESTINOS de crédito a hogares (consumo e hipotecario) y `P` y `Q` son hogares como
+#     empleadores y organismos extraterritoriales. Repartirlas entre sectores sería fabricar.
+#
+# `Y` y `Z` no son un detalle: al corte 2025-12-31 pesaban 26,72% y 18,75% de la cartera del
+# país. Casi la mitad del crédito dominicano no va a un sector productivo, y una lectura
+# «crédito por sector» que no lo sepa se equivoca de denominador.
+
+
+class SibSector(NamedTuple):
+    """One SIB CIIU letter and the BCRD-17 slug(s) it feeds."""
+
+    key: str                 # la letra CIIU tal como la emite la SIB ("F")
+    label: str               # etiqueta completa de la fuente
+    members: List[str]       # slugs BCRD-17 que alimenta (puede ser vacío)
+    kind: str                # "direct" | "bundle" (>1 slug) | "partial" (comparte slug)
+                             # | "no_sectorial" (no alimenta ninguno)
+    note: Optional[str]      # divulgación, o None
+
+
+#: Orden alfabético por letra, que es el que emite la fuente.
+SIB_SECTORS: List[SibSector] = [
+    SibSector("A", "A - AGRICULTURA, GANADERÍA, CAZA Y SILVICULTURA",
+              ["agropecuario"], "partial",
+              "«agropecuario» agrupa agricultura y pesca, que la SIB separa en A y B."),
+    SibSector("B", "B - PESCA", ["agropecuario"], "partial",
+              "«agropecuario» agrupa agricultura y pesca, que la SIB separa en A y B."),
+    SibSector("C", "C - EXPLOTACIÓN DE MINAS Y CANTERAS", ["mineria"], "direct", None),
+    SibSector("D", "D - INDUSTRIA MANUFACTURERA",
+              ["manufactura_local", "zonas_francas"], "bundle",
+              "La SIB no separa la manufactura local de las zonas francas."),
+    SibSector("E", "E - SUMINISTRO DE ELECTRICIDAD, GAS, VAPOR Y AIRE ACONDICIONADO",
+              ["energia"], "partial",
+              "«energia» es «Energía y Agua» en el marco BCRD; la letra E de la SIB cubre "
+              "electricidad y gas, y su marco no trae un sector de agua."),
+    SibSector("F", "F - CONSTRUCCIÓN", ["construccion"], "direct", None),
+    SibSector("G", "G - COMERCIO AL POR MAYOR Y AL POR MENOR; REPARACIÓN DE LOS VEHÍCULOS "
+                   "DE MOTOR Y DE LAS MOTOCICLETAS", ["comercio"], "direct", None),
+    SibSector("H", "H - ALOJAMIENTO Y SERVICIOS DE COMIDA", ["turismo"], "direct", None),
+    SibSector("I", "I - TRANSPORTE Y ALMACENAMIENTO", ["transporte"], "direct", None),
+    SibSector("J", "J - ACTIVIDADES FINANCIERAS Y DE SEGURO", ["financiero"], "direct", None),
+    SibSector("K", "K - ACTIVIDADES INMOBILIARIAS, ALQUILER Y ACTIVIDADES EMPRESARIALES",
+              ["inmobiliario", "servicios_profesionales"], "bundle",
+              "La K de la SIB agrupa el inmobiliario con las actividades empresariales, que "
+              "el marco BCRD separa en «inmobiliario» y «servicios_profesionales»."),
+    SibSector("L", "L - ADMINISTRACIÓN PÚBLICA Y DEFENSA: PLANES DE SEGURIDAD SOCIAL DE "
+                   "AFILIACIÓN OBLIGATORIA", ["administracion_publica"], "direct", None),
+    SibSector("M", "M - ENSEÑANZA", ["ensenanza"], "direct", None),
+    SibSector("N", "N - SERVICIOS SOCIALES Y RELACIONADOS CON LA SALUD HUMANA",
+              ["salud"], "direct", None),
+    SibSector("O", "O - Otras actividades de servicios comunitarios, sociales y personales",
+              ["otros_servicios"], "direct", None),
+    SibSector("P", "P - ACTIVIDADES DE LOS HOGARES EN CALIDAD DE EMPLEADORES, ACTIVIDADES "
+                   "INDIFERENCIADAS DE PRODUCCIÓN DE BIENES Y SERVICIOS DE LOS HOGARES PARA "
+                   "USO PROPIO", [], "no_sectorial",
+              "Hogares como empleadores: no es un sector productivo del marco BCRD-17."),
+    SibSector("Q", "Q - ACTIVIDADES DE ORGANIZACIONES Y ÓRGANOS EXTRATERRITORIALES",
+              [], "no_sectorial",
+              "Organismos extraterritoriales: no es un sector productivo del marco BCRD-17."),
+    SibSector("Y", "Y - CONSUMO DE BIENES Y SERVICIOS", [], "no_sectorial",
+              "DESTINO de crédito a hogares, no un sector económico. Repartirlo entre "
+              "sectores sería fabricar."),
+    SibSector("Z", "Z - COMPRA Y REMODELACIÓN DE VIVIENDAS", [], "no_sectorial",
+              "DESTINO de crédito a hogares (hipotecario), no un sector económico. Es la "
+              "demanda que financia a la construcción, no la construcción."),
+]
+
+SIB_KEYS: List[str] = [s.key for s in SIB_SECTORS]
+_SIB_BY_KEY: Dict[str, SibSector] = {s.key: s for s in SIB_SECTORS}
+_SIB_LABEL_TO_KEY: Dict[str, str] = {norm(s.label): s.key for s in SIB_SECTORS}
+_SIB_MEMBER_SLUGS = {s for sec in SIB_SECTORS for s in sec.members}
+
+# Guard fail-closed al importar, igual que ENCFT/ENAE/IED: todo miembro tiene que ser un
+# slug REAL del catálogo BCRD-17. Un slug mal escrito acá crearía un sector fantasma que
+# nadie alimenta y que ningún test de cobertura notaría.
+_SIB_EXTRA = _SIB_MEMBER_SLUGS - _CATALOG_SLUGS
+if _SIB_EXTRA:
+    raise RuntimeError(
+        f"Crosswalk SIB: slug(s) inexistente(s) en el catálogo BCRD-17: {sorted(_SIB_EXTRA)}"
+    )
+
+
+def map_sib_label(raw_label: object) -> Optional[str]:
+    """La letra CIIU de una etiqueta del cubo (``None`` si la fuente trae una desconocida).
+
+    ``None`` es información, no un fallo: significa que la SIB emitió un sector que este
+    mapa no declara —lo esperable el día que amplíe su marco— y el consumidor tiene que
+    dejarlo fuera del agregado en vez de atribuirlo al azar.
+    """
+    t = norm(_strip_footnote(raw_label))
+    if not t:
+        return None
+    if t in _SIB_LABEL_TO_KEY:
+        return _SIB_LABEL_TO_KEY[t]
+    # La letra sola, por si la fuente acorta la etiqueta: "F" o "F - ...".
+    cabeza = re.split(r"[\s\-–]", str(raw_label or "").strip(), 1)[0].upper()
+    return cabeza if cabeza in _SIB_BY_KEY else None
+
+
+def sib_members(key: str) -> List[str]:
+    """Slugs BCRD-17 que alimenta la letra *key* (``[]`` si no existe o no es sectorial)."""
+    s = _SIB_BY_KEY.get(key)
+    return list(s.members) if s else []
+
+
+def sib_coverage() -> Dict[str, object]:
+    """Cobertura declarada del cubo de la SIB sobre los 17 slugs.
+
+    ``no_sectorial`` NO es una brecha: son destinos de crédito a hogares y categorías que el
+    marco BCRD-17 no considera sectores productivos. ``uncovered`` sí lo es: `comunicaciones`
+    no tiene letra porque la J de la SIB es financiera.
+    """
+    return {
+        "n_letras": len(SIB_SECTORS),
+        "n_slugs_covered": len(_SIB_MEMBER_SLUGS),
+        "covered": sorted(_SIB_MEMBER_SLUGS),
+        "uncovered": sorted(_CATALOG_SLUGS - _SIB_MEMBER_SLUGS),
+        "no_sectorial": [s.key for s in SIB_SECTORS if s.kind == "no_sectorial"],
+    }
