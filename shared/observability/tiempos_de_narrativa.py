@@ -12,6 +12,15 @@ la más lenta. Y dentro de una sección el trabajo sí es serial —generar, jue
 regenerar, juez—, de modo que una sola sección con reparaciones puede consumir el presupuesto
 entero ella sola. Sin el desglose por sección, ese caso se lee igual que «todo está lento».
 
+**Esa afirmación era FALSA para un producto, y costó semanas de diagnóstico.**
+`banking_year_review` hacía `await` dentro de su bucle de secciones —el único del catálogo—,
+así que su tiempo SÍ era la suma: p90 de 347 s contra un techo de 270 s. Leyendo esta nota se
+buscó una cola larga en una sección durante semanas, cuando lo que había era una suma. Se
+faneó el 2026-09-01 y lo vigila `test_las_secciones_se_generan_en_paralelo.py`, que barre los
+productos y exige el fan-out o una excepción declarada. **La lección para esta clase de
+telemetría: una nota que afirma cómo se ejecuta el código no es documentación, es una
+aserción — y si nadie la verifica, dirige el diagnóstico hacia donde no está el problema.**
+
 **Lo que responde en una consulta:**
 
 - qué plantilla tiene la mediana y el p90 más altos — la candidata a mirar;
@@ -127,8 +136,9 @@ def tiempos_de_narrativa(db: Session, desde: Optional[date] = None,
         "llamadas_sin_medicion": sin_medicion,
         "truncado": len(filas) >= MAX_FILAS,
         "como_leerlo": (
-            "Las secciones se generan en PARALELO, así que el tiempo de un informe es "
-            "aproximadamente el de su sección más lenta, no la suma. Dentro de una sección el "
+            "Las secciones se generan en PARALELO —lo exige un test que barre los "
+            "productos—, así que el tiempo de un informe es aproximadamente el de su sección "
+            "más lenta, no la suma. Dentro de una sección el "
             "trabajo es serial (generar · juez · regenerar…), de modo que una sola con "
             "reparaciones puede consumir el presupuesto entero. Mirá el p90 por plantilla: la "
             "de arriba es la candidata. Los HIT de caché quedan fuera de los percentiles. "
