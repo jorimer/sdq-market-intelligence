@@ -14,7 +14,7 @@ from shared.products import (
     get_product,
     is_implemented,
 )
-from modules.sector_intel.models.models import SectorVariable
+from shared.reference.sector_variables import SectorVariable
 from modules.sector_intel.structure_product import (
     EconomicStructureProduct,
     economic_structure_manifest,

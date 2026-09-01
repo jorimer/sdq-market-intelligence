@@ -9,7 +9,7 @@ from sqlalchemy.pool import StaticPool
 from shared.data.tss_salary import TSSSalaryClient, TSSSalaryError
 from shared.database.base import Base
 from shared.settings.models import AppSetting  # noqa: F401 — register app_setting table
-from modules.sector_intel.models.models import SectorVariable  # noqa: F401 — register tables
+from shared.reference.sector_variables import SectorVariable  # noqa: F401 — register tables
 from modules.sector_intel.sectors_sync import (
     OPERATING_COST_KEY,
     latest_complete_year,

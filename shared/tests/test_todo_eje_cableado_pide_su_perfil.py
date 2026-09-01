@@ -31,13 +31,25 @@ EJES_CABLEADOS = {
     "energy": ("modules.energy_intel.ai_context", "energy_outlook", "energia"),
     "free_zones": ("modules.free_zones_intel.ai_context", "free_zones_outlook",
                    "zonas_francas"),
+    "telecom": ("modules.telecom_intel.ai_context", "telecom_outlook", "comunicaciones"),
     "tourism": ("modules.tourism_intel.ai_context", "tourism_outlook", "turismo"),
+}
+
+#: Capas que un eje declara NO servir aunque su fuente las alcance, y por qué. Es la única
+#: puerta: sin una entrada acá, el test de abajo exige que la plantilla nombre toda capa que
+#: el crosswalk alcanza para ese slug.
+OMISIONES_DECLARADAS = {
+    # `construction_intel` ya publica el crecimiento del PIB de construcción del BCRD con su
+    # propio nombre. Servirle además `actividad` pondría dos cifras de crecimiento del mismo
+    # sector en el mismo contexto —una interanual y una de tres años— y el modelo elige la
+    # que le cae más cerca.
+    ("construction", "actividad"): "ya publica construction_gdp_growth_*_pct del BCRD",
 }
 
 
 def test_el_barrido_no_esta_vacio():
     """Un `@parametrize` sobre una lista vacía sale SKIPPED, no FAILED."""
-    assert len(EJES_CABLEADOS) == 4
+    assert len(EJES_CABLEADOS) == 5
 
 
 @pytest.mark.parametrize("eje", sorted(EJES_CABLEADOS))
@@ -52,30 +64,95 @@ def test_el_contexto_del_eje_INCLUYE_el_bloque(eje):
     assert llamadas, f"{eje}: el contexto no arma el bloque de financiamiento"
 
 
+def _capas_que_la_fuente_ALCANZA(slug):
+    """Las capas del perfil que existen para *slug*, DERIVADAS del crosswalk.
+
+    Se derivan y no se listan a mano: una segunda tabla del mismo mapa es como las dos se
+    desincronizan, y acá el costo de desincronizarse es que la plantilla deje de pedir una
+    capa que sí viaja — el bloque llega al contexto y la prosa nunca lo usa, en silencio.
+    """
+    from shared.perfil_del_sector import (_ACTIVIDAD_IED_POR_SLUG, _RAMA_POR_SLUG,
+                                          letras_del_slug)
+    capas = {}
+    if letras_del_slug(slug):
+        capas["credito"] = f"credito_del_sistema_al_sector_{slug}"
+    capas["costo_laboral"] = f"costo_laboral_del_sector_{slug}"      # la TSS cubre los 17
+    capas["actividad"] = f"actividad_del_sector_{slug}_en_las_cuentas_nacionales"
+    if slug in _RAMA_POR_SLUG:                                        # la ENCFT parte los 17
+        capas["ocupacion"] = f"ocupacion_de_la_rama_del_sector_{slug}"
+    if slug in _ACTIVIDAD_IED_POR_SLUG:                               # la IED cubre 10 de 17
+        capas["inversion_extranjera"] = f"inversion_extranjera_en_el_sector_{slug}"
+    return capas
+
+
 @pytest.mark.parametrize("eje", sorted(EJES_CABLEADOS))
-def test_la_plantilla_del_eje_PIDE_el_bloque(eje):
+def test_la_plantilla_del_eje_PIDE_todas_las_capas_que_su_fuente_ALCANZA(eje):
+    """La mitad que se olvida, ahora sobre las CINCO capas.
+
+    La primera versión enumeraba dos claves a mano. Al sumar tres capas más eso habría
+    quedado corto sin fallar: la plantilla seguiría verde pidiendo dos de cinco, y las otras
+    tres viajarían al contexto sin que la prosa las usara — que es exactamente el defecto que
+    este archivo existe para prevenir, repetido a mayor escala.
+    """
     _mod, plantilla, slug = EJES_CABLEADOS[eje]
     texto = THIN_TEMPLATES[plantilla]
-    for clave in (f"credito_del_sistema_al_sector_{slug}",
-                  f"costo_laboral_del_sector_{slug}"):
+    for capa, clave in _capas_que_la_fuente_ALCANZA(slug).items():
+        if (eje, capa) in OMISIONES_DECLARADAS:
+            assert clave not in texto, (
+                f"{eje}: declara omitir «{capa}» y la plantilla igual la nombra")
+            continue
         assert clave in texto, (
             f"{eje}: la plantilla no nombra «{clave}». El bloque viaja en el contexto y el "
             "modelo no lo usa, porque la enumeración de cifras permitidas lo deja afuera")
 
 
 @pytest.mark.parametrize("eje", sorted(EJES_CABLEADOS))
+def test_el_eje_que_OMITE_una_capa_lo_hace_en_el_CODIGO_y_no_solo_en_el_test(eje):
+    """Una omisión declarada en el test y no en el código deja la clave viajando igual.
+
+    El contrato es al revés de lo que parece: `OMISIONES_DECLARADAS` no apaga nada, solo
+    dice qué se espera. Quien apaga es el `omitir=(...)` del contexto del eje, y si falta,
+    la plantilla no la pide pero el dato sí llega — y llega para ser ignorado.
+    """
+    omitidas = {capa for (e, capa) in OMISIONES_DECLARADAS if e == eje}
+    if not omitidas:
+        return
+    mod_name, _plantilla, _slug = EJES_CABLEADOS[eje]
+    fuente = inspect.getsource(importlib.import_module(mod_name))
+    literales = {n.value for n in ast.walk(ast.parse(fuente))
+                 if isinstance(n, ast.Constant) and isinstance(n.value, str)}
+    faltan = omitidas - literales
+    assert not faltan, (
+        f"{eje}: declara omitir {sorted(faltan)} y su contexto no lo pasa en `omitir=`")
+
+
+@pytest.mark.parametrize("eje", sorted(EJES_CABLEADOS))
 def test_la_plantilla_manda_a_CITAR_la_fecha_de_la_capa(eje):
-    """Son capas de otro período que el índice del eje. Sin la fecha, el modelo las fecha en
-    el encabezado del informe."""
-    _mod, plantilla, _slug = EJES_CABLEADOS[eje]
-    assert "corte_de_esta_capa" in THIN_TEMPLATES[plantilla]
+    """Son capas de otro período que el índice del eje, y de períodos distintos entre sí: el
+    cubo es trimestral, las cuentas nacionales y la IED anuales, la ENCFT por rama. Sin la
+    fecha, el modelo las fecha en el encabezado del informe."""
+    _mod, plantilla, slug = EJES_CABLEADOS[eje]
+    texto = THIN_TEMPLATES[plantilla]
+    # `comunicaciones` es el único slug que la SIB no cubre: sin crédito no hay corte
+    # trimestral que citar, y exigir esa palabra ahí sería exigir algo que no viaja.
+    from shared.perfil_del_sector import letras_del_slug
+    if letras_del_slug(slug):
+        assert "corte_de_esta_capa" in texto
+    assert "anio_de_esta_capa" in texto
 
 
 @pytest.mark.parametrize("eje", sorted(EJES_CABLEADOS))
 def test_la_plantilla_NO_manda_a_declarar_la_ausencia(eje):
-    """Decisión del dueño del 2026-08-31: lo que no se puede afirmar no se menciona."""
+    """Decisión del dueño del 2026-08-31: lo que no se puede afirmar no se menciona.
+
+    Las dos formas valen —«no la menciones» y «no las menciones»—: lo que se protege es la
+    instrucción, no su número gramatical. Atar el test a una sola forma haría fallar a un eje
+    que dice lo mismo bien escrito, que es cómo un test correcto se vuelve un estorbo.
+    """
     _mod, plantilla, _slug = EJES_CABLEADOS[eje]
-    assert "no las menciones ni digas que" in THIN_TEMPLATES[plantilla]
+    texto = THIN_TEMPLATES[plantilla]
+    assert ("no la menciones ni digas que" in texto
+            or "no las menciones ni digas que" in texto)
 
 
 def test_la_LISTA_no_se_queda_corta_contra_el_codigo():
@@ -86,7 +163,7 @@ def test_la_LISTA_no_se_queda_corta_contra_el_codigo():
     raiz = pathlib.Path(__file__).resolve().parents[2]
     cableados = set()
     for ctx in sorted(raiz.glob("modules/*/ai_context.py")):
-        if "contexto_de_financiamiento" in ctx.read_text(encoding="utf-8"):
+        if "contexto_del_perfil_del_sector" in ctx.read_text(encoding="utf-8"):
             cableados.add(ctx.parent.name)
     declarados = {m.split(".")[1] for m, _p, _s in EJES_CABLEADOS.values()}
     faltan = cableados - declarados
@@ -145,6 +222,24 @@ def test_la_plantilla_PIDE_la_capacidad_de_pago_con_SU_lectura(eje):
         f"{eje}: no exige citar el año de la capa, que no es el del informe")
     assert "no la menciones" in texto, (
         f"{eje}: manda a declarar la ausencia, contra la decisión del 2026-08-31")
+
+
+def test_cada_eje_lee_las_capas_NUEVAS_de_una_forma_DISTINTA():
+    """La misma disciplina que la capacidad de pago, sobre actividad/ocupación/IED.
+
+    Cinco plantillas con el mismo párrafo sobre inversión extranjera serían relleno
+    repartido: la capa llegaría a los cinco informes diciendo lo mismo, que es indistinguible
+    de no haberla traído. Se recorta la lectura ENTERA, no un prefijo — un prefijo deja pasar
+    una copia parcial, y en este repo ya pasó.
+    """
+    lecturas = {}
+    for eje, (_m, plantilla, _slug) in EJES_CABLEADOS.items():
+        t = THIN_TEMPLATES[plantilla]
+        i = t.index("Y si el contexto trae ")
+        fin = t.index("Cada una de estas capas trae SU propia fecha", i)
+        lecturas[eje] = " ".join(t[i:fin].split())
+    assert len(set(lecturas.values())) == len(lecturas), (
+        f"hay ejes con la MISMA lectura de las capas nuevas: {sorted(lecturas)}")
 
 
 def test_cada_eje_tiene_una_lectura_DISTINTA():

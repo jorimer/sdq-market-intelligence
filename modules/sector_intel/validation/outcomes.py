@@ -10,7 +10,7 @@ from typing import Dict, List, Optional
 
 from sqlalchemy.orm import Session
 
-from modules.sector_intel.models.models import SectorVariable
+from shared.reference.sector_variables import SectorVariable
 from modules.sector_intel.sectors_sync import LABOR_ENCFT_DIMENSION
 
 

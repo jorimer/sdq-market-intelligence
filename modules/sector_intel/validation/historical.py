@@ -11,7 +11,8 @@ from typing import Dict, List, Optional
 
 from sqlalchemy.orm import Session
 
-from modules.sector_intel.models.models import SectorScore, SectorVariable
+from modules.sector_intel.models.models import SectorScore
+from shared.reference.sector_variables import SectorVariable
 from shared.data.sector_crosswalk import ENCFT_BRANCHES, IED_ACTIVITIES
 
 

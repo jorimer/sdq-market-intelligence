@@ -12,6 +12,8 @@ from typing import Any, Callable, Dict, List, Optional
 
 from sqlalchemy.orm import Session
 
+from shared.reference.sector_variables import SECTOR_DIMENSION
+
 from modules.sector_intel.events import (
     acceleration_context,
     publish_sector_updated,
@@ -191,16 +193,15 @@ IAI_RUBRIC_VARS = (
 )
 # Real sector inputs from si_variables (BCRD value added).
 SECTOR_LIVE_VARS = ("sector_size", "sector_growth")
-# Storage dimension of the per-slug IAI inputs. Other dimensions in si_variables
-# (e.g. ``labor_encft`` — branch-level ENCFT employment, the Gate-E outcome) are NOT
-# index inputs and must not define the index's period grid, so reads scope to this.
-SECTOR_DIMENSION = "sector"
+# La dimensión de almacenamiento de los insumos por slug se declara junto al modelo
+# (`shared/reference/sector_variables.py`), que es de donde se importa arriba: las otras
+# dimensiones de `si_variables` no son insumos del índice y no deben definir su grilla.
 
 
 def get_sector_variables(db: Session, period: Optional[str] = None) -> Dict[str, Any]:
     """Real per-sector inputs from ``si_variables`` (BCRD). Latest period per
     (sector, variable) when *period* is omitted — sources can lag differently."""
-    from modules.sector_intel.models.models import SectorVariable
+    from shared.reference.sector_variables import SectorVariable
 
     q = db.query(SectorVariable).filter(SectorVariable.dimension == SECTOR_DIMENSION)
     if period:
@@ -243,7 +244,7 @@ def _load_macro_contract(db: Session) -> Dict[str, Any]:
 
 def _sector_periods(db: Session) -> List[str]:
     """Distinct periods present in ``si_variables``, chronologically sorted."""
-    from modules.sector_intel.models.models import SectorVariable
+    from shared.reference.sector_variables import SectorVariable
 
     periods = {p for (p,) in db.query(SectorVariable.period)
                .filter(SectorVariable.dimension == SECTOR_DIMENSION).distinct() if p}
@@ -371,7 +372,7 @@ def _load_labor_availability(db: Session, target: Optional[str]) -> Dict[str, fl
     slugs resolve to a branch with employment in the chosen period. Partial coverage
     → ``{}`` (stay full rubric), so a missing branch can't sink some slugs to the
     min-max floor while others carry real headcounts."""
-    from modules.sector_intel.models.models import SectorVariable
+    from shared.reference.sector_variables import SectorVariable
     from modules.sector_intel.sectors_sync import LABOR_ENCFT_DIMENSION
     from shared.data.bcrd_sectors import sector_catalog
     from shared.data.sector_crosswalk import slug_branch
@@ -411,7 +412,7 @@ def _load_enae_profitability(db: Session) -> Dict[str, float]:
     motor omite variables faltantes — sin rúbrica-50 falsa), así la cobertura parcial es
     honesta y libre de distorsión min-max (a diferencia de operating_cost/labor, que sí
     llevan rúbrica y deben ser todo-17). ``{}`` si no hay dato ENAE."""
-    from modules.sector_intel.models.models import SectorVariable
+    from shared.reference.sector_variables import SectorVariable
     from modules.sector_intel.sectors_sync import ENAE_DIMENSION
     from shared.data.enae_activity import VAR_INGRESOS, VAR_UTILIDAD
     from shared.data.sector_crosswalk import ENAE_SECTORS
@@ -472,7 +473,7 @@ def _load_sgps_historical(db: Session) -> Dict[str, float]:
     Cubre los 17 (todos tienen la serie ``sector_growth``); un slug sin ningún valor
     queda ausente → ``compute_sgps`` lo imputa a 50 (rúbrica rotulada). ``{}`` si no
     hay serie de crecimiento persistida."""
-    from modules.sector_intel.models.models import SectorVariable
+    from shared.reference.sector_variables import SectorVariable
     from shared.data.bcrd_sectors import VAR_GROWTH
 
     rows = (db.query(SectorVariable)

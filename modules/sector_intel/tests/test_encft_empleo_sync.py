@@ -12,7 +12,7 @@ from shared.data.encft_employment import EmploymentClient, EmploymentError
 from shared.data.sector_crosswalk import ENCFT_BRANCHES
 from shared.database.base import Base
 from shared.settings.models import AppSetting  # noqa: F401 — register app_setting table
-from modules.sector_intel.models.models import SectorVariable  # noqa: F401 — register tables
+from shared.reference.sector_variables import SectorVariable  # noqa: F401 — register tables
 from modules.sector_intel.sectors_sync import LABOR_ENCFT_DIMENSION, encft_empleo_sync
 
 BRANCH_KEYS = {b.key for b in ENCFT_BRANCHES}

@@ -38,7 +38,8 @@ from modules.banking_score.models.models import (  # noqa: F401,E402
 from modules.macro_political_risk.models.models import Country, IRMPSnapshot, DimensionScore  # noqa: F401,E402
 from modules.macro_monitor.models.models import MacroSeries, MacroSnapshot  # noqa: F401,E402
 from modules.trade_intel.models.models import TradeFlow, TradeScore  # noqa: F401,E402
-from modules.sector_intel.models.models import Sector, SectorVariable, SectorScore  # noqa: F401,E402
+from modules.sector_intel.models.models import Sector, SectorScore  # noqa: F401,E402
+from shared.reference.sector_variables import SectorVariable  # noqa: F401,E402
 from modules.social_dev.models.models import SocialIndicator, DevelopmentScore  # noqa: F401,E402
 from modules.esg_climate.models.models import EnvIndicator, ESGScore  # noqa: F401,E402
 

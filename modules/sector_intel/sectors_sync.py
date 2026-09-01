@@ -11,31 +11,19 @@ from typing import Any, Callable, Dict, List, Optional
 
 from sqlalchemy.orm import Session
 
-from modules.sector_intel.models.models import SectorVariable
+from shared.reference.sector_variables import (  # noqa: F401 — re-export
+    ENAE_DIMENSION, IED_DIMENSION, LABOR_ENCFT_DIMENSION, SECTOR_DIMENSION,
+    SectorVariable,
+)
 
 logger = logging.getLogger("sdq.sector_intel.sectors_sync")
 
-SECTOR_DIMENSION = "sector"  # IAI dimension these variables belong to
 # El archivo vigente del BCRD arranca en 2018; el retropolado extiende a 2007. Si el
 # panel trae algún año ≤ este ancla, el vintage histórico se ingirió; si arranca en
 # 2018+, el retropolado no estaba disponible (degradación a rotular, no silenciar).
 _RETRO_HISTORY_ANCHOR_YEAR = 2017
-# ENCFT employment is published by the ONE at a 10-activity-branch resolution (NOT
-# the 17 BCRD slugs); these rows are keyed by branch under their own dimension so
-# the 17-slug IAI never reads them. They are the Gate-E outcome (Δempleo) and the
-# raw input the per-slug ``labor_availability`` is later derived from.
-LABOR_ENCFT_DIMENSION = "labor_encft"
-# ENAE structural-financial variables (income/costs/profit/profitability) are
-# published per ENAE survey sector (9, a partial cut — NOT the 17 slugs), so rows are
-# keyed by ENAE sector under their own dimension. The 17-slug IAI never reads them;
-# wiring them into the business/talent dimensions (de-rubricizing operating_cost +
-# a profitability signal) is a later phase. This sync only ingests the real panel.
-ENAE_DIMENSION = "enae"
-
-# IED del BCRD por actividad (9 actividades, tercera resolución del mismo mapa). Es el
-# DESENLACE del Gate E de inversión, no un insumo del IAI: el índice nunca lee esta
-# dimensión, así que el ranking de los 17 slugs queda intacto.
-IED_DIMENSION = "ied_bcrd"
+# Las cuatro dimensiones de `si_variables` —y qué resolución es cada una— se declaran
+# junto al modelo, en `shared/reference/sector_variables.py`.
 
 # TSS salary → operating_cost is a CROSS-SECTIONAL snapshot (per-slug, applied
 # uniformly across periods like the national WGI), so it lives as an AppSetting the

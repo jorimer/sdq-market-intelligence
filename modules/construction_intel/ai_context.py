@@ -32,14 +32,19 @@ _METRIC = {"production": ("production", "avg_growth"), "pipeline": ("pipeline", 
 
 
 def _financiamiento(perfil: Optional[Dict[str, Any]]) -> Dict[str, Any]:
-    """Delega en `shared.perfil_del_sector.contexto_de_financiamiento`.
+    """Delega en `shared.perfil_del_sector.contexto_del_perfil_del_sector`.
 
     El cuerpo vivía acá y era el único. Subió a `shared/` al cablear el segundo eje: cuatro
     copias de la misma forma es como una se queda atrás. Se conserva el nombre local porque
     es el que usan los tests de este módulo.
+
+    **`actividad` se OMITE, y es el único eje que la omite.** Este contexto ya publica el
+    crecimiento del PIB de construcción del BCRD como `construction_gdp_growth_latest_pct` y
+    `..._3y_pct`: sumarle la misma lectura con otro nombre pondría dos cifras de crecimiento
+    del mismo sector en el mismo contexto y el modelo elige la que le cae más cerca.
     """
-    from shared.perfil_del_sector import contexto_de_financiamiento
-    return contexto_de_financiamiento(perfil, "construccion")
+    from shared.perfil_del_sector import contexto_del_perfil_del_sector
+    return contexto_del_perfil_del_sector(perfil, "construccion", omitir=("actividad",))
 
 
 def construction_ai_context(index: Dict[str, Any], period: str,

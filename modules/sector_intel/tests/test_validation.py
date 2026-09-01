@@ -5,7 +5,8 @@ from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
 
 from shared.database.base import Base
-from modules.sector_intel.models.models import SectorScore, SectorVariable  # noqa: F401
+from modules.sector_intel.models.models import SectorScore  # noqa: F401
+from shared.reference.sector_variables import SectorVariable  # noqa: F401
 from modules.sector_intel.validation.historical import build_iai_panel
 from modules.sector_intel.validation.outcomes import employment_by_branch, label_panel
 from modules.sector_intel.validation.report import gate_e_report

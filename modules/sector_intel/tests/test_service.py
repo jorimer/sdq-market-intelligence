@@ -11,10 +11,10 @@ from modules.sector_intel.events import (
     acceleration_context,
     register_subscribers,
 )
+from shared.reference.sector_variables import SectorVariable  # noqa: F401 — register tables
 from modules.sector_intel.models.models import (  # noqa: F401 — register tables
     Sector,
     SectorScore,
-    SectorVariable,
 )
 from shared.settings.models import AppSetting  # noqa: F401 — registra app_setting (assemble lee WGI/TSS)
 from modules.sector_intel.service import (
