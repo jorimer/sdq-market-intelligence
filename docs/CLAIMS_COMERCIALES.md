@@ -94,7 +94,7 @@ producción sirvió 19 días un Gini de 0,44 calculado con un score que ya no ex
 el deck decía 0,16. Las cifras vetadas se listan en `vetadas_por_frescura` en vez de
 desaparecer — un veto silencioso se lee como que el eje no tiene validación.
 
-### Los seis grupos, y por qué no se mezclan
+### Los siete grupos, y por qué no se mezclan
 
 «Tiene validación» abarca cosas que no sostienen el mismo argumento de venta:
 
@@ -102,6 +102,7 @@ desaparecer — un veto silencioso se lee como que el eje no tiene validación.
 |---|---|
 | **A · evento real** | discriminación contra desenlaces reales de entidades |
 | **B · concluyente** | discriminación contra un desenlace realizado, con IC que no cruza cero |
+| **B2 · concluyente, pero indistinguible del tamaño** | discriminación contra un desenlace realizado, **sin poder afirmar ventaja**: el mismo desenlace ordenado SOLO por el tamaño del sujeto alcanza un poder estadísticamente indistinguible. La cifra es real y se cita; lo que NO se puede decir es que el score aporte algo que el tamaño no explique. Medido el 2026-09-01, **tres de las cinco filas que estaban en el grupo B empataban con el tamaño** y la tabla no lo decía en ninguna parte |
 | **C · convergente** | coincide con una medida independiente del mismo período — **no** es backtest temporal y no se vende como tal |
 | **D · parcial** | metodología exigente con resultado acotado, declarado |
 | **E · corrida y sin credencial a favor** | el Gate E se aplicó y **no dejó una afirmación vendible**. Cubre dos cosas distintas que comparten esa consecuencia: que el intervalo cruce cero (no concluyente) y que **no lo cruce pero esté del lado equivocado** (la señal ordena INVERTIDO, que es un hallazgo, no una ausencia). Honesto; no es credencial |
