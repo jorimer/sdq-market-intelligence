@@ -289,9 +289,11 @@ class ConstructionProduct:
         try:
             from datetime import date
 
-            from shared.perfil_del_sector import perfil_del_sector
-            _perfil = perfil_del_sector(self._require_db(), "construccion",
-                                        date(int(str(s.period)[:4]), 12, 31))
+            from shared.perfil_del_sector import (corte_del_cubo_para_el_anio,
+                                                 perfil_del_sector)
+            _db = self._require_db()
+            _corte = corte_del_cubo_para_el_anio(_db, int(str(s.period)[:4]))
+            _perfil = perfil_del_sector(_db, "construccion", _corte) if _corte else None
             if _perfil:
                 payload["perfil_del_sector"] = _perfil
         except Exception:  # noqa: BLE001 — el snapshot nunca depende de esta lectura

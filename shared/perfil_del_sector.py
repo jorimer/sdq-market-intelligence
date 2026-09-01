@@ -25,6 +25,7 @@ import logging
 from datetime import date
 from typing import Any, Dict, List, Optional
 
+from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from shared.data.bcrd_sectors import sector_catalog
@@ -239,3 +240,27 @@ def contexto_de_financiamiento(perfil: Optional[Dict[str, Any]],
             "fuente": sal.get("fuente"),
         }
     return out
+
+
+def corte_del_cubo_para_el_anio(db: Session, anio: int) -> Optional[date]:
+    """El corte del cubo con que se lee un AÑO — su diciembre, o el último disponible.
+
+    **Por qué existe.** Los ejes sectoriales tienen período anual y el cubo es trimestral, así
+    que un año cerrado se lee con su diciembre. Pero un año EN CURSO no tiene diciembre: el
+    producto de energía estaba en 2026 y pedía `2026-12-31`, que no existe, así que la capa
+    de crédito no viajaba y nunca iba a viajar. El año que viene le pasa a todos.
+
+    La caída al último trimestre disponible del año es legítima porque esta capa **no es del
+    índice**: es contexto agregado, y la doctrina de este repo ya dice que esas capas llevan
+    el período de SU PROPIA FUENTE, indicado donde se presentan. El bloque viaja con
+    `corte_de_esta_capa` y la plantilla exige citarlo, así que el lector nunca la confunde
+    con el corte del informe.
+
+    Lo que NO hace: salirse del año. Un informe de 2026 no lee el cubo de 2025 — eso sí sería
+    contradecir el encabezado. Sin ningún corte dentro del año devuelve ``None``.
+    """
+    inicio, fin = date(anio, 1, 1), date(anio, 12, 31)
+    return (db.query(func.max(CarteraSectorial.period_end))
+            .filter(CarteraSectorial.period_end >= inicio,
+                    CarteraSectorial.period_end <= fin)
+            .scalar())

@@ -293,16 +293,20 @@ class EnergyProduct:
         # EL FINANCIAMIENTO DEL SECTOR (energía), que este eje no tenía. Cuánto
         # crédito recibe, a qué tasa y con qué mora sale del cubo de la SIB.
         #
-        # AL CIERRE DEL AÑO: el período de este producto es anual y el cubo es
-        # trimestral. Con el corte de marzo el bloque describiría otro trimestre que
-        # el encabezado del informe. Un año sin cubo no trae el bloque y no se
-        # menciona (decisión del dueño del 2026-08-31).
+        # DENTRO DEL AÑO: el período de este producto es anual y el cubo trimestral.
+        # Se usa el diciembre del año, y si el año está EN CURSO —y por eso no tiene
+        # diciembre— el último trimestre disponible DE ESE AÑO. Es legítimo porque
+        # esta capa no es del índice: es contexto agregado, viaja con su propio corte
+        # y la plantilla exige citarlo. Nunca se sale del año, que sí contradiría el
+        # encabezado. Sin ningún corte, no hay bloque y no se menciona.
         try:
             from datetime import date as _date
 
-            from shared.perfil_del_sector import perfil_del_sector
-            _perfil = perfil_del_sector(self._require_db(), "energia",
-                                        _date(int(str(s.period)[:4]), 12, 31))
+            from shared.perfil_del_sector import (corte_del_cubo_para_el_anio,
+                                                 perfil_del_sector)
+            _db = self._require_db()
+            _corte = corte_del_cubo_para_el_anio(_db, int(str(s.period)[:4]))
+            _perfil = perfil_del_sector(_db, "energia", _corte) if _corte else None
             if _perfil:
                 payload["perfil_del_sector"] = _perfil
         except Exception:  # noqa: BLE001 — el snapshot nunca depende de esta lectura

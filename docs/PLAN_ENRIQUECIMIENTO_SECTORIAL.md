@@ -239,6 +239,15 @@ sino atar las dos puntas —`test_las_DOS_PUNTAS_del_contrato_usan_las_mismas_cl
 las claves que el lector pide contra las que el emisor REAL produce, en los dos casos
 (directo y agregado)—.
 
+**Un año EN CURSO también lee el cubo** (#1041). Verificado en producción: los tres ejes
+citan el financiamiento, pero `energy` no — su producto está en 2026, pedía un `2026-12-31`
+que no existe y la capa nunca iba a viajar. El año que viene le pasa a todos.
+
+Ahora el corte lo deriva `corte_del_cubo_para_el_anio`: el diciembre del año, o —si el año
+está en curso— su último trimestre DE ESE AÑO. Nunca se sale del año, que sí contradiría el
+encabezado. Es legítimo porque la capa no es del índice: es contexto agregado, viaja con su
+propio corte y la plantilla exige citarlo.
+
 **`sector_intel` queda APARTE, y es una decisión del dueño.** Sumar el crédito a los 19
 sectores del IAI/SGPS no es enriquecer una narrativa: es cambiar los insumos de un SCORE
 publicado. Eso mueve un número que ya se citó y merece su propia decisión, no colarse en una
@@ -281,5 +290,5 @@ sería relleno.
 | 2 · letra CIIU en el crosswalk | **cerrada** 2026-08-31 (#1035) |
 | 3 · `perfil_del_sector` | **cerrada** 2026-08-31 (#1036) |
 | 4 · construction + medición | **cerrada** 2026-08-31 (#1037 + #1038) |
-| 5 · resto de los ejes | **cerrada** 2026-09-01 (#1040) · `sector_intel` aparte |
+| 5 · resto de los ejes | **cerrada** 2026-09-01 (#1040 + #1041) · `sector_intel` aparte |
 | 6 · capacidad de pago y holgura | pendiente |
