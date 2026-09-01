@@ -3,7 +3,7 @@
 Deterministic and cheap (in-memory over the rating history), so it can be
 recomputed on demand or on a schedule from the Operation Console.
 """
-from typing import Dict
+from typing import Dict, List, Optional
 
 from sqlalchemy.orm import Session
 
@@ -45,6 +45,14 @@ NOTA_CONTROL_TAMANO = (
     "el mismo desenlace ordenado SOLO por el activo total de la entidad, sobre el mismo "
     "panel. Es la vara contra la que se lee el Gini del score: si el tamaño solo alcanza el "
     "mismo poder, el score no está agregando nada por encima de cuán grande es la entidad"
+)
+
+
+#: Qué se le dice al lector del control de UNA familia. Va aparte de `NOTA_CONTROL_TAMANO`
+#: porque esa habla del agregado: acá el desenlace es el de la familia, no la unión.
+NOTA_EXTRA_TAMANO = (
+    "activo total de la entidad al corte, contra el desenlace de ESTA familia (no contra "
+    "el agregado de las tres)"
 )
 
 
@@ -92,7 +100,8 @@ def _senal(obs, reglas, tier_order, n_boot: int) -> Dict:
     }
 
 
-def senales_por_familia(obs, tier_order, n_boot: int) -> Dict:
+def senales_por_familia(obs, tier_order, n_boot: int,
+                        db: Optional[Session] = None) -> Dict:
     """Una señal por familia + cuál es la titular (la concluyente con más eventos).
 
     Mismo contrato que seguros y pensiones (`signals` + `headline_signal`), a propósito: dos
@@ -100,12 +109,57 @@ def senales_por_familia(obs, tier_order, n_boot: int) -> Dict:
     """
     señales = {clave: {**_senal(obs, reglas, tier_order, n_boot), "que_mide": glosa}
                for clave, reglas, glosa in FAMILIAS_DESENLACE}
+    # EL CONTROL VIAJA DENTRO DE CADA SEÑAL, pegado al Gini que acota. Estaba solo en la
+    # raíz del reporte —acotando el agregado— y la credencial comercial, que publica la
+    # señal TITULAR, salía sin control: `control_medido: false` en producción, en el eje
+    # insignia. Mismo lugar que en seguros, pensiones, comercio e IRMP.
+    if db is not None:
+        for clave, reglas, _glosa in FAMILIAS_DESENLACE:
+            señales[clave]["control_solo_tamano"] = control_por_familia(
+                db, obs, señales[clave], reglas)
     concluyentes = [(v["n_events"], k) for k, v in señales.items() if v.get("conclusive")]
     titular = max(concluyentes)[1] if concluyentes else None
     return {"signals": señales, "headline_signal": titular}
 
 
-def control_solo_tamano(db: Session, obs, n_boot: int) -> Dict:
+def _activos_por_observacion(db: Session, obs) -> List[Optional[float]]:
+    """El activo total de cada observación, en el MISMO orden que *obs*.
+
+    Se extrae aparte porque ahora el control se computa una vez por FAMILIA de desenlace y
+    no solo sobre el agregado: leer la base una vez por familia sería el mismo trabajo
+    cuatro veces.
+    """
+    activos = {(str(d.bank_id), d.period_end): d.activos_totales
+               for d in db.query(BankingData).all()}
+    return [None if (a := activos.get((str(o.bank_id), o.period_end))) is None else float(a)
+            for o in obs]
+
+
+def control_por_familia(db: Session, obs, señal: Dict, reglas) -> Dict:
+    """El control de UNA familia: el MISMO desenlace de esa familia, ordenado solo por activo.
+
+    **Por qué por familia y no uno solo para todo.** El control del agregado acota la cifra
+    del agregado, y la credencial comercial publica la de la señal TITULAR —que es otra—.
+    Emparejar la cifra de un desenlace con el control de otro sería peor que no traer
+    control: diría que se comparó cuando no. Es la misma forma que ya usan seguros,
+    pensiones, comercio e IRMP: el control viaja DENTRO de su señal.
+
+    Usa `shared.validation.control_tamano.medir_control_de_tamano` en vez de la cuenta
+    propia que había acá: así trae el veredicto, la cobertura del panel y la negativa a
+    comparar universos distintos, que la versión local no computaba.
+    """
+    from shared.validation.control_tamano import medir_control_de_tamano
+
+    y = [1 if set(o.triggers or ()) & set(reglas) else 0 for o in obs]
+    return medir_control_de_tamano(
+        _activos_por_observacion(db, obs), y, señal.get("gini"),
+        variable="activos_totales", nota_extra=NOTA_EXTRA_TAMANO,
+        ic_del_score=señal.get("gini_ci"))
+
+
+def control_solo_tamano(db: Session, obs, n_boot: int,
+                        gini_del_score: Optional[float] = None,
+                        ic_del_score: Optional[List] = None) -> Dict:
     """El MISMO desenlace, ordenado solo por el activo total. Con su N y su motivo si falta.
 
     El tamaño entra con la misma convención que el score —más activo = menos riesgo— así que
@@ -119,10 +173,8 @@ def control_solo_tamano(db: Session, obs, n_boot: int) -> Dict:
         return {"gini": None, "gini_ci": None, "n": 0,
                 "motivo": "sin sesión de base: el control no se pudo computar en esta corrida",
                 "nota": NOTA_CONTROL_TAMANO}
-    activos = {(str(d.bank_id), d.period_end): d.activos_totales
-               for d in db.query(BankingData).all()}
-    pares = [(float(a), 1 if o.deteriorated else 0) for o in obs
-             for a in [activos.get((str(o.bank_id), o.period_end))] if a]
+    pares = [(float(a), 1 if o.deteriorated else 0)
+             for o, a in zip(obs, _activos_por_observacion(db, obs)) if a]
     if not pares:
         return {"gini": None, "gini_ci": None, "n": 0,
                 "motivo": "ninguna observación del panel trae activo total: el control no se "
@@ -130,14 +182,23 @@ def control_solo_tamano(db: Session, obs, n_boot: int) -> Dict:
                 "nota": NOTA_CONTROL_TAMANO}
     g, lo, hi = gini_bootstrap_ci([v for v, _e in pares], [e for _v, e in pares],
                                   n_boot=n_boot)
+    # EL VEREDICTO, que faltaba. Sin él, el control publicaba dos Ginis y dejaba la
+    # comparación a cargo del lector — y la tabla comercial, que no puede leer, lo tomaba
+    # como «no evaluable». La regla vive en `shared.validation.control_tamano`: acá se
+    # llama, no se reimplementa.
+    from shared.validation.control_tamano import veredicto_de_control
+
+    redondeado = None if g is None else round(g, 4)
     return {
-        "gini": None if g is None else round(g, 4),
+        "gini": redondeado,
         "gini_ci": None if g is None or lo is None or hi is None else [round(lo, 4),
                                                                       round(hi, 4)],
         "n": len(pares),
         "n_sin_activo": len(obs) - len(pares),
         "variable": "activos_totales",
         "nota": NOTA_CONTROL_TAMANO,
+        "gini_del_score": gini_del_score,
+        **veredicto_de_control(gini_del_score, ic_del_score, redondeado),
     }
 
 
@@ -307,7 +368,7 @@ def build_backtest_report(db: Session, horizon_q: int = HORIZON_Q,
                           f"{dominante['eventos']} de los {composicion['n_eventos']} eventos "
                           f"({_pct(dominante['cuota'])}). La discriminación medida es sobre "
                           f"todo contra ese fenómeno, no contra los tres por igual.")
-    familias = senales_por_familia(obs, tier_order, n_boot)
+    familias = senales_por_familia(obs, tier_order, n_boot, db=db)
     invertidas = [k for k, v in familias["signals"].items() if v.get("invertida")]
     if invertidas:
         caveats.insert(0, "El score ordena AL REVÉS contra "
@@ -325,7 +386,8 @@ def build_backtest_report(db: Session, horizon_q: int = HORIZON_Q,
             f"{_pct(sin_credito['cuota_de_eventos'])} de los eventos. Están en el universo por "
             "diseño del producto, pero la cifra no se puede leer como discriminación entre "
             "bancos."))
-    control = control_solo_tamano(db, obs, n_boot)
+    control = control_solo_tamano(db, obs, n_boot, gini_del_score=g,
+                                  ic_del_score=[g_lo, g_hi] if g is not None else None)
     # Si el tamaño SOLO ordena igual o mejor que el score, decirlo es el hallazgo. Callarlo
     # deja publicada una cifra que el lector atribuye al score.
     if control.get("gini") is not None and g is not None and control["gini"] >= g:

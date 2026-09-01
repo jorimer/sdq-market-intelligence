@@ -164,3 +164,82 @@ def test_report_end_to_end(db):
     assert rep["n_events"] >= 1
     assert any("preliminar" in c.lower() for c in rep["caveats"])
     assert isinstance(rep["by_tier"], list)
+
+
+# ── El control por tamaño viaja DENTRO de cada señal ───────────────────────────
+#
+# Vivía SOLO en la raíz del reporte, acotando el desenlace agregado. La credencial
+# comercial publica la señal TITULAR —que es otro desenlace— así que salía sin control:
+# `control_medido: false` en producción, en el eje insignia, dentro del grupo que autoriza
+# a decir «discrimina». Emparejar la cifra de un desenlace con el control de otro habría
+# sido peor: diría que se comparó cuando no.
+
+def _panel_con_perdidas_y_tamanos(db):
+    """Un panel donde el desenlace de «resultados» dispara y hay activos de varios tamaños.
+
+    Se siembran activos MUY distintos a propósito: si todas las entidades pesaran lo mismo,
+    el control no tendría nada que ordenar y el test pasaría sin ejercitar la comparación.
+    """
+    for k in range(6):
+        for p in PERIODS:
+            _rate(db, f"MAL{k}", p, 45 + k, "SDQ-BBB")
+            db.add(BankingData(bank_id=f"MAL{k}", period_end=p, solvencia_pct=12.0,
+                               activos_totales=1_000 * (k + 1), utilidad_neta=-5))
+    for k in range(6):
+        for p in PERIODS:
+            _rate(db, f"OK{k}", p, 88, "SDQ-AA")
+            db.add(BankingData(bank_id=f"OK{k}", period_end=p, solvencia_pct=18.0,
+                               activos_totales=500_000 * (k + 1), utilidad_neta=90))
+    db.commit()
+
+
+def test_cada_senal_lleva_su_propio_control_pegado(db):
+    """La propiedad que la credencial necesita: el control DENTRO de la señal, no en la raíz."""
+    _panel_con_perdidas_y_tamanos(db)
+    rep = build_backtest_report(db, n_boot=60)
+    assert rep["signals"], "el panel sembrado no produjo señales"
+    for clave, señal in rep["signals"].items():
+        ctrl = señal.get("control_solo_tamano")
+        assert ctrl is not None, f"la señal «{clave}» salió sin control pegado"
+        assert ctrl["variable"] == "activos_totales"
+        # El veredicto viene de `shared.validation.control_tamano`, no de una cuenta local.
+        assert ctrl["veredicto"], f"la señal «{clave}» trae control sin veredicto"
+        assert "el_tamano_alcanza_al_score" in ctrl and "empata_con_el_score" in ctrl
+
+
+def test_el_control_de_una_senal_se_mide_contra_SU_desenlace(db):
+    """No contra el agregado. Si se copiara el del agregado, todas las familias traerían el
+    MISMO N y el mismo Gini — y la cifra de una señal quedaría emparejada con el control de
+    otra, que es exactamente lo que este arreglo viene a impedir."""
+    _panel_con_perdidas_y_tamanos(db)
+    rep = build_backtest_report(db, n_boot=60)
+    evaluables = {k: v["control_solo_tamano"] for k, v in rep["signals"].items()
+                  if v.get("evaluable")}
+    assert evaluables, "ninguna familia evaluable: el panel no ejercita el control"
+    for clave, ctrl in evaluables.items():
+        assert ctrl["gini_del_score"] == rep["signals"][clave]["gini"], (
+            f"«{clave}» compara su control contra el Gini de otro desenlace")
+
+
+def test_el_control_del_agregado_trae_su_veredicto(db):
+    """Publicaba dos Ginis y dejaba la comparación a cargo del lector. La tabla comercial,
+    que no puede leer, lo tomaba como «no evaluable»."""
+    _panel_con_perdidas_y_tamanos(db)
+    ctrl = build_backtest_report(db, n_boot=60)["control_solo_tamano"]
+    assert ctrl["veredicto"] and ctrl["gini_del_score"] is not None
+    assert isinstance(ctrl["empata_con_el_score"], bool)
+
+
+def test_la_credencial_de_banca_ya_no_sale_sin_control(db):
+    """Punta a punta: del reporte REAL a la fila comercial. Los tests de la credencial solos
+    usan fixtures escritos a mano y pasan aunque el motor no emita nada — es la forma en que
+    este defecto sobrevivió."""
+    from shared.products.credenciales import _cifra_principal
+
+    _panel_con_perdidas_y_tamanos(db)
+    rep = build_backtest_report(db, n_boot=60)
+    if not rep.get("headline_signal"):
+        pytest.skip("el panel sembrado no produjo una señal titular concluyente")
+    cifra = _cifra_principal("banking", rep)
+    assert cifra["control_medido"] is True
+    assert cifra["control_de_tamano"] is not None

@@ -396,3 +396,36 @@ def test_pensiones_alinea_el_tamano_al_periodo_sin_inventar_valores():
     assert _vigente(serie, "2024-05") == 100.0   # arrastra el trimestre anterior
     assert _vigente(serie, "2024-06") == 120.0
     assert _vigente(serie, "2024-01") is None    # antes del primer dato NO inventa
+
+
+# ── Todas las ramas de retorno traen las MISMAS claves ─────────────────────────
+
+def test_toda_rama_de_medir_control_devuelve_el_mismo_contrato():
+    """El hueco entra por la rama que alguien olvidó.
+
+    `medir_control_de_tamano` tiene una rama temprana para el panel degenerado —sin tamaños,
+    o con una sola clase del desenlace— y omitía `el_tamano_alcanza_al_score` y
+    `empata_con_el_score`. Un consumidor que lee con `.get()` recibía None, que en un
+    `bool()` es False: o sea «el tamaño NO lo explica», afirmado por un control que nunca
+    se computó. Es el `stale=null` otra vez — «no sé» leído como «está bien».
+
+    Lo encontró un test de banca que recorre TODAS las familias de desenlace, incluida una
+    cuya regla no dispara nunca. Un test que mirara solo la señal titular no lo habría visto.
+    """
+    from shared.validation.control_tamano import medir_control_de_tamano
+
+    sano = medir_control_de_tamano([float(i) for i in range(12)], [i % 2 for i in range(12)],
+                                   gini_del_score=0.2, variable="x", n_boot=50)
+    degenerados = {
+        "sin tamaños": ([None] * 12, [i % 2 for i in range(12)]),
+        "una sola clase del desenlace": ([float(i) for i in range(12)], [1] * 12),
+        "panel vacío": ([], []),
+    }
+    for etiqueta, (tamanos, labels) in degenerados.items():
+        salida = medir_control_de_tamano(tamanos, labels, gini_del_score=0.2,
+                                         variable="x", n_boot=50)
+        faltan = set(sano) - set(salida)
+        assert not faltan, f"la rama «{etiqueta}» omite {sorted(faltan)}"
+        assert salida["el_tamano_alcanza_al_score"] is False
+        assert salida["empata_con_el_score"] is False
+        assert "no evaluable" in salida["veredicto"]
