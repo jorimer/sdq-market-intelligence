@@ -275,7 +275,27 @@ class ConstructionProduct:
             return ProductSnapshot(tier=tier, period=period or "—",
                                    payload={"has_score": False}, entity_name=entity,
                                    entity_roster=())
-        payload = {"has_score": True, "index": _index_dict(s)}
+        payload: Dict[str, Any] = {"has_score": True, "index": _index_dict(s)}
+        # EL FINANCIAMIENTO DEL SECTOR, que este eje no tenía de ninguna forma. Mide
+        # permisos, m² y concentración geográfica; cuánto crédito recibe la construcción, a
+        # qué tasa y con qué mora venía del cubo de la SIB y no salía de banca.
+        #
+        # AL CIERRE DEL AÑO: el período de este producto es anual y el cubo es trimestral,
+        # así que un año se lee con su diciembre. Con el corte de marzo el bloque
+        # describiría otro trimestre que el encabezado del informe.
+        #
+        # Un año sin cubo —la serie arranca en 2024— simplemente no trae el bloque. No se
+        # menciona: decisión del dueño del 2026-08-31.
+        try:
+            from datetime import date
+
+            from shared.perfil_del_sector import perfil_del_sector
+            _perfil = perfil_del_sector(self._require_db(), "construccion",
+                                        date(int(str(s.period)[:4]), 12, 31))
+            if _perfil:
+                payload["perfil_del_sector"] = _perfil
+        except Exception:  # noqa: BLE001 — el snapshot nunca depende de esta lectura
+            logger.exception("Perfil del sector omitido en el snapshot de construcción")
         if tier == ProductTier.pulse:
             return ProductSnapshot(tier=tier, period=s.period, payload=payload,
                                    entity_name=None, entity_roster=())
@@ -361,7 +381,8 @@ class ConstructionProduct:
                     for sec in sections}
 
         from shared.narrative.claude_engine import narrative_engine
-        base_ctx = construction_ai_context(snapshot.payload["index"], snapshot.period)
+        base_ctx = construction_ai_context(snapshot.payload["index"], snapshot.period,
+                                           snapshot.payload.get("perfil_del_sector"))
         audience = "inversionista"
         templates = {"recommendation": "sector_decision", "positioning": "sector_positioning"}
         out: Dict[str, str] = {}

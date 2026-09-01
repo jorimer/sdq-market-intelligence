@@ -89,7 +89,9 @@ def credito_al_sector(db: Session, slug: str, corte: date) -> Optional[Dict[str,
     if not acc["deuda"]:
         return None
 
-    # El TOTAL del corte, para poder decir cuánto pesa este sector en el libro del país. Se
+    # EL TOTAL DEL CORTE — la cartera clasificada de TODAS las supervisadas, hogares
+    # incluidos. Se dice «cartera del sistema» y no «crédito del país» porque es lo que el
+    # denominador de verdad es: el cubo de la SIB, no la economía. Se
     # computa acá y el modelo lo copia: pedirle que divida dos cifras es cómo se invierte una
     # relación, y en este repo ya pasó.
     total_pais = (db.query(CarteraSectorial)
@@ -105,7 +107,7 @@ def credito_al_sector(db: Session, slug: str, corte: date) -> Optional[Dict[str,
         "corte": corte.isoformat(),
         "letras_ciiu_de_la_fuente": sorted(letras),
         "deuda_del_sistema_al_sector": round(acc["deuda"], 2),
-        "peso_del_sector_en_el_credito_del_pais_pct": (
+        "peso_del_sector_en_la_cartera_del_sistema_pct": (
             round(100.0 * acc["deuda"] / acc_pais["deuda"], 2) if acc_pais["deuda"] else None),
         "entidades_que_le_prestan": len(acc["bancos"]),
         # El SUJETO en cada clave lo pone `_medidas`, que es el mismo cuerpo que usa el mapa
