@@ -121,3 +121,28 @@ def test_el_snapshot_pide_el_perfil_al_CIERRE_del_anio():
     mes, dia = corte.args[1], corte.args[2]
     assert (mes.value, dia.value) == (12, 31), (
         "el perfil se pide a un corte que no es el cierre del año")
+
+
+def test_la_PLANTILLA_pide_el_financiamiento():
+    """Servir el dato no alcanza: la plantilla tiene que pedirlo.
+
+    Medido en producción el 2026-08-31. Con el bloque ya en el contexto, la prosa generada
+    siguió hablando solo de permisos, m², tipología y geografía — ni una palabra de crédito.
+    El modelo hacía lo correcto: la plantilla enumera taxativamente qué cifras usar («Usa
+    EXCLUSIVAMENTE las cifras del contexto (icc_score, coverage, …)») y el financiamiento no
+    estaba en esa lista.
+
+    Es la familia de «el cómputo existe y la superficie no lo pide», y acá la superficie es el
+    prompt. Sin este test, un futuro reordenamiento de la plantilla vuelve a dejar el dato
+    servido y sin usar, y nada falla: el informe sale, más pobre y en silencio.
+    """
+    from shared.narrative.claude_engine import THIN_TEMPLATES
+
+    plantilla = THIN_TEMPLATES["construction_outlook"]
+    for clave in ("credito_del_sistema_al_sector_construccion",
+                  "costo_laboral_del_sector_construccion"):
+        assert clave in plantilla, (
+            f"la plantilla no nombra «{clave}»: el bloque viaja en el contexto y el modelo "
+            "no lo usa, porque la enumeración de cifras permitidas lo deja afuera")
+    # Y que NO mande a declarar la ausencia — decisión del dueño del 2026-08-31.
+    assert "no las menciones ni digas que" in plantilla
