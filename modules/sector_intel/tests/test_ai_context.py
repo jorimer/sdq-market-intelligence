@@ -28,15 +28,138 @@ def test_context_is_compact_and_explains_drivers():
     assert ctx["weakest_dimension"]["score"] == 40.0
 
 
-def test_provenance_flags_real_vs_rubric():
-    ctx = sector_ai_context(_LATEST)
-    prov = {r["dimension"].split(" ")[0]: r["provenance"] for r in ctx["dimensions"]}
-    assert prov["Sector"] == "real" and prov["Exposición"] == "real"
-    assert prov["Entorno"] == "rúbrica declarada"          # business
-    assert prov["Talento"] == "rúbrica declarada"
+def test_la_procedencia_se_COMPUTA_de_las_variables_y_no_se_transcribe():
+    """Acá vivía `_LIVE_DIMS = {"sector", "macro"}` y este test lo bendecía.
+
+    Era cierto cuando se escribió y envejeció: hoy 8 de las 9 variables del índice corren
+    con dato real —TSS, SIB, ENCFT, ENAE, capital humano del Banco Mundial y WGI— y la única
+    rúbrica efectiva es `ease_of_business`, porque el Doing Business se descontinuó. El
+    contexto le decía al modelo que negocios, talento y regulatoria eran rúbrica declarada,
+    o sea que el producto se subestimaba a sí mismo en el texto que se vende.
+
+    La procedencia se GENERA del registro —el `source` por variable que estampa el motor—,
+    que es la misma regla que la doctrina ya se aplica a sí misma.
+    """
+    latest = {**_LATEST, "iai_breakdown": {
+        "sector": {"score": 80.0, "weight": 0.3, "contribution": 24.0, "variables": {
+            "sector_size": {"raw": 8.9, "normalized": 70.0, "source": "live"},
+            "sector_growth": {"raw": 3.5, "normalized": 60.0, "source": "live"}}},
+        "business": {"score": 50.0, "weight": 0.2, "contribution": 10.0, "variables": {
+            "credit_cost": {"raw": 8.39, "normalized": 88.0, "source": "live"},
+            "operating_cost": {"raw": 26113.1, "normalized": 100.0, "source": "live"},
+            "ease_of_business": {"raw": 50.0, "normalized": 50.0, "source": "rubric"}}},
+        "talent": {"score": 50.0, "weight": 0.15, "contribution": 7.5, "variables": {
+            "skills_index": {"raw": 50.28, "normalized": 50.0, "source": "rubric"}}},
+    }}
+    filas = {r["dimension"].split(" ")[0]: r for r in sector_ai_context(latest)["dimensions"]}
+    assert filas["Sector"]["provenance"] == "real"
+    assert filas["Entorno"]["provenance"] == "real en parte"
+    assert filas["Entorno"]["variables_reales_de_la_dimension"] == "2 de 3"
+    # Se nombra lo que ES rúbrica, que es la lista corta y la que el modelo necesita para no
+    # construir una conclusión fuerte encima.
+    assert any("facilidad de hacer negocios" in x
+               for x in filas["Entorno"]["sobre_rubrica_declarada"])
+    assert filas["Talento"]["provenance"] == "rúbrica declarada"
+
+
+def test_un_breakdown_VIEJO_sin_procedencia_no_la_inventa():
+    """Los breakdown anteriores al estampado no traen `source`. Devolver «real» ahí sería
+    afirmar procedencia sobre algo que no la declara — el defecto al revés."""
+    latest = {**_LATEST, "iai_breakdown": {
+        "sector": {"score": 80.0, "weight": 0.3, "contribution": 24.0}}}
+    fila = sector_ai_context(latest)["dimensions"][0]
+    assert fila["provenance"] == "no declarada"
+
+
+def test_el_contexto_dice_QUE_HAY_DENTRO_de_cada_dimension():
+    """Sin esto el modelo dice que una dimensión lastra y no puede decir por qué.
+
+    Agropecuario cambió de banda al entrar el costo del capital —paga 13,61 % de tasa con el
+    segundo salario más bajo del país— y ésa, que es la única frase accionable del informe,
+    no se podía escribir porque el contexto solo llevaba el score de la dimensión.
+    """
+    latest = {**_LATEST, "iai_breakdown": {
+        "business": {"score": 56.9, "weight": 0.25, "contribution": 14.2, "variables": {
+            "credit_cost": {"raw": 13.61, "normalized": 25.35, "source": "live"},
+            "operating_cost": {"raw": 28537.27, "normalized": 95.46, "source": "live"}}}}}
+    dentro = {f["variable"]: f for f in sector_ai_context(latest)["dimensions"][0]["que_hay_dentro"]}
+    tasa = next(v for k, v in dentro.items() if "costo del capital" in k)
+    assert tasa["valor"] == 13.61 and tasa["procedencia"] == "real"
+    assert tasa["posicion_entre_los_17_sectores_0_100"] == 25.35
+    salario = next(v for k, v in dentro.items() if "costo laboral" in k)
+    assert salario["valor"] == 28537.27
+
+
+def test_la_rentabilidad_viaja_en_POR_CIENTO_y_no_como_razon():
+    """El guard numérico veta una cifra REAL cuando cambia de FORMA: la rentabilidad es una
+    razón (0,048) y el modelo la escribe «4,8 %». Servirla cruda es cómo un peso de 0,38 se
+    publicó como «38 %» y el ensamblador vetó el informe. Se sirve como se va a citar."""
+    latest = {**_LATEST, "iai_breakdown": {
+        "business": {"score": 50.0, "weight": 0.25, "contribution": 12.5, "variables": {
+            "profitability": {"raw": 0.048, "normalized": 30.0, "source": "live"}}}}}
+    fila = sector_ai_context(latest)["dimensions"][0]["que_hay_dentro"][0]
+    assert "POR CIENTO" in fila["variable"]
+    assert fila["valor"] == 4.8, "la razón llegó cruda: el guard vetaría el «4,8 %» del texto"
+
+
+def test_TODA_variable_de_la_doctrina_tiene_su_nombre_citable():
+    """La prueba negativa del barrido. Una variable nueva del índice que no esté en la tabla
+    viaja al modelo con su identificador de código (`credit_cost`) y su valor crudo, sin
+    unidad — que es cómo una razón se publica como porcentaje."""
+    from modules.sector_intel.ai_context import _VARIABLES
+    from shared.doctrine import load_doctrine
+
+    cfg = load_doctrine("sectoral")
+    declaradas = {v for vs in cfg.dimension_variables.values() for v in vs}
+    assert declaradas, "la doctrina no declaró ninguna variable: el barrido estaría vacío"
+    faltan = declaradas - set(_VARIABLES)
+    assert not faltan, f"variables del IAI sin nombre citable: {sorted(faltan)}"
 
 
 def test_handles_missing_breakdown():
     ctx = sector_ai_context({"sector_code": "x", "iai_score": None, "iai_breakdown": None})
     assert ctx["dimensions"] == []
     assert ctx["strongest_dimension"] is None and ctx["weakest_dimension"] is None
+
+
+# ── La reincidencia: que la procedencia no vuelva a transcribirse ─────────────
+def test_la_procedencia_NO_se_resuelve_con_un_condicional_sobre_una_lista_fija():
+    """El guard estructural de la regresión.
+
+    El defecto original era una línea: `"provenance": "real" if key in _LIVE_DIMS else …`.
+    Es correcta el día que se escribe y miente el día que un conector sube una dimensión a
+    dato real, sin que nada falle — el score cambia y el texto sigue diciendo «rúbrica».
+    Los tests de valor de arriba pasarían si alguien reescribiera la lista fija con los
+    nombres de hoy; esto exige que el valor salga de un CÓMPUTO sobre el breakdown.
+    """
+    import ast
+    import inspect
+
+    from modules.sector_intel import ai_context as mod
+
+    fn = next(n for n in ast.walk(ast.parse(inspect.getsource(mod)))
+              if isinstance(n, ast.FunctionDef) and n.name == "sector_ai_context")
+    for nodo in ast.walk(fn):
+        if not isinstance(nodo, ast.Dict):
+            continue
+        for k, v in zip(nodo.keys, nodo.values):
+            if isinstance(k, ast.Constant) and k.value == "provenance":
+                assert not isinstance(v, ast.IfExp), (
+                    "la procedencia volvió a resolverse con un condicional en línea: es una "
+                    "transcripción, y envejece sin que nada falle")
+
+
+def test_la_PLANTILLA_no_nombra_dimensiones_como_reales_ni_como_rubrica():
+    """La otra mitad. El prompt decía «apóyate en las dimensiones real (sector, exposición
+    macro); sobre las de rúbrica declarada (negocios, talento, regulatoria) no construyas
+    conclusión fuerte»: mandaba a NO apoyarse en el 60 % del peso del score, cuando 8 de las
+    9 variables ya corren con dato real. Un contexto computado con un prompt que lo
+    contradice deja el defecto en pie."""
+    from shared.narrative.claude_engine import THIN_TEMPLATES
+
+    t = THIN_TEMPLATES["sector_outlook"]
+    for frase in ("(negocios, talento, regulatoria)", "(sector, exposición macro)"):
+        assert frase not in t, f"la plantilla clasifica dimensiones a mano: «{frase}»"
+    assert "provenance" in t and "que_hay_dentro" in t, (
+        "la plantilla no manda a leer la procedencia computada ni las variables: el bloque "
+        "viaja en el contexto y el modelo no lo usa")

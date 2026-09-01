@@ -16,8 +16,88 @@ _DIM_LABELS = {
     "talent": "Talento y mano de obra",
     "regulation": "Regulatoria",
 }
-# Dimensions sourced from real data today; the rest are declared rubric.
-_LIVE_DIMS = {"sector", "macro"}
+#: Cada variable del IAI, con el SUJETO y la UNIDAD en el nombre, y la forma en que se va a
+#: CITAR. El `raw` del breakdown viene en la unidad del motor y hay dos que no se pueden
+#: servir así: la rentabilidad es una razón (0,048) que el modelo escribe como «4,8 %» —la
+#: familia de falso positivo del guard que ya costó tres informes— y el empleo viene en
+#: personas con decimales. Se transforman acá, una vez, y viajan listos para citar.
+_VARIABLES = {
+    "macro_exposure": ("exposición macro del sector (0-100, mayor = el ciclo lo favorece más)",
+                       lambda v: round(v, 1)),
+    "ease_of_business": ("facilidad de hacer negocios (0-100)", lambda v: round(v, 1)),
+    "operating_cost": ("costo laboral: salario promedio cotizable del sector, RD$/mes",
+                       lambda v: round(v, 2)),
+    "credit_cost": ("costo del capital: tasa promedio ponderada que el sistema financiero le "
+                    "cobra al sector, en POR CIENTO", lambda v: round(v, 2)),
+    "profitability": ("rentabilidad del sector (utilidad sobre ingresos), en POR CIENTO",
+                      lambda v: round(v * 100.0, 2)),
+    "labor_availability": ("ocupados en la rama de actividad del sector, en personas",
+                           lambda v: round(v)),
+    "skills_index": ("índice de capital humano del país (0-100)", lambda v: round(v, 2)),
+    "regulatory_quality": ("calidad regulatoria del país (0-100)", lambda v: round(v, 2)),
+    "regulatory_volatility": ("volatilidad regulatoria del país (desviación de la serie)",
+                              lambda v: round(v, 3)),
+    "sector_growth": ("crecimiento real del sector, en POR CIENTO", lambda v: round(v, 2)),
+    "sector_size": ("peso del sector en el valor agregado nacional, en POR CIENTO",
+                    lambda v: round(v, 3)),
+}
+
+
+def _procedencia_de_la_dimension(detalle):
+    """La procedencia de una dimensión, COMPUTADA de sus variables.
+
+    **Estaba transcrita y envejeció.** Acá vivía `_LIVE_DIMS = {"sector", "macro"}` y una
+    nota en prosa que le decía al modelo que negocios, talento y regulatoria eran «rúbrica
+    declarada». Cuando se escribió era cierto; hoy 8 de las 9 variables del índice corren con
+    dato real —TSS, SIB, ENCFT, ENAE, capital humano del Banco Mundial y WGI— y la única
+    rúbrica efectiva es `ease_of_business`, porque el Doing Business se descontinuó. El
+    resultado era un producto que se subestimaba a sí mismo en el texto que se vende, y el
+    prompt además mandaba a no construir conclusión fuerte sobre el 60 % del peso del score.
+
+    Es la misma regla que la doctrina ya se aplica a sí misma: la procedencia se GENERA del
+    registro, nunca se afirma en prosa. El breakdown persistido trae `source` por variable
+    (lo estampa `_stamp_provenance`), así que la respuesta está en el dato.
+    """
+    vs = (detalle.get("variables") or {})
+    if not vs:
+        return {"procedencia": "no declarada", "variables_reales": 0, "variables_totales": 0}
+    reales = [k for k, v in vs.items() if v.get("source") == "live"]
+    rubrica = sorted(k for k in vs if k not in reales)
+    if not reales:
+        clase = "rúbrica declarada"
+    elif not rubrica:
+        clase = "real"
+    else:
+        clase = "real en parte"
+    out = {"procedencia": clase, "variables_reales": len(reales), "variables_totales": len(vs)}
+    if rubrica:
+        # Se nombran las que SON rúbrica, no las que son reales: es la lista corta, y es la
+        # que el modelo necesita para no construir una conclusión fuerte encima.
+        out["sobre_rubrica_declarada"] = [_VARIABLES.get(k, (k,))[0] for k in rubrica]
+    return out
+
+
+def _variables_de_la_dimension(detalle):
+    """Las variables de una dimensión, con su nombre citable y su valor ya en la unidad en
+    que se va a escribir.
+
+    Sin esto el contexto solo llevaba el SCORE de cada dimensión, así que el modelo podía
+    decir que negocios lastra y no podía decir POR QUÉ. Agropecuario cambió de banda el
+    2026-09-01 al entrar el costo del capital —paga 13,61 % de tasa con el segundo salario
+    más bajo del país— y esa frase, que es la única accionable del informe, no se podía
+    escribir.
+    """
+    filas = []
+    for var, det in sorted((detalle.get("variables") or {}).items()):
+        etiqueta, forma = _VARIABLES.get(var, (var, lambda v: v))
+        crudo = det.get("raw")
+        filas.append({
+            "variable": etiqueta,
+            "valor": forma(crudo) if crudo is not None else None,
+            "posicion_entre_los_17_sectores_0_100": det.get("normalized"),
+            "procedencia": "real" if det.get("source") == "live" else "rúbrica declarada",
+        })
+    return filas
 
 
 def economic_structure_ai_context(structure: Dict[str, Any]) -> Dict[str, Any]:
@@ -69,12 +149,19 @@ def sector_ai_context(
     dims = latest.get("iai_breakdown") or {}
     rows: List[Dict[str, Any]] = []
     for key, d in dims.items():
+        proc = _procedencia_de_la_dimension(d)
         rows.append({
             "dimension": _DIM_LABELS.get(key, key),
             "score": d.get("score"),
             "weight": d.get("weight"),
             "contribution": d.get("contribution"),
-            "provenance": "real" if key in _LIVE_DIMS else "rúbrica declarada",
+            "provenance": proc["procedencia"],
+            "variables_reales_de_la_dimension": (
+                f"{proc['variables_reales']} de {proc['variables_totales']}"),
+            "sobre_rubrica_declarada": proc.get("sobre_rubrica_declarada"),
+            # LO QUE EXPLICA EL SCORE. Sin esto el modelo dice que una dimensión lastra y no
+            # puede decir por qué; con esto nombra la variable y su valor.
+            "que_hay_dentro": _variables_de_la_dimension(d),
         })
     scored = [r for r in rows if r["score"] is not None]
     strongest = max(scored, key=lambda r: r["score"], default=None)
@@ -98,8 +185,9 @@ def sector_ai_context(
         "strongest_dimension": strongest,
         "weakest_dimension": weakest,
         "acceleration": (sgps_detail or {}).get("acceleration_detail"),
-        "note": "Real: sector (BCRD) y exposición macro. Rúbrica declarada: "
-                "negocios, talento, regulatoria (suben a real con WGI/estudios ONE).",
+        # La `note` que vivía acá afirmaba en prosa qué era real y qué era rúbrica, y
+        # envejeció: decía que negocios, talento y regulatoria eran rúbrica cuando hoy
+        # corren con dato real. La procedencia viaja COMPUTADA en cada dimensión.
         # ── canónico (cerebro) ──
         "score_global": latest.get("iai_score"),
         "sub_componentes": subcomp,
