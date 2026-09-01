@@ -289,3 +289,51 @@ class TestUnAnioEnCursoTambienLeeElCubo:
     def test_sin_ningun_corte_devuelve_None(self, db_session):
         from shared.perfil_del_sector import corte_del_cubo_para_el_anio
         assert corte_del_cubo_para_el_anio(db_session, 2019) is None
+
+
+class TestLaHolguraDeUnaRegion:
+    """`parse_regiones` persiste 7 indicadores × 5 dominios × 11 años y hasta la fase 6 solo
+    los leía banca, agregados y ponderados por exposición crediticia. Un producto que YA es
+    regional los quiere directos."""
+
+    def test_las_diez_regiones_de_desarrollo_resuelven_a_un_dominio(self):
+        from shared.data.regiones_rd import (REGIONES_DE_DESARROLLO,
+                                             dominio_de_la_region)
+        assert len(REGIONES_DE_DESARROLLO) == 10
+        sin_dominio = [r for r in REGIONES_DE_DESARROLLO if dominio_de_la_region(r) is None]
+        assert not sin_dominio, f"regiones sin dominio ENCFT: {sin_dominio}"
+
+    def test_acepta_las_DOS_formas_que_circulan_en_el_repo(self):
+        """La fuente rotula «CIBAO NORDESTE» y los productos usan «cibao_nordeste»."""
+        from shared.data.regiones_rd import dominio_de_la_region
+        assert dominio_de_la_region("CIBAO NORDESTE") == dominio_de_la_region("cibao_nordeste")
+        assert dominio_de_la_region("cibao_nordeste") is not None
+
+    def test_una_region_que_NO_existe_no_se_asigna_a_ningun_dominio(self):
+        """Asignarle uno le atribuiría condiciones laborales de otro territorio."""
+        from shared.data.regiones_rd import dominio_de_la_region
+        assert dominio_de_la_region("REGION INVENTADA") is None
+        assert dominio_de_la_region("") is None
+
+    def test_el_mapa_se_DERIVA_y_no_se_escribe_dos_veces(self):
+        """Una segunda tabla del mismo mapa es como las dos se desincronizan."""
+        from shared.data.regiones_rd import DOMINIOS, dominio_de_la_region
+        for dominio, regiones in DOMINIOS.items():
+            for region in regiones:
+                assert dominio_de_la_region(region) == dominio
+
+    def test_la_respuesta_DICE_que_el_dato_es_del_dominio(self, db_session, monkeypatch):
+        """La ENCFT publica por dominio (4), no por región (10). Atribuirlo a la región
+        afirmaría una precisión que la fuente no tiene."""
+        import shared.capacidad_de_pago as cap
+        monkeypatch.setattr(cap, "mercado_laboral_por_region", lambda db, c: {
+            "anio": "2024",
+            "por_dominio": {"norte": {"subutilizacion_amplia_su4_pct": 18.4,
+                                      "desocupacion_abierta_su1_pct": 5.1}}})
+        monkeypatch.setattr(cap, "_ultimo_valor_de", lambda *a, **k: 15.0)
+        r = cap.holgura_de_la_region(db_session, CORTE, "cibao_nordeste")
+        assert r["dominio_encft_al_que_pertenece"] == "norte"
+        aviso = r["el_dato_es_del_DOMINIO_no_de_la_region"]
+        assert "por dominio" in aviso and "no por región de desarrollo" in aviso
+        # LA RELACIÓN SE COMPUTA ACÁ: el modelo la copia, no la deriva.
+        assert r["mas_subutilizacion_que_el_pais_pp"] == 3.4

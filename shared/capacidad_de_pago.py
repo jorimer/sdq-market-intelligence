@@ -471,9 +471,18 @@ def mercado_laboral_por_region(db: Session, corte: date) -> Optional[Dict[str, A
     return out
 
 
-def holgura_donde_presta(db: Session, corte: date,
-                         provincias: List[Dict[str, Any]]) -> Optional[Dict[str, Any]]:
-    """La holgura laboral del territorio donde la entidad efectivamente presta.
+def holgura_donde_opera(db: Session, corte: date,
+                        unidades: List[Dict[str, Any]], *,
+                        clave_peso: str = "deuda",
+                        sujeto: str = "cartera") -> Optional[Dict[str, Any]]:
+    """La holgura laboral del territorio donde el sujeto efectivamente opera.
+
+    **Genérica desde la fase 6 del plan sectorial.** Nació para banca —«dónde presta»— y la
+    necesita también construcción, cuyo peso territorial son m² licenciados y no saldo
+    adeudado. `clave_peso` nombra el campo que pondera y `sujeto` el sustantivo que va en las
+    claves de salida, porque la regla del sujeto exige que una cuota diga sobre qué se computa.
+    `holgura_donde_presta` sigue existiendo como el caso de banca y delega acá: un segundo
+    cuerpo discreparía en silencio.
 
     Es el cruce que ningún banco puede hacer, y no por el dato —los dos son públicos— sino
     por la mitad que le falta: para saber si su exposición está en el territorio de más o de
@@ -492,8 +501,8 @@ def holgura_donde_presta(db: Session, corte: date,
     peso: Dict[str, float] = {}
     sin_dominio = 0.0
     total = 0.0
-    for f in provincias or ():
-        deuda = float(f.get("deuda") or 0)
+    for f in unidades or ():
+        deuda = float(f.get(clave_peso) or 0)
         total += deuda
         dominio = dominio_de_la_provincia(str(f.get("provincia") or ""))
         if dominio is None:
@@ -509,7 +518,7 @@ def holgura_donde_presta(db: Session, corte: date,
         filas.append({
             "dominio": dominio,
             # El SUJETO en la clave: es la cuota sobre la cartera clasificada de la ENTIDAD.
-            "peso_en_su_cartera_pct": round(100.0 * deuda / total, 2),
+            f"peso_en_su_{sujeto}_pct": round(100.0 * deuda / total, 2),
             "subutilizacion_amplia_su4_pct": laboral.get("subutilizacion_amplia_su4_pct"),
             "desocupacion_abierta_su1_pct": laboral.get("desocupacion_abierta_su1_pct"),
         })
@@ -520,7 +529,8 @@ def holgura_donde_presta(db: Session, corte: date,
     # del dominio— y multiplicar sin estrechar es cómo un texto llega a una multiplicación.
     con_dato: List[Tuple[float, float]] = []
     for f in filas:
-        w, v_su4 = f.get("peso_en_su_cartera_pct"), f.get("subutilizacion_amplia_su4_pct")
+        w = f.get(f"peso_en_su_{sujeto}_pct")
+        v_su4 = f.get("subutilizacion_amplia_su4_pct")
         if isinstance(w, (int, float)) and isinstance(v_su4, (int, float)):
             con_dato.append((float(w), float(v_su4)))
     out: Dict[str, Any] = {"anio": regional.get("anio"), "por_dominio": filas,
@@ -536,12 +546,24 @@ def holgura_donde_presta(db: Session, corte: date,
                 out["subutilizacion_del_pais_pct"] = nacional
                 out["mas_holgura_que_el_pais_pp"] = round(ponderada - nacional, 2)
     if sin_dominio > 0:
-        out["cartera_sin_dominio_asignable_pct"] = round(100.0 * sin_dominio / total, 2)
+        out[f"{sujeto}_sin_dominio_asignable_pct"] = round(
+            100.0 * sin_dominio / total, 2)
         out["por_que_queda_fuera"] = (
-            "cartera cuya provincia la fuente no rotula o no pertenece a la regionalización: "
+            f"{sujeto} cuya provincia la fuente no rotula o no pertenece a la "
+            "regionalización: "
             "asignarla a un dominio le atribuiría condiciones laborales de un territorio que "
             "no le corresponde")
     return out
+
+
+def holgura_donde_presta(db: Session, corte: date,
+                         provincias: List[Dict[str, Any]]) -> Optional[Dict[str, Any]]:
+    """El caso de BANCA de `holgura_donde_opera`: pondera por saldo adeudado.
+
+    Se conserva porque es el que usan las cuatro superficies de banca y porque nombrar el
+    sujeto —«su cartera»— importa en las claves. Delega: un segundo cuerpo discreparía.
+    """
+    return holgura_donde_opera(db, corte, provincias, clave_peso="deuda", sujeto="cartera")
 
 
 def capacidad_de_pago(db: Session, corte: date) -> Optional[Dict[str, Any]]:
@@ -568,3 +590,54 @@ def capacidad_de_pago(db: Session, corte: date) -> Optional[Dict[str, Any]]:
     if cobertura:
         bloque["cobertura_del_piso_de_ingreso"] = cobertura
     return bloque or None
+
+
+def holgura_de_la_region(db: Session, corte: date,
+                         region: str) -> Optional[Dict[str, Any]]:
+    """La condición laboral de UNA región de desarrollo, contra la del país.
+
+    **Por qué existe.** `parse_regiones` persiste siete indicadores por cinco dominios y once
+    años, y hasta la fase 6 del plan sectorial solo los leía banca —agregados y ponderados por
+    exposición crediticia—. Un producto que YA es regional, como el índice de desarrollo, los
+    quiere de la forma más directa: la holgura de SU territorio.
+
+    **La relación se computa acá y el modelo la copia.** «Esta región tiene N puntos más de
+    subutilización que el país» es una resta que el modelo invierte; ya pasó en este repo.
+
+    ``None`` si la región no pertenece a la regionalización o no hay dato del dominio. La
+    ENCFT publica por DOMINIO (cuatro), no por región de desarrollo (diez): el valor es el de
+    su dominio y la respuesta lo dice, porque atribuirlo a la región como si fuera propio
+    afirmaría una precisión que la fuente no tiene.
+    """
+    from shared.data.regiones_rd import PROCEDENCIA, dominio_de_la_region
+
+    dominio = dominio_de_la_region(region)
+    if dominio is None:
+        return None
+    regional = mercado_laboral_por_region(db, corte)
+    if not regional:
+        return None
+    laboral = (regional.get("por_dominio") or {}).get(dominio)
+    if not laboral:
+        return None
+
+    out: Dict[str, Any] = {
+        "region": region,
+        "dominio_encft_al_que_pertenece": dominio,
+        "el_dato_es_del_DOMINIO_no_de_la_region": (
+            "La ENCFT publica por dominio (cuatro), no por región de desarrollo (diez). "
+            "Este valor es el del dominio que contiene a la región."),
+        "anio": regional.get("anio"),
+        "subutilizacion_amplia_su4_del_dominio_pct": laboral.get(
+            "subutilizacion_amplia_su4_pct"),
+        "desocupacion_abierta_su1_del_dominio_pct": laboral.get(
+            "desocupacion_abierta_su1_pct"),
+        "procedencia_de_la_region": PROCEDENCIA,
+    }
+    su4 = laboral.get("subutilizacion_amplia_su4_pct")
+    nacional = _ultimo_valor_de(db, "subutilizacion_su4_regional_anual", "nacional",
+                                str(corte.year))
+    if isinstance(su4, (int, float)) and nacional is not None:
+        out["subutilizacion_del_pais_pct"] = nacional
+        out["mas_subutilizacion_que_el_pais_pp"] = round(float(su4) - float(nacional), 2)
+    return out

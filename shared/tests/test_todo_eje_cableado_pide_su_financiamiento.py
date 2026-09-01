@@ -93,3 +93,88 @@ def test_la_LISTA_no_se_queda_corta_contra_el_codigo():
     assert not faltan, (
         f"estos ejes arman el bloque y no están en EJES_CABLEADOS: {sorted(faltan)}. "
         "Su plantilla podría no pedirlo y nadie se enteraría")
+
+
+# ─── La capacidad de pago del hogar (fase 6) ──────────────────────────────────
+#
+# Se reparte SOLO donde la lectura significa algo, y la lectura cambia por eje: demanda de
+# vivienda en construcción, costo laboral en zonas francas, demanda interna en turismo,
+# asequibilidad del servicio en telecom. Deliberadamente NO va en `law`, `esg`, `trade` ni
+# `macro`: ahí sería relleno.
+EJES_CON_CAPACIDAD_DE_PAGO = {
+    "construction": ("modules.construction_intel.products", "construction_outlook"),
+    "free_zones": ("modules.free_zones_intel.products", "free_zones_outlook"),
+    "tourism": ("modules.tourism_intel.products", "tourism_outlook"),
+    "telecom": ("modules.telecom_intel.products", "telecom_outlook"),
+}
+
+
+@pytest.mark.parametrize("eje", sorted(EJES_CON_CAPACIDAD_DE_PAGO))
+def test_la_capacidad_de_pago_LLEGA_al_contexto(eje):
+    """La mitad que se olvida.
+
+    En la fase 4 el financiamiento llegó al payload y la prosa no lo usó nunca, porque el
+    contexto del modelo no lo tenía. Un eje que la sume al payload y no al `base_ctx` queda
+    con el dato viajando sin que el modelo pueda verlo, y nada falla.
+    """
+    import importlib
+    mod = importlib.import_module(EJES_CON_CAPACIDAD_DE_PAGO[eje][0])
+    arbol = ast.parse(inspect.getsource(mod))
+    # Se exige la ASIGNACIÓN al contexto, no la mención: el comentario que explica esto
+    # nombra la clave y un test de texto se satisfaría con eso.
+    asignada = any(
+        isinstance(n, ast.Dict)
+        and any(isinstance(k, ast.Constant) and k.value == "capacidad_de_pago"
+                for k in n.keys if k is not None)
+        for n in ast.walk(arbol))
+    assert asignada, (
+        f"{eje}: la capacidad de pago no entra al contexto del modelo. Viaja en el payload y "
+        "la prosa no la puede usar")
+
+
+@pytest.mark.parametrize("eje", sorted(EJES_CON_CAPACIDAD_DE_PAGO))
+def test_la_plantilla_PIDE_la_capacidad_de_pago_con_SU_lectura(eje):
+    """Lo que cambia entre ejes es la LECTURA, no el dato. Si la plantilla solo la nombrara,
+    el modelo escribiría el mismo párrafo de inflación en los cuatro."""
+    _mod, plantilla = EJES_CON_CAPACIDAD_DE_PAGO[eje]
+    texto = THIN_TEMPLATES[plantilla]
+    assert "capacidad_de_pago" in texto, f"{eje}: la plantilla no la pide"
+    assert "ESTA lectura" in texto, (
+        f"{eje}: la plantilla la nombra pero no dice CÓMO leerla en este eje")
+    assert "a qué año" in texto, (
+        f"{eje}: no exige citar el año de la capa, que no es el del informe")
+    assert "no la menciones" in texto, (
+        f"{eje}: manda a declarar la ausencia, contra la decisión del 2026-08-31")
+
+
+def test_cada_eje_tiene_una_lectura_DISTINTA():
+    """La prueba negativa: cuatro plantillas con el mismo párrafo serían relleno repartido.
+
+    Se recorta la lectura ENTERA —de «ESTA lectura:» hasta el aviso común sobre el año— y no
+    un prefijo de N caracteres. La primera versión comparaba los primeros 160 y una copia
+    PARCIAL se le escapaba: dos ejes podían compartir la mitad del párrafo y el test daba
+    verde. Comprobado por mutación.
+    """
+    lecturas = {}
+    for eje, (_m, plantilla) in EJES_CON_CAPACIDAD_DE_PAGO.items():
+        t = THIN_TEMPLATES[plantilla]
+        i = t.index("ESTA lectura:")
+        fin = t.index("No es una capa del índice", i)
+        lecturas[eje] = " ".join(t[i:fin].split())
+    assert len(set(lecturas.values())) == len(lecturas), (
+        f"hay ejes con la MISMA lectura: {lecturas}")
+
+
+def test_los_ejes_donde_seria_RELLENO_no_la_reciben():
+    """`law`, `esg`, `trade` y `macro` quedaron fuera a propósito. Si alguien la agrega sin
+    una lectura propia, esto lo frena: repartir un bloque por completitud es lo contrario de
+    enriquecer."""
+    import pathlib
+    raiz = pathlib.Path(__file__).resolve().parents[2]
+    for mod in ("law_intel", "esg_climate", "trade_intel"):
+        fuente = raiz / "modules" / mod / "products.py"
+        if not fuente.exists():
+            continue
+        assert "capacidad_de_pago" not in fuente.read_text(encoding="utf-8"), (
+            f"{mod} recibió la capacidad de pago: se decidió que ahí no significa nada. "
+            "Si cambió el criterio, agregá su lectura a la plantilla y quitalo de este test")
