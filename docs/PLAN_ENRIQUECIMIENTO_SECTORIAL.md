@@ -141,11 +141,35 @@ letra inicial — una etiqueta reescrita sigue resolviendo, que es lo que evita 
 cartera desaparezca del agregado por un cambio cosmético. Lo que sí vigila es que la tabla
 declarada no se separe de lo medido.
 
-### Fase 3 — `shared/perfil_del_sector.py`
+### Fase 3 — `shared/perfil_del_sector.py` · CERRADA (#1036)
 
-Las cuatro lecturas por slug: crédito (SIB), ocupación y subutilización (ENCFT), salario
-(TSS), y donde haya provincia, la holgura del territorio donde opera. La cobertura viaja como
-dato interno que acota qué se afirma, no como texto.
+Entrega **dos** de las cuatro lecturas: crédito (SIB, agregado y sin ninguna entidad
+nombrada) y costo laboral (salario promedio cotizable de la TSS, con su año).
+
+**Por qué dos y no cuatro.** Se midió el estado de las fuentes en producción antes de
+escribir: `tss-salario-sync` está en verde con los 17 slugs del año 2025, pero la ocupación
+ENCFT y el tamaño/crecimiento del BCRD viven los dos en `SectorVariable`, tabla de
+`sector_intel`. Traerlas exigiría que `shared/` importe el modelo de un módulo — el patrón
+que la fase 1 evitó mudando la tabla en vez de leerla desde afuera. Además
+`encft-empleo-sync` lleva desde junio de 2026 fallando con 403 contra one.gob.do.
+
+Cada respuesta trae `cobertura.lecturas_pendientes` con las dos, como dato interno del
+contexto y no como texto del informe.
+
+**Lo que este módulo protege es el SUJETO.** Varias letras de la SIB alimentan a más de un
+slug: la `D` no separa manufactura local de zonas francas y la `K` agrupa inmobiliario con
+servicios profesionales. Para esos slugs la cifra NO es del sector pedido sino del agregado
+que publica la fuente, y la respuesta lo dice en `es_agregado`, `el_agregado_incluye` y
+`por_que_es_agregado`. Repartir un agregado entre sus miembros sería fabricar.
+
+**Las primitivas de agregación se MUDARON, no se copiaron**, a
+`shared/reference/cartera_agregacion.py`: el mapa sectorial de banca y este perfil comparten
+un solo cuerpo, y hay un test que exige que los dos importen del mismo lugar. Copiarlas
+habría repetido el defecto que ese mismo día borró la tasa de 38 entidades.
+
+**Decisión pendiente para el dueño:** mover `SectorVariable` a `shared/` (o exponerla)
+habilitaría las otras dos lecturas. No se hizo por cuenta propia porque es la misma decisión
+de arquitectura que se tomó explícitamente en la fase 1.
 
 ### Fase 4 — Un solo eje, y medir
 
@@ -196,7 +220,7 @@ sería relleno.
 | 0 · la capa macro sigue al corte | **cerrada** 2026-08-31 (#1033) |
 | 1 · `CarteraSectorial` a `shared/reference/` | **cerrada** 2026-08-31 (#1034) |
 | 2 · letra CIIU en el crosswalk | **cerrada** 2026-08-31 (#1035) |
-| 3 · `perfil_del_sector` | pendiente |
+| 3 · `perfil_del_sector` | **cerrada** 2026-08-31 (#1036) |
 | 4 · construction + medición | pendiente |
 | 5 · resto de los ejes | pendiente |
 | 6 · capacidad de pago y holgura | pendiente |
