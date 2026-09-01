@@ -32,6 +32,16 @@ CORTE = date(2026, 3, 31)
 
 @pytest.fixture()
 def db():
+    """Base en memoria con TODO el metadata registrado.
+
+    El `import app.main` no es decorativo: `cartera_sectorial` vive en `shared/reference/` y
+    su FK apunta a `banks`, que sigue en `banking_score`. Sin registrar los modelos del
+    módulo, `create_all` levanta `NoReferencedTableError`. Corriendo la suite entera no se
+    veía —otro archivo importaba `banking_score` antes— así que `pytest shared/tests/` sola
+    fallaba con 45 errores mientras CI daba verde: un test que pasa por el ORDEN de importación
+    no está probando lo que dice.
+    """
+    import app.main  # noqa: F401 — registra todos los modelos
     eng = create_engine("sqlite:///:memory:", connect_args={"check_same_thread": False},
                         poolclass=StaticPool)
     Base.metadata.create_all(eng)

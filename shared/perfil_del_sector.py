@@ -206,12 +206,33 @@ def _variacion_pct(serie: Dict[str, float], anio: str) -> Optional[float]:
     Se computa y no se deja para el modelo por la regla de la casa: el modelo acierta las
     cifras y falla las relaciones. Sin el año previo devuelve ``None`` en vez de cero, que
     se leería como «no se movió».
+
+    **Una BASE NEGATIVA no produce porcentaje, y esto no es teórico.** La IED de
+    telecomunicaciones pasó de −32,4 a −44,3 millones de US$ entre 2023 y 2024 —dos años de
+    desinversión neta, y el segundo peor que el primero— y la razón daba **+36,73 %**, que se
+    lee como una mejora. Es la familia de la relación invertida que este repo ya publicó.
+    Con la base en cero o negativa el porcentaje se DECLARA ausente y la dirección viaja por
+    el cambio absoluto, que sí conserva el signo.
     """
     previo = serie.get(str(int(anio) - 1))
     actual = serie.get(anio)
-    if previo is None or actual is None or previo == 0:
+    if previo is None or actual is None or previo <= 0:
         return None
     return round(100.0 * (actual / previo - 1.0), 2)
+
+
+def _cambio_absoluto(serie: Dict[str, float], anio: str) -> Optional[float]:
+    """El cambio contra el año anterior en las UNIDADES de la serie.
+
+    Es la relación que sobrevive a una base negativa: −32,4 → −44,3 son −11,9 millones y el
+    signo dice lo que pasó, mientras que el porcentaje dice lo contrario. Viaja siempre, no
+    solo cuando el porcentaje falta, para que el modelo no tenga que elegir cuál usar.
+    """
+    previo = serie.get(str(int(anio) - 1))
+    actual = serie.get(anio)
+    if previo is None or actual is None:
+        return None
+    return round(actual - previo, 2)
 
 
 def actividad_del_sector(db: Session, slug: str, anio: int) -> Optional[Dict[str, Any]]:
@@ -279,6 +300,11 @@ def inversion_extranjera_del_sector(db: Session, slug: str,
     dice algo que ningún indicador propio del eje dice: si el capital extranjero efectivamente
     llegó, no si el sector parecía atractivo.
 
+    **El flujo puede ser NEGATIVO y eso es un dato, no un error**: la IED se mide neta, así
+    que un año de desinversión —repatriación por encima de la entrada— sale con signo menos.
+    Telecomunicaciones lleva dos así. Por eso el movimiento viaja como CAMBIO ABSOLUTO en
+    millones de US$, que conserva el signo, y el porcentaje solo cuando la base es positiva.
+
     ``None`` para los seis slugs que el cuadro del BCRD no desagrega —agropecuario,
     construcción, administración pública, enseñanza, salud y servicios profesionales—. No es
     un cero: un cero afirmaría que no recibieron inversión, y lo que pasa es que la fuente no
@@ -295,6 +321,7 @@ def inversion_extranjera_del_sector(db: Session, slug: str,
     out: Dict[str, Any] = {
         "anio": usar,
         "ied_realizada_en_la_actividad_usd_mm": round(serie[usar], 2),
+        "cambio_de_la_ied_vs_anio_anterior_usd_mm": _cambio_absoluto(serie, usar),
         "variacion_de_la_ied_vs_anio_anterior_pct": _variacion_pct(serie, usar),
         "actividad_del_cuadro_de_ied": act.label,
         "fuente": "BCRD · flujos de IED por actividad económica",
@@ -449,6 +476,11 @@ def contexto_del_perfil_del_sector(perfil: Optional[Dict[str, Any]], sufijo: str
             "anio_de_esta_capa": ied.get("anio"),
             f"ied_realizada_en_la_actividad_del_sector_{sufijo}_usd_mm": ied.get(
                 "ied_realizada_en_la_actividad_usd_mm"),
+            # EL CAMBIO ABSOLUTO PRIMERO, y el porcentaje después. La IED se mide neta y
+            # puede ser negativa: con base negativa el porcentaje invierte su sentido, así
+            # que ahí viene en `null` y el signo lo lleva esta clave.
+            f"cambio_de_la_ied_del_sector_{sufijo}_vs_anio_anterior_usd_mm": ied.get(
+                "cambio_de_la_ied_vs_anio_anterior_usd_mm"),
             f"variacion_de_la_ied_del_sector_{sufijo}_vs_anio_anterior_pct": ied.get(
                 "variacion_de_la_ied_vs_anio_anterior_pct"),
             "actividad_del_cuadro_de_ied": ied.get("actividad_del_cuadro_de_ied"),
