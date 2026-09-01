@@ -523,3 +523,119 @@ def test_sin_control_el_acuerdo_no_inventa_una_ventaja():
 
     r = _acuerdo_entre_instrumentos({"aporta_sobre_el_tamano": False}, {})
     assert r["el_control_dice_que_aporta"] is False and r["coinciden"] is True
+
+
+# ── El panel tiene VARIAS composiciones del índice ────────────────
+#
+# El panel cubre 2007→ y el IAI no fue el mismo todo ese tiempo: cada conector agregó su
+# variable desde el período en que su fuente empieza. Un IC medio sobre 16 años es el promedio
+# de varios modelos, y presentarlo como «el resultado del índice» esconde que el índice de los
+# últimos años no es el de los primeros. La pregunta «¿ordena mejor desde que tiene X?» se
+# respondía leyendo la serie por año y promediando dos pedazos a mano — armar la conclusión a
+# ojo, lo mismo que motivó el parcial por tamaño.
+
+_BASE = ("ease_of_business", "operating_cost", "sector_size")
+_CON_CREDITO = _BASE + ("credit_cost",)
+
+
+def _fila_tramo(ano, iai, y, tam):
+    return {"period": ano, "branch": f"b{iai}", "iai_score": iai, "y": y, "sector_size": tam}
+
+
+def _panel_tramos():
+    """Ocho años: los cuatro primeros con la composición vieja, los cuatro últimos con una
+    variable más. En los últimos el índice ordena; en los primeros, no."""
+    filas = []
+    for ano in ("2017", "2018", "2019", "2020"):
+        filas += [_fila_tramo(ano, i, y, t) for i, y, t in
+                  [(1, 3, 3), (2, 1, 1), (3, 5, 5), (4, 2, 2), (5, 6, 6), (6, 4, 4)]]
+    for ano in ("2021", "2022", "2023", "2024"):
+        filas += [_fila_tramo(ano, i, y, t) for i, y, t in
+                  [(1, 1, 3), (2, 2, 1), (3, 3, 5), (4, 4, 2), (5, 5, 6), (6, 6, 4)]]
+    comp = {a: frozenset(_BASE) for a in ("2017", "2018", "2019", "2020")}
+    comp.update({a: frozenset(_CON_CREDITO) for a in ("2021", "2022", "2023", "2024")})
+    return filas, comp
+
+
+def test_los_tramos_salen_del_DATO_y_no_de_una_fecha_escrita_a_mano():
+    """Una lista escrita a mano de qué variable entró cuándo se desincroniza el día que llega
+    la siguiente, y el reporte seguiría partiendo el panel por una frontera que ya no existe.
+    """
+    from modules.sector_intel.validation.report import _tramos_por_composicion
+
+    filas, comp = _panel_tramos()
+    tramos = _tramos_por_composicion(filas, "y", comp)
+    assert [t["anios"] for t in tramos] == [["2017", "2020"], ["2021", "2024"]]
+    assert tramos[1]["variables_que_suma"] == ["credit_cost"]
+    assert tramos[0]["variables_que_suma"] == sorted(_BASE)
+
+
+def test_cada_tramo_trae_SU_control_por_tamano():
+    """Sin él, un tramo que se SEPARA del tamaño y uno que simplemente tiene otro nivel de IC
+    son indistinguibles — y es justo la comparación que este bloque existe para permitir."""
+    from modules.sector_intel.validation.report import _tramos_por_composicion
+
+    filas, comp = _panel_tramos()
+    for t in _tramos_por_composicion(filas, "y", comp):
+        assert "control_solo_tamano_ic" in t
+        assert "veredicto" in t
+
+
+def test_un_tramo_de_UN_ANO_no_produce_intervalo_y_dice_por_que():
+    """Con un solo año no hay dispersión que estimar: el intervalo sería una invención."""
+    from modules.sector_intel.validation.report import _tramos_por_composicion
+
+    filas, comp = _panel_tramos()
+    filas += [_fila_tramo("2025", i, i, i) for i in range(1, 7)]
+    comp["2025"] = frozenset(_CON_CREDITO + ("otra_nueva",))
+    tramos = _tramos_por_composicion(filas, "y", comp)
+    corto = tramos[-1]
+    assert corto["n_anios"] == 1
+    assert "mean_yearly_ic" not in corto
+    assert "invención" in corto["motivo_sin_metricas"]
+
+
+def test_con_UNA_sola_composicion_no_se_finge_un_contraste():
+    """Partir un panel homogéneo en un solo «tramo» sugeriría que hay algo que comparar."""
+    from modules.sector_intel.validation.report import _tramos_por_composicion
+
+    filas, _c = _panel_tramos()
+    unica = {str(f["period"]): frozenset(_BASE) for f in filas}
+    assert _tramos_por_composicion(filas, "y", unica) is None
+    assert _tramos_por_composicion(filas, "y", None) is None
+
+
+def test_la_composicion_se_LEE_del_breakdown_persistido():
+    """No de `assemble_iai_dataset`: el backtest corre sobre los scores PERSISTIDOS, y si la
+    composición se leyera del ensamblador de hoy, los tramos describirían un índice que ese
+    período nunca tuvo."""
+    from sqlalchemy import create_engine
+    from sqlalchemy.orm import sessionmaker
+    from sqlalchemy.pool import StaticPool
+
+    from shared.database.base import Base
+    from modules.sector_intel.models.models import SectorScore
+    from modules.sector_intel.validation.historical import composicion_por_periodo
+
+    eng = create_engine("sqlite://", connect_args={"check_same_thread": False},
+                        poolclass=StaticPool)
+    Base.metadata.create_all(eng)
+    db = sessionmaker(bind=eng)()
+    viejo = {"business": {"variables": {"operating_cost": {"raw": 1.0}}}}
+    nuevo = {"business": {"variables": {"operating_cost": {"raw": 1.0},
+                                        "credit_cost": {"raw": 11.4}}}}
+    db.add(SectorScore(sector_code="turismo", period="2019", iai_score=50.0,
+                       iai_breakdown=viejo))
+    db.add(SectorScore(sector_code="turismo", period="2024", iai_score=55.0,
+                       iai_breakdown=nuevo))
+    # Cobertura PARCIAL: otro sector del mismo período sin la variable. La composición es la
+    # UNIÓN —«¿existía en este período?»— y no la intersección.
+    db.add(SectorScore(sector_code="comunicaciones", period="2024", iai_score=30.0,
+                       iai_breakdown=viejo))
+    db.commit()
+
+    comp = composicion_por_periodo(db)
+    assert comp["2019"] == frozenset({"operating_cost"})
+    assert comp["2024"] == frozenset({"operating_cost", "credit_cost"}), (
+        "la composición se tomó como intersección: una variable de cobertura parcial existe "
+        "en el período aunque no la tengan todos los sectores")
