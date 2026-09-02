@@ -801,6 +801,25 @@ def _named_peers(db: Session, bank: Bank, period_end: date) -> Optional[Dict[str
     }
 
 
+#: Qué es la credencial de evento real, y qué NO es. Vive en constantes porque un literal
+#: incrustado en el dict se parte por ancho de línea y la frase deja de existir en el fuente.
+QUE_ES_EVENTO_REAL = (
+    "backtest de la alerta temprana sobre la cohorte de bancos que efectivamente QUEBRARON: "
+    "cuántos meses antes del colapso se habría encendido la primera alerta de cluster. Es "
+    "evidencia distinta —y más fuerte— que el backtest de distress, y se corre en vivo sobre "
+    "las series históricas de la SB"
+)
+#: La distinción que impide una afirmación comercial falsa construida sobre un contador
+#: honesto. Medido el 2026-09-01: las 6 entidades de la cohorte tienen serie, pero el lead
+#: time solo se midió en 3, y una de esas 3 dio CERO.
+ADVERTENCIA_EVENTO_REAL = (
+    "«con serie» no es «detectada»: tener historia en la base no significa que la alerta se "
+    "haya encendido. La afirmación que sostiene esta credencial es el LEAD TIME y su N, no "
+    "el tamaño de la cohorte. El peor caso viaja al lado del mediano a propósito: una de las "
+    "entidades medidas dio cero meses de anticipación"
+)
+
+
 class BankingProduct:
     """``SectorProduct`` de Banca. ``db`` es opcional: las muestras sintéticas usan
     solo ``narratives``/``render`` (sin DB)."""
@@ -817,6 +836,49 @@ class BankingProduct:
 
     def __init__(self, db: Optional[Session] = None):
         self._db = db
+
+    # ── La credencial de EVENTO REAL (paralela al backtest) ──
+    def credencial_evento_real(self) -> Optional[Dict[str, Any]]:
+        """Qué se puede afirmar contra quiebras REALES. Computado, nunca transcrito.
+
+        Es una credencial APARTE del backtest de distress y con otra evidencia: la cohorte
+        de bancos que efectivamente quebraron, y cuántos meses antes del colapso se habría
+        encendido la primera alerta de cluster.
+
+        **La trampa que este método existe para evitar.** `cohort_backtest` devuelve
+        `found=True` para las 6 entidades, pero `found` significa «hay serie histórica», NO
+        «la alerta se encendió». Publicar «6 de 6» sería una afirmación comercial falsa
+        construida sobre un contador honesto. Lo que se puede afirmar es el LEAD TIME, y ese
+        solo se midió en 3: 11 meses, 7 meses y **0** — una de las tres sin anticipación
+        ninguna. La cifra que la tabla publica es esa, con su N y su peor caso.
+
+        Se computa en vivo sobre las series históricas y por eso no lleva `generated_at`: no
+        hay reporte que envejezca, hay una consulta.
+        """
+        if self._db is None:
+            return None
+        from modules.banking_score.historical_service import cohort_backtest
+        from shared.products.credenciales import GRUPO_EVENTO_REAL
+
+        datos = cohort_backtest(self._db)
+        cohorte = datos.get("cohort") or []
+        leads = {n: m for n, m in (datos.get("leads") or {}).items() if m is not None}
+        if not cohorte:
+            return None
+        medidos = sorted(leads.values())
+        mediana = medidos[len(medidos) // 2] if medidos else None
+        return {
+            "grupo": GRUPO_EVENTO_REAL,
+            "que_es": QUE_ES_EVENTO_REAL,
+            "n_cohorte": len(cohorte),
+            "n_con_serie": sum(1 for c in cohorte if c.get("found")),
+            # La cifra que se cita. Nunca `n_con_serie`: ver el docstring.
+            "n_con_lead_medido": len(medidos),
+            "lead_meses_por_entidad": leads,
+            "lead_mediano_meses": mediana,
+            "lead_minimo_meses": medidos[0] if medidos else None,
+            "advertencia": ADVERTENCIA_EVENTO_REAL,
+        }
 
     # ── Manifiesto ──
     def product_manifest(self) -> SectorProductManifest:

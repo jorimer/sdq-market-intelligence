@@ -46,21 +46,29 @@ def test_sin_titular_declarado_no_se_inventa_uno():
 
 def test_un_eje_sin_motor_va_al_grupo_que_declara_el_obstaculo():
     cifra = {"valor": None, "concluyente": False}
-    assert _grupo("tourism", _Estado(False), cifra, evento_real=False) == GRUPO_SIN_MOTOR
+    assert _grupo("tourism", _Estado(False), cifra) == GRUPO_SIN_MOTOR
 
 
-def test_banca_va_al_grupo_de_evento_real_aunque_su_backtest_sea_de_distress():
-    """La cohorte de quiebras es una credencial APARTE del backtest de distress."""
-    cifra = {"valor": 0.16, "concluyente": True}
-    assert _grupo("banking", _Estado(True, "banking_score"), cifra, True) == GRUPO_EVENTO_REAL
+def test_el_grupo_de_la_fila_sale_de_LA_CIFRA_que_la_fila_publica():
+    """Banca entraba al grupo de evento real POR SER BANCA, sin mirar el número.
+
+    Quedaba una fila con el RÓTULO de una medición —la cohorte de quiebras— y la CIFRA de
+    otra —el backtest de distress—. Se vio cuando el control de tamaño llegó a la tabla: el
+    rótulo decía «validado contra evento real» sobre un Gini de 0,2489 que el activo total
+    supera con 0,5553. La credencial de evento real no se pierde: viaja como bloque propio,
+    con sus números (ver `test_la_credencial_de_evento_real_viaja_aparte`).
+    """
+    sin_ventaja = {"valor": 0.2489, "concluyente": True, "el_tamano_alcanza": True}
+    assert _grupo("banking", _Estado(True, "banking_score"), sin_ventaja) == \
+        GRUPO_EMPATA_TAMANO
 
 
 def test_una_cifra_que_no_concluye_no_se_presenta_como_concluyente():
     cifra = {"valor": 0.0639, "concluyente": False}
-    assert _grupo("insurance", _Estado(True, "insurance_intel"), cifra, False) == \
+    assert _grupo("insurance", _Estado(True, "insurance_intel"), cifra) == \
         GRUPO_NO_CONCLUYENTE
     cifra_ok = {"valor": 0.2575, "concluyente": True}
-    assert _grupo("insurance", _Estado(True, "insurance_intel"), cifra_ok, False) == \
+    assert _grupo("insurance", _Estado(True, "insurance_intel"), cifra_ok) == \
         GRUPO_CONCLUYENTE
 
 
@@ -193,15 +201,15 @@ def test_una_cifra_que_concluye_pero_EMPATA_no_se_sienta_en_el_grupo_concluyente
     empata = {"valor": 0.2575, "concluyente": True, "empata_con_el_tamano": True}
     gana = {"valor": 0.2320, "concluyente": True, "empata_con_el_tamano": False}
     estado = _Estado(True, "insurance_intel")
-    assert _grupo("insurance", estado, empata, False) == GRUPO_EMPATA_TAMANO
-    assert _grupo("trade", estado, gana, False) == GRUPO_CONCLUYENTE
+    assert _grupo("insurance", estado, empata) == GRUPO_EMPATA_TAMANO
+    assert _grupo("trade", estado, gana) == GRUPO_CONCLUYENTE
 
 
 def test_un_empate_que_NO_concluye_sigue_yendo_al_grupo_sin_credencial():
     """El contra-caso: el empate solo reclasifica lo que YA concluía. Sin conclusión, la fila
     pertenece al grupo que dice que no dejó afirmación vendible, no a uno más suave."""
     cifra = {"valor": -0.274, "concluyente": False, "empata_con_el_tamano": True}
-    assert _grupo("agribusiness", _Estado(True, "sector_intel"), cifra, False) == \
+    assert _grupo("agribusiness", _Estado(True, "sector_intel"), cifra) == \
         GRUPO_NO_CONCLUYENTE
 
 
@@ -297,7 +305,7 @@ def test_si_el_tamano_GANA_la_fila_tampoco_puede_afirmar_ventaja():
     """
     gana_el_tamano = {"valor": 0.2489, "concluyente": True,
                       "empata_con_el_tamano": False, "el_tamano_alcanza": True}
-    assert _grupo("x", _Estado(True, "m"), gana_el_tamano, False) == GRUPO_EMPATA_TAMANO
+    assert _grupo("x", _Estado(True, "m"), gana_el_tamano) == GRUPO_EMPATA_TAMANO
 
 
 def test_con_ventaja_real_la_fila_SI_se_queda_en_el_grupo_de_arriba():
@@ -305,5 +313,75 @@ def test_con_ventaja_real_la_fila_SI_se_queda_en_el_grupo_de_arriba():
     `_grupo` que devolviera B2 siempre."""
     con_ventaja = {"valor": 0.30, "concluyente": True,
                    "empata_con_el_tamano": False, "el_tamano_alcanza": False}
-    assert _grupo("trade", _Estado(True, "trade_intel"), con_ventaja, False) == \
+    assert _grupo("trade", _Estado(True, "trade_intel"), con_ventaja) == \
         GRUPO_CONCLUYENTE
+
+
+# ── La credencial de EVENTO REAL viaja aparte ──────────────────────
+
+def test_la_credencial_de_evento_real_viaja_aparte(monkeypatch):
+    """Es otra medición, con otra evidencia. Deja de ser un rótulo sobre la cifra de otro.
+
+    Lo que la tabla no puede publicar es «6 de 6»: `found=True` significa «hay serie
+    histórica», no «la alerta se encendió». La afirmación que la cohorte sostiene es el LEAD
+    TIME y su N — medido el 2026-09-01: 3 de 6, con 11, 7 y **0** meses.
+    """
+    from modules.banking_score.products import BankingProduct
+
+    prod = BankingProduct(db=object())
+    monkeypatch.setattr(
+        "modules.banking_score.historical_service.cohort_backtest",
+        lambda _db: {
+            "cohort": [{"nombre": n, "found": True} for n in
+                       ("BNC", "Mercantil", "Baninter", "Global", "Universal", "Panamericano")],
+            "n_found": 6,
+            "leads": {"BNC": 11, "Mercantil": 0, "Baninter": 7,
+                      "Global": None, "Universal": None, "Panamericano": None},
+        })
+    c = prod.credencial_evento_real()
+    assert c["n_cohorte"] == 6 and c["n_con_serie"] == 6
+    # LA CIFRA QUE SE CITA. Si esto fuera 6, la tabla afirmaría una detección que no ocurrió.
+    assert c["n_con_lead_medido"] == 3
+    assert c["lead_mediano_meses"] == 7
+    # El peor caso viaja al lado del mediano: una de las tres no anticipó nada.
+    assert c["lead_minimo_meses"] == 0
+    assert "no es «detectada»" in c["advertencia"]
+
+
+def test_sin_base_no_se_inventa_una_credencial_de_evento_real():
+    from modules.banking_score.products import BankingProduct
+
+    assert BankingProduct(db=None).credencial_evento_real() is None
+
+
+def test_una_credencial_que_falla_no_tumba_la_tabla():
+    """La leen todas las superficies comerciales: un eje roto no puede llevarse el resto."""
+    from shared.products.credenciales import _safe_evento_real
+
+    class _Rota:
+        def credencial_evento_real(self):
+            raise RuntimeError("la cohorte no se pudo computar")
+
+    assert _safe_evento_real(_Rota()) is None
+    assert _safe_evento_real(object()) is None      # un producto sin la credencial
+
+
+def test_el_grupo_de_evento_real_se_puebla_DESDE_el_bloque():
+    """Ninguna fila se sienta en A por su cifra —A es una credencial paralela—, así que si
+    `por_grupo` mirara solo el grupo de la fila, el grupo más fuerte del catálogo quedaría
+    vacío y se leería como que nadie tiene validación contra evento real."""
+    from shared.products.credenciales import GRUPO_EVENTO_REAL as A
+
+    filas = [
+        {"eje": "banking", "grupo": GRUPO_EMPATA_TAMANO,
+         "credencial_evento_real": {"n_con_lead_medido": 3}},
+        {"eje": "trade", "grupo": GRUPO_CONCLUYENTE, "credencial_evento_real": None},
+    ]
+    por_grupo = {
+        g: ([f["eje"] for f in filas if f.get("credencial_evento_real")] if g == A
+            else [f["eje"] for f in filas if f["grupo"] == g])
+        for g in GRUPOS
+    }
+    assert por_grupo[A] == ["banking"]
+    assert por_grupo[GRUPO_EMPATA_TAMANO] == ["banking"]
+    assert por_grupo[GRUPO_CONCLUYENTE] == ["trade"]
