@@ -192,3 +192,100 @@ class TestLaColaNoSeAtora:
         self._con_cubo_solo_en(monkeypatch, db, {"2025-03"})
         r = ops._run_sectorial_al_dia({}, None, lambda *_: None)
         assert r["faltaban"] == 2 and r["quedan"] == 1
+
+
+@pytest.fixture()
+def db_incompleto():
+    """Un corte CON cubo al que le falta una entidad que presta, y una cambiaria que no.
+
+    Reproduce el punto ciego real: 21 cortes «hechos» a los que les faltaban las mismas dos
+    entidades porque el emparejador no reconocía los nombres que el cubo emitía.
+    """
+    engine = create_engine("sqlite:///:memory:", connect_args={"check_same_thread": False},
+                           poolclass=StaticPool)
+    Base.metadata.create_all(engine)
+    s = sessionmaker(bind=engine)()
+    presta = Bank(name="Banco Que Presta", bank_type=BankType.banca_multiple)
+    falta = Bank(name="Banco Sin Cubo", bank_type=BankType.banca_multiple)
+    cambia = Bank(name="Agente de Cambio", bank_type=BankType.cambiaria)
+    s.add_all([presta, falta, cambia])
+    s.flush()
+    pe = date(2025, 6, 30)
+    for b in (presta, falta, cambia):
+        s.add(BankingData(bank_id=b.id, period_end=pe))
+    # El cubo trae solo a UNO de los dos que prestan. La cambiaria nunca está, y está bien.
+    s.add(CarteraSectorial(bank_id=presta.id, period_end=pe,
+                           sector="F - CONSTRUCCIÓN", provincia="SANTIAGO", deuda=100))
+    s.commit()
+    return s
+
+
+class TestUnCorteINCOMPLETOSeVe:
+    """El punto ciego que dejó 21 cortes «hechos» durante cinco años.
+
+    La brecha se computaba comparando conjuntos de CORTES: un trimestre con al menos una
+    celda contaba como hecho, y a la operación le era indistinguible de uno completo. Lo
+    destapó el rename de FONDESA y el Caribe, que nunca habían entrado al cubo ni una vez
+    desde 2021-03-31.
+    """
+
+    def test_un_corte_con_cubo_pero_sin_una_entidad_se_marca(self, db_incompleto):
+        incompletos = ops.cortes_incompletos(db_incompleto)
+        assert list(incompletos) == [date(2025, 6, 30)]
+        assert incompletos[date(2025, 6, 30)] == ["Banco Sin Cubo"]
+
+    def test_la_cambiaria_NO_cuenta_como_hueco(self, db_incompleto):
+        """Los agentes de cambio y las fiduciarias no otorgan crédito: exigirles cartera
+        sectorial marcaría TODOS los cortes como incompletos para siempre. Son 46 de las 89
+        entidades del universo supervisado — la regla se volvería inútil."""
+        assert "Agente de Cambio" not in ops.cortes_incompletos(db_incompleto)[date(2025, 6, 30)]
+
+    def test_un_corte_COMPLETO_no_aparece(self, db_incompleto):
+        """Sin esto, el test de arriba pasaría con una función que devuelve todo siempre."""
+        b = db_incompleto.query(Bank).filter_by(name="Banco Sin Cubo").one()
+        db_incompleto.add(CarteraSectorial(bank_id=b.id, period_end=date(2025, 6, 30),
+                                           sector="A - AGRO", provincia="AZUA", deuda=50))
+        db_incompleto.commit()
+        assert ops.cortes_incompletos(db_incompleto) == {}
+
+    def test_el_corte_incompleto_se_REINGIERE(self, db_incompleto, monkeypatch):
+        """La reparación. Antes ni siquiera entraba a la lista de trabajo."""
+        llamados = []
+        monkeypatch.setattr(ops, "SessionLocal", lambda: db_incompleto)
+        monkeypatch.setattr("modules.banking_score.sib_sync.recompute_carteras_metrics",
+                            lambda p, write_status=None: llamados.append(p) or {"rows_updated": 5})
+        r = ops._run_sectorial_al_dia({}, None, lambda *_: None)
+        assert llamados == ["2025-06"]
+        assert r["incompletos"] == {"2025-06": ["Banco Sin Cubo"]}
+        assert r["procesados"][0]["faltaban_entidades"] == ["Banco Sin Cubo"]
+
+    def test_reingerir_NO_es_lo_mismo_que_completar(self, db_incompleto, monkeypatch):
+        """Si después de reingerir la entidad SIGUE faltando, el corte no se cuenta como
+        resuelto y se dice cuál. La fuente no la trae, y reintentar no la va a traer."""
+        monkeypatch.setattr(ops, "SessionLocal", lambda: db_incompleto)
+        monkeypatch.setattr("modules.banking_score.sib_sync.recompute_carteras_metrics",
+                            lambda p, write_status=None: {"rows_updated": 5})
+        r = ops._run_sectorial_al_dia({}, None, lambda *_: None)
+        assert r["procesados"][0]["siguen_faltando"] == ["Banco Sin Cubo"]
+        assert r["siguen_incompletos"] == ["2025-06"]
+        assert r["cargados"] == 0, "un corte que sigue incompleto no es trabajo hecho"
+
+    def test_los_VACIOS_se_atienden_primero(self, db_incompleto, monkeypatch):
+        """Un corte sin cubo es un hueco mayor que uno al que le falta gente.
+
+        La base tiene los DOS a la vez a propósito: con una que solo tuviera vacíos, invertir
+        la prioridad no cambiaría nada y el test pasaría en verde contra el orden equivocado.
+        """
+        # Un corte VACÍO, posterior al incompleto: reportó y no tiene ni una celda.
+        b = db_incompleto.query(Bank).filter_by(name="Banco Que Presta").one()
+        db_incompleto.add(BankingData(bank_id=b.id, period_end=date(2025, 9, 30)))
+        db_incompleto.commit()
+        assert ops.cortes_sin_desglose_sectorial(db_incompleto) == [date(2025, 9, 30)]
+        assert list(ops.cortes_incompletos(db_incompleto)) == [date(2025, 6, 30)]
+
+        llamados = []
+        monkeypatch.setattr(ops, "SessionLocal", lambda: db_incompleto)
+        monkeypatch.setattr("modules.banking_score.sib_sync.recompute_carteras_metrics",
+                            lambda p, write_status=None: llamados.append(p) or {"rows_updated": 3})
+        ops._run_sectorial_al_dia({}, None, lambda *_: None)
+        assert llamados[0] == "2025-09", llamados

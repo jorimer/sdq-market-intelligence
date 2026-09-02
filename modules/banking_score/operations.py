@@ -259,6 +259,62 @@ def cortes_sin_desglose_sectorial(db) -> list:
     return sorted(con_datos - con_desglose, reverse=True)
 
 
+#: Tipos de entidad CON libro de crédito. Los otros dos del universo supervisado —agentes
+#: de cambio y fiduciarias— no otorgan crédito, así que su ausencia del cubo sectorial es
+#: correcta y no puede contarse como un hueco: medido el 2026-09-02, son 46 de las 89.
+TIPOS_QUE_PRESTAN = ("banca_multiple", "aap", "banco_ahorro_credito", "corporacion_credito")
+
+
+def entidades_sin_desglose(db, corte) -> list:
+    """Entidades que PRESTAN, reportaron en *corte*, y no tienen cartera abierta por sector.
+
+    Devuelve nombres, no ids: es lo que se lee en la consola de operaciones.
+    """
+    from modules.banking_score.models.models import Bank, BankingData
+    from shared.reference.cartera_sectorial import CarteraSectorial
+
+    reportaron = {r[0] for r in db.query(BankingData.bank_id)
+                  .filter(BankingData.period_end == corte).distinct()}
+    con_cubo = {r[0] for r in db.query(CarteraSectorial.bank_id)
+                .filter(CarteraSectorial.period_end == corte).distinct()}
+    faltan = reportaron - con_cubo
+    if not faltan:
+        return []
+    return sorted(
+        b.name for b in db.query(Bank).filter(Bank.id.in_(faltan)).all()
+        if (b.bank_type.value if hasattr(b.bank_type, "value") else str(b.bank_type))
+        in TIPOS_QUE_PRESTAN)
+
+
+def cortes_incompletos(db) -> dict:
+    """``{corte: [entidades que faltan]}`` de los cortes que SÍ tienen cubo pero les falta gente.
+
+    **Por qué esto existía como punto ciego durante cinco años.** La brecha se computaba
+    comparando CONJUNTOS DE CORTES: un trimestre con al menos una celda contaba como hecho.
+    Un corte al que le faltaran entidades era, para la operación, indistinguible de uno
+    completo — así que nunca se volvía a mirar.
+
+    Lo destapó el rename de dos entidades (2026-09-02): FONDESA y el Caribe nunca habían
+    entrado al cubo —ni una sola vez desde 2021-03-31— porque el endpoint del cubo usaba
+    desde siempre las formas de nombre que el emparejador no reconocía. Los 21 cortes
+    estaban «hechos» y a los 21 les faltaban las mismas dos entidades.
+
+    La comparación correcta es POR ENTIDAD dentro de cada corte, y contra las que PRESTAN:
+    exigirle cartera sectorial a un agente de cambio marcaría todos los cortes como
+    incompletos para siempre.
+    """
+    from shared.reference.cartera_sectorial import CarteraSectorial
+
+    con_cubo = sorted({r[0] for r in db.query(CarteraSectorial.period_end).distinct()},
+                      reverse=True)
+    fuera = {}
+    for corte in con_cubo:
+        faltan = entidades_sin_desglose(db, corte)
+        if faltan:
+            fuera[corte] = faltan
+    return fuera
+
+
 #: Cuántos cortes se pueden INTENTAR de más, por encima de los productivos pedidos.
 #:
 #: El presupuesto de la corrida se cuenta en cortes que efectivamente CARGARON, no en
@@ -295,21 +351,34 @@ def _run_sectorial_al_dia(params, user_id, set_phase) -> Dict:
     faltan son los EXTREMOS —2026-06-30 (el que la fuente no publicó) y 2020-12-31—, con la
     operación reintentando el primero desde entonces y sin llegar nunca al segundo.
 
+    **TAMBIÉN REPARA CORTES INCOMPLETOS (2026-09-02).** Un corte con cubo pero al que le
+    faltan entidades era invisible: la brecha se computaba comparando conjuntos de CORTES, y
+    un trimestre con al menos una celda contaba como hecho. Así vivieron cinco años 21
+    cortes a los que les faltaban las mismas dos entidades. Los vacíos se atienden PRIMERO
+    —un corte sin cubo es un hueco mayor que uno al que le falta gente— y los incompletos
+    comparten el mismo presupuesto y el mismo tope.
+
     Lo que esto NO resuelve: un corte que la fuente no vaya a publicar nunca se sigue
-    intentando en cada corrida. Es barato (vuelve con cero filas), pero distinguir «todavía
-    no» de «nunca» es un cambio aparte — hoy los `sin_cubo` se LISTAN en el resultado para
-    que esa decisión se pueda tomar mirando datos.
+    intentando en cada corrida, igual que uno que quede incompleto después de reingerirlo.
+    Es barato (vuelve enseguida) y está acotado por el tope de intentos, pero distinguir
+    «todavía no» de «nunca» es un cambio aparte — hoy los `sin_cubo` y los
+    `siguen_incompletos` se LISTAN en el resultado para que esa decisión se pueda tomar
+    mirando datos.
     """
     from modules.banking_score.sib_sync import recompute_carteras_metrics
     cuantos = int(params.get("cortes") or 1)
     db = SessionLocal()
     try:
         faltan = cortes_sin_desglose_sectorial(db)
+        incompletos = cortes_incompletos(db)
     finally:
         db.close()
-    if not faltan:
-        return {"faltaban": 0, "procesados": [], "cargados": 0, "sin_cubo": [],
-                "quedan": 0, "nota": "todos los trimestres tienen desglose"}
+    # Los VACÍOS primero: un corte sin cubo es un hueco mayor que uno al que le falta gente.
+    trabajo = [(pe, None) for pe in faltan] + [(pe, ents) for pe, ents in incompletos.items()]
+    if not trabajo:
+        return {"faltaban": 0, "incompletos": {}, "procesados": [], "cargados": 0,
+                "sin_cubo": [], "siguen_incompletos": [], "quedan": 0,
+                "nota": "todos los trimestres tienen desglose, y completo"}
 
     def _ws(_db, **updates):
         if updates.get("phase"):
@@ -318,23 +387,43 @@ def _run_sectorial_al_dia(params, user_id, set_phase) -> Dict:
     tope_de_intentos = cuantos + INTENTOS_EXTRA
     hechos: List[Dict] = []
     cargados = 0
-    for pe in faltan:
+    for pe, faltaban_ents in trabajo:
         if cargados >= cuantos or len(hechos) >= tope_de_intentos:
             break
         periodo = f"{pe.year}-{pe.month:02d}"
-        set_phase(f"desglose sectorial de {periodo}")
+        que = "desglose sectorial" if faltaban_ents is None else "entidades faltantes"
+        set_phase(f"{que} de {periodo}")
         r = recompute_carteras_metrics(periodo, write_status=_ws)
         filas = r.get("rows_updated", 0)
         # Un corte puede no tener cubo publicado todavía: se REPORTA y se sigue con el
         # siguiente. No se marca como hecho y no bloquea a los de atrás.
-        hechos.append({"corte": periodo, "filas": filas, "sin_cubo": not filas})
-        if filas:
+        entrada: Dict = {"corte": periodo, "filas": filas, "sin_cubo": not filas}
+        if faltaban_ents is not None:
+            entrada["faltaban_entidades"] = faltaban_ents
+            # Se re-mide DESPUÉS de reingerir: reingerir no es lo mismo que completar, y un
+            # corte que sigue incompleto tiene que decirlo en vez de contarse como resuelto.
+            db2 = SessionLocal()
+            try:
+                entrada["siguen_faltando"] = entidades_sin_desglose(db2, pe)
+            finally:
+                db2.close()
+        productivo = bool(filas) and not entrada.get("siguen_faltando")
+        hechos.append(entrada)
+        if productivo:
             cargados += 1
-    return {"faltaban": len(faltan), "procesados": hechos, "cargados": cargados,
+    return {"faltaban": len(faltan),
+            # Qué le falta a cada corte que SÍ tiene cubo. Es el punto ciego que dejó 21
+            # cortes «hechos» durante cinco años sin las mismas dos entidades.
+            "incompletos": {f"{pe.year}-{pe.month:02d}": ents
+                            for pe, ents in incompletos.items()},
+            "procesados": hechos, "cargados": cargados,
             # Los cortes que la fuente no tenía. Se listan —no desaparecen— porque son el
             # insumo para decidir cuáles son el BORDE de la serie y no una brecha.
             "sin_cubo": [h["corte"] for h in hechos if h["sin_cubo"]],
-            "quedan": max(0, len(faltan) - cargados)}
+            # Y los que se reingirieron y SIGUEN incompletos: la fuente no los trae, y
+            # reintentarlos para siempre no los va a traer.
+            "siguen_incompletos": [h["corte"] for h in hechos if h.get("siguen_faltando")],
+            "quedan": max(0, len(faltan) + len(incompletos) - cargados)}
 
 
 def _run_sib_sync_liviano(params, user_id, set_phase) -> Dict:
