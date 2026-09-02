@@ -1228,6 +1228,19 @@ class SIBDataClient:
         "MOTOR CREDITO": "Motor Crédito",
         "FIHOGAR": "Fihogar",
         "BACC": "BACC",
+        # LAS FORMAS QUE EL EMISOR USA DESDE 2026-06. Se agregaron el 2026-09-01 tras medir
+        # el daño: la SB dejó de emitir «FONDESA» y «BACC» y pasó a «BANFONDESA» y «BANCO
+        # BACC». El emparejador no las reconoció y las dos entidades quedaron CONGELADAS en
+        # 2026-03-31 —21 períodos contra los 22 de sus pares, sin el trimestre de junio y sin
+        # desglose sectorial— mientras el resto del padrón seguía al día.
+        #
+        # Van como claves EXACTAS, que es lo que el diseño declara seguro («an exact key
+        # never collides»). NO se resuelven por subcadena a propósito: el respaldo por
+        # subcadena excluye códigos y abreviaturas desde que «BON» ruteó el balance de Bonao
+        # a Bonanza, y esa exclusión es justamente la que dejó pasar este hueco. La cura es
+        # nombrar el alias, no aflojar el respaldo.
+        "BANFONDESA": "FONDESA",
+        "BANCO BACC": "BACC",
         "UNION": "Unión",
         "GRUFICORP": "Gruficorp",
         "BONANZA": "Bonanza",
