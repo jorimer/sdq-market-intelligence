@@ -280,9 +280,18 @@ def _cifra_principal(eje: str, reporte: Dict[str, Any]) -> Dict[str, Any]:
             "control_de_tamano": None, **_veredicto_del_control(None)}
 
 
-def _grupo(eje: str, estado, cifra: Dict[str, Any], evento_real: bool) -> str:
-    if evento_real:
-        return GRUPO_EVENTO_REAL
+def _grupo(eje: str, estado, cifra: Dict[str, Any]) -> str:
+    """El grupo de la fila sale de LA CIFRA QUE LA FILA PUBLICA. Nada más.
+
+    Antes cortocircuitaba: banca entraba a `A · validado contra evento real` por ser banca,
+    sin mirar el número. El resultado era una fila con el RÓTULO de una medición —la cohorte
+    de quiebras— y la CIFRA de otra —el backtest de distress—, y cuando el control de tamaño
+    llegó a la tabla quedó a la vista: el rótulo decía «evento real» sobre un Gini de 0,2489
+    que el activo total supera con 0,5553.
+
+    La credencial de evento real no se pierde: la declara el producto
+    (`credencial_evento_real()`) y viaja como bloque propio, con SUS números.
+    """
     if estado is not None and not estado.tiene_motor:
         return GRUPO_SIN_MOTOR
     if eje in _CONVERGENTES:
@@ -301,6 +310,22 @@ def _grupo(eje: str, estado, cifra: Dict[str, Any], evento_real: bool) -> str:
     # que vender — y la fila lleva el veredicto completo para quien quiera distinguirlos.
     sin_ventaja = cifra.get("empata_con_el_tamano") or cifra.get("el_tamano_alcanza")
     return GRUPO_EMPATA_TAMANO if sin_ventaja else GRUPO_CONCLUYENTE
+
+
+def _safe_evento_real(producto: Any) -> Optional[Dict[str, Any]]:
+    """La credencial de evento real que el producto declare, o ``None``.
+
+    Un fallo al computarla no puede tumbar la tabla entera: es UNA credencial de UN eje, y
+    la tabla la leen todas las superficies comerciales.
+    """
+    fn = getattr(producto, "credencial_evento_real", None)
+    if not callable(fn):
+        return None
+    try:
+        bloque = fn()
+    except Exception:  # noqa: BLE001 — una credencial que no se puede computar no rompe la tabla
+        return None
+    return bloque if isinstance(bloque, dict) else None
 
 
 def control_declarado_que_no_llego(filas: List[Dict[str, Any]]) -> List[str]:
@@ -349,13 +374,21 @@ def credenciales(db: Session) -> Dict[str, Any]:
         frescura = (con_frescura(dict(reporte), motor.eje, db)
                     if (reporte and motor) else {"stale": None,
                                                  "stale_reason": "sin reporte persistido"})
-        # La cohorte de quiebras reales de banca es una credencial APARTE del backtest: se
-        # corre en vivo sobre el ledger de terminaciones y no depende de este reporte.
-        evento_real = entrada.sector_key == "banking"
+        # LA CREDENCIAL DE EVENTO REAL, si el eje tiene una. La declara el PRODUCTO y no
+        # este módulo: `shared/` no puede importar de un módulo (la regla de independencia),
+        # y además así cualquier eje que consiga una entra sin tocar esta función.
+        #
+        # Se computa en vivo —la cohorte se corre sobre las series históricas, no vive en un
+        # reporte persistido— y por eso no pasa por el gate de frescura de arriba: no hay
+        # un `generated_at` que envejezca, hay una consulta.
+        evento_real = _safe_evento_real(producto)
         filas.append({
             "eje": entrada.sector_key,
             "nombre": entrada.display_name,
-            "grupo": _grupo(entrada.sector_key, estado, cifra, evento_real),
+            "grupo": _grupo(entrada.sector_key, estado, cifra),
+            # El bloque va al lado del grupo, no dentro: son dos afirmaciones distintas
+            # sobre el mismo eje y cada una tiene que poder leerse con su propia evidencia.
+            "credencial_evento_real": evento_real,
             **cifra,
             # La POBLACIÓN viaja con la cifra. Sin esto, «Gini 0,23 · n=1.693» se lee como
             # discriminación entre bancos, y el 47 % de ese panel no otorga crédito.
@@ -383,7 +416,16 @@ def credenciales(db: Session) -> Dict[str, Any]:
     sin_llegar = control_declarado_que_no_llego(filas)
     return {
         "ejes": filas,
-        "por_grupo": {g: [f["eje"] for f in filas if f["grupo"] == g] for g in GRUPOS},
+        # `por_grupo` mira el grupo de la fila, salvo en A: ahí ninguna fila se sienta por
+        # su cifra —el grupo A es una credencial PARALELA— así que se puebla desde el bloque.
+        # Sin esto, el grupo más fuerte del catálogo quedaría vacío y se leería como que
+        # nadie tiene validación contra evento real, que es falso.
+        "por_grupo": {
+            g: ([f["eje"] for f in filas if f.get("credencial_evento_real")]
+                if g == GRUPO_EVENTO_REAL
+                else [f["eje"] for f in filas if f["grupo"] == g])
+            for g in GRUPOS
+        },
         "n_publicables": sum(1 for f in filas if f["publicable"]),
         # Cifras que EXISTEN pero no se pueden publicar por frescura. Se listan en vez de
         # desaparecer: un veto silencioso se lee como que el eje no tiene validación.

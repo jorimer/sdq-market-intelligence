@@ -40,6 +40,12 @@ NO_APORTAN_CONTEXTO = {
     "reports.criteria_doc": "genera el documento de metodología, que NO se narra",
     "reports.pdf_generator": "renderiza el PDF; no arma contexto",
     "scoring.amplitude": "solo series de números (período, score); sin prosa — verificado",
+    "historical_service": ("lo importa `credencial_evento_real()`, que alimenta la TABLA "
+                          "COMERCIAL de credenciales (`/products/credenciales`), no el "
+                          "contexto del modelo. Ninguna narrativa lee la cohorte de "
+                          "quiebras: si algún día una la leyera, este módulo tiene que "
+                          "MUDARSE a AI_CONTEXT_FILES o el arreglo quedaría muerto contra "
+                          "la caché."),
     "ai_context_files": ("DECLARA la lista, no aporta contexto. Vive aparte porque la "
                          "comparten los DOS productos de banca y `products.py` ya importa "
                          "del anual: duplicarla es cómo una lista se desincroniza."),
