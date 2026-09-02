@@ -32,14 +32,19 @@ from sqlalchemy.orm import Session
 # el material comercial para no presentar como equivalentes cosas que no lo son.
 GRUPO_EVENTO_REAL = "A · validado contra evento real"
 GRUPO_CONCLUYENTE = "B · discriminación concluyente contra desenlace realizado"
-# Concluye, pero el mismo desenlace ordenado SOLO por el tamaño del sujeto alcanza un poder
-# estadísticamente indistinguible. La cifra es real y la afirmación «discrimina contra un
-# desenlace realizado» sigue siendo cierta; la que NO se puede sostener es la de VENTAJA — que
-# el score aporte algo que el tamaño no explique. Mandarlo a E sería prohibir una afirmación
-# verdadera; dejarlo en B es autorizar una falsa, y eso hacía la tabla: al medirlo el
-# 2026-09-01, TRES de las cinco credenciales del grupo B empataban con el tamaño y la tabla no
-# lo decía en ninguna parte.
-GRUPO_EMPATA_TAMANO = "B2 · concluyente, pero indistinguible de ordenar por tamaño"
+# Concluye, pero el score NO aporta nada por encima del tamaño del sujeto. La cifra es real y
+# la afirmación «discrimina contra un desenlace realizado» sigue siendo cierta; la que NO se
+# puede sostener es la de VENTAJA. Mandarlo a E sería prohibir una afirmación verdadera;
+# dejarlo en B es autorizar una falsa, y eso hacía la tabla: al medirlo el 2026-09-01, TRES de
+# las cinco credenciales del grupo B empataban con el tamaño y la tabla no lo decía.
+#
+# **Cubre DOS situaciones y por eso el rótulo no dice «indistinguible».** El empate —el Gini
+# del tamaño cae DENTRO del intervalo del score— y el caso peor, que el tamaño ordene
+# estrictamente MEJOR. El rótulo anterior nombraba solo el primero, y con eso banca se
+# quedaba en el grupo de arriba con un control que la superaba más del doble: el activo total
+# ordena el mismo desenlace con 0,5553 contra 0,2489 del score, con los intervalos sin
+# tocarse. Un grupo que solo mira el empate deja pasar justamente el resultado más grave.
+GRUPO_EMPATA_TAMANO = "B2 · concluyente, pero sin ventaja sobre ordenar por tamaño"
 GRUPO_CONVERGENTE = "C · concluyente por validez convergente"
 GRUPO_PARCIAL = "D · validación parcial o acotada"
 # «NO concluyente» era inexacto para una señal cuyo IC no cruza cero pero está del lado
@@ -286,11 +291,16 @@ def _grupo(eje: str, estado, cifra: Dict[str, Any], evento_real: bool) -> str:
         return GRUPO_PARCIAL
     if not cifra["concluyente"]:
         return GRUPO_NO_CONCLUYENTE
-    # CONCLUYE, pero ¿por encima del tamaño del sujeto? Si el control empata, la fila no puede
-    # sentarse en el grupo que autoriza a decir «discrimina» a secas: lo que el material
-    # publicaría es una ventaja que no existe. Medido el 2026-09-01, tres de las cinco filas
-    # del grupo B empataban con el tamaño y nada en la tabla lo decía.
-    return GRUPO_EMPATA_TAMANO if cifra.get("empata_con_el_tamano") else GRUPO_CONCLUYENTE
+    # CONCLUYE, pero ¿por encima del tamaño del sujeto? Si el control empata —o si lo SUPERA,
+    # que es peor— la fila no puede sentarse en el grupo que autoriza a decir «discrimina» a
+    # secas: lo que el material publicaría es una ventaja que no existe.
+    #
+    # Mirar solo el empate era un hueco: banca quedaba en el grupo de arriba con un control
+    # que la supera más del doble (0,5553 contra 0,2489, intervalos sin tocarse). «El tamaño
+    # empata» y «el tamaño gana» comparten exactamente lo que importa acá — no hay ventaja
+    # que vender — y la fila lleva el veredicto completo para quien quiera distinguirlos.
+    sin_ventaja = cifra.get("empata_con_el_tamano") or cifra.get("el_tamano_alcanza")
+    return GRUPO_EMPATA_TAMANO if sin_ventaja else GRUPO_CONCLUYENTE
 
 
 def control_declarado_que_no_llego(filas: List[Dict[str, Any]]) -> List[str]:
