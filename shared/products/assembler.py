@@ -256,7 +256,8 @@ async def _narratives_cached(
     # ContextVar se restaura, pero el dict sigue siendo el mismo objeto que se fue llenando.
     # Consultarlo después devolvía {} y la fila marcada se cacheaba igual.
     from shared.narrative.cifras_pendientes import asegurando as asegurando_cifras
-    with asegurando_cifras() as sin_respaldo:
+    from shared.narrative.relaciones_pendientes import asegurando as asegurando_relaciones
+    with asegurando_cifras() as sin_respaldo, asegurando_relaciones() as invertidas:
         narratives = await product.narratives(tier, snapshot, lang)  # MISS → generar
     # NUNCA persistir texto degradado: si el motor IA cayó al fallback estático (rate-limit,
     # outage o corte de presupuesto), cachearlo serviría el mismo relleno hueco incluso
@@ -283,6 +284,22 @@ async def _narratives_cached(
             "Narrativa con cifras sin respaldo en %s/%s (scope=%s, período=%s): %s — "
             "no se cachea.", product.sector_key, tier.value, scope or "",
             snapshot.period or "", sin_respaldo)
+        return narratives
+    # NI TEXTO CON UNA RELACIÓN INVERTIDA, que era el TERCER gate y el único que no protegía
+    # la caché. El agujero era exacto y se midió el 2026-09-02 en producción: una descarga
+    # generó, el motor marcó la relación invertida, esto CACHEÓ el texto igual, y el gate de
+    # entrega respondió 503. La descarga siguiente fue un HIT —el motor no corre, así que no
+    # emite hallazgos— y el mismo texto que se acababa de vetar salió con 200 en 4,7 s.
+    #
+    # O sea: el veto más caro de los tres se esquivaba **reintentando**, y lo que quedaba
+    # servido en Postgres SIN TTL era justamente el informe que se había decidido no
+    # entregar. Sus dos hermanos —fallback estático y cifra sin respaldo— ya se protegían
+    # acá; este se quedó afuera. Es, otra vez, un guard que existe en dos de tres lugares.
+    if invertidas:
+        logger.warning(
+            "Narrativa con relaciones invertidas en %s/%s (scope=%s, período=%s): %s — "
+            "no se cachea.", product.sector_key, tier.value, scope or "",
+            snapshot.period or "", invertidas)
         return narratives
     try:
         if row is None:

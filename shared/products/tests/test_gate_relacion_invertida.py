@@ -117,3 +117,53 @@ def test_el_acumulador_se_abre_alrededor_de_la_generacion():
     i_with = fuente.index("with acumulando()")
     i_gen = fuente.index("_narratives_cached(")
     assert i_with < i_gen, "la generación quedó fuera del acumulador"
+
+
+class TestLaCacheNoLoPersiste:
+    """El agujero exacto, medido en producción el 2026-09-02.
+
+    Una descarga generó, el motor marcó la relación invertida, `_narratives_cached` cacheó el
+    texto IGUAL, y el gate de entrega respondió 503. La descarga siguiente fue un HIT —el
+    motor no corre, así que no emite hallazgos— y **el mismo texto que se acababa de vetar
+    salió con 200 en 4,7 segundos**.
+
+    O sea: el veto se esquivaba REINTENTANDO, y lo que quedaba servido en Postgres sin TTL era
+    justamente el informe que se había decidido no entregar.
+
+    Sus dos hermanos —fallback estático y cifra sin respaldo— ya se protegían en la escritura;
+    éste se quedó afuera. Un guard que existe en dos de tres lugares.
+    """
+
+    def _generar(self, product, tier, db, entity="Banco X"):
+        from shared.products.assembler import _narratives_cached
+
+        snap = ProductSnapshot(tier=tier, period="2025", payload=dict(_CTX),
+                               entity_name=entity)
+        return asyncio.run(_narratives_cached(product, tier, snap, "es", "bx"))
+
+    def test_no_se_escribe_fila_con_relacion_invertida(self, db):
+        p = _Product(Granularity.named_entity, ProductTier.deep_dive)
+        p._db = db
+        self._generar(p, ProductTier.deep_dive, db)
+        assert db.query(ProductReportCache).count() == 0, (
+            "el texto vetado quedó cacheado: la próxima descarga lo sirve con 200 y el veto "
+            "se vuelve esquivable reintentando")
+
+    def test_la_sana_SI_se_cachea(self, db):
+        """El contrapeso: sin él, este guard podría estar rompiendo la caché entera."""
+        p = _Product(Granularity.named_entity, ProductTier.deep_dive, deja_pendiente=False)
+        p._db = db
+        self._generar(p, ProductTier.deep_dive, db)
+        assert db.query(ProductReportCache).count() == 1
+
+    def test_los_TRES_gates_protegen_la_escritura(self):
+        """La regla que faltaba, leída del fuente: los tres motivos por los que un informe NO
+        se entrega son los tres por los que NO se cachea. Si aparece un cuarto gate y nadie
+        lo agrega acá, la caché vuelve a servir lo que la entrega rechaza."""
+        import inspect
+
+        from shared.products import assembler
+
+        fuente = inspect.getsource(assembler._narratives_cached)
+        for señal in ("is_static_fallback_text", "if sin_respaldo:", "if invertidas:"):
+            assert señal in fuente, f"la escritura de caché no se protege de «{señal}»"
