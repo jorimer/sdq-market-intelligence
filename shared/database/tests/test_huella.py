@@ -102,3 +102,39 @@ def test_el_pool_declarado_no_CAMBIA_la_capacidad_de_hoy():
         "el techo declarado dejó de coincidir con el que la app tenía de hecho. Si es "
         "deliberado, actualizá este test citando la medición que lo justifica."
     )
+
+
+def test_toda_columna_de_la_consulta_va_calificada():
+    """El defecto que solo aparece contra un Postgres real.
+
+    `relname`, `n_live_tup` y `n_dead_tup` existen en `pg_class` Y en `pg_stat_user_tables`.
+    Sin calificar, Postgres rechaza la consulta ENTERA con «column reference is ambiguous».
+    En SQLite este módulo declara `aplica: false` y no ejecuta nada, así que el CI no la
+    tocaba: el panel salió a producción, reportó su propio error correctamente —sin tumbar
+    la consola— y devolvió cero información.
+
+    Un motor de Postgres en CI sería la prueba de verdad. Mientras no lo haya, esto cubre la
+    clase de defecto que efectivamente ocurrió, que es mejor que nada y mucho mejor que la
+    confianza.
+    """
+    import re
+
+    sql = str(huella._SQL_TABLAS)
+    seleccion = sql[sql.upper().index("SELECT") + 6:sql.upper().index("FROM")]
+    # Cada elemento del SELECT: o es una llamada a función, o va calificado con su alias.
+    for item in seleccion.split(","):
+        expr = item.split(" AS ")[0].strip()
+        if "(" in expr:                      # pg_total_relation_size(c.oid) — ya calificado
+            assert re.search(r"\b[a-z]\.\w+", expr), f"«{expr}» no califica su columna"
+            continue
+        assert re.fullmatch(r"[a-z]\.\w+", expr), (
+            f"«{expr}» va sin calificar: si el nombre existe en más de una tabla del JOIN, "
+            "Postgres rechaza la consulta entera.")
+
+
+def test_el_desborde_del_pool_nunca_se_publica_negativo():
+    """`overflow()` devuelve negativo mientras el pool base no está lleno —es la distancia
+    hasta `pool_size`, no un desborde—. Publicarlo crudo mostraba «desbordadas: -4» en la
+    consola, y un número imposible hace desconfiar de todos los demás."""
+    d = huella.estado_del_pool()
+    assert d["desbordadas"] is None or d["desbordadas"] >= 0

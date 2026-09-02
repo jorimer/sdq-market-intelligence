@@ -9,8 +9,8 @@ tampoco** — «no sé de cuándo es» y «está al día» son cosas distintas, 
 exactamente cómo se publicó el 0,44.
 """
 from shared.products.credenciales import (
-    GRUPO_CONCLUYENTE, GRUPO_EVENTO_REAL, GRUPO_NO_CONCLUYENTE, GRUPO_SIN_MOTOR, GRUPOS,
-    _cifra_principal, _grupo, _mejor_senal,
+    GRUPO_CONCLUYENTE, GRUPO_EMPATA_TAMANO, GRUPO_EVENTO_REAL, GRUPO_NO_CONCLUYENTE,
+    GRUPO_SIN_MOTOR, GRUPOS, _cifra_principal, _grupo, _mejor_senal,
 )
 
 
@@ -285,3 +285,25 @@ def test_la_plataforma_REPORTA_el_control_declarado_que_no_llego():
         {"eje": "tourism", "valor": 0.1, "control_declarado": False, "control_medido": False},
     ]
     assert control_declarado_que_no_llego(filas) == ["banking"]
+
+
+def test_si_el_tamano_GANA_la_fila_tampoco_puede_afirmar_ventaja():
+    """El hueco que dejaba pasar el resultado más grave.
+
+    El grupo miraba solo el EMPATE. Cuando el control no empata sino que SUPERA al score
+    —el caso peor— la fila se quedaba en el grupo que autoriza a decir «discrimina» a secas.
+    Le pasó a banca el 2026-09-01, apenas su control llegó a la tabla: el activo total ordena
+    el mismo desenlace con 0,5553 contra 0,2489 del score, con los intervalos sin tocarse.
+    """
+    gana_el_tamano = {"valor": 0.2489, "concluyente": True,
+                      "empata_con_el_tamano": False, "el_tamano_alcanza": True}
+    assert _grupo("x", _Estado(True, "m"), gana_el_tamano, False) == GRUPO_EMPATA_TAMANO
+
+
+def test_con_ventaja_real_la_fila_SI_se_queda_en_el_grupo_de_arriba():
+    """La regla no puede degradar a todo el mundo: sin eso, el test de arriba pasaría con un
+    `_grupo` que devolviera B2 siempre."""
+    con_ventaja = {"valor": 0.30, "concluyente": True,
+                   "empata_con_el_tamano": False, "el_tamano_alcanza": False}
+    assert _grupo("trade", _Estado(True, "trade_intel"), con_ventaja, False) == \
+        GRUPO_CONCLUYENTE

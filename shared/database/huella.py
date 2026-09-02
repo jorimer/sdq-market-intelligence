@@ -42,12 +42,18 @@ SIN_RETENCION: Dict[str, str] = {
     "operation_runs": "historial de operaciones: es la auditoría de qué corrió y cuándo",
 }
 
+# TODA columna va CALIFICADA con su tabla. `relname`, `n_live_tup` y `n_dead_tup` existen en
+# `pg_class` y en `pg_stat_user_tables` a la vez, y sin calificar Postgres rechaza la consulta
+# entera con «column reference is ambiguous». El panel lo reportó bien —no tumbó la consola—
+# pero devolvió cero información durante su primer despliegue: la consulta nunca se había
+# ejecutado contra un Postgres de verdad, porque en SQLite este módulo declara que no aplica.
+# Lo vigila `test_toda_columna_de_la_consulta_va_calificada`.
 _SQL_TABLAS = text("""
-    SELECT relname AS tabla,
+    SELECT c.relname AS tabla,
            pg_total_relation_size(c.oid) AS bytes_total,
            pg_relation_size(c.oid)       AS bytes_datos,
-           n_live_tup                    AS filas_vivas,
-           n_dead_tup                    AS filas_muertas
+           s.n_live_tup                  AS filas_vivas,
+           s.n_dead_tup                  AS filas_muertas
       FROM pg_class c
       JOIN pg_namespace n ON n.oid = c.relnamespace
       LEFT JOIN pg_stat_user_tables s ON s.relid = c.oid
@@ -70,16 +76,23 @@ def estado_del_pool() -> Dict[str, Any]:
     a la cantidad de procesos.
     """
     pool = engine.pool
+
     def _n(nombre: str):
         fn = getattr(pool, nombre, None)
         try:
             return fn() if callable(fn) else None
         except Exception:  # noqa: BLE001 — un contador no rompe la pantalla
             return None
+
+    # `overflow()` de SQLAlchemy devuelve NEGATIVO mientras el pool base no está lleno: es
+    # la distancia hasta `pool_size`, no un desborde. Publicarlo crudo mostraba
+    # «desbordadas: -4», y un número imposible en un panel de diagnóstico hace desconfiar de
+    # todos los demás. Se piso en cero y se declara qué significa.
+    desborde = _n("overflow")
     return {
         "en_uso": _n("checkedout"),
         "ociosas_en_pool": _n("checkedin"),
-        "desbordadas": _n("overflow"),
+        "desbordadas": None if desborde is None else max(0, desborde),
         "techo_por_proceso": settings.DB_POOL_SIZE + settings.DB_MAX_OVERFLOW,
         "alcance": "Solo ESTE proceso. Cada worker web y el worker de Celery abren su propio "
                    "pool; lo que ve Postgres es la suma de todos.",
