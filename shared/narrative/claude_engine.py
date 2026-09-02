@@ -2385,7 +2385,7 @@ class NarrativeEngine:
         from shared.narrative.numeric_guard import (
             CORRECTION_NOTICE, DIRECTION_CORRECTION_NOTICE, fragmento_alrededor,
             deterministic_direction_errors, deterministic_uncited_figures,
-            deterministic_unsupported, verify_figures)
+            deterministic_unsupported, reescribir_relaciones_invertidas, verify_figures)
         from shared.narrative.presupuesto import cabe, queda
 
         def _gen(user_msg):
@@ -2488,10 +2488,34 @@ class NarrativeEngine:
                     logger.warning(
                         "Guardrail (%s): persisten hallazgos tras %d reintento(s): %s",
                         template, _MAX_REINTENTOS_GUARD, result.guard_unsupported)
-                # Las relaciones invertidas que SOBREVIVEN a que se les diera la lectura
-                # correcta se depositan para que la superficie decida (premium veta, Pulse
-                # registra). El motor es transversal y no sabe qué nivel se está sirviendo:
-                # solo reporta.
+                # ÚLTIMO RECURSO: LA ESCRIBE EL SISTEMA.
+                #
+                # Si tras los reintentos el modelo sigue sin copiar la lectura que se le
+                # entregó, el sistema sustituye la oración con la frase que ya tenía
+                # computada. Antes acá solo se depositaba el hallazgo y la superficie
+                # decidía: premium VETABA. Las dos salidas eran malas —vetar niega quince
+                # secciones correctas por una frase; anotar al pie documenta el error en vez
+                # de arreglarlo— y el veto además era esquivable reintentando, porque el
+                # texto marcado quedaba cacheado.
+                #
+                # Escribirla es lo único que deja el documento bien. Y no es un acto de fe:
+                # `reescribir_relaciones_invertidas` usa este mismo detector como oráculo,
+                # no toca lo que no tiene lectura servida, y REVIERTE la sustitución si el
+                # hallazgo sobrevive.
+                if wrong_dir:
+                    texto_ok, reescritas = reescribir_relaciones_invertidas(
+                        context or {}, result.text)
+                    if reescritas:
+                        logger.warning(
+                            "Guardrail (%s): el modelo no copió la lectura servida tras %d "
+                            "reintento(s) — la escribe el sistema: %s",
+                            template, _MAX_REINTENTOS_GUARD, reescritas)
+                        result.text = texto_ok
+                        wrong_dir = [h for h in wrong_dir
+                                     if h.split(":", 1)[0].strip() not in " ".join(reescritas)]
+                        result.guard_unsupported = list(bad) + list(wrong_dir)
+                # Lo que ni el modelo ni el sistema pudieron arreglar se deposita para que la
+                # superficie lo REGISTRE. Ya no veta: ver `shared/products/assembler`.
                 if wrong_dir:
                     from shared.narrative.relaciones_pendientes import registrar
                     registrar(template, wrong_dir)
