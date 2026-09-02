@@ -790,15 +790,17 @@ async def generate_report(
                 "NO se entrega" if premium else "boletín de sistema: solo se registra")
             if premium:
                 raise NarrativeSinRespaldoError(sin_respaldo)
+        # RELACIÓN INVERTIDA: SE REGISTRA, NO VETA (2026-09-02, igual que el ensamblador).
+        # Lo que llega acá ya pasó por el último recurso del motor, que sustituye la oración
+        # con la lectura computada cuando el modelo no la copia. Si algo sobrevive a ESO, es
+        # que el sistema tampoco tenía la frase — y vetar quince secciones correctas por una
+        # que no se puede reparar niega un análisis correcto casi entero.
         if relaciones_pendientes:
             logger.warning(
                 "Reporte %s para %s (%s) afirma relaciones que el dato contradice en %d "
-                "sección(es): %s — %s",
+                "sección(es): %s — se ENTREGA y se registra.",
                 report_type, bank.name, period_end, len(relaciones_pendientes),
-                relaciones_pendientes,
-                "NO se entrega" if premium else "boletín de sistema: solo se registra")
-            if premium:
-                raise NarrativeRelacionInvertidaError(relaciones_pendientes)
+                relaciones_pendientes)
 
         file_path = await generate_pdf_report(
             report_type=report_type,

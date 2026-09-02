@@ -1686,6 +1686,82 @@ _TOLERANCIA_MULT = 0.15
 _CIFRAS_DE_FRASE = re.compile(r"-?\d+(?:[.,]\d+)?")
 
 
+def _oraciones(text: str) -> List[str]:
+    """El MISMO corte que usa el detector de dirección. Vive acá para que el reescritor y el
+    detector no puedan discrepar sobre qué es una oración."""
+    return [o for o in re.split(r"(?<=[.;:])\s+", re.sub(r"\s+", " ", text)) if o.strip()]
+
+
+def _lectura_de(context: dict, indicador: str) -> Optional[str]:
+    """La lectura YA REDACTADA de ese indicador, o None."""
+    for clave in ("comparaciones", "razones"):
+        for fila in (context.get(clave) or []):
+            if isinstance(fila, dict) and str(fila.get("indicador")) == indicador:
+                lectura = fila.get("lectura")
+                if isinstance(lectura, str) and lectura.strip():
+                    return lectura.strip()
+    return None
+
+
+def _patron_de_oracion(oracion: str) -> "re.Pattern":
+    """Regex que encuentra esa oración en el texto ORIGINAL, tolerando saltos de línea.
+
+    El detector trabaja sobre el texto aplanado; el informe conserva su formato. Buscar la
+    cadena literal fallaría en cuanto la oración cruce un salto de línea — que es lo normal
+    en un párrafo largo, y justo donde el caso real de la §7 se escondía.
+    """
+    return re.compile(r"\s+".join(re.escape(t) for t in oracion.split()))
+
+
+def reescribir_relaciones_invertidas(context: dict, text: str) -> Tuple[str, List[str]]:
+    """Sustituye la ORACIÓN que afirma una relación al revés por la lectura que el sistema
+    ya computó. Devuelve ``(texto, reemplazos)``.
+
+    **Por qué esto y no vetar ni anotar.** El sistema TIENE la frase correcta —la computa y
+    se la entrega al modelo con «escribí exactamente esto»—. Si el modelo no la copia después
+    de dos intentos, vetar niega quince secciones correctas y anotar al pie documenta el
+    error sin arreglarlo. Escribirla es lo único que deja el documento bien.
+
+    Tres propiedades que lo hacen seguro, cada una con su test:
+
+    1. **El detector es el oráculo.** Para saber qué oración está mal se le pregunta al mismo
+       `deterministic_direction_errors`, oración por oración. No hay un segundo matcher que
+       se desincronice — el modo de falla que este repo ya pagó cinco veces.
+    2. **Sin lectura no se toca.** Si el contexto no trae la frase redactada de ese
+       indicador, la oración queda como está y el hallazgo sigue vivo. Nunca se inventa.
+    3. **Se revierte si no arregla.** Aplicada la sustitución se vuelve a correr el detector:
+       si el hallazgo sigue, se deshace. Un reemplazo que no resuelve es un cambio de prosa
+       a ciegas sobre un informe que se vende.
+    """
+    reemplazos: List[str] = []
+    try:
+        if not deterministic_direction_errors(context, text):
+            return text, []
+        salida = text
+        for oracion in _oraciones(text):
+            hallazgos = deterministic_direction_errors(context, oracion)
+            if not hallazgos:
+                continue
+            indicador = str(hallazgos[0]).split(":", 1)[0].strip()
+            lectura = _lectura_de(context, indicador)
+            if not lectura:
+                continue
+            patron = _patron_de_oracion(oracion)
+            if not patron.search(salida):
+                continue
+            candidato = patron.sub(lambda _m: lectura, salida, count=1)
+            # SE REVIERTE SI NO ARREGLA. La sustitución es una promesa verificable, no un
+            # acto de fe: si el detector sigue marcando lo mismo, el reemplazo no sirvió.
+            if indicador in " ".join(deterministic_direction_errors(context, candidato)):
+                continue
+            salida = candidato
+            reemplazos.append(f"{indicador}: se reescribió la cláusula con la lectura servida")
+        return salida, reemplazos
+    except Exception as e:  # noqa: BLE001 — best-effort: jamás rompe la generación
+        logger.warning("La reescritura de relaciones invertidas no pudo completarse: %s", e)
+        return text, []
+
+
 def _clausula_a_copiar(context: dict, indicador: str, clave: str = "comparaciones") -> str:
     """El sufijo `→ escribí: "..."` con la lectura YA REDACTADA de ese indicador.
 
