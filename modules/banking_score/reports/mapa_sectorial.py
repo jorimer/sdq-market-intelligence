@@ -205,6 +205,16 @@ MOTIVO_ENTIDAD_SIN_DESGLOSE = (
     "lugar de presentar una posición que no se midió."
 )
 
+#: Tipos SIN libro de crédito. Son 46 de las 89 entidades supervisadas —42 agentes de cambio
+#: y 4 fiduciarias— y decirles «no registra cartera clasificada por sector» es técnicamente
+#: cierto y se lee como una deficiencia. No prestan: no hay cartera que clasificar.
+SIN_LIBRO_DE_CREDITO = ("cambiaria", "fiduciaria")
+
+MOTIVO_NO_OTORGA_CREDITO = (
+    "Esta entidad no otorga crédito, así que no hay cartera que abrir por sector económico. "
+    "No es un dato que falte: el mapa sectorial no aplica a su modelo de negocio."
+)
+
 MOTIVO_SISTEMA_SIN_PUBLICAR = (
     "El libro de crédito del sistema abierto por sector no está disponible para este corte: "
     "la Superintendencia de Bancos todavía no ha publicado el cubo de crédito del período. "
@@ -216,14 +226,33 @@ def motivo_sin_mapa(db: Session, corte: date,
                     bank: Optional[Bank] = None) -> str:
     """Por qué este corte no tiene mapa sectorial — distinguiendo de QUIÉN es la ausencia.
 
-    Sin celdas para el corte, la fuente no publicó el cubo. Con celdas pero ninguna de la
-    entidad, el hueco es de la entidad. Confundirlos haría que un trimestre sin publicar se
-    leyera como una característica del banco evaluado, que es exactamente la lectura que un
-    informe de calificación no puede permitirse inducir.
+    Son TRES situaciones que en el informe se veían iguales (la sección simplemente no
+    estaba), y cada una autoriza a decir algo distinto:
+
+    * **la entidad no presta** — cambiarias y fiduciarias, 46 de las 89. No hay cartera que
+      clasificar; el mapa no aplica a su modelo de negocio.
+    * **la fuente no publicó el trimestre** — la SB emite el cubo de crédito un trimestre
+      detrás de los estados financieros, así que le pasa a TODAS las entidades en el corte
+      corriente. Es el caso más frecuente en el informe más nuevo.
+    * **la entidad no está en el cubo** aunque el sistema sí. Ojo con este: era lo que
+      parecía pasarle a FONDESA y al Caribe y resultó ser un fallo NUESTRO de emparejamiento
+      (ver `SIB_API_NAME_MAP`). Un hueco acá merece que se compruebe de quién es antes de
+      darlo por bueno.
+
+    Confundirlos haría que un trimestre sin publicar se leyera como una característica del
+    banco evaluado, que es exactamente la lectura que un informe de calificación no puede
+    permitirse inducir.
     """
     hay_corte = bool(_celdas(db, corte))
     if bank is None:
         return "" if hay_corte else MOTIVO_SISTEMA_SIN_PUBLICAR
+    # Primero el modelo de negocio: una cambiaria no tiene cartera que clasificar, y el
+    # motivo del cubo —«no registra cartera clasificada»— se le leería como una deficiencia.
+    # Son 46 de las 89 entidades, así que es el caso MÁS COMÚN, no la excepción.
+    tipo = getattr(bank, "bank_type", None)
+    nombre_del_tipo = getattr(tipo, "value", None) or str(tipo)
+    if nombre_del_tipo in SIN_LIBRO_DE_CREDITO:
+        return MOTIVO_NO_OTORGA_CREDITO
     if not hay_corte:
         return MOTIVO_FUENTE_SIN_PUBLICAR
     return MOTIVO_ENTIDAD_SIN_DESGLOSE

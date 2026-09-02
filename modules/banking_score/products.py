@@ -820,6 +820,36 @@ ADVERTENCIA_EVENTO_REAL = (
 )
 
 
+def _motivo_sin_mapa_sectorial(db, snapshot) -> Optional[str]:
+    """El texto que ocupa el lugar del mapa cuando no hay mapa. Nunca lanza.
+
+    Se resuelve la entidad para poder distinguir de QUIÉN es la ausencia: sin ella,
+    `motivo_sin_mapa` solo puede hablar del sistema, y un trimestre que la fuente no publicó
+    se leería como una característica del banco evaluado.
+
+    Si algo falla —sin sesión, período ilegible, entidad no resuelta— devuelve None y la
+    sección vuelve a faltar. Eso es un empate con el comportamiento anterior, no una
+    regresión: lo que no puede pasar es que un fallo acá tumbe el informe entero.
+    """
+    if db is None:
+        return None
+    try:
+        from modules.banking_score.models.models import Bank
+        from modules.banking_score.reports.mapa_sectorial import motivo_sin_mapa
+
+        corte = _parse_period(snapshot.period)
+        if corte is None:
+            return None
+        # `narratives()` no recibe el scope: la entidad viaja en el snapshot, que es lo que
+        # el motor ya usa para nombrarla en la prosa.
+        bank = (db.query(Bank).filter(Bank.name == snapshot.entity_name).one_or_none()
+                if snapshot.entity_name else None)
+        return motivo_sin_mapa(db, corte, bank) or None
+    except Exception:  # noqa: BLE001 — un motivo que no se puede computar no tumba el informe
+        logger.exception("No se pudo computar el motivo del mapa sectorial ausente")
+        return None
+
+
 class BankingProduct:
     """``SectorProduct`` de Banca. ``db`` es opcional: las muestras sintéticas usan
     solo ``narratives``/``render`` (sin DB)."""
@@ -1295,10 +1325,23 @@ class BankingProduct:
         # reales; sin contrato macro la sección no se emite (nunca vacía/fabricada).
         if not scoring_result.get("entorno_macro"):
             claude_sections = [s for s in claude_sections if s != "entorno_operativo"]
-        # Mapa sectorial: los cortes anteriores al backfill del cubo de créditos no tienen
-        # desglose, y una entidad sin cartera clasificada tampoco. Sin dato no hay sección.
+        # MAPA SECTORIAL: sin dato no hay narrativa, pero la sección NO desaparece.
+        #
+        # Antes se quitaba de la lista y el informe entregaba 16 de las 17 secciones que su
+        # propio `commercial.sections` promete, sin decir por qué. Y no es un caso raro: el
+        # cubo de crédito de la SB va un trimestre detrás de los estados financieros, así que
+        # al informe del trimestre CORRIENTE le falta SIEMPRE — que es el que se vende.
+        #
+        # Ahora la sección se emite con el motivo declarado. `motivo_sin_mapa` distingue las
+        # tres situaciones —la entidad no presta, la fuente no publicó el trimestre, la
+        # entidad no está en el cubo— que hasta hoy se veían todas iguales: ausentes.
+        #
+        # Es texto DETERMINISTA, como `limitations` y `early_warning`: no pasa por el motor.
+        motivo_del_mapa = None
         if not scoring_result.get("mapa_sectorial"):
             claude_sections = [s for s in claude_sections if s != "mapa_sectorial"]
+            if "mapa_sectorial" in manifest.sections:
+                motivo_del_mapa = _motivo_sin_mapa_sectorial(self._db, snapshot)
         out = await generate_named_narratives(
             claude_sections, snapshot.entity_name or "Entidad", scoring_result,
             snapshot.period, benchmarks=peer_block,
@@ -1306,6 +1349,8 @@ class BankingProduct:
             # el cierre en 'standard' (profundidad por sección, no un mode único por tier).
             mode="detailed",
         )
+        if motivo_del_mapa:
+            out["mapa_sectorial"] = motivo_del_mapa
         if "early_warning" in manifest.sections:
             from modules.banking_score.early_warning import format_alerts_text
             ew = scoring_result.get("early_warning") or {}
