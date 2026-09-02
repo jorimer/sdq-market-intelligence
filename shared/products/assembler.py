@@ -490,28 +490,39 @@ async def _content_from_snapshot(
         if blocked:
             raise NarrativeSinRespaldoError(sin_respaldo)
 
-    # GATE DE RELACIÓN INVERTIDA — el tercero, y el más acotado de los tres a propósito. Una
-    # relación invertida es REPARABLE: el sistema ya computó la lectura correcta y el motor se
-    # la entrega al modelo para que la copie. Por eso el remedio de primera línea es reparar,
-    # no vetar — frenar quince secciones buenas por una frase corregible no protege al
-    # cliente, le niega un análisis que es correcto casi entero.
+    # RELACIÓN INVERTIDA: SE REGISTRA, NO VETA (decisión del dueño, 2026-09-02).
     #
-    # Se llega acá solo si el modelo contradijo esa lectura DOS veces seguidas. En ese punto ya
-    # no es «se equivocó»: es señal de que algo más está roto —quizá el propio guard, como en
-    # el falso positivo del 69%— y publicar sería apostar a que el equivocado es el detector.
+    # Hasta hoy esto frenaba la entrega de un premium. Se quitó por dos razones que se
+    # sostienen solas:
     #
-    # Misma política que sus hermanos: premium FALLA CERRADO, Pulse solo registra.
+    # 1. **El veto no protegía.** Era esquivable REINTENTANDO: `_narratives_cached` cacheaba
+    #    el texto marcado, el gate respondía 503, y la descarga siguiente era un HIT que no
+    #    ejecuta el motor —así que no emite hallazgos— y salía con 200. Medido en producción
+    #    el 2026-09-02: 503 a los 272 s, 200 a los 4,7 s, el mismo texto.
+    # 2. **El precio era desproporcionado.** Quince secciones correctas no se entregaban por
+    #    una frase, después de haber pagado la generación entera.
+    #
+    # Qué NO es esto. Una CURVA invertida —un índice que ordena al revés— es un hallazgo y se
+    # publica con su cifra; nunca fue candidata a veto (ver el grupo E del catálogo). Lo que
+    # se detecta acá es que el TEXTO contradice el dato que se le sirvió al modelo: el dato
+    # está bien y la frase está mal. No es algo que explicar, es algo que corregir — y el
+    # motor ya lo intenta dos veces entregándole la lectura correcta ya redactada.
+    #
+    # Dónde queda entonces. HACIA ADENTRO: el registro de operaciones y `marcas-del-guard`,
+    # con la sección y las dos lecturas, que es lo que puede usar el equipo antes de mandar
+    # el informe. No va al documento: una nota al pie de una frase equivocada no la arregla,
+    # la documenta, y declarar huecos en el entregable lo desvaloriza.
+    #
+    # Lo que esto deja abierto, y hay que decirlo: se publica una frase que sabemos
+    # equivocada, y solo se entera quien mire la consola. La cura de verdad no es vetar ni
+    # anotar — es que el sistema ESCRIBA la cláusula correcta cuando el modelo no la copia.
     if relaciones_pendientes:
-        from shared.narrative.claude_engine import NarrativeRelacionInvertidaError
-        blocked = level.granularity is not Granularity.system
         logger.warning(
             "Reporte %s/%s (scope=%s, período=%s) afirma relaciones que el dato contradice "
-            "en %d sección(es): %s — %s",
+            "en %d sección(es): %s — se ENTREGA y se registra (el veto se quitó el "
+            "2026-09-02: era esquivable reintentando y costaba el informe entero).",
             product.sector_key, tier.value, scope or "", snapshot.period or "",
-            len(relaciones_pendientes), relaciones_pendientes,
-            "NO se entrega" if blocked else "abierto: solo se registra")
-        if blocked:
-            raise NarrativeRelacionInvertidaError(relaciones_pendientes)
+            len(relaciones_pendientes), relaciones_pendientes)
     # Glosario automático (audiencia mixta): detecta las siglas/términos técnicos que la
     # narrativa YA REDACTADA usa y anexa su definición. Va ANTES del merge de las secciones
     # estándar (metodología/fuentes no llevan jerga propia del eje). Punto único: lo

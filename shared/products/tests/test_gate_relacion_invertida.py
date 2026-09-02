@@ -5,16 +5,20 @@ capitalización contable «SUPERA en 3.70 puntos porcentuales al promedio de su 
 estaba POR DEBAJO —7.41% contra una mediana de grupo de 11.11%— contradiciendo a la §2 y a la
 §10 del MISMO documento.
 
-Por qué es el más acotado: una relación invertida es REPARABLE. El sistema ya computó la
-lectura correcta y el motor se la entrega al modelo para que la copie. Frenar quince secciones
-buenas por una frase corregible no protege al cliente — le niega un análisis correcto casi
-entero. Se llega al veto solo cuando el modelo contradice esa lectura DOS veces.
+**EL VETO SE QUITÓ el 2026-09-02** (decisión del dueño). Por dos razones que se sostienen
+solas: no protegía —era esquivable REINTENTANDO, porque el texto marcado quedaba cacheado y
+el HIT siguiente no ejecuta el motor ni emite hallazgos— y su precio era no entregar quince
+secciones correctas por una frase, después de pagar la generación entera.
+
+Qué NO es esto, porque se confunde: una CURVA invertida —un índice que ordena al revés— es un
+hallazgo, se publica con su cifra y nunca fue candidata a veto. Lo que se detecta acá es que
+el TEXTO contradice el dato que se le sirvió al modelo: el dato está bien y la frase está mal.
 
 Contrato que fijan estos tests:
 
-  * PREMIUM (nombrado) con relaciones pendientes → ``NarrativeRelacionInvertidaError``, con
-    las secciones LISTADAS.
-  * PULSE (sistema/abierto) → solo se registra; no rompe la entrega.
+  * PREMIUM (nombrado) con relaciones pendientes → **SE ENTREGA**, y el hallazgo se registra
+    con su sección. Hacia adentro: lo usa el equipo antes de mandar el informe.
+  * PULSE (sistema/abierto) → igual, como siempre.
   * Sin relaciones pendientes → no cambia nada.
 """
 import asyncio
@@ -83,11 +87,22 @@ def _correr(product, tier, entity):
     return asyncio.run(_content_from_snapshot(product, tier, snap, "es"))
 
 
-def test_PREMIUM_no_se_entrega_y_LISTA_la_seccion():
+def test_PREMIUM_SE_ENTREGA_y_el_hallazgo_se_REGISTRA(caplog):
+    """El contrato nuevo. Antes esto levantaba `NarrativeRelacionInvertidaError`.
+
+    Lo que no puede pasar es que se entregue EN SILENCIO: el registro es lo único que queda,
+    así que si desaparece, la frase equivocada sale y nadie se entera nunca.
+    """
+    import logging
+
     p = _Product(Granularity.named_entity, ProductTier.deep_dive)
-    with pytest.raises(NarrativeRelacionInvertidaError) as e:
-        _correr(p, ProductTier.deep_dive, "Banco X")
-    assert "peer_positioning" in e.value.hallazgos, e.value.hallazgos
+    with caplog.at_level(logging.WARNING):
+        contenido = _correr(p, ProductTier.deep_dive, "Banco X")
+    assert set(contenido.narratives) >= set(_SECTIONS), "el informe no se entregó"
+    registro = " ".join(r.getMessage() for r in caplog.records)
+    assert "peer_positioning" in registro, (
+        "el hallazgo no quedó registrado: la frase equivocada saldría sin que nadie se entere")
+    assert "se ENTREGA" in registro
 
 
 def test_el_PULSE_abierto_registra_pero_ENTREGA():
