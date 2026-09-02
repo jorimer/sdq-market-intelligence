@@ -6,7 +6,7 @@ history, scheduler) is platform-wide; this module only owns its runners.
 """
 import json
 from datetime import datetime, timezone
-from typing import Dict
+from typing import Dict, List
 
 from shared.database.session import SessionLocal
 from shared.settings.models import AppSetting
@@ -259,6 +259,18 @@ def cortes_sin_desglose_sectorial(db) -> list:
     return sorted(con_datos - con_desglose, reverse=True)
 
 
+#: Cuántos cortes se pueden INTENTAR de más, por encima de los productivos pedidos.
+#:
+#: El presupuesto de la corrida se cuenta en cortes que efectivamente CARGARON, no en
+#: intentos: el costo real está en la escritura (~8 minutos), mientras que un corte cuyo
+#: cubo la fuente no publicó vuelve casi enseguida y con cero filas. Sin esta distinción la
+#: cola se atoraba — ver `_run_sectorial_al_dia`.
+#:
+#: El tope existe igual para que una fuente caída no convierta una operación corta en un
+#: barrido de los 23 trimestres.
+INTENTOS_EXTRA = 4
+
+
 def _run_sectorial_al_dia(params, user_id, set_phase) -> Dict:
     """Llena el desglose sectorial de los trimestres que aún no lo tienen, DE A UNO.
 
@@ -270,6 +282,23 @@ def _run_sectorial_al_dia(params, user_id, set_phase) -> Dict:
 
     Por eso también esta operación SÍ puede tener cadencia, mientras que el backfill completo
     no debería: es corta, idempotente y reanudable.
+
+    **LA COLA NO SE ATORA (2026-09-01).** El presupuesto se cuenta en cortes que CARGARON,
+    no en intentos. Antes se tomaba `faltan[:1]` a secas y la lista viene del más nuevo al
+    más viejo, así que la corrida agarraba siempre la cabeza; si ese corte no tenía cubo
+    publicado volvía con cero filas, seguía en la brecha, y la semana siguiente se lo volvía
+    a tomar. Todo lo que estuviera detrás no llegaba nunca.
+
+    No era un caso raro: el cubo de crédito de la SB va un trimestre detrás de los estados
+    financieros, así que la cabeza de la lista es casi siempre un corte sin cubo. Medido el
+    2026-09-01 en producción: de 23 trimestres con datos, 21 tienen desglose y los dos que
+    faltan son los EXTREMOS —2026-06-30 (el que la fuente no publicó) y 2020-12-31—, con la
+    operación reintentando el primero desde entonces y sin llegar nunca al segundo.
+
+    Lo que esto NO resuelve: un corte que la fuente no vaya a publicar nunca se sigue
+    intentando en cada corrida. Es barato (vuelve con cero filas), pero distinguir «todavía
+    no» de «nunca» es un cambio aparte — hoy los `sin_cubo` se LISTAN en el resultado para
+    que esa decisión se pueda tomar mirando datos.
     """
     from modules.banking_score.sib_sync import recompute_carteras_metrics
     cuantos = int(params.get("cortes") or 1)
@@ -279,23 +308,33 @@ def _run_sectorial_al_dia(params, user_id, set_phase) -> Dict:
     finally:
         db.close()
     if not faltan:
-        return {"faltaban": 0, "procesados": [], "nota": "todos los trimestres tienen desglose"}
+        return {"faltaban": 0, "procesados": [], "cargados": 0, "sin_cubo": [],
+                "quedan": 0, "nota": "todos los trimestres tienen desglose"}
 
     def _ws(_db, **updates):
         if updates.get("phase"):
             set_phase(updates["phase"])
 
-    hechos = []
-    for pe in faltan[:cuantos]:
+    tope_de_intentos = cuantos + INTENTOS_EXTRA
+    hechos: List[Dict] = []
+    cargados = 0
+    for pe in faltan:
+        if cargados >= cuantos or len(hechos) >= tope_de_intentos:
+            break
         periodo = f"{pe.year}-{pe.month:02d}"
         set_phase(f"desglose sectorial de {periodo}")
         r = recompute_carteras_metrics(periodo, write_status=_ws)
-        # Un corte puede no tener cubo publicado todavía: se REPORTA, no se reintenta en
-        # bucle ni se marca como hecho.
-        hechos.append({"corte": periodo, "filas": r.get("rows_updated", 0),
-                       "sin_cubo": not r.get("rows_updated")})
-    return {"faltaban": len(faltan), "procesados": hechos,
-            "quedan": max(0, len(faltan) - len(hechos))}
+        filas = r.get("rows_updated", 0)
+        # Un corte puede no tener cubo publicado todavía: se REPORTA y se sigue con el
+        # siguiente. No se marca como hecho y no bloquea a los de atrás.
+        hechos.append({"corte": periodo, "filas": filas, "sin_cubo": not filas})
+        if filas:
+            cargados += 1
+    return {"faltaban": len(faltan), "procesados": hechos, "cargados": cargados,
+            # Los cortes que la fuente no tenía. Se listan —no desaparecen— porque son el
+            # insumo para decidir cuáles son el BORDE de la serie y no una brecha.
+            "sin_cubo": [h["corte"] for h in hechos if h["sin_cubo"]],
+            "quedan": max(0, len(faltan) - cargados)}
 
 
 def _run_sib_sync_liviano(params, user_id, set_phase) -> Dict:
