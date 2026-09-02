@@ -289,3 +289,62 @@ class TestUnCorteINCOMPLETOSeVe:
                             lambda p, write_status=None: llamados.append(p) or {"rows_updated": 3})
         ops._run_sectorial_al_dia({}, None, lambda *_: None)
         assert llamados[0] == "2025-09", llamados
+
+
+class TestUnaAusenciaSeDECLARA:
+    """«Todavía no» y «nunca» no son lo mismo, y hasta hoy se reintentaban igual.
+
+    Tras reingerir los 19 cortes (2026-09-02) quedaron cinco donde la fuente sigue sin traer
+    a Qik y uno sin Activo. Reintentarlos cada semana no los va a traer: son ausencias
+    reales, y lo que corresponde es declararlas con su evidencia.
+
+    Cómo se distingue una ausencia real de un defecto nuestro: un fallo de emparejamiento
+    deja a la entidad fuera de TODOS los cortes —le pasó a FONDESA y al Caribe, ausentes en
+    los 21— mientras que una ausencia legítima está ACOTADA y es consecutiva.
+    """
+
+    def test_una_ausencia_declarada_deja_de_marcarse(self, db_incompleto):
+        """Lo declarado no ensucia la lista de trabajo."""
+        ops.AUSENCIAS_DECLARADAS["Banco Sin Cubo"] = {
+            "cortes": frozenset({date(2025, 6, 30)}),
+            "motivo": "prueba", "evidencia": "prueba"}
+        try:
+            assert ops.cortes_incompletos(db_incompleto) == {}
+        finally:
+            del ops.AUSENCIAS_DECLARADAS["Banco Sin Cubo"]
+
+    def test_solo_en_LOS_CORTES_declarados(self, db_incompleto):
+        """Los cortes van enumerados, no por rango: un corte nuevo NO queda tapado.
+
+        Un rango abierto («desde tal fecha») escondería justo la regresión que esto no debe
+        esconder — que la entidad vuelva a faltar donde antes estaba.
+        """
+        ops.AUSENCIAS_DECLARADAS["Banco Sin Cubo"] = {
+            "cortes": frozenset({date(2024, 3, 31)}),      # OTRO corte
+            "motivo": "prueba", "evidencia": "prueba"}
+        try:
+            assert ops.cortes_incompletos(db_incompleto) == {
+                date(2025, 6, 30): ["Banco Sin Cubo"]}
+        finally:
+            del ops.AUSENCIAS_DECLARADAS["Banco Sin Cubo"]
+
+    def test_toda_ausencia_declarada_trae_MOTIVO_y_EVIDENCIA(self):
+        """Declarar sin evidencia es encogerse de hombros con más pasos. Misma forma que
+        `no_medido` en el control por tamaño y que `dato_pendiente` en los obstáculos."""
+        assert ops.AUSENCIAS_DECLARADAS, "el barrido no encontró ninguna declaración"
+        for nombre, e in ops.AUSENCIAS_DECLARADAS.items():
+            assert e.get("cortes"), f"{nombre} no enumera sus cortes"
+            assert all(isinstance(c, date) for c in e["cortes"]), nombre
+            assert len(e.get("motivo", "")) > 20, f"{nombre} no explica POR QUÉ falta"
+            assert len(e.get("evidencia", "")) > 40, (
+                f"{nombre} no dice CÓMO se comprobó. Una ausencia declarada sin evidencia "
+                "es indistinguible de un defecto nuestro tapado.")
+
+    def test_las_declaradas_SIGUEN_listadas_en_el_resultado(self, db, monkeypatch):
+        """Una ausencia que desaparece del reporte se lee como que el dato está."""
+        monkeypatch.setattr(ops, "SessionLocal", lambda: db)
+        monkeypatch.setattr("modules.banking_score.sib_sync.recompute_carteras_metrics",
+                            lambda p, write_status=None: {"rows_updated": 3})
+        r = ops._run_sectorial_al_dia({}, None, lambda *_: None)
+        assert "Qik Banco Digital Dominicano" in r["ausencias_declaradas"]
+        assert r["ausencias_declaradas"]["Banco Múltiple Activo"] == ["2023-09"]

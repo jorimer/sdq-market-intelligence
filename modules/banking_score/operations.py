@@ -5,7 +5,7 @@ operation console (:mod:`shared.operations`). The console framework (status,
 history, scheduler) is platform-wide; this module only owns its runners.
 """
 import json
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
 from typing import Dict, List
 
 from shared.database.session import SessionLocal
@@ -265,6 +265,43 @@ def cortes_sin_desglose_sectorial(db) -> list:
 TIPOS_QUE_PRESTAN = ("banca_multiple", "aap", "banco_ahorro_credito", "corporacion_credito")
 
 
+#: AUSENCIAS DECLARADAS del cubo sectorial: la entidad no tenía cartera clasificada en esos
+#: cortes, y reingerir no la va a traer. Se declaran para que la operación deje de
+#: reintentarlas cada semana — pero se LISTAN en el resultado, porque una ausencia que
+#: desaparece se lee como que el dato está.
+#:
+#: **Cómo se distingue una ausencia real de un defecto nuestro.** Un fallo de emparejamiento
+#: deja a la entidad fuera de TODOS los cortes: le pasó a FONDESA y al Caribe, ausentes en
+#: los 21 desde 2021-03-31 (ver `SIB_API_NAME_MAP`). Una ausencia legítima está ACOTADA y es
+#: consecutiva, con un principio o un final que se explica solo.
+#:
+#: Los cortes van ENUMERADOS, no por rango: si aparece uno nuevo, no está declarado y la
+#: operación lo marca. Un rango abierto taparía justo la regresión que esto no debe tapar.
+AUSENCIAS_DECLARADAS: Dict[str, Dict] = {
+    "Qik Banco Digital Dominicano": {
+        "cortes": frozenset({date(2022, 12, 31), date(2023, 3, 31), date(2023, 6, 30),
+                             date(2023, 9, 30), date(2023, 12, 31)}),
+        "motivo": "banco digital sin cartera clasificada por sector todavía",
+        "evidencia": ("reporta estados financieros desde 2022-12-31 y entra al cubo en "
+                      "2024-03-31, presente sin interrupción en los 9 cortes siguientes. "
+                      "Verificado el 2026-09-02 tras reingerir los 19 cortes: la fuente "
+                      "sigue sin traerlo en esos cinco"),
+    },
+    "Banco Múltiple Activo": {
+        "cortes": frozenset({date(2023, 9, 30)}),
+        "motivo": "entidad SALIDA del sistema, catalogada inactiva",
+        "evidencia": ("`SIB_ENTITY_CODES['Activo']` la trae con `active: False`; no aparece "
+                      "en el catálogo de entidades vigentes. Un solo corte, verificado el "
+                      "2026-09-02 tras la reingesta"),
+    },
+}
+
+
+def _ausencia_declarada(nombre: str, corte) -> bool:
+    entrada = AUSENCIAS_DECLARADAS.get(nombre)
+    return bool(entrada and corte in entrada["cortes"])
+
+
 def entidades_sin_desglose(db, corte) -> list:
     """Entidades que PRESTAN, reportaron en *corte*, y no tienen cartera abierta por sector.
 
@@ -283,7 +320,8 @@ def entidades_sin_desglose(db, corte) -> list:
     return sorted(
         b.name for b in db.query(Bank).filter(Bank.id.in_(faltan)).all()
         if (b.bank_type.value if hasattr(b.bank_type, "value") else str(b.bank_type))
-        in TIPOS_QUE_PRESTAN)
+        in TIPOS_QUE_PRESTAN
+        and not _ausencia_declarada(b.name, corte))
 
 
 def cortes_incompletos(db) -> dict:
@@ -375,9 +413,12 @@ def _run_sectorial_al_dia(params, user_id, set_phase) -> Dict:
         db.close()
     # Los VACÍOS primero: un corte sin cubo es un hueco mayor que uno al que le falta gente.
     trabajo = [(pe, None) for pe in faltan] + [(pe, ents) for pe, ents in incompletos.items()]
+    declaradas = {n: sorted(f"{c.year}-{c.month:02d}" for c in e["cortes"])
+                  for n, e in AUSENCIAS_DECLARADAS.items()}
     if not trabajo:
         return {"faltaban": 0, "incompletos": {}, "procesados": [], "cargados": 0,
-                "sin_cubo": [], "siguen_incompletos": [], "quedan": 0,
+                "sin_cubo": [], "siguen_incompletos": [],
+                "ausencias_declaradas": declaradas, "quedan": 0,
                 "nota": "todos los trimestres tienen desglose, y completo"}
 
     def _ws(_db, **updates):
@@ -423,6 +464,9 @@ def _run_sectorial_al_dia(params, user_id, set_phase) -> Dict:
             # Y los que se reingirieron y SIGUEN incompletos: la fuente no los trae, y
             # reintentarlos para siempre no los va a traer.
             "siguen_incompletos": [h["corte"] for h in hechos if h.get("siguen_faltando")],
+            # Las ausencias que ya sabemos que la fuente no trae. Se listan SIEMPRE: una
+            # ausencia declarada que desaparece del reporte se lee como que el dato está.
+            "ausencias_declaradas": declaradas,
             "quedan": max(0, len(faltan) + len(incompletos) - cargados)}
 
 
