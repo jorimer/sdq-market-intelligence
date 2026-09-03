@@ -192,11 +192,24 @@ _NAME_TOOL = {
 }
 
 
+#: Cuántas filas se piden por vez. El tope de salida de la respuesta es finito y un nombre
+#: jerárquico ocupa bastante: pedir 64 de una vez hacía que la respuesta se cortara a mitad
+#: del bloque de herramienta y se parseara a CERO nombres. Se pagaba la llamada, el log lo
+#: decía en INFO —«Claude nombró 0 de 64 filas ambiguas»— y las 64 series se quedaban con el
+#: número de fila como nombre. Que el TAMAÑO del pedido decida en silencio si el nombrado
+#: ocurre es el defecto; el lote lo cierra. Ver `tests/test_nombrado_por_lotes.py`.
+_FILAS_POR_LOTE = 24
+
+
 def name_ambiguous_rows(
     grid: Grid, rows: List[int], *, client: Any = None, model: Optional[str] = None,
     context_rows: int = 400,
 ) -> Dict[int, str]:
     """Nombre jerárquico para filas cuya etiqueta se repite en la planilla.
+
+    Pide por LOTES de :data:`_FILAS_POR_LOTE`, acumulando los nombres ya usados entre lotes:
+    la regla de no repetir un nombre vale para el pedido entero, no por lote — dos series
+    distintas con el mismo rótulo se fusionarían igual aunque el choque cruce el corte.
 
     Es la misma lectura que hace un analista y que la plataforma ya hace en pensiones y
     seguros: mirar la fila en su contexto —bajo qué grupo cuelga— y nombrarla por su
@@ -217,11 +230,30 @@ def name_ambiguous_rows(
         from shared.config.settings import settings
         model = settings.ANTHROPIC_MODEL
 
+    ordenadas = sorted(set(rows))
+    out: Dict[int, str] = {}
+    seen: Dict[str, int] = {}   # nombre → fila, compartido por TODOS los lotes
+    for i in range(0, len(ordenadas), _FILAS_POR_LOTE):
+        _nombrar_lote(grid, ordenadas[i:i + _FILAS_POR_LOTE], set(ordenadas),
+                      client=client, model=model, context_rows=context_rows,
+                      out=out, seen=seen)
+    nivel = logger.warning if not out else logger.info
+    nivel("[bcrd_excel] Claude nombró %d de %d filas ambiguas (%d lote/s)",
+          len(out), len(ordenadas),
+          (len(ordenadas) + _FILAS_POR_LOTE - 1) // _FILAS_POR_LOTE)
+    return out
+
+
+def _nombrar_lote(
+    grid: Grid, rows: List[int], todas: set, *, client: Any, model: str,
+    context_rows: int, out: Dict[int, str], seen: Dict[str, int],
+) -> None:
+    """Un pedido de nombres. Acumula sobre *out* y *seen*, que viajan entre lotes."""
     # Contexto GENEROSO: el rótulo que distingue dos filas puede estar decenas de filas
     # arriba (el encabezado de su bloque). Con una ventana corta el modelo devolvía el
     # MISMO nombre para filas distintas —no por incapacidad, sino porque no veía al padre.
-    lo = max(0, min(rows) - context_rows)
-    hi = min(grid.nrows, max(rows) + 5)
+    lo = max(0, min(todas) - context_rows)
+    hi = min(grid.nrows, max(todas) + 5)
     lines = []
     for r in range(lo, hi):
         cells = []
@@ -251,18 +283,19 @@ def name_ambiguous_rows(
         "no estén en la planilla.\n\n" + "\n".join(lines)
     )
     response = client.messages.create(
-        model=model, max_tokens=2000,
+        model=model, max_tokens=4000,
         tools=[_NAME_TOOL], tool_choice={"type": "tool", "name": "emit_series_names"},
         messages=[{"role": "user", "content": prompt}],
     )
     account(response, model=model, purpose=PURPOSE_EXTRACTION, module="macro", template="bcrd_excel")
     block = next((b for b in response.content if getattr(b, "type", None) == "tool_use"), None)
     if block is None:
-        return {}
+        # Respuesta sin bloque de herramienta: casi siempre, cortada por el tope de salida.
+        logger.warning("[bcrd_excel] la respuesta de nombres no trajo bloque de "
+                       "herramienta para %d fila(s); quedan con su coordenada", len(rows))
+        return
     data = block.input if isinstance(block.input, dict) else json.loads(block.input)
-    out: Dict[int, str] = {}
     wanted = set(rows)
-    seen: Dict[str, int] = {}
     for item in data.get("names", []):
         try:
             r = int(item["row"])
@@ -282,5 +315,3 @@ def name_ambiguous_rows(
             continue
         seen[key] = r
         out[r] = name
-    logger.info("[bcrd_excel] Claude nombró %d de %d filas ambiguas", len(out), len(rows))
-    return out

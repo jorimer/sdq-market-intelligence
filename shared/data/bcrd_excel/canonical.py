@@ -309,6 +309,28 @@ REGISTRY: List[CanonicalSeries] = [
         excel_series_suffix="serie_original_indice",
     ),
     CanonicalSeries(
+        key="pib_sectores_origen", concept="PIB por sector de origen (desagregación sectorial)",
+        sector="sector_real",
+        # OJO — el archivo NO es `PIB_sectores_origen.xls`, que es el que uno esperaría por el
+        # nombre y el que el spec de persistencia señalaba. Ése está CONGELADO: su
+        # `last-modified` es del 2019-02-23 y sus dos hojas son «Trim Acum 91-14», o sea que
+        # termina en 2014 y en la base vieja. Es la misma trampa del IMAE: el BCRD migró a un
+        # archivo base 2018 y el anterior quedó quieto. El vigente se actualizó el 2026-06-29.
+        source_file="pib_origen_2018.xlsx", base="2018", frequency="trimestral",
+        homogenization="índice de volumen encadenado referenciado a 2018, por actividad; "
+                       "el crecimiento se deriva como YoY, que es invariante a la base",
+        rationale="La desagregación por actividad del PIB: es lo que permite decir qué sector "
+                  "empuja o frena el crecimiento, y el insumo de la proyección sectorial.",
+        # AMARILLO, y el motivo es concreto: de las cuatro hojas del libro, las dos
+        # trimestrales (`PIB$_Trim`, `PIBK_Trim`) extraen limpias —162 series, todas con
+        # períodos trimestrales 2018-Q1→2025-Q4, cero duplicados con valores en conflicto—
+        # pero las dos ACUMULADAS mezclan períodos anuales y trimestrales dentro de la misma
+        # serie y producen 1.660 duplicados con valores distintos, que el upsert resolvería
+        # por orden de lectura. Como la ingesta es por ARCHIVO y no por hoja, el libro entero
+        # queda fuera de `PERSISTIBLES_VERIFICADOS` hasta que las acumuladas se parseen bien.
+        robustness="yellow",
+    ),
+    CanonicalSeries(
         key="pib_nominal_gasto", concept="PIB nominal por gasto", sector="sector_real",
         source_file="pib_gasto.xls", base="corriente", frequency="anual",
         homogenization="nivel corriente directo",

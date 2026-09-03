@@ -388,7 +388,7 @@ se escribe es derivado de dato real, y lo declarado se usa para detectar el erro
 
 ---
 
-## 🔴 PROPUESTO (pendiente aprobación) — T-PS-2: series faltantes en el canónico
+## ✅ HECHA 2026-09-03 — T-PS-2: series faltantes en el canónico
 > Tres trabajos. Los dos del IMAE son directos y con evidencia. El tercero **no es el que
 > el spec describe**: el archivo que nombra está congelado desde 2019.
 
@@ -406,11 +406,11 @@ la YoY calculada del índice original, sobre 223 períodos comparables,
 | `variacion_porcentual_acumulada` | 1,87588 pp |
 | `interanual_acumulada` | 1,89979 pp |
 
-- [ ] **1.** `excel_series_suffix` → `"variacion_porcentual_interanual"`.
+- [x] **1.** Hecho. Test con fixture real: los 4 casos fallaban antes.
 
 ### Trabajo 2 · `imae_indice`
 
-- [ ] **2.** Entrada nueva, mismo `source_file`, `excel_series_suffix="serie_original_indice"`.
+- [x] **2.** Hecho. **34 entradas con puente, 0 sin resolver** (antes: 1).
       El dato **ya está persistido** (235 obs, 2007-01→2026-07, sin huecos ni nulos): la
       ingesta es por ARCHIVO y el sufijo no la gobierna. Esto es DECLARACIÓN, no un cambio de
       datos — y es lo que permite que el test de §4 lo vigile y que `tpm_modeling` deje de
@@ -444,18 +444,31 @@ del sujeto, incumplida en la puerta que existe para eso.
 Dato para decidir: **hoy hay CERO series `_rNN` en las 600 del canónico completo**, así que
 extender el guard no vetaría nada de lo que ya existe.
 
-- [ ] **3a.** Corregir el spec §3.3 y §2.4 con esta evidencia (archivo equivocado).
-- [ ] **3b.** Entrada `pib_sectores_origen` apuntando a **`pib_origen_2018.xlsx`**, declarando
+- [x] **3a.** Corregido en el anexo III del informe, con `last-modified` de los dos archivos.
+- [x] **3b.** Hecha, en `yellow` y FUERA de `PERSISTIBLES_VERIFICADOS`. Declarando
       en `homogenization` y `robustness` que dos de cada tres series están sin nombrar.
       **NO entra en `PERSISTIBLES_VERIFICADOS`**: el registro declara qué es citable; la
       escritura espera al nombrado.
-- [ ] **3c.** *(a decidir)* Extender `_sin_sujeto` a `_r\d+$`.
+- [x] **3c.** Extendido a `_[cr]\d+$`. No vetó nada existente (había 0 códigos `_rNN`).
 
 ### Sensores
-- [ ] **S1.** Test de que los tres puentes del IMAE resuelven a ≥1 serie, y de que la del
-      YoY es la que coincide con la variación del índice. **Contra el código viejo primero.**
-- [ ] **S2.** Test de que ninguna entrada del `REGISTRY` con sufijo queda sin resolver — el
-      defecto de `imae` no vuelve, y ahora aplica a las 34 entradas con puente.
-- [ ] **S3.** Corrida real: la ingesta no cambia (el IMAE ya estaba), 0 discrepancias de
-      cadencia, `mm_series` sigue en 6.390.
-- [ ] **S4.** Los tres gates.
+- [x] **S1 — VERDE con dientes.** Los 4 fallaban antes: «ninguna de las 14 series termina
+      así» y «el registro no declara `imae_indice`».
+- [x] **S2 — VERDE.** Barrido sobre las 600 series: 34 con puente, 0 sin resolver. Más dos
+      guards nuevos: lo habilitado para escribir debe declararse `green`, y el registro no
+      puede apuntar a un archivo congelado.
+- [x] **S3 — VERDE.** 6.390 filas, 0 valores cambiados, 0 cadencias cambiadas, 0
+      discrepancias. `omitidos` pasó de 22 a 23: el archivo nuevo se lee y NO se escribe.
+- [x] **S4.** `ruff` verde · `mypy` **exit 0** (sin sumar baseline: anoté la función en vez
+      de aceptar la nota) · `pytest` abajo.
+
+### Hallazgo que T-PS-2 destapa y NO resuelve
+El nombrado era necesario pero **no suficiente**. Con los nombres arreglados,
+`pib_origen_2018.xlsx` sigue sin poder persistirse: sus dos hojas **acumuladas** mezclan
+períodos anuales y trimestrales dentro de la misma serie y producen **1.660 duplicados con
+valores distintos** en 159 series. Las dos hojas trimestrales —`PIB$_Trim` y `PIBK_Trim`,
+justo las que T-MP necesita— extraen limpias: 162 series, 2018-Q1→2025-Q4, cero conflictos.
+
+Como la ingesta es por ARCHIVO y no por hoja, el libro entero queda fuera. Para habilitarlo
+hacen falta **una de dos**: arreglar el parseo de las acumuladas, o que el alcance de
+escritura pueda declararse por HOJA y no solo por archivo.

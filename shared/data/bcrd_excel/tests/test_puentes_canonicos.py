@@ -17,6 +17,7 @@ verifica es la ESTRUCTURA de columnas del cuadro del IMAE, idéntica en los dos 
 los mismos nombres—, y no hace falta sumar un binario al repo para eso.
 """
 from pathlib import Path
+from typing import Any, Dict
 
 import pytest
 
@@ -28,11 +29,11 @@ from shared.data.bcrd_excel.workbook import load_workbook
 FIXTURES = Path(__file__).parent / "fixtures"
 
 
-def _series_del_imae():
+def _series_del_imae() -> Dict[str, Dict[str, Any]]:
     """{sufijo: {período: valor}} de lo que el motor saca del cuadro del IMAE."""
     wb = load_workbook(FIXTURES / "imae.xlsx")
     recs = extract_records(wb, infer_spec(wb, "imae.xlsx"))
-    out: dict = {}
+    out: Dict[str, Dict[str, Any]] = {}
     for r in recs:
         out.setdefault(r.series.split(".", 3)[3], {})[r.period] = r.value
     return out

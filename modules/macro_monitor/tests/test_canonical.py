@@ -144,3 +144,31 @@ def test_los_persistibles_verificados_existen_en_el_registro():
     archivos = {s.source_file for s in canonical.registry()}
     faltan = [f for f in canonical.PERSISTIBLES_VERIFICADOS if f not in archivos]
     assert not faltan, f"habilitados pero ausentes del REGISTRY: {faltan}"
+
+
+def test_lo_habilitado_para_escribir_declara_ser_robusto():
+    """Un archivo no entra a `PERSISTIBLES_VERIFICADOS` si su propia entrada del registro
+    dice que no extrae limpio. Son dos afirmaciones distintas —«es la fuente citable» y
+    «ya se puede escribir sin degradar la base»— y la segunda no puede contradecir a la
+    primera. El PIB por origen es el caso: entra al registro en `yellow` porque dos de sus
+    cuatro hojas mezclan períodos anuales y trimestrales, y por eso NO se habilita."""
+    por_archivo = {}
+    for s in canonical.registry():
+        por_archivo.setdefault(s.source_file, []).append(s.robustness)
+    malos = [f for f in canonical.PERSISTIBLES_VERIFICADOS
+             if any(r != "green" for r in por_archivo.get(f, []))]
+    assert not malos, f"habilitados para escribir pese a no ser 'green': {malos}"
+
+
+def test_el_pib_sectorial_apunta_al_archivo_VIGENTE_no_al_congelado():
+    """`PIB_sectores_origen.xls` es el que el nombre sugiere y el que el spec señalaba, pero
+    está congelado desde 2019-02-23 y termina en 2014, en la base vieja. El vigente es
+    `pib_origen_2018.xlsx`. Es la misma trampa del IMAE, y por eso se fija igual que aquélla."""
+    s = canonical.by_key("pib_sectores_origen")
+    assert s is not None, "el registro no declara el PIB por sector de origen"
+    assert s.source_file == "pib_origen_2018.xlsx"
+    assert s.frequency == "trimestral"
+    assert find_entry(s.source_file) is not None
+    congelados = {"PIB_sectores_origen.xls", "imae.xlsx"}
+    usados = {x.source_file for x in canonical.registry()}
+    assert not (usados & congelados), f"el registro apunta a archivos congelados: {usados & congelados}"

@@ -425,3 +425,94 @@ escrita; la línea de resumen es lo que hay que leer.
   entra en una identidad `(series_code, period)` mensual.
 - **Prod**: repetir el diff antes de desplegar, y desatascar alembic en dev (le falta
   `mm_series.nature`) para poder correr la migración ahí.
+
+---
+
+# ANEXO III — T-PS-2: las series que faltaban en el canónico (2026-09-03)
+
+> Decisiones del dueño: arreglar el nombrado además de declarar, y extender el guard.
+
+## C.1 El puente del IMAE: cuál era la correcta se COMPUTÓ
+
+La entrada declaraba `serie_original_variacion_porcentual_interanual` y **ninguna** de las 12
+series del archivo termina así. Cuatro candidatas llevan «interanual» en el nombre; contra la
+YoY calculada del índice original, sobre 223 períodos:
+
+| candidata | error medio |
+|---|---:|
+| **`variacion_porcentual_interanual`** | **0,00000 pp** |
+| `interanual` | 0,31017 pp |
+| `variacion_porcentual_acumulada` | 1,87588 pp |
+| `interanual_acumulada` | 1,89979 pp |
+
+Elegir por parecido de rótulo es exactamente cómo se llegó al sufijo roto. Corregido, más la
+entrada `imae_indice`: **34 entradas con puente, 0 sin resolver** (antes, 1).
+
+## C.2 El spec nombra el archivo equivocado — se corrige §3.3
+
+| archivo | `last-modified` | contenido |
+|---|---|---|
+| `PIB_sectores_origen.xls` (el del spec) | **2019-02-23** | «Trim Acum 91-14»: termina en 2014, base vieja |
+| **`pib_origen_2018.xlsx`** (el vigente) | **2026-06-29** | 4 hojas, base 2018, 2018-Q1→2025-Q4 |
+
+Es **la trampa 1 otra vez**: el BCRD migró a un archivo base 2018 y el anterior quedó quieto,
+igual que `imae.xlsx`. Promover el del spec habría metido al registro una serie de hace una
+década que además mezcla períodos anuales y trimestrales.
+
+## C.3 Por qué el PIB sectorial no se nombraba, y qué costaba
+
+El archivo repite cada sector en tres bloques —nivel, tasa de crecimiento, incidencia— así
+que sus hojas de volumen encadenado llegan con **64 filas ambiguas**. El pedido de nombres
+tenía `max_tokens=2000`: 64 nombres jerárquicos no entran, la respuesta se cortaba a mitad
+del bloque de herramienta y se parseaba a **cero nombres**.
+
+Y fallaba **en silencio y pagando**: el log lo decía en INFO —«Claude nombró 0 de 64 filas
+ambiguas»—, costaba US$0,11 por nada, y las 128 series quedaban con el número de fila como
+nombre. Las hojas hermanas (32 filas) sí entraban: por eso el mismo archivo tenía la mitad de
+sus series bien nombradas y la otra mitad no. **Que el TAMAÑO del pedido decida en silencio si
+el nombrado ocurre** era el defecto.
+
+Se pide por lotes de 24, con los nombres ya usados compartidos entre lotes —la regla de no
+fusionar dos series vale para el pedido entero, no por lote— y el «0 de N» pasa a WARNING.
+Resultado: **de 128 series con coordenada a 1**, en 3 lotes por hoja, US$0,23 por el archivo
+(que se cachea por layout y se paga una vez).
+
+Y los nombres se verificaron contra el dato, no se aceptaron: **29 de 31** series del bloque
+de tasas coinciden con la YoY computada de su nivel con error < 1e-6; las otras 2 son filas de
+encabezado sin nivel que comparar. Cero discrepancias.
+
+## C.4 El guard veta ahora las DOS coordenadas
+
+`_sin_sujeto` cubría `_c<n>` (columna) y dejaba pasar `_r<n>` (fila). `agropecuario_r46` dice
+en qué FILA estaba, no si mide el nivel, la tasa o la incidencia — la misma pérdida de sujeto
+por el otro eje. No vetó nada de lo existente: había **cero** códigos `_rNN` en las 600 series
+del canónico. Es la red para la única fila que el modelo no llegó a nombrar (`salud_r69`).
+
+## C.5 Lo que T-PS-2 destapa y NO resuelve
+
+**El nombrado era necesario pero no suficiente.** Con los nombres arreglados, el archivo sigue
+sin poder persistirse:
+
+| hoja | series | obs | dup. con valor distinto | series con períodos mezclados |
+|---|---:|---:|---:|---:|
+| `PIB$_Trim` | 65 | 2.080 | **0** | **0** |
+| `PIBK_Trim` | 97 | 3.104 | **0** | **0** |
+| `PIB$_Trim_Acum` | 65 | 650 | 252 | 65 |
+| `PIBK_Trim_Acum` | 98 | 3.136 | 1.408 | 98 |
+
+Las dos hojas trimestrales —justo las que T-MP necesita— extraen **limpias**. Las dos
+acumuladas mezclan períodos anuales y trimestrales dentro de la misma serie. Como la ingesta
+es por ARCHIVO y no por hoja, el libro entero queda fuera de `PERSISTIBLES_VERIFICADOS`, y la
+entrada entra al registro en `yellow` declarando exactamente esto.
+
+Para habilitarlo hacen falta **una de dos**: arreglar el parseo de las acumuladas, o que el
+alcance de escritura se pueda declarar por HOJA y no solo por archivo.
+
+## C.6 Sensores
+
+| Sensor | Resultado |
+|---|---|
+| S1 · puentes del IMAE | Verde; los 4 fallaban contra el código anterior |
+| S2 · ninguna entrada con puente sin resolver | **34 con puente, 0 sin resolver.** Más dos guards: lo habilitado debe ser `green`, y el registro no puede apuntar a un archivo congelado |
+| S3 · la ingesta encendida no se mueve | 6.390 filas, **0 valores y 0 cadencias cambiados**, 0 discrepancias; `omitidos` 22 → 23 |
+| S4 · los tres gates | `ruff` verde · `mypy` **exit 0**, sin sumar baseline · `pytest` verde |
