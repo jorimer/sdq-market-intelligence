@@ -126,3 +126,29 @@ def test_una_entrada_sin_puente_no_se_puede_verificar():
     entradas = [_Entrada("inflacion_interanual", "mensual", None)]
     records = [_Rec("bcrd.xls.ipc_base_2019_2020.indice", "2026-Q1", 1.0)]
     assert _discrepancias_de_cadencia(entradas, records) == []
+
+
+# ── La frontera de escritura veta las DOS coordenadas ────────────────────────────
+
+def test_un_codigo_desempatado_por_columna_no_se_persiste(db):
+    _upsert_records(db, [_Rec("bcrd.xls.f.tasa_de_inflacion_c5", "2026-01", 1.0)])
+    assert db.query(MacroSeries).count() == 0
+
+
+def test_un_codigo_desempatado_por_FILA_tampoco(db):
+    """`agropecuario_r46` dice en qué FILA estaba, no si mide el nivel, la tasa de
+    crecimiento o la incidencia. Es la misma pérdida de sujeto que `_c<n>`, por el otro eje:
+    el cuadro del PIB por origen repite cada sector en tres bloques."""
+    _upsert_records(db, [_Rec("bcrd.xls.pib_origen_2018.pibk_trim.agropecuario_r46",
+                              "2026-Q1", 1.0)])
+    assert db.query(MacroSeries).count() == 0
+
+
+def test_un_codigo_con_sujeto_si_se_persiste(db):
+    """El guard veta la COORDENADA, no cualquier número al final: una serie legítimamente
+    numerada —una base, un manual, un quintil— tiene que pasar."""
+    for code in ("bcrd.xls.pib_origen_2018.pibk_trim.agropecuario",
+                 "bcrd.xls.ipc_quintiles_base_2019_2020.quintil_5",
+                 "bcrd.xls.bpagos_6.1_cuenta_corriente"):
+        _upsert_records(db, [_Rec(code, "2026-Q1", 1.0)])
+    assert db.query(MacroSeries).count() == 3

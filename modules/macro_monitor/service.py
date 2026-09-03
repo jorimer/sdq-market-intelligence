@@ -54,7 +54,14 @@ DEBT_SERIES = "public_debt_gdp"
 #: del IPC por quintiles coincide con error 0,00000 pp con la variación mensual de su
 #: índice—. Descartar un dato porque el nombre está roto es arreglar el síntoma tirando la
 #: medición.
-_CODIGO_SIN_SUJETO = re.compile(r"_c\d+$")
+#:
+#: Vale para las DOS coordenadas. Cubría solo la columna (`_c<n>`), y la de FILA (`_r<n>`)
+#: pasaba: un cuadro que repite los mismos sectores en tres bloques —nivel, tasa de
+#: crecimiento, incidencia— produce `agropecuario`, `agropecuario_r46` y `agropecuario_r83`,
+#: y las dos últimas dicen en qué FILA estaban, no cuál de los tres miden. El PIB sectorial
+#: por origen entra con ~196 series así. Al agregarse esta mitad no se vetó nada de lo
+#: existente: había CERO códigos `_r<n>` en las 600 series del canónico.
+_CODIGO_SIN_SUJETO = re.compile(r"_[cr]\d+$")
 
 
 def _sin_sujeto(codigo: str) -> bool:

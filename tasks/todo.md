@@ -385,3 +385,77 @@ se escribe es derivado de dato real, y lo declarado se usa para detectar el erro
       `frequency` NULL, 0 fuera del vocabulario**, idempotente en valor Y en cadencia.
 - [x] **S5.** `ruff` verde · `mypy` **exit 0** (con +1 línea de baseline, el mismo patrón
       que sus 5 vecinas de esta función: `row.nature = nat` es una de ellas) · `pytest` abajo.
+
+---
+
+## 🔴 PROPUESTO (pendiente aprobación) — T-PS-2: series faltantes en el canónico
+> Tres trabajos. Los dos del IMAE son directos y con evidencia. El tercero **no es el que
+> el spec describe**: el archivo que nombra está congelado desde 2019.
+
+### Trabajo 1 · el sufijo roto de la entrada `imae` — RESUELTO CON DATO
+
+La entrada declara `excel_series_suffix="serie_original_variacion_porcentual_interanual"` y
+**ninguna** de las 12 series del archivo termina así: es la única de 33 entradas con puente
+que no resuelve. Cuál es la correcta se COMPUTÓ, no se eligió por parecido de nombre: contra
+la YoY calculada del índice original, sobre 223 períodos comparables,
+
+| candidata | error medio |
+|---|---:|
+| **`variacion_porcentual_interanual`** | **0,00000 pp** |
+| `interanual` | 0,31017 pp |
+| `variacion_porcentual_acumulada` | 1,87588 pp |
+| `interanual_acumulada` | 1,89979 pp |
+
+- [ ] **1.** `excel_series_suffix` → `"variacion_porcentual_interanual"`.
+
+### Trabajo 2 · `imae_indice`
+
+- [ ] **2.** Entrada nueva, mismo `source_file`, `excel_series_suffix="serie_original_indice"`.
+      El dato **ya está persistido** (235 obs, 2007-01→2026-07, sin huecos ni nulos): la
+      ingesta es por ARCHIVO y el sufijo no la gobierna. Esto es DECLARACIÓN, no un cambio de
+      datos — y es lo que permite que el test de §4 lo vigile y que `tpm_modeling` deje de
+      consumir un `series_code` que ningún registro declara.
+
+### Trabajo 3 · el PIB sectorial: **el spec nombra el archivo equivocado**
+
+`PIB_sectores_origen.xls` (§3.3 del spec) está **congelado: `last-modified` 2019-02-23**.
+Sus dos hojas son «Trim Acum 91-14» — llega a 2014, en base vieja — y sus 132 series MEZCLAN
+períodos anuales y trimestrales dentro de la misma serie (`1991` → `2009-Q1`). Es la trampa 1
+otra vez: el BCRD migró a un archivo base 2018 y el viejo quedó quieto.
+
+El vigente es **`pib_origen_2018.xlsx`**, `last-modified` **2026-06-29**: cuatro hojas
+(nominal y volumen encadenado, trimestral y trimestral acumulado), **2018-Q1 → 2025-Q4**.
+
+**Pero tampoco está listo, por otro motivo.** De sus 98 series trimestrales de volumen
+encadenado, cada sector aparece TRES veces y dos llevan el número de fila en el nombre. Qué
+es cada una se computó contra el dato:
+
+| serie | qué es | evidencia |
+|---|---|---|
+| `agropecuario` | índice de volumen (nivel) | base 2018=100 |
+| `agropecuario_r46` | **tasa de crecimiento interanual** | error 0,00000 pp vs la YoY del nivel |
+| `agropecuario_r83` | **incidencia** (contribución al crecimiento) | valores de orden 0,2 |
+
+El contenido es correcto; **el nombre no dice cuál de las tres es**. Y el guard de la
+frontera de escritura solo veta coordenadas de COLUMNA (`_c\d+$`, `service.py:57`): las de
+FILA pasan. Serían ~196 series persistidas con un nombre que no dice qué miden — la doctrina
+del sujeto, incumplida en la puerta que existe para eso.
+
+Dato para decidir: **hoy hay CERO series `_rNN` en las 600 del canónico completo**, así que
+extender el guard no vetaría nada de lo que ya existe.
+
+- [ ] **3a.** Corregir el spec §3.3 y §2.4 con esta evidencia (archivo equivocado).
+- [ ] **3b.** Entrada `pib_sectores_origen` apuntando a **`pib_origen_2018.xlsx`**, declarando
+      en `homogenization` y `robustness` que dos de cada tres series están sin nombrar.
+      **NO entra en `PERSISTIBLES_VERIFICADOS`**: el registro declara qué es citable; la
+      escritura espera al nombrado.
+- [ ] **3c.** *(a decidir)* Extender `_sin_sujeto` a `_r\d+$`.
+
+### Sensores
+- [ ] **S1.** Test de que los tres puentes del IMAE resuelven a ≥1 serie, y de que la del
+      YoY es la que coincide con la variación del índice. **Contra el código viejo primero.**
+- [ ] **S2.** Test de que ninguna entrada del `REGISTRY` con sufijo queda sin resolver — el
+      defecto de `imae` no vuelve, y ahora aplica a las 34 entradas con puente.
+- [ ] **S3.** Corrida real: la ingesta no cambia (el IMAE ya estaba), 0 discrepancias de
+      cadencia, `mm_series` sigue en 6.390.
+- [ ] **S4.** Los tres gates.

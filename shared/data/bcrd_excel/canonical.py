@@ -275,7 +275,29 @@ REGISTRY: List[CanonicalSeries] = [
         homogenization="índice + YoY (interanual base-invariante)",
         rationale="Único indicador de actividad de alta frecuencia; mensual desde 2007.",
         robustness="green", api_series="bcrd.sector_real.imaes", api_transform="identity",
-        excel_series_suffix="serie_original_variacion_porcentual_interanual",
+        # El sufijo decía `serie_original_variacion_porcentual_interanual` y NINGUNA de las
+        # series del archivo termina así: era la única entrada con puente que no resolvía a
+        # nada. Cuál es la correcta se COMPUTÓ contra el dato —cuatro candidatas llevan
+        # "interanual" en el nombre y solo ésta coincide, con error 0,00000 pp, con la
+        # variación interanual del índice original—. Elegir por parecido de rótulo es cómo se
+        # llegó al sufijo roto. Lo vigila `tests/test_puentes_canonicos.py`.
+        excel_series_suffix="variacion_porcentual_interanual",
+    ),
+    CanonicalSeries(
+        key="imae_indice", concept="IMAE — índice de actividad (nivel)", sector="sector_real",
+        source_file="imae_2018.xlsx", base="2018=100", frequency="mensual",
+        homogenization="nivel del índice en la base vigente; la variación se deriva como YoY",
+        # Son DOS series, no una corregida. La YoY no permite reconstruir el nivel, y el
+        # nowcast necesita el NIVEL: la bridge equation agrega el índice mensual a trimestre
+        # y lo regresa contra el PIB. Con la serie de variación ese agregado no se puede
+        # construir. Además `tpm_modeling/dataset.py` ya consume este `series_code` para el
+        # output gap, así que el índice hacía falta y el registro no lo declaraba —el dato
+        # entraba igual porque la ingesta es por ARCHIVO, pero sin declararlo ninguna
+        # verificación podía vigilarlo.
+        rationale="Nivel de actividad de alta frecuencia: es el insumo del nowcast trimestral "
+                  "del PIB y del output gap, que necesitan el índice y no su variación.",
+        robustness="green", api_series="bcrd.sector_real.imaes", api_transform="identity",
+        excel_series_suffix="serie_original_indice",
     ),
     CanonicalSeries(
         key="pib_real", concept="PIB real (crecimiento)", sector="sector_real",
