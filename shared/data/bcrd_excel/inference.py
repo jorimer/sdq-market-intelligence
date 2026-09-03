@@ -506,7 +506,14 @@ def infer_spec(wb: Workbook, file: str) -> ExtractionSpec:
             return ExtractionSpec(
                 file=file, sheet=grid.name, orientation="period_rows",
                 data_row_start=first_q_row, month_col=qcol,
-                subtotal_year_regex=_SUBTOTAL_RE, series=series, frequency="trimestral",
+                # El vocabulario de esta columna es inglés y NO es una preferencia de
+                # estilo: `mm_series.frequency` se sirve por la Data API que consume PMS, y
+                # los otros módulos que la pueblan escriben inglés. Esta rama decía
+                # "trimestral" mientras sus dos hermanas, tres líneas arriba y abajo, decían
+                # "quarterly" y "annual". Lo vigila
+                # `tests/test_vocabulario_de_frecuencia.py`, que lee el código con `ast`
+                # porque el defecto vivía en UNA rama de tres.
+                subtotal_year_regex=_SUBTOTAL_RE, series=series, frequency="quarterly",
                 structure_hash=sh, confidence=round(min(0.82, 0.5 + 0.04 * q_count), 2),
                 method="heuristic", notes="period_rows trimestral (marcador de año)",
             )

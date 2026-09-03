@@ -19,6 +19,7 @@ from sqlalchemy.orm import Session
 
 from shared.data.base_client import SourceClient
 from shared.data.bcrd_client import bcrd_client, resolve_bcrd_client, series_label
+from shared.data.series_cadence import cadencia_de_periodo, discrepancia_de_cadencia
 from shared.data.series_nature import infer_nature
 from shared.data.bcrd_excel.canonical import (
     curated_label as canonical_label,
@@ -109,10 +110,17 @@ def _upsert_records(db: Session, records) -> int:
         # código de la serie a la vista. Hacerlo al leer obligaría a cada consumidor a
         # repetir la inferencia — y a equivocarse cada uno a su manera.
         nat = infer_nature(unit=r.unit, code=r.series)
+        # La CADENCIA también se resuelve en la ingesta, por el mismo motivo que la
+        # naturaleza: dejarla nula obligaba a cada lector a derivarla, y el que la sirve por
+        # la Data API lo hacía sobre el conjunto de períodos de la serie —devolviendo
+        # "unknown" en cuanto uno solo tuviera otro formato—. Acá se resuelve por FILA, que
+        # es donde la etiqueta del período es inequívoca.
+        cad = cadencia_de_periodo(str(r.period))
         if row is None:
             db.add(MacroSeries(
                 series_code=r.series, period=r.period, value=r.value,
                 unit=r.unit, source=src, published_at=pub, license=lic, nature=nat,
+                frequency=cad,
             ))
         else:
             # "Un valor real jamás lo pisa un vacío" vale también ENTRE corridas, no solo
@@ -125,6 +133,7 @@ def _upsert_records(db: Session, records) -> int:
             # posterior sigue actualizando, que es como entra una revisión del emisor.
             if r.value is not None:
                 row.value = r.value
+            row.frequency = cad
             row.unit = r.unit
             row.source = src
             row.published_at = pub
@@ -513,6 +522,31 @@ def get_canonical_registry(db: Session) -> Dict[str, Any]:
     return {"series": out, "count": len(out)}
 
 
+def _discrepancias_de_cadencia(entradas, records) -> List[str]:
+    """Dónde la cadencia DECLARADA por el registro contradice a la de los períodos.
+
+    El puente entre una entrada canónica (clave ``pib_real``) y las series persistidas
+    (``bcrd.xls.pib_2018.serie_original_indice``) es ``excel_series_suffix``; una entrada sin
+    él no tiene a qué serie apuntar y no se puede verificar — son 17 de 50, y eso es un hecho
+    declarado, no un olvido. Ver §4 del spec de persistencia.
+    """
+    periodos_por_serie: Dict[str, List[str]] = defaultdict(list)
+    for rec in records:
+        periodos_por_serie[str(rec.series)].append(str(rec.period))
+
+    out: List[str] = []
+    for s in entradas:
+        if not s.excel_series_suffix:
+            continue
+        for code, periodos in periodos_por_serie.items():
+            if not code.endswith(s.excel_series_suffix):
+                continue
+            detalle = discrepancia_de_cadencia(s.frequency, periodos)
+            if detalle:
+                out.append(f"{s.key} · {code}: {detalle}")
+    return out
+
+
 def ingest_canonical(db: Session, *, persist: bool = False,
                      solo_archivos: Optional[List[str]] = None) -> Dict[str, Any]:
     """Run the engine over ONLY the canonical source files (not the whole catalog).
@@ -537,6 +571,13 @@ def ingest_canonical(db: Session, *, persist: bool = False,
     ok = flagged = failed = 0
     persistidos_total = 0
     omitidos: List[str] = []
+    discrepancias: List[str] = []
+    # Un archivo puede declarar VARIAS series canónicas (el IPC general y la inflación
+    # interanual salen del mismo). La cadencia se verifica contra cada declaración, no
+    # contra la primera que aparezca.
+    por_archivo: Dict[str, List[Any]] = defaultdict(list)
+    for s in canonical.registry():
+        por_archivo[s.source_file].append(s)
     for s in canonical.registry():
         if s.source_file in seen:
             continue
@@ -551,6 +592,13 @@ def ingest_canonical(db: Session, *, persist: bool = False,
         try:
             r = ingest_excel(entry, cache=cache, use_claude=True)
             status = "ok" if r.report.ok else "flagged"
+            # La cadencia que el registro DECLARA contra la que dicen los períodos. No se
+            # usa para elegir el valor —eso lo resuelve la etiqueta del período, que es
+            # dato— sino para detectar un eje temporal mal leído: una serie declarada
+            # trimestral cuyos períodos salen mensuales tiene el parse roto, y la serie
+            # entera es sospechosa. Se DECLARA en vez de resolverse en silencio.
+            discrepancias.extend(_discrepancias_de_cadencia(por_archivo[s.source_file],
+                                                            r.records))
             persisted = _upsert_records(db, r.records) if escribir else 0
             persistidos_total += persisted
             _upsert_excel_report(db, {
@@ -580,10 +628,15 @@ def ingest_canonical(db: Session, *, persist: bool = False,
         logger.info("[macro] ingesta canónica: %d archivo(s) leídos y reportados pero NO "
                     "persistidos por alcance (%s): %s", len(omitidos),
                     "canonical.PERSISTIBLES_VERIFICADOS", ", ".join(sorted(omitidos)))
+    if discrepancias:
+        logger.warning("[macro] ingesta canónica: %d serie(s) con la cadencia DECLARADA en "
+                       "contra de sus períodos — el eje temporal se leyó mal: %s",
+                       len(discrepancias), "; ".join(discrepancias[:8]))
     return {"files": len(seen), "ok": ok, "flagged": flagged, "failed": failed,
             "persisted": persistidos_total,
             "persist_scope": sorted(alcance) if alcance else "todos",
-            "skipped_by_scope": sorted(omitidos)}
+            "skipped_by_scope": sorted(omitidos),
+            "cadence_mismatches": discrepancias}
 
 
 def start_canonical_ingest_background(*, persist: bool = False) -> Dict[str, Any]:

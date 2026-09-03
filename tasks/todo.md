@@ -313,3 +313,75 @@ pytest --cov=shared/validation --cov=modules/sector_intel/validation --cov-repor
   contra dev.
 - T-PS-2 sigue pendiente, ahora con **tres** trabajos: `pib_sectores_origen`, `imae_indice`
   y **corregir el sufijo roto de la entrada `imae`**.
+
+---
+
+## 🔴 PROPUESTO (pendiente aprobación) — T-PS-1: `frequency` en `_upsert_records` + backfill
+> El paso 3 de T-PS-1 (guard de nulos §2.2.1) **ya se hizo** en `eab91d0`.
+> Queda la propagación de `frequency` y la migración de backfill.
+
+### Lo que la investigación cambió respecto del plan escrito
+
+- **C6 se queda corta: no son dos vocabularios, son TRES en el mismo campo.**
+  `inference.py:509` escribe `frequency="trimestral"` mientras sus hermanas de `:489` y
+  `:525` escriben `"quarterly"` y `"annual"` — tres líneas de distancia, misma función. El
+  caché de layouts ya tiene los cuatro valores conviviendo: `'quarterly'`, `'annual'`,
+  `None` y `'trimestral'`. **Es un bug puntual y entra en este PR.**
+- **El vocabulario NO es una preferencia: lo decide un contrato vivo.** `service.py:1169`
+  sirve `frequency` por la Data API que consume PMS, hoy derivándolo con `_infer_frequency`,
+  que devuelve **inglés**. Además lo escriben en inglés otros siete sitios
+  (`insurance_intel` ×5, `pension_intel` ×2) y lo declara el comentario de `models.py:40`.
+  Poblar la columna en español cambiaría `quarterly` → `trimestral` en una respuesta que
+  hoy ya se sirve. **Va en inglés**, y lo español del canónico se traduce al escribir.
+- **`Record` no lleva `frequency`** (`base_client.py:35-48`), así que el escalón 2 de la
+  cascada necesita un parámetro nuevo en `_upsert_records` — que tiene **6 sitios de
+  llamada**.
+- **`spec.frequency` viene `None` en 2 de los 4 archivos encendidos** (`imae_2018.xlsx` e
+  `ipc_base_2019-2020.xls`). El escalón 2 no está disponible la mitad de las veces.
+- **`mm_series` NO tiene columna `note`.** El §3.2 del spec pide que lo inferido quede
+  «marcado en `note`»: **no es implementable como está escrito**. Y sin marca, un valor
+  inferido es indistinguible de uno declarado — que es exactamente lo que la doctrina de la
+  casa prohíbe.
+
+### Propuesta de diseño (invierte la cascada del spec §3.2, y por qué)
+
+El spec ordena: canónico → spec de extracción → inferencia. Propongo: **el formato del
+período manda, y la declaración del canónico es la AUTORIDAD CONTRA LA QUE SE VERIFICA.**
+
+- El período (`2026-Q1`, `2026-07`) **no es una inferencia**: lo fija el parser al
+  normalizar y determina la cadencia sin ambigüedad, fila por fila. Cobertura 100%.
+- La declaración del canónico es por SERIE, pero un archivo produce muchas series
+  (`imae_2018.xlsx` produce 12): aplicarle a las 12 la frecuencia de la entrada canónica es
+  una suposición que hoy sale bien **por casualidad** — en los 4 archivos encendidos todas
+  las series comparten cadencia, y eso no es una regla.
+- Donde declarado y derivado **discrepan**, eso es un defecto que se SURFACEA (es la
+  aserción 5 de §4: «ninguna serie trimestral tiene períodos con formato mensual»), no algo
+  que se resuelva en silencio eligiendo uno.
+
+Así no hace falta la columna `note`: no se escribe nada inferido-y-sin-marca, porque lo que
+se escribe es derivado de dato real, y lo declarado se usa para detectar el error.
+
+### Pasos atómicos
+
+- [ ] **1.** `inference.py:509`: `"trimestral"` → `"quarterly"`. Con test que fije el
+      vocabulario del `ExtractionSpec` para las tres ramas.
+- [ ] **2.** `_upsert_records` puebla `frequency` desde el formato del período, en inglés.
+      Un solo punto de escritura, que es por donde pasan los 6 llamadores.
+- [ ] **3.** Verificación contra el canónico: si la cadencia declarada para una serie del
+      `REGISTRY` no coincide con la derivada, se REGISTRA con nombre y las dos cadencias.
+      No se corrige en silencio ni se descarta la fila.
+- [ ] **4.** Migración Alembic de backfill sobre las filas existentes (509 hoy en dev; en
+      prod hay que mirar antes). Data-only: la columna ya existe.
+
+### Sensores
+
+- [ ] **S1.** Test del vocabulario: toda fila escrita queda en `{monthly, quarterly, annual}`
+      y ninguna en español. **Correrlo contra el código viejo primero.**
+- [ ] **S2.** Test de que la Data API sigue devolviendo lo MISMO que hoy para las series que
+      ya existen: el campo `frequency` de `/series` no puede cambiar de valor al pasar de
+      derivado-al-leer a persistido. Es un contrato que consume PMS.
+- [ ] **S3.** Test de la discrepancia: una serie del canónico declarada trimestral con
+      períodos mensuales queda registrada, no silenciada.
+- [ ] **S4.** Backfill verificado sobre copia de la base dev: 0 filas con `frequency` NULL,
+      y ningún valor de las 7 series preexistentes alterado salvo esa columna.
+- [ ] **S5.** Los tres gates.
