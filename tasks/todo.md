@@ -295,9 +295,16 @@ pytest --cov=shared/validation --cov=modules/sector_intel/validation --cov-repor
 - [x] **4. Guard de nulos §2.2.1** en la rama de actualización de `_upsert_records`.
 - [x] **S1/S2 — tests con dientes**, corridos contra el código VIEJO primero: el del guard
       falló con `None == 3.14`; los 4 del alcance fallaron con la firma vieja.
-- [ ] **S3 — corrida real contra copia de la base dev** (6.390 filas) + **idempotencia**:
-      correr dos veces y verificar que la segunda no cambia ningún valor.
-- [ ] **S4 — los tres gates** (`pytest`, `ruff`, `mypy | mypy-baseline filter` por exit code).
+- [x] **S3 — VERDE.** Dos corridas: 6.390 filas · 34 series · 5.881 persistidas cada vez.
+      **0 valores cambiados, 0 no-nulos perdidos, 0 claves que aparezcan o desaparezcan.**
+      Las 7 series preexistentes: 0 cambios. Hallazgo: la base dev está una migración
+      atrás (`mm_series.nature`), y ese fallo se reporta como CONTADOR (`persisted: 0`),
+      no como error — quien despliegue tiene que mirar `persisted`, no el estado.
+- [x] **S4 — los tres VERDES.** `pytest` 7.434 pasados / 0 fallidos (exit 0) · `ruff` All
+      checks passed · `mypy | mypy-baseline filter` **exit code 0**. En la primera pasada
+      falló `test_directorio_sqlite.py`: lo causé yo, el script descartable construía un
+      engine sin `ensure_sqlite_directory`. Corregido en el script — el guard tenía razón
+      y eximirlo habría sido apagar el instrumento.
 
 ### Fuera de alcance, declarado
 - `frequency` no se propaga acá (T-PS-1). Las 5.881 filas entran con NULL; el backfill
