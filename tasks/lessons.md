@@ -331,3 +331,57 @@ Cada entrada sigue esta estructura:
 - **Causa raíz**: `_direction_refs` lee `context["indicadores"]` esperando un MAPA indicador→blob y hace `.items()`. Mi contexto usaba la misma clave para una LISTA de filas. El `except Exception` que envuelve el chequeo —correcto como red, «best-effort: jamás rompe la generación»— convirtió una incompatibilidad de forma en un guard ausente. Es la lección de «un guard sin su input no falla, DESAPARECE», ahora por una vía nueva: no por falta de input, sino por input de otra forma bajo el mismo nombre.
 - **Regla**: un guard que dependa de la FORMA del contexto valida esa forma explícitamente (`isinstance`) y registra que se salta, en vez de dejar que la excepción lo apague dentro de un `except` genérico. Y al servir un contexto nuevo a una ruta compartida, revisar qué claves ya tienen significado allí: reusar un nombre con otra estructura es indistinguible de no pasarlo. Verificación mínima: leer el log de una generación real buscando `no pudo completarse` / `omitido` antes de dar por bueno que los guards corrieron.
 - **Disparador**: agregar una sección o un eje que sirva un contexto nuevo a `narrative_engine.generate`; cualquier `except Exception` alrededor de una verificación. ¿El guard corrió, o solo no rompió?
+
+### 2026-09-03 — Filtré por el nombre del archivo y declaré vacía una serie que tenía 511 observaciones
+
+**Síntoma.** En la fase 0 de la ingesta canónica BCRD reporté «`ipc_general`: 0 series, 0
+obs» y lo escribí como hallazgo, cuando la serie existía completa: 511 observaciones de
+1984-01 a 2026-07, sin huecos. Casi entra a un informe con recomendación de negocio.
+
+**Causa raíz.** Filtré los códigos producidos con
+`c.startswith("bcrd.xls.ipc_base_2019-2020.")`, tomando el `source_file` del canónico como
+si fuera el prefijo del `series_code`. No lo es: `default_prefix` **slugifica y pasa a
+minúsculas**, así que `ipc_base_2019-2020.xls` produce `bcrd.xls.ipc_base_2019_2020`. Mi
+filtro no encontró nada y **la ausencia se leyó como hallazgo en vez de como filtro roto**.
+Afecta a 10 de los 26 archivos del canónico (todos los que llevan guion o mayúscula).
+
+**Regla futura.** Un filtro que devuelve CERO es sospechoso antes que informativo: antes de
+reportar una ausencia, comprobar que el filtro encuentra algo en el caso donde sabés que hay
+dato. Y para componer un identificador derivado, **usar la función que lo compone**
+(`default_prefix`), nunca reconstruirlo a mano a partir del insumo — la transformación que
+aplica es justamente la que no ves. Es la misma familia que «una aserción de AUSENCIA pasa
+sola» y que «un `@parametrize` vacío sale SKIPPED, no FAILED».
+
+**Disparador.** Cada vez que un conteo, un filtro o un barrido dé 0, vacío o «no encontrado»,
+y eso se vaya a reportar como conclusión. También al escribir el test de T-PS-4: tiene que
+usar `default_prefix`, no `bcrd.xls.{stem}.{sufijo}`.
+
+### 2026-09-03 — `git checkout .` para restaurar UN stash me borró cuatro archivos sin commitear
+
+**Síntoma.** Para comprobar que unos tests nuevos tenían dientes, guardé mis 3 archivos de
+código con `git stash push -- <esos 3>`, corrí los tests contra el código viejo (fallaron,
+bien) y restauré con `git checkout . && git stash apply`. El `git checkout .` revirtió
+**todos** los archivos rastreados modificados del árbol, no solo los tres del stash: perdí
+las secciones nuevas de `tasks/todo.md`, la entrada de `tasks/lessons.md` y los siete tests
+que acababa de escribir en `test_upsert_dedupe.py` y `test_canonical.py`. Nada de eso estaba
+en el stash ni commiteado: irrecuperable desde git. Lo reescribí desde el contexto.
+
+**Causa raíz.** Dos errores encadenados. (1) `git checkout .` no tiene alcance: opera sobre
+todo el árbol, mientras que mi `stash push` sí lo tenía. Restaurar con una herramienta más
+ancha que la que guardó es asimétrico, y la diferencia se la come el trabajo no guardado.
+(2) Más de fondo: llevaba una sesión entera de trabajo valioso sin commitear. **El commit no
+es el final del trabajo, es lo que lo vuelve recuperable.** La memoria ya tenía esta lección
+por haber destruido trabajo de OTRA sesión (`sesiones-concurrentes-mismo-arbol`); la
+repetí contra mí mismo, que es la versión barata de la misma factura.
+
+**Regla futura.** Para volver atrás un stash parcial, revertir **exactamente los mismos
+paths** que se guardaron: `git checkout -- <los mismos paths>`, nunca `.`. Y antes de
+cualquier maniobra de stash/checkout, **commitear lo que ya está bien** — un commit WIP
+cuesta diez segundos y es la única red. Para probar que un test tiene dientes hay
+alternativas sin tocar el árbol: `git stash show -p | git apply -R` sobre paths concretos,
+o —mejor— revertir a mano la línea del fix, correr, y volver a ponerla.
+
+**Disparador.** Cualquier `git checkout`, `git restore` o `git stash pop/apply` cuando
+`git status` muestre archivos modificados que NO son los que estoy manipulando. Mirar
+`git status --short` ANTES y confirmar que la lista de paths de la restauración coincide con
+la del guardado.

@@ -259,3 +259,50 @@ pytest --cov=shared/validation --cov=modules/sector_intel/validation --cov-repor
 - [ ] Reviewer subagent (diff + tarea + CLAUDE.md + lessons): titular = IC-mean con t, pooled secundario y etiquetado, parcial `sector_growth_T` intacto, strings en español.
 - [ ] Verificar E2E en prod: tab "Validación" muestra el titular nuevo + badge "Inconclusivo por potencia".
 - [ ] Entrada en `tasks/lessons.md` (síntoma/causa/regla/disparador).
+
+---
+
+## ✅ EJECUTADA 2026-09-03 — Fase 0 (T-PS-0): corrida en seco de la ingesta canónica BCRD
+> **Informe: `tasks/INFORME_FASE0_PERSISTENCIA_BCRD.md`.** 26 archivos, 0 fallidos, 75,2 s,
+> US$0,096. Artefacto `/tmp/fase0_bcrd_would_write.json`. Base del dueño intacta (md5).
+> Spec: `docs/SPEC_PERSISTENCIA_SERIES_BCRD.md` §3.1.
+
+- [x] **E1 — 600 series nuevas, 55.759 obs, CERO colisiones** y cero `None` que pisen un
+      no-nulo. Las 7 series vivas están en otro espacio de nombres y no se cruzan.
+- [x] **E2 — `pib_real` = 77 trimestres ≥ 60: el BVAR de T-MP-3 PROCEDE.** 2007-Q1→2026-Q1,
+      sin huecos ni nulos. `ipc_general` 511 desde 1984; índice del IMAE 235.
+- [x] **E3 — trampas 1 y 2 CONFIRMADAS; trampa 3 REFUTADA.** `ingest_canonical` ingiere
+      archivos completos, así que `excel_series_suffix` NO gobierna la ingesta y el índice
+      del IMAE ya se ingiere. Y el sufijo que declara la entrada `imae` no resuelve a
+      ninguna serie: es la única de 33 con el puente roto.
+- [x] **E4 — 17 de 50 entradas sin `excel_series_suffix`**, todas con archivo que sí produce
+      series. El prefijo del código NO es el nombre del archivo (`default_prefix` slugifica).
+- [x] **E5 — informe entregado** con recomendación explícita.
+- [x] **Hallazgo nuevo:** 29.427 duplicados intra-lote con valores distintos, resueltos por
+      «último gana» en silencio. 176 series, 4 archivos, ninguno de la vía de proyección.
+
+---
+
+## ✅ HECHA 2026-09-03 — T-PS-3-acotado: `persist=True` en 4 archivos · commit `eab91d0`
+> Autorizada por el dueño tras el informe de fase 0. Decisiones tomadas: el guard de nulos
+> va en este PR (no en T-PS-1), y el alcance es **cablear + verificar en dev**, sin desplegar.
+
+- [x] **1. Lista blanca declarada** `canonical.PERSISTIBLES_VERIFICADOS`: los 4 archivos,
+      con el motivo de cada exclusión y qué falta para levantarla. Transitoria por diseño.
+- [x] **2. `ingest_canonical(solo_archivos=...)`** acota lo que se ESCRIBE, no lo que se
+      lee: los 26 se siguen reportando. Default `None` = comportamiento histórico.
+- [x] **3. `operations.py` pasa la lista blanca** a `macro-canonical-sync`.
+- [x] **4. Guard de nulos §2.2.1** en la rama de actualización de `_upsert_records`.
+- [x] **S1/S2 — tests con dientes**, corridos contra el código VIEJO primero: el del guard
+      falló con `None == 3.14`; los 4 del alcance fallaron con la firma vieja.
+- [ ] **S3 — corrida real contra copia de la base dev** (6.390 filas) + **idempotencia**:
+      correr dos veces y verificar que la segunda no cambia ningún valor.
+- [ ] **S4 — los tres gates** (`pytest`, `ruff`, `mypy | mypy-baseline filter` por exit code).
+
+### Fuera de alcance, declarado
+- `frequency` no se propaga acá (T-PS-1). Las 5.881 filas entran con NULL; el backfill
+  futuro pasa de 509 a 6.390 filas, no a las 56.268 del canónico completo.
+- No se despliega a producción. En prod la base no está vacía y el diff de la fase 0 fue
+  contra dev.
+- T-PS-2 sigue pendiente, ahora con **tres** trabajos: `pib_sectores_origen`, `imae_indice`
+  y **corregir el sufijo roto de la entrada `imae`**.
