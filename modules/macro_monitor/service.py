@@ -592,14 +592,24 @@ def ingest_canonical(db: Session, *, persist: bool = False,
         try:
             r = ingest_excel(entry, cache=cache, use_claude=True)
             status = "ok" if r.report.ok else "flagged"
+            persisted = _upsert_records(db, r.records) if escribir else 0
             # La cadencia que el registro DECLARA contra la que dicen los períodos. No se
             # usa para elegir el valor —eso lo resuelve la etiqueta del período, que es
             # dato— sino para detectar un eje temporal mal leído: una serie declarada
             # trimestral cuyos períodos salen mensuales tiene el parse roto, y la serie
             # entera es sospechosa. Se DECLARA en vez de resolverse en silencio.
-            discrepancias.extend(_discrepancias_de_cadencia(por_archivo[s.source_file],
-                                                            r.records))
-            persisted = _upsert_records(db, r.records) if escribir else 0
+            #
+            # Va DESPUÉS del upsert y no puede lanzar: es un diagnóstico, y un diagnóstico
+            # que rompe lo que diagnostica es peor que no tenerlo. Escrito primero antes y
+            # sin proteger, un registro con otra forma tumbaba el archivo ENTERO —los 26
+            # pasaban a `failed` y no se persistía nada—. Lo cazó
+            # `test_ingest_canonical_continues_after_a_failing_file`.
+            try:
+                discrepancias.extend(
+                    _discrepancias_de_cadencia(por_archivo[s.source_file], r.records))
+            except Exception:  # noqa: BLE001 — el diagnóstico jamás rompe la ingesta
+                logger.debug("no se pudo verificar la cadencia de %s", entry.filename,
+                             exc_info=True)
             persistidos_total += persisted
             _upsert_excel_report(db, {
                 "file_url": entry.url, "filename": entry.filename, "sector": entry.sector,

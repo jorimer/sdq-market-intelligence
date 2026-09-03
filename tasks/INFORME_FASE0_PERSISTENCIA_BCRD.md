@@ -343,3 +343,85 @@ Dos cosas que esto deja dichas, y que importan para el despliegue:
   roto de la entrada `imae`**.
 - **Triaje de los 4 archivos excluidos** para levantar la lista blanca, empezando por la
   decisión de diseño de `tipo_cambio` (serie diaria en una identidad mensual).
+
+---
+
+# ANEXO II — T-PS-1: la cadencia se persiste (2026-09-03)
+
+> Decisiones del dueño: cascada **«el período manda, el canónico verifica»** (corrige el
+> §3.2 del spec) y **migración + verificación en dev**, sin desplegar.
+> El paso 3 de T-PS-1 —el guard de nulos— ya iba en el anexo anterior.
+
+## B.1 Lo que la investigación cambió
+
+**No eran dos vocabularios, eran tres en el mismo campo.** `inference.py:509` escribía
+`frequency="trimestral"` mientras sus hermanas de `:489` y `:525` escribían `"quarterly"` y
+`"annual"` — tres líneas de distancia, misma función. El caché de layouts tenía los cuatro
+valores conviviendo: `quarterly`, `annual`, `None` y `trimestral`. Corregido, y vigilado por
+un test **estructural** que lee el código con `ast`: el defecto vivía en una rama de tres, y
+un test de comportamiento solo cubre la rama que su fixture activa.
+
+**El vocabulario lo decidió un contrato vivo, no una preferencia.** `mm_series.frequency` se
+sirve por `/series` de la Data API, que consume PMS, hoy derivándose al leer con una función
+que devuelve inglés; y lo escriben en inglés otros siete sitios (`insurance_intel` ×5,
+`pension_intel` ×2). Persistir español habría cambiado `quarterly` → `trimestral` en una
+respuesta que ya se sirve.
+
+**El §3.2 del spec no se sostiene, y se corrige.** Ordenaba canónico → spec de extracción →
+inferencia, marcando lo inferido en un campo `note`. Tres problemas medidos: `mm_series` **no
+tiene columna `note`**, así que lo inferido quedaría indistinguible de lo declarado —
+justo lo que la doctrina prohíbe; `spec.frequency` viene **`None` en 2 de los 4 archivos**
+encendidos; y la declaración del canónico es por SERIE mientras la ingesta es por ARCHIVO
+(`imae_2018.xlsx` produce doce series). La etiqueta del período, en cambio, **no es una
+inferencia**: la fija el parser y determina la cadencia fila por fila, con cobertura 100%.
+
+Así que la declaración no RESUELVE: **VERIFICA**. Donde declarado y derivado discrepan hay un
+eje temporal mal leído, y eso se declara (`cadence_mismatches`) en vez de resolverse en
+silencio eligiendo uno.
+
+## B.2 Qué se construyó
+
+- **`shared/data/series_cadence.py`** — hermano de `series_nature.py`. Se promovió a
+  `shared/` en vez de escribir una tercera copia del helper que ya duplicaban
+  `insurance_intel` y `pension_intel`.
+- **`_upsert_records`** puebla `frequency` por fila. Un solo punto de escritura, por donde
+  pasan los seis llamadores.
+- **`_discrepancias_de_cadencia`** en `ingest_canonical`.
+- **Migración `a4c7e1b9d302`**, data-only, con las máscaras `LIKE` independientes del orden
+  de ejecución.
+
+## B.3 Sensores
+
+| Sensor | Resultado |
+|---|---|
+| S1 · se escribe la cadencia | **Verde, con dientes probados**: contra el código viejo salía `{None}` |
+| S2 · el contrato de `/series` no se mueve | **Verde: 7 series, 0 cambios de valor** — el sensor que decidió el vocabulario |
+| S3 · la discrepancia se declara | Verde, incluido que las 17 entradas sin puente no dan falso positivo |
+| S4 · backfill sobre copia de dev | **509 → 0 NULL** (16 quarterly + 493 monthly), **0 valores alterados** |
+| S4b · corrida real, 3 veces | 6.390 filas · **0 con `frequency` NULL** · 0 fuera del vocabulario · **0 discrepancias** · idempotente en valor Y en cadencia |
+| S5 · los tres gates | `ruff` verde · `mypy` **exit 0** · `pytest` 7.447 |
+
+## B.4 Dos defectos míos que los tests existentes cazaron
+
+**Un diagnóstico que rompía lo que diagnostica.** Puse la verificación de cadencia ANTES del
+upsert y sin proteger: un registro con otra forma levantaba `AttributeError` dentro del
+`try` del bucle, que lo cuenta como archivo fallido — **los 26 pasaban a `failed` y no se
+persistía nada**. Lo cazó `test_ingest_canonical_continues_after_a_failing_file`, que ya
+existía. Movido después del upsert y aislado: un diagnóstico observa, no vetea.
+
+**Un test que fijaba el bug.** `test_calibration.py:160` afirmaba
+`spec.frequency == "trimestral"`. No estaba protegiendo el vocabulario: lo estaba clavando
+en el valor equivocado.
+
+Y el gate mintió una vez: corrí `pytest ... | tail` y el `$?` era el de `tail`, no el de
+pytest — «exit code 0» con dos fallos en el resumen. Es la lección que este repo ya tenía
+escrita; la línea de resumen es lo que hay que leer.
+
+## B.5 Qué sigue
+
+- **T-PS-2**, con tres trabajos: `pib_sectores_origen`, `imae_indice` y corregir el sufijo
+  roto de la entrada `imae`.
+- **Triaje de los 4 archivos excluidos**, empezando por `tipo_cambio`: una serie diaria no
+  entra en una identidad `(series_code, period)` mensual.
+- **Prod**: repetir el diff antes de desplegar, y desatascar alembic en dev (le falta
+  `mm_series.nature`) para poder correr la migración ahí.

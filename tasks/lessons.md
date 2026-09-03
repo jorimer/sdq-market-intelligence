@@ -385,3 +385,30 @@ o —mejor— revertir a mano la línea del fix, correr, y volver a ponerla.
 `git status` muestre archivos modificados que NO son los que estoy manipulando. Mirar
 `git status --short` ANTES y confirmar que la lista de paths de la restauración coincide con
 la del guardado.
+
+### 2026-09-03 — Puse un diagnóstico ANTES de lo que diagnostica, y sin protección: tumbaba los 26 archivos
+
+**Síntoma.** Al agregar a `ingest_canonical` la verificación de cadencia —comparar lo que el
+registro DECLARA contra lo que dicen los períodos— la puse antes del upsert y sin `try`. Un
+registro con otra forma (`records=[object()]`, sin `.series`) levantaba `AttributeError`
+dentro del `try` general del bucle, que lo cuenta como archivo fallido: los 26 pasaban a
+`failed` y **no se persistía absolutamente nada**. La ingesta entera muerta por el
+observador. Lo cazó un test que ya existía —
+`test_ingest_canonical_continues_after_a_failing_file`— y que simula justo el escenario de
+producción de un upsert envenenado.
+
+**Causa raíz.** Confundí un diagnóstico con un gate. Un gate puede y debe frenar; un
+diagnóstico solo mira. Al ponerlo en el camino crítico y sin aislar, le di poder de veto a
+algo que solo tenía que reportar. Y el orden lo empeoraba: corría **antes** de la escritura,
+así que ni siquiera fallaba después de haber hecho el trabajo útil.
+
+**Regla futura.** Todo lo que solo OBSERVA va después del trabajo que observa y envuelto en
+`try/except` con log — el idioma que este repo ya usa en la contabilidad de LLM («best-effort
+de punta a punta: jamás lanza»). Antes de agregar una llamada dentro de un `try` grande que
+convierte excepciones en «fallo del archivo», preguntarse: **si esto revienta, ¿qué deja de
+pasar?** Si la respuesta incluye «no se persiste el dato», está en el lugar equivocado.
+
+**Disparador.** Agregar cualquier verificación, métrica, log enriquecido o telemetría dentro
+de un bucle que ya tiene un `except` que degrada el resultado. También: cuando un test viejo
+empieza a fallar con un contador en cero (`ok + flagged == 0`), sospechar de lo que agregué
+en el camino, no del test.

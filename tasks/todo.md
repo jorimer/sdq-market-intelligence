@@ -316,7 +316,7 @@ pytest --cov=shared/validation --cov=modules/sector_intel/validation --cov-repor
 
 ---
 
-## 🔴 PROPUESTO (pendiente aprobación) — T-PS-1: `frequency` en `_upsert_records` + backfill
+## ✅ HECHA 2026-09-03 — T-PS-1: `frequency` en `_upsert_records` + backfill
 > El paso 3 de T-PS-1 (guard de nulos §2.2.1) **ya se hizo** en `eab91d0`.
 > Queda la propagación de `frequency` y la migración de backfill.
 
@@ -363,25 +363,25 @@ se escribe es derivado de dato real, y lo declarado se usa para detectar el erro
 
 ### Pasos atómicos
 
-- [ ] **1.** `inference.py:509`: `"trimestral"` → `"quarterly"`. Con test que fije el
-      vocabulario del `ExtractionSpec` para las tres ramas.
-- [ ] **2.** `_upsert_records` puebla `frequency` desde el formato del período, en inglés.
-      Un solo punto de escritura, que es por donde pasan los 6 llamadores.
-- [ ] **3.** Verificación contra el canónico: si la cadencia declarada para una serie del
-      `REGISTRY` no coincide con la derivada, se REGISTRA con nombre y las dos cadencias.
-      No se corrige en silencio ni se descarta la fila.
-- [ ] **4.** Migración Alembic de backfill sobre las filas existentes (509 hoy en dev; en
-      prod hay que mirar antes). Data-only: la columna ya existe.
+- [x] **1.** `inference.py:509` corregido. Test ESTRUCTURAL con `ast`
+      (`test_vocabulario_de_frecuencia.py`) porque el defecto vivía en UNA rama de tres.
+- [x] **2.** Hecho. El helper se promovió a `shared/data/series_cadence.py` —hermano de
+      `series_nature.py`— en vez de escribir una tercera copia del que ya duplicaban
+      `insurance_intel` y `pension_intel`.
+- [x] **3.** `_discrepancias_de_cadencia` en `ingest_canonical`, que devuelve
+      `cadence_mismatches` y avisa por log. En la corrida real: **0 discrepancias**.
+- [x] **4.** `a4c7e1b9d302_backfill_mm_series_frequency.py`, data-only. Verificada sobre
+      copia de dev: **509 → 0 NULL** (16 quarterly + 493 monthly), 0 valores alterados.
 
 ### Sensores
 
-- [ ] **S1.** Test del vocabulario: toda fila escrita queda en `{monthly, quarterly, annual}`
-      y ninguna en español. **Correrlo contra el código viejo primero.**
-- [ ] **S2.** Test de que la Data API sigue devolviendo lo MISMO que hoy para las series que
-      ya existen: el campo `frequency` de `/series` no puede cambiar de valor al pasar de
-      derivado-al-leer a persistido. Es un contrato que consume PMS.
-- [ ] **S3.** Test de la discrepancia: una serie del canónico declarada trimestral con
-      períodos mensuales queda registrada, no silenciada.
-- [ ] **S4.** Backfill verificado sobre copia de la base dev: 0 filas con `frequency` NULL,
-      y ningún valor de las 7 series preexistentes alterado salvo esa columna.
-- [ ] **S5.** Los tres gates.
+- [x] **S1 — VERDE, con dientes probados.** Contra el código viejo, `frequency` salía
+      `{None}` en las tres filas: la aserción del test nuevo no pasaba.
+- [x] **S2 — VERDE, y es el sensor que decidió el vocabulario.** `canonical_series_for_api`
+      corrida contra las dos bases: **7 series, 0 cambios de valor** en `frequency`.
+- [x] **S3 — VERDE.** Incluye el caso de las 17 entradas sin puente: no se pueden
+      verificar y, sobre todo, no producen falso positivo.
+- [x] **S4 — VERDE.** Y la corrida completa sobre la base encendida: **6.390 filas, 0 con
+      `frequency` NULL, 0 fuera del vocabulario**, idempotente en valor Y en cadencia.
+- [x] **S5.** `ruff` verde · `mypy` **exit 0** (con +1 línea de baseline, el mismo patrón
+      que sus 5 vecinas de esta función: `row.nature = nat` es una de ellas) · `pytest` abajo.
