@@ -448,6 +448,38 @@ REGISTRY: List[CanonicalSeries] = [
 ]
 
 
+# Qué archivos del canónico se PERSISTEN hoy. El registro dice qué series son citables; esto
+# dice cuáles de ellas ya se pueden escribir sin degradar la base, que es otra pregunta.
+#
+# Sale de la corrida en seco del 2026-09-03 (`tasks/INFORME_FASE0_PERSISTENCIA_BCRD.md`):
+# de los 26 archivos canónicos, éstos cuatro son los únicos verificados sin colisiones, sin
+# huecos, sin nulos internos y —sobre todo— sin duplicados intra-lote que traigan valores
+# DISTINTOS para la misma (serie, período). Ese último es el que manda: `_upsert_records`
+# resuelve esos empates con "último gana", por orden de lectura y sin dejar marca, y en la
+# corrida hubo 29.427 casos repartidos en 176 series de otros cuatro archivos.
+#
+# ES UNA LISTA TRANSITORIA, y por eso cada exclusión lleva su motivo: una lista blanca sin
+# motivo se vuelve permanente por inercia y nadie recuerda qué había que arreglar para
+# sacarla. Lo que falta para levantar cada exclusión:
+#
+#   TASA_DOLAR_REFERENCIA_MC.xlsx — 20.047 empates. Es una serie DIARIA y la identidad de una
+#       observación es (series_code, period) con el período en meses: los ~30 días del mes
+#       colapsan y sobrevive uno arbitrario. Necesita una decisión de diseño, no un parche.
+#   lleg_total.xls  — 4.555 empates en las columnas de tasa de crecimiento.
+#   piianual_6.xlsx — 2.970 empates: filas distintas del cuadro colapsan en un mismo código
+#   piianual.xls    — 1.855 empates, mismo motivo. Necesitan que el código lleve su sujeto.
+#   Los 18 restantes — no evaluados uno a uno todavía; entran cuando se los verifique.
+#
+# Vacío o None en `ingest_canonical` significa "todo el canónico", que es el comportamiento
+# histórico y el que corresponde cuando esta lista deje de hacer falta.
+PERSISTIBLES_VERIFICADOS: List[str] = [
+    "pib_2018.xlsx",              # PIB real trimestral: 77 trimestres 2007-Q1→2026-Q1
+    "imae_2018.xlsx",             # IMAE mensual, incluido el índice que consume el nowcast
+    "ipc_base_2019-2020.xls",     # IPC general: 511 meses desde 1984
+    "pib_deflactor_2018.xlsx",    # deflactor del PIB: 33 trimestres desde 2018-Q1
+]
+
+
 def registry() -> List[CanonicalSeries]:
     return list(REGISTRY)
 

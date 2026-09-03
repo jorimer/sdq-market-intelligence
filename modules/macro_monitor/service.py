@@ -115,7 +115,16 @@ def _upsert_records(db: Session, records) -> int:
                 unit=r.unit, source=src, published_at=pub, license=lic, nature=nat,
             ))
         else:
-            row.value = r.value
+            # "Un valor real jamás lo pisa un vacío" vale también ENTRE corridas, no solo
+            # dentro del lote. Esta rama hacía la asignación incondicional: un lote posterior
+            # con una celda que el BCRD todavía no publicó —o un parse fallido— BORRABA el
+            # valor ya persistido, en silencio. Mientras `mm_series` no tuvo el corpus Excel
+            # el defecto no podía destruir nada porque no había qué pisar; encender la
+            # persistencia es lo que lo vuelve vivo, porque desde la segunda corrida toda
+            # observación entra por acá. El guard frena el nulo y nada más: un valor real
+            # posterior sigue actualizando, que es como entra una revisión del emisor.
+            if r.value is not None:
+                row.value = r.value
             row.unit = r.unit
             row.source = src
             row.published_at = pub
@@ -504,19 +513,30 @@ def get_canonical_registry(db: Session) -> Dict[str, Any]:
     return {"series": out, "count": len(out)}
 
 
-def ingest_canonical(db: Session, *, persist: bool = False) -> Dict[str, Any]:
+def ingest_canonical(db: Session, *, persist: bool = False,
+                     solo_archivos: Optional[List[str]] = None) -> Dict[str, Any]:
     """Run the engine over ONLY the canonical source files (not the whole catalog).
 
     Dedupes shared source files (e.g. reserves brutas/netas come from one file).
     Upserts a per-file report; with *persist*, upserts the extracted series too.
+
+    *solo_archivos* acota QUÉ SE ESCRIBE, no qué se lee: se recorren y se reportan los 26
+    archivos igual —el reporte de cobertura es el instrumento con el que se decide qué
+    habilitar después, y perderlo sería quedarse ciego justo donde falta mirar— pero solo se
+    persisten los que estén en la lista. `None` = todos, el comportamiento histórico.
+    Ver `canonical.PERSISTIBLES_VERIFICADOS` para qué archivos están habilitados y por qué
+    cada uno de los otros no.
     """
     from shared.data.bcrd_excel import canonical
     from shared.data.bcrd_excel.catalog import find_entry
     from shared.data.bcrd_excel.engine import SpecCache, ingest_excel
 
+    alcance = set(solo_archivos) if solo_archivos else None
     cache = SpecCache()
     seen: set = set()
     ok = flagged = failed = 0
+    persistidos_total = 0
+    omitidos: List[str] = []
     for s in canonical.registry():
         if s.source_file in seen:
             continue
@@ -525,10 +545,14 @@ def ingest_canonical(db: Session, *, persist: bool = False) -> Dict[str, Any]:
         if entry is None:
             failed += 1
             continue
+        escribir = persist and (alcance is None or s.source_file in alcance)
+        if persist and not escribir:
+            omitidos.append(s.source_file)
         try:
             r = ingest_excel(entry, cache=cache, use_claude=True)
             status = "ok" if r.report.ok else "flagged"
-            persisted = _upsert_records(db, r.records) if persist else 0
+            persisted = _upsert_records(db, r.records) if escribir else 0
+            persistidos_total += persisted
             _upsert_excel_report(db, {
                 "file_url": entry.url, "filename": entry.filename, "sector": entry.sector,
                 "status": status, "method": r.spec.method, "orientation": r.spec.orientation,
@@ -550,7 +574,16 @@ def ingest_canonical(db: Session, *, persist: bool = False) -> Dict[str, Any]:
                 "status": "failed", "error": str(e)[:500],
             })
     logger.info("[macro] ingesta canónica: %d ok, %d marcados, %d fallidos", ok, flagged, failed)
-    return {"files": len(seen), "ok": ok, "flagged": flagged, "failed": failed}
+    if omitidos:
+        # Lo acotado se DECLARA. Un alcance que recorta en silencio se lee, tres meses
+        # después, como que esos archivos no traían nada.
+        logger.info("[macro] ingesta canónica: %d archivo(s) leídos y reportados pero NO "
+                    "persistidos por alcance (%s): %s", len(omitidos),
+                    "canonical.PERSISTIBLES_VERIFICADOS", ", ".join(sorted(omitidos)))
+    return {"files": len(seen), "ok": ok, "flagged": flagged, "failed": failed,
+            "persisted": persistidos_total,
+            "persist_scope": sorted(alcance) if alcance else "todos",
+            "skipped_by_scope": sorted(omitidos)}
 
 
 def start_canonical_ingest_background(*, persist: bool = False) -> Dict[str, Any]:

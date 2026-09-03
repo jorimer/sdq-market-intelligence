@@ -189,11 +189,18 @@ def _run_canonical_ingest(params, user_id, set_phase) -> Dict:
     adivinar. Idempotente: hace upsert por (serie, período), nunca duplica. Pesado (~20
     archivos, algunos vía Claude) → va por la operación, no por endpoint síncrono. Mensual,
     que es la cadencia con que el BCRD publica estos cuadros."""
+    from shared.data.bcrd_excel.canonical import PERSISTIBLES_VERIFICADOS
     from modules.macro_monitor.service import build_snapshot, ingest_canonical
     db = SessionLocal()
     try:
         set_phase("ingiriendo el set canónico del BCRD (unidad + naturaleza)")
-        result = ingest_canonical(db, persist=True)
+        # Se LEEN y se reportan los 26 archivos; se ESCRIBEN solo los verificados. La
+        # corrida en seco del 2026-09-03 encontró, en cuatro de los otros archivos, 29.427
+        # empates (misma serie y período, valores distintos) que el upsert resuelve por
+        # orden de lectura y sin dejar marca. El reporte de cobertura se conserva completo
+        # porque es con lo que se decide qué habilitar después.
+        result = ingest_canonical(db, persist=True,
+                                  solo_archivos=PERSISTIBLES_VERIFICADOS)
         set_phase("reconstruyendo snapshot (momentum + señales)")
         snap = build_snapshot(db)
         result["snapshot"] = {"period": snap.get("period"),

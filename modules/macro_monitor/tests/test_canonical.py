@@ -80,3 +80,67 @@ def test_imae_canonical_points_to_current_base2018_file():
     assert imae.source_file == "imae_2018.xlsx"
     assert imae.base == "2018=100"
     assert find_entry(imae.source_file) is not None  # resoluble en el catálogo
+
+
+# ── Alcance de ESCRITURA del canónico (encendido acotado, 2026-09-03) ─────────────
+#
+# `PERSISTIBLES_VERIFICADOS` es una lista TRANSITORIA: los archivos que la corrida en seco
+# verificó como escribibles sin degradar la base. Lo que estos tests fijan no es su
+# contenido —va a crecer— sino su SEMÁNTICA: acota lo que se escribe, nunca lo que se lee.
+# Perder el reporte de los 26 dejaría sin instrumento la decisión de qué habilitar después.
+
+
+def _fake_ingest_por_archivo(entry, **kw):
+    """Un registro por archivo, con el nombre del archivo en el código de la serie."""
+    lin = Lineage(source="BCRD", license="x", fetched_at=date.today())
+    code = f"bcrd.xls.{entry.filename}.s"
+    report = SimpleNamespace(ok=True, series=[SimpleNamespace(code=code, flags=[])], flagged=[])
+    spec = SimpleNamespace(method="heuristic", orientation="period_rows",
+                           frequency="annual", confidence=0.8)
+    return SimpleNamespace(file=entry.filename, spec=spec,
+                           records=[Record(series=code, period="2020", value=1.0, lineage=lin)],
+                           report=report)
+
+
+def test_el_alcance_acota_lo_que_se_escribe_pero_no_lo_que_se_lee(db, monkeypatch):
+    monkeypatch.setattr("shared.data.bcrd_excel.engine.ingest_excel", _fake_ingest_por_archivo)
+    solo = ["pib_2018.xlsx", "imae_2018.xlsx"]
+    out = service.ingest_canonical(db, persist=True, solo_archivos=solo)
+
+    # se LEEN y se reportan todos los archivos del canónico...
+    assert db.query(ExcelFileReport).count() == out["files"]
+    assert out["files"] > len(solo)
+    # ...y se ESCRIBEN solo los del alcance.
+    escritos = {r.series_code for r in db.query(MacroSeries).all()}
+    assert escritos == {"bcrd.xls.pib_2018.xlsx.s", "bcrd.xls.imae_2018.xlsx.s"}
+    # lo omitido se DECLARA en el resultado, no desaparece
+    assert set(out["skipped_by_scope"]) == {
+        s.source_file for s in canonical.registry() if s.source_file not in solo}
+    assert out["persist_scope"] == sorted(solo)
+
+
+def test_sin_alcance_se_escribe_todo_el_canonico(db, monkeypatch):
+    """El default `None` conserva el comportamiento histórico: quien no pide alcance,
+    no lo recibe por sorpresa."""
+    monkeypatch.setattr("shared.data.bcrd_excel.engine.ingest_excel", _fake_ingest_por_archivo)
+    out = service.ingest_canonical(db, persist=True)
+    assert db.query(MacroSeries).count() == out["files"]
+    assert out["skipped_by_scope"] == []
+    assert out["persist_scope"] == "todos"
+
+
+def test_el_alcance_no_escribe_nada_sin_persist(db, monkeypatch):
+    """`solo_archivos` acota la escritura; no la habilita. Sin `persist` no se escribe nada,
+    y el reporte de cobertura sigue saliendo completo."""
+    monkeypatch.setattr("shared.data.bcrd_excel.engine.ingest_excel", _fake_ingest_por_archivo)
+    out = service.ingest_canonical(db, persist=False, solo_archivos=["pib_2018.xlsx"])
+    assert db.query(MacroSeries).count() == 0
+    assert db.query(ExcelFileReport).count() == out["files"]
+
+
+def test_los_persistibles_verificados_existen_en_el_registro():
+    """Un archivo habilitado que el canónico no declara no se ingeriría nunca: la lista
+    quedaría 'encendida' sobre algo que ningún camino recorre."""
+    archivos = {s.source_file for s in canonical.registry()}
+    faltan = [f for f in canonical.PERSISTIBLES_VERIFICADOS if f not in archivos]
+    assert not faltan, f"habilitados pero ausentes del REGISTRY: {faltan}"
