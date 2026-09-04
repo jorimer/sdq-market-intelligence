@@ -526,3 +526,70 @@ escritura pueda declararse por HOJA y no solo por archivo.
 **entero** debe ser `green`; uno habilitado **por hojas** puede ser `yellow` —eso es
 justamente lo que `yellow` significa— siempre que nombre cuáles, y una lista vacía se rechaza
 porque sería habilitar nada pareciendo que se habilitó algo.
+
+---
+
+## ✅ HECHA 2026-09-03 — T-PS-2c: las hojas ACUMULADAS del PIB sectorial
+
+### Causa raíz, verificada
+
+Las hojas trimestrales rotulan sus columnas `E-M · A-J · J-S · O-D`; las acumuladas,
+`E-M · E-J · E-S · E-D` (enero a marzo / junio / septiembre / diciembre). El mapa
+`_QUARTERS` de `periods.py:59` tiene los cuatro primeros y **ninguno de los acumulados**:
+
+```
+parse_quarter('A-J') -> 2     parse_quarter('E-J') -> None
+parse_quarter('J-S') -> 3     parse_quarter('E-S') -> None
+parse_quarter('O-D') -> 4     parse_quarter('E-D') -> None
+```
+
+Sin trimestre, la columna cae al AÑO. Así que de cada año, `E-M` sale como `2018-Q1` y las
+otras tres colapsan las tres en `2018` — y el dedupe «último gana» deja una arbitraria:
+
+```
+2018      103.871   ← E-J
+2018      145.421   ← E-S     las tres compiten por la misma clave
+2018      192.372   ← E-D
+2018-Q1    52.442   ← E-M
+```
+
+Eso explica las tres cifras del anexo III de una sola vez: los 1.660 duplicados con valores
+distintos, las 163 series que mezclan formas de período, y por qué la hoja acumulada tenía
+10 observaciones por serie en vez de 32.
+
+### El arreglo
+
+- [x] **1.** Hecho. Y el calificador `_acumulado` viaja en el CÓDIGO, decidido por el
+      encabezado del propio cuadro; el renombrado semántico ya no se lo lleva puesto (perdía
+      96 de 163). Más nota metodológica por prefijo, que viaja al cliente por la Data API.
+- [x] **2.** Las cuatro hojas habilitadas: **0 duplicados con valor distinto y 0 series con
+      períodos mezclados** en las cuatro.
+
+### ⚠️ La decisión que no puedo tomar yo
+Con el arreglo, el valor de `pib_trim_acum.agropecuario` en `2019-Q2` es el **acumulado
+enero-junio**, no el flujo del trimestre. Lo distingue el segmento de hoja del código
+(`pib_trim_acum` frente a `pib_trim`) y nada más: mismo sujeto, misma unidad, mismo período.
+Un consumidor que agrupe por el nombre de la serie sin mirar la hoja sumaría peras con
+manzanas. Ver la pregunta al dueño.
+
+### Sensores
+- [x] **S1 — VERDE con dientes.** Antes: `E-J`/`E-S`/`E-D` → `None`.
+- [x] **S2 — VERDE.** Y verificado contra el dato real: la suma de los 4 flujos de 2019
+      da 197.776,4 y el acumulado de Q4 da 197.776,4 — diferencia 0,0000.
+- [x] **S3 — VERDE.** Las 11.574 claves previas conservaron valor y cadencia; **0 cambios,
+      0 desapariciones, 0 claves nuevas fuera del PIB por origen**.
+- [x] **S4.** `ruff` verde · `mypy` **exit 0** · `pytest` abajo.
+
+### Hallazgo mayor que esto destapó: la vista previa del modelo estaba TRUNCADA
+Al abrir la hoja acumulada apareció que terminaba en **2020-Q2** y no en 2025-Q4. No era el
+rótulo: su spec venía del MODELO con `value_col_end=11` sobre un cuadro de 34 columnas, y
+re-inferir daba lo mismo. La vista previa muestra `PREVIEW_COLS = 12` y **no declaraba estar
+cortada**: el modelo contestó el rango que veía.
+
+No se arregla ensanchando la vista —21 de 27 planillas pasan de 12 columnas, una llega a 256—:
+la vista ahora AVISA que está truncada y el pedido ofrece dejar el rango abierto, que el
+extractor ya interpretaba como «hasta el final».
+
+Al corregirlo apareció que las otras TRES hojas del mismo libro tenían el mismo defecto un
+grado más suave: `cols=[1,33)` les comía el trimestre más reciente. Con los cuatro specs
+re-inferidos, las cuatro hojas llegan a **2026-Q1**. `mm_series`: **11.574 → 17.115**.

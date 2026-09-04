@@ -412,3 +412,34 @@ pasar?** Si la respuesta incluye «no se persiste el dato», está en el lugar e
 de un bucle que ya tiene un `except` que degrada el resultado. También: cuando un test viejo
 empieza a fallar con un contador en cero (`ok + flagged == 0`), sospechar de lo que agregué
 en el camino, no del test.
+
+### 2026-09-03 — Al modelo se le mostraban 12 columnas de un cuadro de 34, y contestó lo que vio
+
+**Síntoma.** La hoja `PIB$_Trim_Acum` del PIB por sector de origen terminaba en **2020-Q2**
+mientras sus tres hojas hermanas del MISMO libro llegaban a 2025-Q4: 10 de 32 trimestres, sin
+error, sin marca, sin hueco visible — la serie simplemente se acababa cinco años antes. Y las
+otras tres perdían el trimestre más reciente (2026-Q1) por la misma causa, medio grado más
+suave.
+
+**Causa raíz.** Cuando la heurística no resuelve una hoja, el trabajo cae en el modelo, y la
+vista previa que se le arma tiene `PREVIEW_COLS = 12`. El encabezado de la vista declaraba
+`dims=78x34`, pero solo se mostraban 12 columnas y **nada decía que estuviera cortada**. El
+modelo emitió `value_col_end=11`: la respuesta correcta para lo que veía. Re-inferir daba
+exactamente lo mismo, así que no era un caché viejo — era reproducible.
+
+Y no se arregla ensanchando la vista: de las 27 planillas canónicas, **21 pasan de 12
+columnas** y una llega a 256.
+
+**Regla futura.** Cuando se le recorta el insumo al modelo —columnas, filas, cantidad de
+ítems por pedido—, **el recorte tiene que estar declarado en el propio insumo** y el pedido
+debe ofrecer una salida que no dependa de ver todo (acá: dejar el fin del rango abierto, que
+el extractor ya interpretaba como «hasta el final»). Un modelo que contesta bien sobre un
+insumo incompleto produce un resultado incompleto que parece completo. Es la misma familia
+que el nombrado que devolvía «0 de 64» por truncamiento de la respuesta: en los dos casos el
+tamaño del recorte decidía en silencio la calidad del resultado.
+
+**Disparador.** Cualquier constante que limite lo que el modelo VE o lo que puede DEVOLVER
+(`PREVIEW_*`, `max_tokens`, tamaño de lote, `[:N]` sobre una lista que va al prompt).
+Preguntarse: si el insumo real supera este límite, ¿el resultado sale mal o sale corto? Y si
+sale corto, ¿alguien se entera? Corolario de verificación: cuando una serie termina antes que
+sus hermanas del mismo libro, sospechar del spec antes que de la fuente.

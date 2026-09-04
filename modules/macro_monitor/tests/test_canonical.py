@@ -237,8 +237,13 @@ def test_declarar_una_hoja_que_no_produce_nada_FALLA_ruidosamente(db, monkeypatc
     assert fallo is not None and "alcance" in (fallo.error or "").lower()
 
 
-def test_las_hojas_habilitadas_del_pib_sectorial_son_las_limpias():
-    """Las dos ACUMULADAS quedan afuera hasta que su parseo se arregle."""
+def test_las_hojas_habilitadas_del_pib_sectorial_se_nombran_una_por_una():
+    """Las cuatro hojas están habilitadas, y se LISTAN en vez de poner `None`.
+
+    El valor es el mismo hoy —las cuatro extraen limpias tras corregir los rótulos del cuadro
+    acumulado— pero la lista dice cuáles se verificaron una por una. Si el BCRD agrega una
+    quinta hoja, no se habilita sola: alguien tiene que mirarla. `None` la habilitaría en
+    silencio, que es como entró el problema que esto vino a cerrar."""
     hojas = canonical.PERSISTIBLES_VERIFICADOS["pib_origen_2018.xlsx"]
-    assert hojas == ["PIB$_Trim", "PIBK_Trim"]
-    assert not any("Acum" in h for h in hojas)
+    assert hojas is not None, "con `None`, una hoja nueva del emisor se habilitaría sola"
+    assert set(hojas) == {"PIB$_Trim", "PIBK_Trim", "PIB$_Trim_Acum", "PIBK_Trim_Acum"}

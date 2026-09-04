@@ -573,3 +573,88 @@ vacía se rechaza: sería habilitar nada pareciendo que se habilitó algo.
   `piianual`), empezando por la decisión de diseño de `tipo_cambio`: una serie **diaria** no
   entra en una identidad `(series_code, period)` mensual.
 - **Producción**: repetir el diff antes de desplegar, y desatascar alembic en dev.
+
+---
+
+# ANEXO V — Las hojas ACUMULADAS, y la vista previa truncada (2026-09-03)
+
+## E.1 La causa del defecto declarado en el anexo III
+
+El BCRD publica cada cuadro trimestral dos veces: el **flujo** del trimestre, con columnas
+`E-M · A-J · J-S · O-D`, y el **acumulado** del año, con `E-M · E-J · E-S · E-D` (enero a
+marzo / junio / septiembre / diciembre). El mapa de trimestres tenía los cuatro primeros y
+**ninguno de los acumulados**: sin trimestre, la columna caía al AÑO, y las tres columnas de
+cada año competían por la misma clave. El dedupe «último gana» dejaba una arbitraria:
+
+```
+2018      103.871   ← E-J
+2018      145.421   ← E-S     las tres compiten por la misma clave
+2018      192.372   ← E-D
+2018-Q1    52.442   ← E-M
+```
+
+Eso explicaba de una sola vez las tres cifras del anexo III: los 1.660 duplicados con valores
+distintos, las 163 series con períodos mezclados, y las 10 observaciones por serie.
+
+**Verificado contra el dato, no asumido:** la suma de los cuatro flujos de 2019 del
+agropecuario da 197.776,4 y el acumulado del cuarto trimestre da 197.776,4 — diferencia
+**0,0000**.
+
+## E.2 El acumulado dice que lo es
+
+Con el arreglo, el `2019-Q2` del cuadro acumulado vale enero-junio, no abril-junio: mismo
+sujeto, misma unidad y mismo período que la serie de flujo. Así que el calificador viaja en el
+CÓDIGO (`..._acumulado`), y **lo decide el encabezado del propio cuadro** — no el nombre del
+archivo ni una lista escrita a mano. Más una nota metodológica por prefijo, que viaja al
+cliente por la Data API diciendo que no se compara ni se suma con la serie de flujo.
+
+Un hueco que apareció al medir: el renombrado semántico REEMPLAZA la hoja del código, así que
+se llevaba puesto el calificador en **96 de las 163** series acumuladas. Corregido y fijado
+con test: lo que el cuadro declara sobre su período no puede depender de si al modelo le tocó
+renombrar esa fila.
+
+## E.3 El hallazgo mayor: al modelo se le mostraban 12 columnas de un cuadro de 34
+
+Al abrir la hoja acumulada apareció que terminaba en **2020-Q2** mientras sus tres hermanas
+del mismo libro llegaban a 2025-Q4 — 10 de 32 trimestres, sin error ni marca.
+
+No era el rótulo ni un caché viejo: su spec venía del MODELO con `value_col_end=11`, y
+re-inferir daba **exactamente lo mismo**. La causa es que `render_preview` muestra
+`PREVIEW_COLS = 12` columnas y **no declaraba estar cortada**. El modelo contestó el rango que
+veía, que es la respuesta correcta al insumo que recibió.
+
+No se arregla ensanchando la vista: de las 27 planillas canónicas, **21 pasan de 12 columnas**
+y una llega a 256. Se arregla **declarando el recorte** y ofreciendo una salida que no dependa
+de verlo todo: la vista ahora avisa qué columnas existen y no se muestran, y el pedido indica
+dejar `value_col_end` en `null` —«hasta el final»— cuando el patrón continúa. El extractor ya
+interpretaba `null` así.
+
+**Y al corregirlo apareció que las otras tres hojas tenían el mismo defecto, un grado más
+suave:** sus specs decían `cols=[1,33)`, lo que les comía la columna 33 — el trimestre más
+reciente, 2026-Q1, con dato real. Con los cuatro specs re-inferidos, las cuatro hojas llegan a
+2026-Q1.
+
+## E.4 Resultado
+
+| | |
+|---|---:|
+| `mm_series` | **11.574 → 17.115** filas |
+| las cuatro hojas | 33 períodos por serie, **2018-Q1 → 2026-Q1** |
+| duplicados con valor distinto | **0** en las cuatro |
+| series con períodos mezclados | **0** en las cuatro |
+| series acumuladas sin el calificador `_acumulado` | **0** de 163 |
+| series de flujo con el calificador (no debería) | **0** de 162 |
+| series con coordenada `_cN`/`_rN` | **0** |
+| filas con `frequency` NULL | **0** |
+| **regresión sobre lo ya persistido** | **0 valores, 0 cadencias, 0 desapariciones** |
+| idempotencia | 0 cambios |
+
+## E.5 Qué queda
+
+- **Los 4 archivos con «último gana»** (`TASA_DOLAR_REFERENCIA_MC`, `lleg_total`, `piianual_6`,
+  `piianual`), empezando por `tipo_cambio`: una serie **diaria** no entra en una identidad
+  `(series_code, period)` mensual.
+- **Los 18 archivos canónicos restantes**, no evaluados uno a uno todavía. Ojo: el defecto de
+  la vista truncada pudo afectar a cualquiera cuyo spec venga del modelo — conviene barrer los
+  specs cacheados buscando rangos de columna que se corten antes del último año del encabezado.
+- **Producción**: repetir el diff antes de desplegar, y desatascar alembic en dev.

@@ -87,12 +87,25 @@ _SPEC_TOOL = {
 
 
 def render_preview(grid: Grid, rows: int = PREVIEW_ROWS, cols: int = PREVIEW_COLS) -> str:
-    """Render the header region as a compact, indexed TSV for the prompt."""
-    out: List[str] = [f"sheet={grid.name!r} dims={grid.nrows}x{grid.ncols}",
-                      "col idx:\t" + "\t".join(f"[{c}]" for c in range(min(cols, grid.ncols)))]
+    """Render the header region as a compact, indexed TSV for the prompt.
+
+    **Declara cuando está TRUNCADA.** La vista muestra las primeras columnas, y el modelo
+    contesta el rango que VE: para un cuadro de 34 columnas emitía `value_col_end=11` y la
+    serie salía con 10 de sus 32 trimestres, cortada cinco años antes y sin ninguna marca.
+    No se arregla ensanchando la vista —21 de las 27 planillas canónicas pasan de 12 columnas
+    y una llega a 256—: se arregla diciéndolo, para que el modelo pueda dejar el fin del rango
+    abierto cuando el patrón sigue más allá de lo que se le muestra.
+    """
+    mostradas = min(cols, grid.ncols)
+    out: List[str] = [f"sheet={grid.name!r} dims={grid.nrows}x{grid.ncols}"]
+    if grid.ncols > mostradas:
+        out.append(f"AVISO: vista TRUNCADA — se muestran las columnas 0..{mostradas - 1} de "
+                   f"{grid.ncols}. Las columnas {mostradas}..{grid.ncols - 1} EXISTEN y no se "
+                   f"muestran.")
+    out.append("col idx:\t" + "\t".join(f"[{c}]" for c in range(mostradas)))
     for r in range(min(rows, grid.nrows)):
         cells = []
-        for c in range(min(cols, grid.ncols)):
+        for c in range(mostradas):
             v = grid.cell(r, c)
             if v is None:
                 cells.append("")
@@ -137,6 +150,10 @@ def interpret_spec(
         "previa y emite el spec de extracción con la herramienta. Reglas: ignora "
         "filas de título/subtítulo y notas al pie; incluye SOLO columnas de valores "
         "numéricos reales; los índices son 0-based sobre la grilla mostrada.\n\n"
+        "SI LA VISTA VIENE TRUNCADA en columnas (lo dice el AVISO) y el patrón de períodos "
+        "continúa hasta el borde de lo mostrado, NO cortes el rango en la última columna que "
+        "ves: dejá 'value_col_end' en null, que significa «hasta el final de la hoja». "
+        "Cortarlo trunca la serie en silencio.\n\n"
         f"{preview}"
     )
     response = client.messages.create(

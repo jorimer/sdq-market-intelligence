@@ -16,6 +16,7 @@ from shared.data.lineage import Lineage
 
 from .periods import (
     coerce_num,
+    es_trimestre_acumulado,
     format_period,
     normalize_label,
     parse_month,
@@ -179,12 +180,18 @@ def _extract_matrix(grid: Grid, spec: ExtractionSpec, lineage: Lineage,
     col_year = _forward_filled_years(grid, spec.period_header_row, c0, c1)
     # Optional sub-period row: quarter or month per column.
     col_sub: Dict[int, tuple] = {}
+    # ¿Este cuadro publica el ACUMULADO del año en vez del flujo del trimestre? Lo declara el
+    # propio encabezado (`E-J` = enero-junio, frente a `A-J` = abril-junio), y hay que
+    # arrastrarlo al código de la serie: el acumulado y el flujo comparten sujeto, unidad y
+    # período, y sin el calificador quien agrupe por el nombre de la serie sumaría los dos.
+    acumulado = False
     if spec.subperiod_header_row is not None:
         for c in range(c0, c1):
             cell = grid.cell(spec.subperiod_header_row, c)
             q = parse_quarter(cell)
             if q is not None:
                 col_sub[c] = ("Q", q)
+                acumulado = acumulado or es_trimestre_acumulado(cell)
                 continue
             m = parse_month(cell)
             if m is not None:
@@ -275,6 +282,8 @@ def _extract_matrix(grid: Grid, spec: ExtractionSpec, lineage: Lineage,
             path.append(group)                    # componente: cuelga de su agregado
         path.append(name)
         code = ".".join(_slug(part) for part in path if _slug(part))
+        if acumulado and code:
+            code = f"{code}_acumulado"
         if code in seen:  # ruta repetida (raro): desempate final por fila, nunca fusionar
             code = f"{code}_r{r}"
         seen[code] = r

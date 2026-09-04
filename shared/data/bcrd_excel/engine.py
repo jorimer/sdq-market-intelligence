@@ -111,6 +111,10 @@ def build_spec(
 
 _AMBIGUOUS = re.compile(r"^(?P<base>.+)_r(?P<row>\d+)$")
 
+#: Lo declara `extract` cuando el encabezado del cuadro dice que el período es corrido
+#: desde enero. Vive acá también porque el renombrado tiene que conservarlo.
+_SUFIJO_ACUMULADO = "_acumulado"
+
 
 def _resolve_ambiguous_names(wb: Workbook, spec: ExtractionSpec, records: List[Record],
                              *, cache: Optional[SpecCache] = None, client: Any = None):
@@ -159,6 +163,15 @@ def _resolve_ambiguous_names(wb: Workbook, spec: ExtractionSpec, records: List[R
             continue
         head = code.rsplit(".", 1)[0]
         slug = ".".join(_slug(part) for part in pretty.split(">") if _slug(part))
+        # El calificador de ACUMULADO no se pierde al renombrar. El nombre semántico
+        # REEMPLAZA la hoja del código, así que un `agropecuario_acumulado_r46` volvía como
+        # `ponderacion...agropecuario` — sin decir que es el corrido del año. Eran 96 de las
+        # 163 series acumuladas del PIB por origen, y quedaban indistinguibles de las de
+        # flujo salvo por el segmento de hoja. Lo que el cuadro declara sobre su período no
+        # puede depender de si al modelo le tocó renombrar esa fila.
+        base = _AMBIGUOUS.match(code.rsplit(".", 1)[1])
+        if slug and base and base.group("base").endswith(_SUFIJO_ACUMULADO):
+            slug = f"{slug}{_SUFIJO_ACUMULADO}"
         candidate = f"{head}.{slug}" if slug else code
         if candidate in used or candidate == code:
             continue

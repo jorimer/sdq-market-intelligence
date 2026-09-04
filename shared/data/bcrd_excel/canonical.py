@@ -61,6 +61,19 @@ SERIES_NOTES = {
         "a 2009. NO es comparable ni encadenable con la serie MBP6 "
         "(bcrd.xls.piianual_6.*)."
     ),
+    "bcrd.xls.pib_origen_2018.pib_trim_acum.": (
+        "PIB por actividad ACUMULADO del año: el valor de un trimestre es el corrido desde "
+        "enero (el de Q2 es enero-junio, no abril-junio). NO se compara ni se suma con la "
+        "serie de flujo trimestral (bcrd.xls.pib_origen_2018.pib_trim.*), que mide el "
+        "trimestre solo; el acumulado del cuarto trimestre ES el año completo."
+    ),
+    "bcrd.xls.pib_origen_2018.pibk_trim_acum.": (
+        "Índice de volumen encadenado por actividad, ACUMULADO del año: el valor de un "
+        "trimestre corresponde al corrido desde enero. NO se compara ni se encadena con la "
+        "serie de flujo trimestral (bcrd.xls.pib_origen_2018.pibk_trim.*). Ojo: el acumulado "
+        "de un índice es un promedio ponderado, no una suma — no se reconstruye sumando los "
+        "trimestres."
+    ),
     "bcrd.xls.bpagos.": (
         "Balanza de pagos bajo el MBP5 (quinta edición del manual) — serie HISTÓRICA y "
         "DESCONTINUADA: el BCRD dejó de actualizar este archivo en 2019. Úsese solo para el "
@@ -533,8 +546,16 @@ PERSISTIBLES_VERIFICADOS: Dict[str, Optional[List[str]]] = {
     # series, 2018-Q1→2025-Q4, cero duplicados con valores en conflicto—; las dos ACUMULADAS
     # mezclan períodos anuales y trimestrales dentro de la misma serie y producen 1.660
     # duplicados con valores distintos, que el upsert resolvería por orden de lectura.
-    # `PIB$_Trim_Acum` y `PIBK_Trim_Acum` entran cuando su parseo se arregle.
-    "pib_origen_2018.xlsx": ["PIB$_Trim", "PIBK_Trim"],
+    # Las cuatro entran: los rótulos del cuadro acumulado (`E-J`/`E-S`/`E-D`) no resolvían
+    # trimestre y las tres columnas de cada año colapsaban en la misma clave; corregido en
+    # `periods.py`, las cuatro hojas dan 0 duplicados con valores en conflicto y 0 series con
+    # períodos mezclados. Las acumuladas declaran su naturaleza en el código —`_acumulado`—
+    # y en una nota metodológica que viaja al cliente por la Data API.
+    # Se listan LAS CUATRO en vez de poner `None`: el valor es el mismo hoy, pero la lista
+    # dice cuáles se verificaron una por una, y si el BCRD agrega una quinta hoja no se
+    # habilita sola sin que alguien la mire.
+    "pib_origen_2018.xlsx": ["PIB$_Trim", "PIBK_Trim",
+                             "PIB$_Trim_Acum", "PIBK_Trim_Acum"],
 }
 
 

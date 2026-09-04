@@ -56,7 +56,22 @@ def parse_month(value: Any) -> Optional[int]:
 
 # quarter label → 1..4. Covers BCRD's many spellings: month-range ("E-M", "A-J",
 # "J-S", "O-D"; "Ene-Mar"), Roman ("I".."IV"), and "T1"/"1T"/"Trim 1"/"Q1".
+#: Los rótulos del cuadro ACUMULADO: el rango va siempre desde enero, y el trimestre es aquel
+#: en que CIERRA. El BCRD publica cada cuadro trimestral dos veces —el flujo del trimestre
+#: (`A-J` = abril-junio) y el acumulado del año (`E-J` = enero-junio)— y solo estaban los
+#: primeros: los otros tres no resolvían trimestre, caían al AÑO, y las tres columnas de un
+#: año competían por la misma clave. El dedupe «último gana» dejaba una arbitraria. En el PIB
+#: por sector de origen eran 1.660 duplicados con valores distintos.
+#:
+#: `E-M` (enero-marzo) no está acá a propósito: es el primer trimestre en los DOS cuadros y
+#: vale lo mismo en ambos, así que no distingue uno de otro.
+_QUARTERS_ACUMULADOS: dict[str, int] = {
+    "e-j": 2, "e-s": 3, "e-d": 4,
+    "ene-jun": 2, "ene-sep": 3, "ene-dic": 4,
+}
+
 _QUARTERS: dict[str, int] = {
+    **_QUARTERS_ACUMULADOS,
     "e-m": 1, "a-j": 2, "j-s": 3, "o-d": 4,
     "ene-mar": 1, "abr-jun": 2, "jul-sep": 3, "oct-dic": 4,
     "ene-marzo": 1, "i": 1, "ii": 2, "iii": 3, "iv": 4,
@@ -80,6 +95,18 @@ def parse_quarter(value: Any) -> Optional[int]:
     if m and ("trim" in token or "t" == token[:1]):
         return int(m.group(1))
     return None
+
+
+def es_trimestre_acumulado(value: Any) -> bool:
+    """¿El rótulo denota un acumulado del año (enero a…) en vez del flujo del trimestre?
+
+    Lo decide el ENCABEZADO del cuadro, que es donde el emisor lo declara — no el nombre del
+    archivo ni una lista escrita a mano. Sirve para que la serie extraída diga en su código
+    que es acumulada: sin eso, el acumulado y el flujo comparten sujeto, unidad y período, y
+    quien agrupe por el nombre de la serie sumaría los dos.
+    """
+    token = normalize_label(value).rstrip(".").strip().replace(" ", "")
+    return token in _QUARTERS_ACUMULADOS
 
 
 def parse_year(value: Any) -> Optional[int]:
