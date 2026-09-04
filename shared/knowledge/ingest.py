@@ -78,7 +78,11 @@ def registry_passages(db: Optional[Session]) -> List[Passage]:
                 ref=f"registry/{a.sector_key}/{s.key}",
                 license=LICENSE_PUBLIC if s.state == "real" else LICENSE_OWN,
                 meta={"sector_key": a.sector_key, "variable": s.key, "state": s.state,
-                      "weight": s.weight, "real_fraction": s.real_fraction},
+                      "weight": s.weight, "real_fraction": s.real_fraction,
+                      # La proyección viaja con la señal: es el primero de los tres puntos
+                      # del cableado. Sin esto, la evidencia llega proyectada pero sin nada
+                      # que el gate pueda juzgar, y una proyección sin metadato no ancla.
+                      "projection": s.projection},
             ))
     return out
 

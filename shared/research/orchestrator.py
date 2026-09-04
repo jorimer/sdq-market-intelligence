@@ -26,7 +26,7 @@ from typing import List, Optional, Tuple
 from sqlalchemy.orm import Session
 
 from shared.config.settings import settings
-from shared.registry.signals import GAP, REAL, RUBRIC
+from shared.registry.signals import GAP, PROJECTED, REAL, RUBRIC
 from shared.research.assemble import assemble_report_sections, assemble_scoping_sections
 from shared.research.data_pull import EnginePull, pull_axis, pull_entity
 from shared.research.deep_report import build_synthesis_report
@@ -109,6 +109,29 @@ def _merge_engine_evidence(sub_questions: List[SubQuestion], pulls: List[EngineP
         if matched:
             sq.state = REAL
             sq.note = ""
+        else:
+            # Tercer punto del cableado: el orquestador es el ÚNICO que puede escribir en la
+            # sub-pregunta. Se consulta DESPUÉS del dato real y solo si no lo hubo — una
+            # proyección es el último recurso antes de declarar brecha, no una alternativa
+            # al dato.
+            _aplicar_evidencia_proyectada(sq, sq.evidence)
+
+
+def _aplicar_evidencia_proyectada(sq, evidencias) -> None:
+    """Marca la sub-pregunta como PROYECTADA si su mejor evidencia lo es.
+
+    Un dato REAL siempre gana: si entre la evidencia hay algo real, no se toca nada. Y la
+    admisibilidad NO se juzga acá — la juzga `SubQuestion.anchored` a través del gate, que es
+    el único lugar donde vive esa decisión.
+    """
+    if sq.state == REAL or any(e.state == REAL for e in evidencias):
+        return
+    proyectadas = [e for e in evidencias if e.state == PROJECTED and e.projection is not None]
+    if not proyectadas:
+        return
+    mejor = max(proyectadas, key=lambda e: e.score)
+    sq.state = PROJECTED
+    sq.projection = mejor.projection
 
 
 def _forward_gaps(question: str, sub_questions: List[SubQuestion],
@@ -117,11 +140,30 @@ def _forward_gaps(question: str, sub_questions: List[SubQuestion],
     presente, no pronóstico), declara ese futuro como límite — sin rellenarlo."""
     if not is_forward_looking(question) or not live_pulls:
         return []
+    # Lo prospectivo dejó de ser brecha AUTOMÁTICA: si alguna sub-pregunta trae una
+    # proyección que pasa el gate, esa parte está contestada y no hay límite que declarar.
+    from shared.registry.projection import projection_is_admissible
+
+    motivos: List[str] = []
+    for sq in sub_questions:
+        if getattr(sq, "state", None) != PROJECTED:
+            continue
+        ok, motivo = projection_is_admissible(getattr(sq, "projection", None))
+        if ok:
+            return []
+        if motivo:
+            motivos.append(motivo)
+    # Si había proyección y se descartó, la nota dice POR QUÉ. «No se estima» a secas deja al
+    # lector sin saber si es que no hay modelo o si el que hay no está validado — y esa
+    # diferencia es justamente la que el bloque existe para poder comunicar.
+    detalle = (" La proyección disponible no se publica: " + "; ".join(motivos) + "."
+               if motivos else "")
     return [DeclaredGap(
         sub_question=question,
         note=("La parte prospectiva (proyección/escenario a futuro) excede lo que los motores "
               "computan hoy: se reporta la posición ACTUAL con dato real (incl. señales de "
-              "alerta temprana y sensibilidades), pero no un pronóstico —no se estima."),
+              "alerta temprana y sensibilidades), pero no un pronóstico —no se estima."
+              + detalle),
         candidate_source=None,
     )]
 
