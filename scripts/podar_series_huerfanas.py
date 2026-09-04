@@ -38,6 +38,9 @@ Uso::
     # 3. ensayo, y recién después el borrado
     python scripts/podar_series_huerfanas.py --antes antes.json
     python scripts/podar_series_huerfanas.py --antes antes.json --confirmar
+    # 4. volver a sincronizar y mirar qué REAPARECIÓ: eso demuestra que el motor del destino
+    #    sí lo produce, con otro nombre. Va a `--vivas` y no se vuelve a tocar.
+    python scripts/podar_series_huerfanas.py --antes antes.json --vivas vivas.json
 
 Limitación declarada: el inventario del destino se lee de `/indicators`, que descarta los
 períodos FUTUROS, así que una serie compuesta solo de períodos futuros no aparece y esta
@@ -96,6 +99,9 @@ def main() -> int:
                     help="Borra de verdad. Sin esto solo lista.")
     ap.add_argument("--antes", help="JSON con el inventario del destino ANTERIOR a la "
                                     "sincronización. Obligatorio para borrar.")
+    ap.add_argument("--vivas", metavar="ARCHIVO",
+                    help="JSON con los códigos que una corrida anterior demostró VIVOS: los "
+                         "que reaparecieron después de podarlos. No se vuelven a tocar.")
     ap.add_argument("--guardar-inventario", metavar="ARCHIVO",
                     help="Guarda el inventario actual del destino y termina. Es el paso 1, "
                          "el que hay que correr ANTES de sincronizar.")
@@ -125,6 +131,9 @@ def main() -> int:
     print(f"  el motor produce {len(vivos)} series")
     antes = (set(json.loads(Path(args.antes).read_text())["codigos"])
              if args.antes else None)
+    vivas = set(json.loads(Path(args.vivas).read_text())) if args.vivas else set()
+    if vivas:
+        print(f"  {len(vivas)} códigos declarados VIVOS por una corrida anterior: no se tocan")
     with httpx.Client(base_url=args.base_url, timeout=180, follow_redirects=True) as c:
         salud = c.get("/api/v1/health").json()
         print(f"  destino: {args.base_url}  commit {salud['deployment']['commit_short']} "
@@ -138,7 +147,7 @@ def main() -> int:
         if antes is None:
             candidatas = todas
         else:
-            candidatas = huerfanas_podables(set(destino), vivos, antes, PREFIJO)
+            candidatas = huerfanas_podables(set(destino), vivos, antes, PREFIJO, vivas)
             fuera = sorted(todas - candidatas)
             if fuera:
                 print(f"\n  {len(fuera)} códigos NO se tocan: no estaban antes de la "

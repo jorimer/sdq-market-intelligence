@@ -562,3 +562,31 @@ comparar lo pedido contra lo guardado y pedir la diferencia.
 **Disparador.** Toda caché cuya clave describe el insumo y cuyo valor responde una consulta
 sobre él. Preguntarse: si mañana cambia la consulta, ¿esta caché devuelve una respuesta vieja
 o admite que le falta?
+
+---
+
+## Lo que produce un motor NO se puede leer desde otro entorno cuando lo nombra un modelo
+
+**Síntoma.** Después de sincronizar producción con el código corregido, mi herramienta de poda
+listó **418** series huérfanas. Las reales eran 365. Las 53 de diferencia eran series **recién
+escritas y correctas**: `lleg_total…via_aerea.volumen.no_residentes` en producción contra
+`…via_aerea.total.no_residentes` en mi corrida local — la misma fila, con el rótulo que el
+modelo eligió en cada entorno. De haberlas borrado, habría destruido datos buenos sin un solo
+error a la vista: son códigos plausibles y el `DELETE` funciona igual de bien.
+
+**Causa raíz.** Construí la herramienta sobre un supuesto que nunca comprobé: que «lo que
+produce el motor» es lo mismo acá que allá. Vale mientras la extracción sea determinista, y
+deja de valer en el punto exacto donde el motor le pide un nombre a un modelo — que es
+justamente donde están las filas difíciles. Comparé un lado observado (producción) contra un
+lado **reconstruido** (mi corrida) y traté a los dos como si fueran mediciones.
+
+**Regla futura.** Antes de borrar en un destino remoto, la lista de lo que sobra tiene que
+salir de algo OBSERVADO en ese destino, no reconstruido acá. Cuando no se puede observar
+directamente, sirve un invariante temporal: *lo que no estaba antes de la operación, lo
+escribió la operación*. Y si queda residuo, convertirlo en experimento: borrar, volver a
+sincronizar y mirar qué reaparece — lo que vuelve demuestra que el destino sí lo produce, y
+la pérdida dura lo que tarda la reposición.
+
+**Disparador.** Cualquier borrado masivo cuya lista se calcule ejecutando código local contra
+una fuente compartida. Preguntarse: ¿esta lista la MEDÍ en el destino, o la deduje? Y en
+particular, ¿hay un modelo en algún punto de la cadena que la produce?

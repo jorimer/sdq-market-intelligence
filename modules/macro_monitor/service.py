@@ -1223,7 +1223,8 @@ _MINIMO_DE_LO_NUEVO_YA_PRESENTE = 0.5
 
 
 def huerfanas_podables(en_destino: Set[str], produce_el_motor: Set[str],
-                       antes_de_sincronizar: Set[str], prefijo: str = "bcrd.xls.") -> Set[str]:
+                       antes_de_sincronizar: Set[str], prefijo: str = "bcrd.xls.",
+                       vivas_confirmadas: Optional[Set[str]] = None) -> Set[str]:
     """Qué códigos del destino se pueden podar, y por qué solo esos.
 
     Huérfano es un código que el motor ya no produce. Pero «lo que el motor produce» no se
@@ -1237,15 +1238,24 @@ def huerfanas_podables(en_destino: Set[str], produce_el_motor: Set[str],
     en el destino ANTES de la sincronización, lo escribió la sincronización**. Por eso la
     poda se restringe a lo que ya estaba.
 
-    Queda un residuo declarado: un código viejo que la sincronización SÍ reescribió pero que
-    el motor local nombra distinto se podaría de más. Vuelve en la sincronización siguiente
-    —la poda no borra la fuente, solo la copia—, y por eso el protocolo es podar, volver a
-    sincronizar y comprobar qué reapareció.
+    Queda un residuo, y el protocolo lo convierte en PRUEBA en vez de en riesgo: un código
+    viejo que la sincronización sí reescribió pero que el motor local nombra distinto se poda
+    de más. Vuelve en la sincronización siguiente —la poda borra la copia, no la fuente—, y
+    esa reaparición demuestra que el motor del destino SÍ lo produce. Pasa entonces a
+    *vivas_confirmadas* y no se vuelve a tocar; sin eso, cada corrida lo borraría y cada
+    sincronización lo repondría, para siempre.
+
+    Medido el 2026-09-04 contra producción: de 365 podadas reaparecieron 3, las tres de
+    `bpagos.xls` («Nacionales» y «Zonas Francas» bajo importaciones, y «Otros» bajo egresos
+    de servicios) — filas sin numeración ni sangría que solo el modelo puede jerarquizar, y
+    que rotuló distinto en cada entorno.
     """
+    vivas = vivas_confirmadas or set()
     return {s for s in en_destino
             if s.startswith(prefijo)
             and s not in produce_el_motor
-            and s in antes_de_sincronizar}
+            and s in antes_de_sincronizar
+            and s not in vivas}
 
 
 def por_que_no_podar(vivos: Set[str], en_destino: Set[str]) -> str:

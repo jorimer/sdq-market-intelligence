@@ -57,3 +57,15 @@ def test_solo_toca_las_series_del_motor_excel():
     antes = {"bcrd.xls.a.vieja", "fiscal_eo.ingresos", "remittances"}
     podables = huerfanas_podables(antes, set(), antes)
     assert podables == {"bcrd.xls.a.vieja"}
+
+
+def test_lo_que_volvio_despues_de_podarlo_no_se_vuelve_a_podar():
+    """Sin esto, la poda y la sincronización se pelean para siempre: una borra la serie y la
+    otra la repone, cada mes. Que haya vuelto ES la prueba de que el motor del destino la
+    produce — con otro nombre que el de este entorno."""
+    antes = {"bcrd.xls.a.vieja", "bcrd.xls.bpagos.importaciones.nacionales"}
+    destino = set(antes)
+    motor = set()          # el motor local no produce ninguno de los dos nombres
+    vivas = {"bcrd.xls.bpagos.importaciones.nacionales"}
+    assert huerfanas_podables(destino, motor, antes, vivas_confirmadas=vivas) == {
+        "bcrd.xls.a.vieja"}
