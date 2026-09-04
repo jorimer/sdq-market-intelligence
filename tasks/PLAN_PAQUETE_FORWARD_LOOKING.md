@@ -506,12 +506,20 @@ T-VL-3. No bloquean T-PS.
 ## T-MP-4 · Sectorial — `forecasting/sectoral.py` (NUEVO)
 
 ### Pasos atómicos
-- [ ] **1.** Proyección de los 17 sectores con **restricción de agregación**: la suma ponderada reconcilia con el PIB agregado proyectado.
-- [ ] **2.** Método (proporciones con corrección de tendencia, o factor model) se decide **con la data en mano** y se documenta la elección con su evidencia.
-- [ ] **3.** Un sector con huecos o cambio de base **no se proyecta**: se declara brecha. 15 sectores honestos valen más que 17 con dos inventados.
+- [x] **1.** Proyección de los 17 sectores con **restricción de agregación**: la suma ponderada reconcilia con el PIB agregado proyectado. El sustrato NO es el cuadro de incidencias —que no cierra en el archivo del BCRD: `VA+impuestos−PIB` nunca da cero, |d| medio 0,22 pp y máximo 1,29, y `Σ(3 grupos)−VA` da −1,945 en 2021-Q4— sino el **cuadro nominal**, donde `17 actividades + impuestos = PIB` da error **0,000000000** en los 33 trimestres.
+- [x] **2.** Método elegido **con la data en mano**: persistencia encogida (λ=0,7, re-elegida en cada ventana) más reconciliación proporcional al peso. RMSE **3,07 pp** contra **4,45** de la proporción pura, **+31,2 %**. La regresión sobre el agregado —el «factor model» con factor observado— NO le gana a la proporción pura ni con el agregado realizado a la vista.
+- [x] **3.** Un sector con huecos **no se proyecta**: se declara brecha, y la brecha viaja hasta la salida.
 
 ### Sensor T-MP-4
-- [ ] Reconciliación exacta; sectores no proyectables declarados.
+- [x] Reconciliación exacta (`Σ wᵢ·gᵢ == g_PIB`, test con `abs=1e-12`); sectores no proyectables declarados.
+- [x] La partición 17+impuestos=PIB se **comprueba en el dato en cada llamada**, no se supone.
+- [x] `verificar_componentes` delata un código movido: ocho de las 18×2 series dependen de una partición del spec interpretado y su pérdida sería silenciosa.
+
+> **Límite declarado, no escondido.** Con índices encadenados la agregación exacta contra el
+> PIB *publicado* es imposible: reconstruirlo desde las 17 actividades con pesos nominales
+> deja 0,149 pp de error medio (máx 0,63) — **más ajustado que el propio cuadro de
+> incidencias del BCRD** (0,22 / 1,29). La reconciliación es exacta contra el agregado que
+> publicamos, y esa distancia va a la metodología.
 
 ---
 
