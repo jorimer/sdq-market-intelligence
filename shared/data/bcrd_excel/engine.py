@@ -12,6 +12,7 @@ import json
 import logging
 import re
 from dataclasses import dataclass, replace
+from functools import lru_cache
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
@@ -140,6 +141,32 @@ _AMBIGUOUS = re.compile(r"^(?P<base>.+)_r(?P<row>\d+)$")
 _SUFIJO_ACUMULADO = "_acumulado"
 
 
+#: Los nombres que el modelo le dio a las filas ambiguas, CONGELADOS en el paquete. Se lee
+#: una vez por proceso.
+_NOMBRES_CONGELADOS_PATH = Path(__file__).parent / "nombres_semanticos.json"
+
+
+@lru_cache(maxsize=1)
+def _mapa_congelado() -> Dict[str, Dict[int, str]]:
+    try:
+        doc = json.loads(_NOMBRES_CONGELADOS_PATH.read_text(encoding="utf-8"))
+    except (OSError, ValueError):  # pragma: no cover — el paquete lo trae
+        return {}
+    return {hoja: {int(f): n for f, n in filas.items()}
+            for hoja, filas in doc.get("nombres", {}).items()}
+
+
+def _nombres_congelados(structure_hash: str) -> Dict[int, str]:
+    """Los nombres FIJOS de esa hoja: se decidieron una vez y no se vuelven a preguntar.
+
+    El `series_code` que sale de acá es un contrato —se persiste, se cita, la Data API lo
+    sirve— y el nombre lo produce un modelo, que no da la misma respuesta dos veces. Mientras
+    el mapa vivió solo en `data/` (gitignored, y en Railway el filesystem del contenedor, que
+    cada deploy borra), 40 de 2.103 series cambiaron de código en una sola corrida.
+    """
+    return dict(_mapa_congelado().get(structure_hash, {}))
+
+
 def _pegar_sin_repetir(head: str, slug: str) -> str:
     """Une la cabeza de un código con el nombre propuesto sin repetir la ruta común.
 
@@ -183,6 +210,10 @@ def _resolve_ambiguous_names(wb: Workbook, spec: ExtractionSpec, records: List[R
     cache_key = wb.structure_hash()
     cached = cache.get_names(cache_key) if cache is not None else None
     named: Dict[int, str] = {int(k): v for k, v in (cached or {}).items()}
+    # Lo CONGELADO manda sobre la caché local: si el modelo dijo otra cosa esta vez, la que
+    # vale es la que está comiteada. Si ganara la respuesta nueva, congelarla no serviría
+    # para nada — que es exactamente lo que pasaba cuando el mapa vivía en `data/`.
+    named.update(_nombres_congelados(cache_key))
     # La caché es PARCIAL, no todo-o-nada. Leerla como "si hay entrada, ya está" dejaba sin
     # nombre —para siempre, sin error y sin aviso— a toda fila ambigua que apareciera
     # después de la primera corrida; y vetada al escribir, por no nombrar su sujeto. Se
@@ -195,6 +226,13 @@ def _resolve_ambiguous_names(wb: Workbook, spec: ExtractionSpec, records: List[R
                 named.update(nuevos)
                 if cache is not None:
                     cache.set_names(cache_key, {str(k): v for k, v in named.items()})
+                # Se AVISA: hasta que se congelen, esos nombres pueden moverse en el
+                # próximo deploy y con ellos el código de la serie.
+                logger.warning(
+                    "[bcrd_excel] %d fila(s) de %s nombradas por el modelo y NO congeladas "
+                    "(hoja %s). Correr `scripts/congelar_nombres_semanticos.py` y comitear: "
+                    "hasta entonces su series_code puede cambiar en el próximo despliegue.",
+                    len(nuevos), spec.file, cache_key)
         except Exception as e:  # noqa: BLE001 — nombrar nunca puede costar la ingesta
             logger.warning("[bcrd_excel] nombrado semántico no aplicado a %s: %s",
                            spec.file, e)
