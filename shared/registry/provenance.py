@@ -28,6 +28,7 @@ from shared.registry.signals import (
     COVERAGE_INSTRUMENT,
     GAP,
     NATIONAL,
+    PROJECTED,
     REAL,
     RUBRIC,
     AxisRegistry,
@@ -137,6 +138,65 @@ def partial_coverage_sentence(axis: AxisRegistry) -> str:
             f"ausente en vez de rellenarse.")
 
 
+def projection_sentence(axis: Optional[AxisRegistry]) -> str:
+    """Lo que hay que decir de una proyección para que el lector pueda juzgarla.
+
+    Cuatro elementos, y ninguno es opcional:
+
+    * el **error** del backtest, EN LA MISMA FRASE que la proyección. Enterrarlo en una
+      sección de limitaciones al final es la práctica que esta plataforma existe para no
+      repetir: quien lee la cifra y sigue leyendo ya se formó la idea.
+    * la **calibración empírica** del intervalo. Un intervalo del 80% que acierta el 45% de
+      las veces engaña a quien dimensiona riesgo con él, por bajo que sea el RMSE.
+    * el **solapamiento**, cuando existe. Un `n` grande sugiere una precisión que ventanas
+      correlacionadas no sostienen. Cuando no se solapan, la cláusula se OMITE — escribir
+      «no se solapan» es ruido.
+    * el **corte de información**, que es lo que separa un pronóstico de un ajuste hecho con
+      datos que entonces no se tenían.
+
+    Solo se narra lo que ANCLA: una proyección que el gate rechaza no se cuenta a medias.
+    """
+    from shared.registry.projection import projection_is_admissible
+
+    if axis is None or not axis.signals:
+        return ""
+    frases: List[str] = []
+    for s in axis.signals:
+        if s.state != PROJECTED or s.projection is None:
+            continue
+        m = s.projection
+        ok, _motivo = projection_is_admissible(m)
+        if not ok:
+            continue
+        nivel, lo, hi = sorted(m.intervals, key=lambda i: i[0])[0]
+        partes = [
+            f"La proyección de {s.label or s.key} para {m.horizon} sale del modelo "
+            f"{m.model_id}, con intervalo de {_pct(nivel)} entre {lo} y {hi}."
+        ]
+        cobertura = {lv: (cob, n) for lv, cob, n in m.interval_coverage}
+        if nivel in cobertura:
+            cob, _n = cobertura[nivel]
+            partes.append(
+                f"Ese modelo erró en promedio {m.oos_error} "
+                f"({m.error_metric.upper()}) en {m.n_oos} períodos fuera de muestra, y su "
+                f"intervalo de {_pct(nivel)} contuvo al dato observado en {_pct(cob)} de "
+                f"esos casos."
+            )
+        else:
+            partes.append(f"Ese modelo erró en promedio {m.oos_error} "
+                          f"({m.error_metric.upper()}) en {m.n_oos} períodos fuera de "
+                          f"muestra.")
+        if m.n_oos_overlapping:
+            partes.append(
+                f"Las ventanas de evaluación se solapan, así que esos {m.n_oos} períodos "
+                f"no son {m.n_oos} observaciones independientes."
+            )
+        partes.append(f"La estimación usa información disponible al {m.as_of} y no "
+                      f"incorpora nada posterior.")
+        frases.append(" ".join(partes))
+    return " ".join(frases)
+
+
 def provenance_paragraph(axis: Optional[AxisRegistry]) -> str:
     """El párrafo completo de procedencia del eje, listo para la sección de Metodología.
 
@@ -152,6 +212,9 @@ def provenance_paragraph(axis: Optional[AxisRegistry]) -> str:
         coverage_sentence(axis),
         partial_coverage_sentence(axis),
         scope_sentence(axis),
+        # La proyección va ANTES de los límites: su error viaja en su propia frase, no en la
+        # sección donde se guardan las salvedades.
+        projection_sentence(axis),
         limits_sentence(axis),
     ]
     return " ".join(p for p in parts if p)

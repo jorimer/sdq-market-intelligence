@@ -844,9 +844,9 @@ de reporte, no un arreglo de bug. El plan ya lo dice y se confirma.
       tupla no vacía es siempre truthy, y retornarla directo ancla TODA proyección, que es lo
       contrario de lo que el bloque existe para lograr—. Cableado en tres puntos, ninguno en
       `_evidence_state`.
-- [ ] **T-PP-5 · Prosa.** El error va en la MISMA frase que la proyección, nunca en
+- [x] **T-PP-5 · Prosa.** El error va en la MISMA frase que la proyección, nunca en
       limitaciones al final.
-- [ ] **T-PP-6 · Cerebro y API.** Cuarto párrafo del `EPISTEMIC_STANDARD` en el núcleo (es
+- [x] **T-PP-6 · Cerebro y API.** Cuarto párrafo del `EPISTEMIC_STANDARD` en el núcleo (es
       regla de la casa, no de macro) y `quality` aditivo. Grepear `by_state` en `frontend/`.
 
 ### Cómo lo voy a partir en PRs
@@ -908,3 +908,20 @@ brecha, no una alternativa al dato.
 —«¿Cuánto va a crecer el PIB en 2026?»— NO la reconoce `is_forward_looking`, así que los
 cuatro casos pasaban sin ejercitar nada. Con una que sí reconoce («¿Cuál es la proyección
 del PIB para 2026?»), dos fallaron contra el código viejo, que es lo que tenían que hacer.
+
+
+### PR 3 del bloque PP — T-PP-5 y T-PP-6, y el bloque cierra
+`projection_sentence` con sus cuatro elementos: error, calibración empírica del intervalo,
+solapamiento CUANDO EXISTE —si no, la cláusula se omite; «no se solapan» es ruido— y corte
+de información. El error va en la misma frase que la proyección, no en limitaciones al
+final: enterrarlo en el apéndice es la práctica que la plataforma existe para no repetir.
+
+Solo se narra lo que ANCLA: una proyección que el gate rechaza no se cuenta a medias.
+
+El cuarto párrafo del `EPISTEMIC_STANDARD` va en el NÚCLEO, con un test que verifica que no
+se coló en la doctrina de ningún eje — si viviera por eje, el primer eje nuevo que emita
+proyecciones nacería sin la regla. Y `coverage_projected` en el bloque `quality` de la Data
+API, al lado de la real y nunca sumada.
+
+**BLOQUE PP cerrado.** Lo que sigue es MP, el motor, que tiene como precondición dura este
+bloque y el de persistencia — los dos ya están.

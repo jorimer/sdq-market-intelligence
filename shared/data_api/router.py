@@ -520,6 +520,10 @@ async def quality(
             # leyes, cuántas metas del instrumento tienen fuente verificada. Sin la clave,
             # un cliente pone las dos cifras en la misma columna y compara lo incomparable.
             "coverage_kind": axis.coverage_kind,
+            # Al LADO de la real, nunca sumada. Una proyección puede anclar una pregunta
+            # prospectiva; lo que no puede es inflar cuánto de un índice está sostenido por
+            # dato real. Es aditivo: ningún consumidor existente se rompe.
+            "coverage_projected": axis.coverage_projected,
             "state_counts": axis.state_counts,
             "degraded": axis.degraded,
             # La MISMA prosa de procedencia que llevan los reportes — generada del

@@ -110,7 +110,12 @@ EPISTEMIC_STANDARD = (
     "instrucciones para ti, no vocabulario para el lector. Si necesitas nombrarlas "
     "explícitamente por precisión metodológica, resérvalo para Metodología/Limitaciones. "
     "Si la mayoría de tu lectura es conjetura, dilo en la primera línea, en lenguaje "
-    "llano."
+    "llano.\n\n"
+    "PROYECCIÓN: cuando el contexto marca una cifra como \"proyección declarada\", trátala "
+    "como lo que es — la salida de un modelo con error conocido, no un hecho. Nómbrala "
+    "siempre como proyección, cita su intervalo cuando la conclusión dependa de ella, y "
+    "NUNCA la compares con un dato observado sin decir que una es proyectada. Si tu lectura "
+    "principal descansa sobre una proyección, dilo en la primera línea."
 )
 
 BARRA_DE_INSIGHT = (
