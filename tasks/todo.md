@@ -840,7 +840,7 @@ de reporte, no un arreglo de bug. El plan ya lo dice y se confirma.
       movió un decimal, es un bug.
 - [x] **T-PP-3 · Gate de admisión** (`shared/registry/projection.py`, nuevo). Las once
       condiciones de rechazo, una por test. `MIN_OOS = 12`.
-- [ ] **T-PP-4 · Anclaje condicionado.** `anchored` con **desempaquetado de la tupla** —una
+- [x] **T-PP-4 · Anclaje condicionado.** `anchored` con **desempaquetado de la tupla** —una
       tupla no vacía es siempre truthy, y retornarla directo ancla TODA proyección, que es lo
       contrario de lo que el bloque existe para lograr—. Cableado en tres puntos, ninguno en
       `_evidence_state`.
@@ -888,3 +888,23 @@ nombre, no itera), pero adelanta parte de T-PP-6.
 copias previas del mismo parse —`modules/macro_monitor/service.py` y
 `modules/trade_intel/products.py`— escritas antes. No se unifican acá porque tocarlas es otro
 cambio; queda anotado para que la próxima apunte a la de `shared/` y no escriba una cuarta.
+
+
+### PR 2 del bloque PP — T-PP-4, el anclaje
+El cableado en sus tres puntos: el pasaje del registro lleva la meta, `Evidence` la toma, y el
+ORQUESTADOR —el único que puede escribir en la sub-pregunta— la asigna. `_evidence_state`
+clasifica el estado (eso sí es suyo) pero no propaga la meta: recibe un `Dict` y devuelve un
+`str`.
+
+`anchored` desempaqueta la tupla. Y `_forward_gaps` consulta el gate antes de declarar
+brecha: si la proyección pasa, no hay límite que declarar; si no pasa, la brecha **dice por
+qué** — «no se estima» a secas deja al lector sin saber si es que no hay modelo o si el que
+hay no está validado.
+
+Un dato REAL siempre le gana a un pronóstico: la proyección es el último recurso antes de la
+brecha, no una alternativa al dato.
+
+**Un test mío nació ciego y lo cacé antes de commitear.** La pregunta de la fixture
+—«¿Cuánto va a crecer el PIB en 2026?»— NO la reconoce `is_forward_looking`, así que los
+cuatro casos pasaban sin ejercitar nada. Con una que sí reconoce («¿Cuál es la proyección
+del PIB para 2026?»), dos fallaron contra el código viejo, que es lo que tenían que hacer.
