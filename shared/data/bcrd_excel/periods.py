@@ -68,12 +68,17 @@ def parse_month(value: Any) -> Optional[int]:
 _QUARTERS_ACUMULADOS: dict[str, int] = {
     "e-j": 2, "e-s": 3, "e-d": 4,
     "ene-jun": 2, "ene-sep": 3, "ene-dic": 4,
+    "enero-junio": 2, "enero-septiembre": 3, "enero-diciembre": 4,
 }
 
 _QUARTERS: dict[str, int] = {
     **_QUARTERS_ACUMULADOS,
     "e-m": 1, "a-j": 2, "j-s": 3, "o-d": 4,
     "ene-mar": 1, "abr-jun": 2, "jul-sep": 3, "oct-dic": 4,
+    # Con los meses COMPLETOS: así rotula el tipo de cambio sus cortes trimestrales
+    # (`Enero-Marzo`, `Abril-Junio`). Estaban solo las formas abreviadas, y sin trimestre
+    # las cuatro filas de cada año colapsaban en el año — 367 valores en conflicto.
+    "enero-marzo": 1, "abril-junio": 2, "julio-septiembre": 3, "octubre-diciembre": 4,
     "ene-marzo": 1, "i": 1, "ii": 2, "iii": 3, "iv": 4,
     "t1": 1, "t2": 2, "t3": 3, "t4": 4,
     "1t": 1, "2t": 2, "3t": 3, "4t": 4,
@@ -123,8 +128,17 @@ def parse_year(value: Any) -> Optional[int]:
     return y if 1900 <= y <= 2100 else None
 
 
-def format_period(year: int, month: Optional[int], quarter: Optional[int] = None) -> str:
-    """``(2007, 5) → "2007-05"``; ``(2007, None, 2) → "2007-Q2"``; ``(2007, None) → "2007"``."""
+def format_period(year: int, month: Optional[int], quarter: Optional[int] = None,
+                  day: Optional[int] = None) -> str:
+    """``(2007, 5) → "2007-05"``; ``(2007, None, 2) → "2007-Q2"``; ``(2007, None) → "2007"``;
+    ``(2007, 5, day=9) → "2007-05-09"``.
+
+    El DÍA es la cuarta forma de período de la plataforma. Existe porque el tipo de cambio se
+    publica diario: sin día, los ~22 días hábiles de un mes colapsaban en `YYYY-MM` y el
+    upsert dejaba uno arbitrario — 19.680 valores en conflicto en un solo archivo.
+    """
+    if month is not None and day is not None:
+        return f"{int(year):04d}-{int(month):02d}-{int(day):02d}"
     if month is not None:
         return f"{int(year):04d}-{int(month):02d}"
     if quarter is not None:

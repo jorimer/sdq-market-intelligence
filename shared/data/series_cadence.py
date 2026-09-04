@@ -32,15 +32,19 @@ no la columna.
 from __future__ import annotations
 
 import re
+from datetime import date
 from typing import Optional
 
 #: Las tres cadencias que la plataforma persiste, más la respuesta honesta.
 ANUAL = "annual"
 TRIMESTRAL = "quarterly"
 MENSUAL = "monthly"
+#: El tipo de cambio se publica DIARIO. Sin esta cadencia el período no tenía día, los ~22
+#: días hábiles de un mes colapsaban en `YYYY-MM` y sobrevivía uno arbitrario.
+DIARIA = "daily"
 DESCONOCIDA = "unknown"
 
-CADENCIAS = (ANUAL, TRIMESTRAL, MENSUAL)
+CADENCIAS = (ANUAL, TRIMESTRAL, MENSUAL, DIARIA)
 
 #: Cómo se dice cada una en el registro canónico, que está en español porque es la
 #: superficie de documentación. La traducción vive acá —en un solo lugar— y no en cada
@@ -49,20 +53,29 @@ DESDE_ESPANOL = {
     "mensual": MENSUAL,
     "trimestral": TRIMESTRAL,
     "anual": ANUAL,
-    "diaria": DESCONOCIDA,   # una serie diaria NO entra en (series_code, period) mensual
+    "diaria": DIARIA,
 }
 
 _ANUAL = re.compile(r"\d{4}")
 _TRIMESTRAL = re.compile(r"\d{4}-Q[1-4]", re.IGNORECASE)
 _MENSUAL = re.compile(r"\d{4}-\d{2}")
+_DIARIA = re.compile(r"\d{4}-\d{2}-\d{2}")
 
 
 def cadencia_de_periodo(period: str) -> str:
     """Cadencia que declara la ETIQUETA del período. ``unknown`` si no la reconoce.
 
-    ``"2025"`` → annual · ``"2025-Q1"`` → quarterly · ``"2025-01"`` → monthly.
+    ``"2025"`` → annual · ``"2025-Q1"`` → quarterly · ``"2025-01"`` → monthly ·
+    ``"2025-01-09"`` → daily.
     """
     p = (period or "").strip()
+    if _DIARIA.fullmatch(p):
+        # Un día que no existe (2026-02-31) no es una cadencia: es un parse roto.
+        try:
+            date.fromisoformat(p)
+        except ValueError:
+            return DESCONOCIDA
+        return DIARIA
     if _TRIMESTRAL.fullmatch(p):
         return TRIMESTRAL
     if _MENSUAL.fullmatch(p):

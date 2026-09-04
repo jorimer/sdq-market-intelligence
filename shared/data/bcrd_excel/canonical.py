@@ -519,9 +519,6 @@ REGISTRY: List[CanonicalSeries] = [
 # motivo se vuelve permanente por inercia y nadie recuerda qué había que arreglar para
 # sacarla. Lo que falta para levantar cada exclusión:
 #
-#   TASA_DOLAR_REFERENCIA_MC.xlsx — 20.047 empates. Es una serie DIARIA y la identidad de una
-#       observación es (series_code, period) con el período en meses: los ~30 días del mes
-#       colapsan y sobrevive uno arbitrario. Necesita una decisión de diseño, no un parche.
 #   lleg_total.xls  — 4.555 empates en las columnas de tasa de crecimiento.
 #   piianual_6.xlsx — 2.970 empates: filas distintas del cuadro colapsan en un mismo código
 #   piianual.xls    — 1.855 empates, mismo motivo. Necesitan que el código lleve su sujeto.
@@ -556,6 +553,14 @@ PERSISTIBLES_VERIFICADOS: Dict[str, Optional[List[str]]] = {
     # habilita sola sin que alguien la mire.
     "pib_origen_2018.xlsx": ["PIB$_Trim", "PIBK_Trim",
                              "PIB$_Trim_Acum", "PIBK_Trim_Acum"],
+    # El tipo de cambio, con sus SIETE cortes. Tenía dos defectos distintos y los dos eran
+    # del parser: la hoja `Diaria` es una serie diaria de verdad —`Año | Mes | Día`— y el
+    # período no tenía día, así que los ~22 días hábiles de cada mes colapsaban; y los cortes
+    # trimestrales rotulan el trimestre con los meses completos (`Enero-Marzo`), grafía que
+    # el mapa no tenía. Con las dos cosas corregidas, las siete hojas dan 0 duplicados con
+    # valores en conflicto.
+    "TASA_DOLAR_REFERENCIA_MC.xlsx": ["Diaria", "PromMensual", "PromTrimestral", "PromAnual",
+                                      "FPMensual", "FPTrimestral", "FPAnual"],
 }
 
 

@@ -869,12 +869,21 @@ _Q_START = {1: (1, 1), 2: (4, 1), 3: (7, 1), 4: (10, 1)}
 def period_end_date(period: Optional[str]) -> Optional[date]:
     """Date a period label CLOSES on, for chronological ordering.
 
-    Handles ``YYYY``, ``YYYY-MM`` and ``YYYY-Qn`` (case-insensitive). Returns
-    None when unparseable, so callers can decide how to treat it.
+    Handles ``YYYY``, ``YYYY-MM``, ``YYYY-Qn`` (case-insensitive) and ``YYYY-MM-DD``.
+    Returns None when unparseable, so callers can decide how to treat it.
+
+    El DÍA se resuelve PRIMERO: `2026-03-07` también empieza con algo que parece `YYYY-MM`,
+    y sin este orden un día se ordenaría como si fuera el mes entero.
     """
     if not period:
         return None
     p = period.strip().upper()
+    m = re.fullmatch(r"(\d{4})-(\d{2})-(\d{2})", p)
+    if m:
+        try:
+            return date(int(m.group(1)), int(m.group(2)), int(m.group(3)))
+        except ValueError:
+            return None
     m = re.fullmatch(r"(\d{4})", p)
     if m:
         return date(int(m.group(1)), 12, 31)
@@ -892,10 +901,19 @@ def period_end_date(period: Optional[str]) -> Optional[date]:
 
 def period_start_date(period: Optional[str]) -> Optional[date]:
     """Date a period label STARTS on. A period is "future" iff its start > today
-    (so the current, in-progress period is kept; only genuinely-future ones drop)."""
+    (so the current, in-progress period is kept; only genuinely-future ones drop).
+
+    Un día empieza y termina el mismo día; el orden de las ramas importa por lo mismo que en
+    :func:`period_end_date`."""
     if not period:
         return None
     p = period.strip().upper()
+    m = re.fullmatch(r"(\d{4})-(\d{2})-(\d{2})", p)
+    if m:
+        try:
+            return date(int(m.group(1)), int(m.group(2)), int(m.group(3)))
+        except ValueError:
+            return None
     m = re.fullmatch(r"(\d{4})", p)
     if m:
         return date(int(m.group(1)), 1, 1)
@@ -1248,7 +1266,9 @@ def _infer_frequency(periods: List[str]) -> str:
     kinds = set()
     for p in periods:
         p = (p or "").strip()
-        if re.fullmatch(r"\d{4}", p):
+        if re.fullmatch(r"\d{4}-\d{2}-\d{2}", p):
+            kinds.add("daily")
+        elif re.fullmatch(r"\d{4}", p):
             kinds.add("annual")
         elif re.fullmatch(r"\d{4}-Q[1-4]", p, re.IGNORECASE):
             kinds.add("quarterly")

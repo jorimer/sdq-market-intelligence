@@ -56,6 +56,9 @@ class ExtractionSpec:
     # ── period_rows ──────────────────────────────────────────────
     month_col: Optional[int] = None
     year_col: Optional[int] = None
+    #: Columna del DÍA, cuando la planilla publica una serie diaria (`Año | Mes | Día`).
+    #: Sin ella los ~22 días hábiles de un mes colapsaban en `YYYY-MM`.
+    day_col: Optional[int] = None
     subtotal_year_regex: Optional[str] = None
     series: List[SeriesSpec] = field(default_factory=list)
 

@@ -116,6 +116,13 @@ def _extract_period_rows(grid: Grid, spec: ExtractionSpec, lineage: Lineage,
     def emit(year: int, sub: Optional[tuple], r: int) -> None:
         if sub and sub[0] == "Q":
             period = format_period(year, None, sub[1])
+        elif sub and sub[0] == "M" and spec.day_col is not None:
+            # Serie DIARIA: la planilla trae `Año | Mes | Día` y el día es parte del
+            # período, no una medición. Sin esto los días de un mes colapsan en `YYYY-MM`
+            # y el upsert deja uno arbitrario.
+            dia = coerce_num(grid.cell(r, spec.day_col))
+            period = (format_period(year, sub[1], day=int(dia)) if dia is not None
+                      else format_period(year, sub[1]))
         else:
             period = format_period(year, sub[1] if sub else None)
         for s in series:
