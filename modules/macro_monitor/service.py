@@ -1222,6 +1222,32 @@ def get_series(db: Session, series_code: str) -> Dict[str, Any]:
 _MINIMO_DE_LO_NUEVO_YA_PRESENTE = 0.5
 
 
+def huerfanas_podables(en_destino: Set[str], produce_el_motor: Set[str],
+                       antes_de_sincronizar: Set[str], prefijo: str = "bcrd.xls.") -> Set[str]:
+    """Qué códigos del destino se pueden podar, y por qué solo esos.
+
+    Huérfano es un código que el motor ya no produce. Pero «lo que el motor produce» no se
+    puede leer desde acá y creerle: el nombrado de las filas ambiguas lo resuelve el MODELO,
+    y en producción puede rotular la misma fila distinto que en el entorno donde se corre
+    esta poda. Medido el 2026-09-04: 53 códigos —del PIB por origen, las llegadas y la
+    balanza de pagos— salieron con nombres distintos en los dos entornos. Compararlos contra
+    el motor local y nada más los marcaba como huérfanos, y son series recién escritas.
+
+    La regla que lo cierra es observable y no depende del modelo: **un código que no estaba
+    en el destino ANTES de la sincronización, lo escribió la sincronización**. Por eso la
+    poda se restringe a lo que ya estaba.
+
+    Queda un residuo declarado: un código viejo que la sincronización SÍ reescribió pero que
+    el motor local nombra distinto se podaría de más. Vuelve en la sincronización siguiente
+    —la poda no borra la fuente, solo la copia—, y por eso el protocolo es podar, volver a
+    sincronizar y comprobar qué reapareció.
+    """
+    return {s for s in en_destino
+            if s.startswith(prefijo)
+            and s not in produce_el_motor
+            and s in antes_de_sincronizar}
+
+
 def por_que_no_podar(vivos: Set[str], en_destino: Set[str]) -> str:
     """Motivo por el que NO se debe podar ahora, o cadena vacía si se puede.
 
