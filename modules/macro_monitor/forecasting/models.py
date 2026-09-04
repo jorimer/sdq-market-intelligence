@@ -44,6 +44,15 @@ class ForecastLog(UUIDMixin, Base):
     model_id = Column(String(80), nullable=False, index=True)
     target_series = Column(String(255), nullable=False, index=True)
     horizon = Column(String(16), nullable=False)          # "2026-Q4"
+    #: Horizonte RELATIVO en trimestres (1 = el próximo). Es la clave del CONJUNTO sobre el
+    #: que se computa el track record, y la distinción no es cosmética: con el trimestre
+    #: calendario como clave, cada conjunto tiene una sola observación y `n_oos` nunca llega
+    #: al mínimo del gate — medido, tres años de operación perfecta dan n_oos = 1. La
+    #: pregunta que el track record responde es «¿qué tan bien pronosticamos a UN trimestre
+    #: vista?», y eso se acumula A LO LARGO de los trimestres.
+    #: Nullable porque las filas anteriores a la migración no lo tienen; `track_record` las
+    #: excluye en vez de adivinarles un horizonte.
+    h = Column(Integer, nullable=True, index=True)
     as_of = Column(String(10), nullable=False)            # corte point-in-time
     revision = Column(Integer, nullable=False, default=0)  # 0 = como se publicó
 

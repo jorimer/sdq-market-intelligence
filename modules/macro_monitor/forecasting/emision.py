@@ -85,11 +85,17 @@ def _es_hacia_adelante(horizonte: str, corte: date) -> bool:
 
 
 def _escribir(db: Session, *, model_id: str, horizonte: str, as_of: str, punto: float,
-              intervalos: List[List[float]], objetivo: str = OBJETIVO) -> Optional[bool]:
-    """``True`` escrito · ``False`` duplicado · ``None`` no se pudo."""
+              intervalos: List[List[float]], objetivo: str = OBJETIVO,
+              h: Optional[int] = None) -> Optional[bool]:
+    """``True`` escrito · ``False`` duplicado · ``None`` no se pudo.
+
+    *h* es el horizonte RELATIVO, y es lo que hace comparable a esta fila con las de otros
+    trimestres. Sin él la fila queda fuera de todo conjunto de track record — a propósito:
+    inventarle un horizonte sería fabricarle historial.
+    """
     try:
         ledger.registrar(db, model_id=model_id, target_series=objetivo, horizon=horizonte,
-                         as_of=as_of, point=punto, intervals=intervalos)
+                         as_of=as_of, point=punto, intervals=intervalos, h=h)
         return True
     except IntegrityError:
         db.rollback()
@@ -122,9 +128,11 @@ def emitir(db: Session, *, as_of: Optional[date] = None) -> Emision:
             motivos.append(f"nowcast m{variante} {est.horizon}: el período ya había cerrado "
                            f"al corte {iso}; no se registra")
             continue
+        # El nowcast apunta al trimestre EN CURSO: su horizonte relativo es 0, y la variante
+        # (cuántos meses de IMAE vio) ya viaja en `model_id`, así que m1 y m2 no se mezclan.
         r = _escribir(db, model_id=est.model_id, horizonte=est.horizon, as_of=iso,
                       punto=est.point, intervalos=[list(t) for t in est.intervals],
-                      objetivo=est.target_series)
+                      objetivo=est.target_series, h=0)
         escritos += 1 if r is True else 0
         omitidos += 1 if r is False else 0
         if r is None:
@@ -153,7 +161,7 @@ def emitir(db: Session, *, as_of: Optional[date] = None) -> Emision:
                 continue
             r = _escribir(db, model_id=p.model_id, horizonte=p.horizonte, as_of=iso,
                           punto=p.punto, intervalos=[list(t) for t in p.intervalos],
-                          objetivo=p.target_series)
+                          objetivo=p.target_series, h=p.h)
             escritos += 1 if r is True else 0
             omitidos += 1 if r is False else 0
             if r is None:

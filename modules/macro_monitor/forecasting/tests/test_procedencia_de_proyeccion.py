@@ -47,17 +47,24 @@ def db():
     s.close()
 
 
-def _emitir(db, horizonte="2027-Q1", as_of="2026-09-01", revision=0, punto=3.1):
+def _emitir(db, horizonte="2027-Q1", as_of="2026-09-01", revision=0, punto=3.1, h=1):
     return led.registrar(db, model_id=MODELO, target_series=SERIE, horizon=horizonte,
-                         as_of=as_of, point=punto, intervals=INTERVALOS, revision=revision)
+                         as_of=as_of, point=punto, intervals=INTERVALOS, revision=revision,
+                         h=h)
 
 
-def _puntuar(db, n, horizonte="2026-Q1"):
-    """`n` pronósticos ya puntuados bajo el mismo `backtest_id`, para darle backtest."""
+def _puntuar(db, n, horizonte=None):
+    """`n` pronósticos ya puntuados bajo el mismo `backtest_id`, para darle backtest.
+
+    Cada uno apunta a un trimestre CALENDARIO distinto, porque así es como se acumula un
+    track record: un trimestre se pronostica una sola vez a cada distancia. Lo que los hace
+    un conjunto es el horizonte RELATIVO, que es el mismo para todos.
+    """
     for i in range(n):
-        f = led.registrar(db, model_id=MODELO, target_series=SERIE, horizon=horizonte,
+        objetivo = horizonte or f"{2020 + i // 4}-Q{(i % 4) + 1}"
+        f = led.registrar(db, model_id=MODELO, target_series=SERIE, horizon=objetivo,
                           as_of=f"2020-{(i % 12) + 1:02d}-01", point=3.0,
-                          intervals=INTERVALOS)
+                          intervals=INTERVALOS, h=1)
         f.status, f.realized, f.abs_error, f.sq_error = "scored", 3.2, 0.2, 0.04
         f.interval_hit_80, f.interval_hit_90 = True, True
         f.realized_period_end = date(2026, 3, 31)
@@ -74,7 +81,9 @@ def test_la_meta_sale_del_ledger_campo_por_campo(db):
         MODELO, SERIE, "2027-Q1", "2026-09-01", 0)
     assert m.point == pytest.approx(3.1)
     assert m.intervals == ((0.80, 2.1, 4.1), (0.90, 1.6, 4.6))
-    assert m.backtest_id == led.backtest_id(MODELO, SERIE, "2027-Q1")
+    # RELATIVO: el conjunto son los pronósticos a la misma distancia, no los de un
+    # trimestre concreto — que sería uno solo y nunca alcanzaría el mínimo del gate.
+    assert m.backtest_id == led.backtest_id(MODELO, SERIE, 1)
 
 
 def test_sin_filas_puntuadas_la_meta_sale_con_n_oos_cero_y_el_gate_la_rechaza(db):
@@ -86,7 +95,7 @@ def test_sin_filas_puntuadas_la_meta_sale_con_n_oos_cero_y_el_gate_la_rechaza(db
 
 
 def test_con_backtest_suficiente_la_proyeccion_es_admisible(db):
-    _puntuar(db, MIN_OOS, horizonte="2027-Q1")
+    _puntuar(db, MIN_OOS)
     m = proc.meta_de(db, _emitir(db))
     assert m.n_oos == MIN_OOS
     assert m.error_metric == "rmse"

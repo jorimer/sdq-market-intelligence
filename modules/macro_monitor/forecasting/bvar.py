@@ -293,7 +293,10 @@ class ProyeccionBVAR:
             Pronostico(h=k + 1, horizonte=self.horizontes[k], punto=self.puntos[k],
                        intervalos=self.intervalos[k], model_id=self.model_id,
                        target_series=self.target,
-                       backtest_id=f"{self._backtest_id()}|{self.horizontes[k]}")
+                       # RELATIVO (`+1T`), no el trimestre calendario: el conjunto que
+                       # sostiene el error son los pronósticos a la misma distancia, no los
+                       # de un trimestre concreto — que serían uno solo.
+                       backtest_id=f"{self._backtest_id()}|+{k + 1}T")
             for k in range(min(HORIZONTES_CON_TRACK_RECORD, len(self.horizontes)))
         ]
 
