@@ -687,6 +687,44 @@ UNIDADES_CURADAS: Dict[str, tuple] = {
 }
 
 
+#: Escalas CURADAS: los archivos que guardan una tasa como FRACCIÓN mientras su encabezado
+#: dice porcentaje. Excel almacena una celda con formato de porcentaje como la fracción
+#: —0,0525 se muestra «5,25%» pero el valor guardado es 0,0525— y el extractor lee el valor
+#: crudo, así que el formato se pierde.
+#:
+#: Multiplicar valores es más peligroso que corregir una etiqueta, así que cada entrada trae
+#: TRES cosas: el factor, un TOPE por encima del cual no se aplica —el freno que impide
+#: volver a multiplicar si algún día la fuente republica ya en porcentaje— y la evidencia.
+#:
+#: Clave: prefijo del código. Valor: (factor, tope, evidencia).
+ESCALAS_CURADAS: Dict[str, tuple] = {
+    "bcrd.xls.serie_tpm.": (
+        100.0, 1.5,
+        "El archivo se titula «En % anual» y guarda fracciones. Verificado por tres caminos: "
+        "en 2026-07 la TPM se persistía como 0,0525 mientras la tasa pasiva promedio del "
+        "sistema es 6,90% —una tasa de política de 0,05% con depósitos al 6,9% no existe, el "
+        "arbitraje la cerraría el mismo día—; la facilidad permanente de depósito, que es el "
+        "piso del corredor, venía como 0,045, en la misma escala, de modo que el corredor "
+        "solo es coherente a ×100; y el máximo de la serie es 0,5, que a ×100 da el 50% real "
+        "de la TPM dominicana tras la crisis de 2003-2004.",
+    ),
+}
+
+
+def escala_curada(series_code: str, valor: Optional[float]) -> Optional[float]:
+    """El valor con su escala corregida, o el mismo valor si no hay nada que corregir.
+
+    El TOPE no es cosmético: si el BCRD republica el archivo ya en porcentaje, volver a
+    multiplicar daría 525%. Una fracción de tasa vive por debajo del tope; un porcentaje, no.
+    """
+    if valor is None:
+        return None
+    for prefijo, (factor, tope, _evidencia) in ESCALAS_CURADAS.items():
+        if str(series_code).startswith(prefijo) and abs(float(valor)) < tope:
+            return float(valor) * factor
+    return valor
+
+
 def unidad_curada(series_code: str) -> Optional[str]:
     """La unidad verificada de una serie cuando el emisor rotuló mal, o ``None``."""
     for prefijo, (unidad, _evidencia) in UNIDADES_CURADAS.items():

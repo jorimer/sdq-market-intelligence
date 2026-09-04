@@ -969,8 +969,8 @@ construida, igual que ve el error del backtest en la misma frase.
       acuerde deja de correr el trimestre en que el resultado es malo.
 - [x] **T-MP-2 · Nowcast** (bridge IMAE→PIB). Le gana al random walk por +62,9% (m1) y
       +77,9% (m2). Y **`m3` dejó de ser una variante**: ver abajo.
-- [ ] **T-MP-3 · BVAR** con prior Minnesota por observaciones artificiales. Sin apoyo en la
-      regla de reacción de TPM (no hay panel).
+- [x] **T-MP-3 · BVAR** con prior Minnesota por observaciones artificiales. Sin apoyo en la
+      regla de reacción de TPM (no hay panel). Ver abajo el corte pronóstico/escenario.
 - [ ] **T-MP-4 · Sectorial** — se publica, con los 33 trimestres declarados en la metodología.
 - [ ] **T-MP-5 · Procedencia**: cablear `ProjectionMeta` del motor al registro. Es lo que
       enciende el trabajo del BLOQUE PP: hasta que esto exista, ninguna señal llega proyectada.
@@ -1082,3 +1082,30 @@ los tres tramos y no en el vigente dejaba la serie imposible de armar. Es el pon
 ahora se dice: las excepciones sin puente bajan de 15 a **13**.
 
 **El bloque del BVAR son 5 variables**, y el cuello de botella vuelve a ser el PIB.
+
+
+### T-MP-3 hecho — y el horizonte se corta en 2 trimestres
+
+Prior Minnesota por observaciones artificiales, sin dependencias nuevas. λ₁ = **0,3** por
+verosimilitud marginal (λ₂ = 1 fijo por el prior conjugado, λ₃ = 2), bloque de **5 variables ×
+75 trimestres**, 2007-Q2 → 2025-Q4.
+
+Los dos casos límite, que son la única defensa real de un álgebra que nadie audita línea por
+línea, pasaron **a la primera**: con λ₁ → 0 converge al random walk (propios → 1, cruzados →
+0) y con λ₁ → ∞ al OLS sin restringir. Y un tercero que agregué: la distancia al OLS decrece
+monótonamente al aflojar el prior — los dos extremos pueden dar bien y el medio estar roto.
+
+**Backtest, muestra completa: le gana al random walk en los 8 horizontes** (+18% a +37%), con
+cobertura del 80% en 79,4% a un trimestre — casi exactamente nominal.
+
+**Pero recortando la pandemia la película es otra:** h=1 +66,3% · h=2 +1,4% · h=3 +60,5% ·
+**h=4 −43,5%**. A cuatro trimestres el random walk gana, y esa alternancia con n≈20 es ruido,
+no estructura.
+
+**Decisión del dueño: 1-2 trimestres se publican como PRONÓSTICO** —entran al ledger, pueden
+anclar— **y de 3 en adelante son ESCENARIO**: se muestran con su banda, sin track record.
+
+El corte es estructural y no un comentario: `Escenario` **no tiene `backtest_id`**, así que no
+hay forma de construirle un `ProjectionMeta`, y sin `ProjectionMeta` el gate de admisión de
+T-PP-3 lo rechaza. `a_ledger` lanza si recibe un escenario. Publicar «le gana al random walk
+en los 8 horizontes» sería cierto y engañoso, igual que el «+100%» de `m3`.
