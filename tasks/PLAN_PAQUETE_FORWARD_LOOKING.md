@@ -86,12 +86,14 @@ están verdes; (e) los tres gates de CI verdes en todo el paquete.
 Tres decisiones fijadas en los specs que **conviene cerrar antes** de arrancar T-PP-1 y
 T-VL-3. No bloquean T-PS.
 
-- [ ] **Asimetría de cobertura** (`SPEC_PROCEDENCIA` §3.3): `PROJECTED` ancla pero no suma
-      a `coverage_real`. ¿Confirmado?
-- [ ] **`MIN_OOS = 12`** (`SPEC_PROCEDENCIA` §3.4): mínimo de observaciones fuera de
-      muestra para admitir una proyección. ¿12 o se recalibra?
-- [ ] **`N ≥ 8`** (`SPEC_VALUADOR` §5.4): transacciones RD/Caribe con precio sobre valor
-      libro para abrir la vista M&A. ¿8 o se recalibra?
+> **GATE CERRADO — 2026-09-04, las tres confirmadas por el dueño.**
+
+- [x] **Asimetría de cobertura** (`SPEC_PROCEDENCIA` §3.3): `PROJECTED` ancla pero **no suma
+      a `coverage_real`**. CONFIRMADO. `coverage_projected` va al lado, como propiedad
+      hermana; ningún producto existente mueve su cobertura.
+- [x] **`MIN_OOS = 12`** (`SPEC_PROCEDENCIA` §3.4): CONFIRMADO tal cual. Queda como
+      constante de archivo, recalibrable por PR con justificación.
+- [x] **`N ≥ 8`** (`SPEC_VALUADOR` §5.4): CONFIRMADO tal cual.
 
 ---
 

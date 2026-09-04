@@ -194,7 +194,10 @@ def test_quality_serves_the_registry_with_generated_provenance(env, monkeypatch)
     body = env["client"].get(f"/api/data/v1/quality/{SECTOR}", headers=env["auth"]).json()
     d = body["data"]
     assert d["coverage_real"] == 0.6
-    assert d["state_counts"] == {"real": 1, "rubric": 1, "gap": 0}
+    # La cuarta clave es ADITIVA: un consumidor que lee `state_counts["real"]` no se
+    # entera, y uno que itera recibe `projected: 0` en vez de una clave ausente —que se
+    # lee como «no aplica» y no como «cero».
+    assert d["state_counts"] == {"real": 1, "rubric": 1, "projected": 0, "gap": 0}
     assert "facilidad" in d["provenance"]           # la prosa GENERADA, no escrita
     assert {v["key"] for v in d["variables"]} == {"gdp", "ease"}
 

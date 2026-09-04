@@ -6,6 +6,7 @@ from shared.registry.builders import (
     pattern_b_signals,
 )
 from shared.registry.signals import (
+    PROJECTED,
     GAP,
     REAL,
     RUBRIC,
@@ -147,7 +148,9 @@ def test_axis_coverage_real_weighted():
                         implemented=True, signals=sigs)
     # 0.6*1.0 anclado / 0.6+0.4 = 0.6
     assert axis.coverage_real == 0.6
-    assert axis.state_counts == {REAL: 1, RUBRIC: 1, GAP: 0}
+    # Las CUATRO claves: un eje sin proyecciones dice `projected: 0` en vez de omitir la
+    # clave, porque una clave ausente se lee como «no aplica» y no como «cero».
+    assert axis.state_counts == {REAL: 1, RUBRIC: 1, PROJECTED: 0, GAP: 0}
 
 
 def test_axis_coverage_partial_real_credit():
