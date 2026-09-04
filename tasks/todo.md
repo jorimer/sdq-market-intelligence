@@ -657,7 +657,7 @@ cero regresión.
 
 ---
 
-## ✅ HECHA 2026-09-04 — T-PS-2d: triaje de los archivos con «último gana» (3 de 4)
+## ✅ HECHA 2026-09-04 — T-PS-2d: triaje de los archivos con «último gana» (LOS 4)
 
 Re-medidos con el código de hoy (las cifras del anexo I se mantienen). **Tres causas
 distintas**, ninguna es la misma:
@@ -700,10 +700,19 @@ distintos. Es la doctrina del sujeto, en la orientación que todavía no la apli
       dejó de tomar una FECHA por año —tomaba la fila de fechas de corte como fila de años y
       los flujos salían **corridos un año**—. Verificado con la identidad contable del propio
       cuadro: **cierra en 2.718 casos y falla en 0**. 130→780 y 96→576 series.
-- [ ] **4b.** `lleg_total`: el grupo en `year_blocks`. ÚNICO pendiente de los cuatro.
+- [x] **4b.** `lleg_total`, con DOS defectos de la misma familia: el grupo repetido en
+      `year_blocks` (`Tasa de Crecimiento` bajo *Total* y bajo *Dominicanos*) y **dos cuadros
+      en la misma hoja** con el eje de años reiniciado —los años completos y el corte
+      «enero-julio», con 2023-2025 en los dos y valores distintos—. De 4.555 conflictos a
+      **0**; de 59 a 99 series. Habilitado por hoja.
 
 ### Sensores
 - [x] Los cinco archivos de test nuevos, todos corridos contra el código viejo primero.
 - [x] Las 7 hojas con 0 conflictos. Y las dos PII con 0.
 - [x] **0 valores, 0 cadencias, 0 desapariciones.** `mm_series`: 17.115 → **51.687**.
 - [x] `ruff` verde · `mypy` **exit 0** · `pytest` **7.548, exit 0**.
+
+### Cierre del bloque: los cuatro archivos, cerrados
+`mm_series` **509 → 73.472** filas y **7 → 1.828** series. Cero archivos con «último gana»,
+cero series con coordenada, cero filas sin cadencia, cero archivos marcados por truncamiento.
+Nueve archivos habilitados de 27; los 18 restantes siguen sin evaluar uno a uno.

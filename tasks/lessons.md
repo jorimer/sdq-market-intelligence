@@ -464,3 +464,27 @@ dos minutos y evitó romper un spec correcto.
 
 **Disparador.** Cualquier barrido, auditoría o guard nuevo sobre un corpus. Correrlo primero
 sobre un caso que se sabe BUENO y verificar que sale limpio, antes de confiar en los positivos.
+
+### 2026-09-04 — Mi regla nueva rompió un caso legítimo que un test viejo ya cubría
+
+**Síntoma.** Al enseñarle al motor que un eje de años REINICIADO es otro cuadro, la primera
+versión trataba cualquier año repetido como reinicio. En una matriz trimestral el año se
+escribe encima de **cada uno de sus cuatro trimestres** (`2010 2010 2010 2010 2011…`), así que
+la regla partía cada año en cuatro «bloques» y el cuadro entero salía mal. Lo cazó
+`test_matrix_quarterly_synthetic`, un test de calibración que existía desde antes.
+
+**Causa raíz.** Generalicé desde UN archivo. Miré `lleg_total`, vi «un año que vuelve» y lo
+convertí en regla sin preguntarme en qué OTRA forma legítima aparece un año repetido en este
+corpus — y aparece en la más común de todas, la matriz trimestral. La condición correcta no
+era «vuelve un año visto» sino «vuelve un año visto **que no es el de la columna anterior**, o
+vuelve después de una columna separadora».
+
+**Regla futura.** Antes de convertir una observación en regla del motor, buscar el
+CONTRAEJEMPLO en el propio corpus: ¿dónde más aparece esta señal, y ahí qué significa? Un
+patrón visto en un archivo es una hipótesis, no una regla. Y correr la suite del motor
+—no solo los tests nuevos— antes de dar por buena una generalización: los tests de calibración
+existen para eso y me avisaron gratis.
+
+**Disparador.** Cualquier heurística nueva en `inference.py` o `extract.py` que dispare sobre
+una señal estructural (un valor que se repite, una fila que aparece, una columna vacía).
+Preguntarse qué caso NORMAL exhibe esa misma señal.

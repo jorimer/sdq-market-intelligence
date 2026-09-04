@@ -803,3 +803,65 @@ Queda `lleg_total.xls`: en `year_blocks` el encabezado tiene dos niveles (`Total
 «Tasa de Crecimiento › Igual Mes» aparece dos veces. Es la doctrina del sujeto en la
 orientación que todavía no la aplica: `period_rows` ya tiene `_grupo_a_la_izquierda`,
 `year_blocks` no.
+
+---
+
+# ANEXO VIII — Llegadas de pasajeros: el último de los cuatro (2026-09-04)
+
+`lleg_total.xls` tenía **dos** defectos, los dos de la misma familia: el sujeto que no viaja
+con el número.
+
+## H.1 Un rótulo de grupo que se repite no identifica a nadie
+
+El encabezado tiene dos niveles: `Total | Tasa de Crecimiento | Dominicanos | Tasa de
+Crecimiento`, y debajo `Mensual | Acumulado | Trimestral | Igual Mes…`. «Tasa de Crecimiento»
+aparece bajo *Total* y bajo *Dominicanos*: las dos columnas producían el MISMO código.
+
+Es la doctrina del sujeto en la orientación que todavía no la aplicaba — `period_rows` ya
+califica un nombre repetido con el grupo de al lado, `year_blocks` no—. Y la regla es la misma
+que allá: **se califica a todos los que comparten el rótulo, no solo a los que llegan
+después**; el primero tampoco queda identificado por «Tasa de Crecimiento» a secas.
+
+## H.2 Dos cuadros en la misma hoja, con el eje de años reiniciado
+
+La hoja «1993 - 2026» trae los años completos 1993-2025 y, tras una columna vacía, otro cuadro
+titulado **«enero-julio 2023-2026»** — un corte acumulado. Los años 2023, 2024 y 2025 aparecen
+en los dos con valores distintos (9.009.094 el año completo, 5.408.034 el corte) y competían
+por la misma clave.
+
+Cuando el eje de años REINICIA empieza otro cuadro, y su título va al código. Con dos
+salvedades que costaron una corrida cada una:
+
+* **Un año repetido en columnas contiguas NO es un reinicio.** Así se escribe una matriz
+  trimestral —el año encima de cada uno de sus cuatro trimestres— y la primera versión de la
+  regla rompió ese caso, que un test de calibración ya cubría.
+* **La columna separadora vacía no es un período.** Hereda el último año por el rellenado
+  hacia la derecha y disparaba el corte una columna antes del cuadro nuevo.
+
+## H.3 Resultado
+
+| | antes | ahora |
+|---|---:|---:|
+| series | 59 | **99** |
+| duplicados con valor distinto | 4.555 | **0** |
+| series con períodos mezclados | — | **0** |
+| códigos desempatados por coordenada | — | **0** |
+
+Habilitado **por hoja**: su entrada sigue en `yellow` y con razón, pero por HOMOGENEIZACIÓN
+—el archivo publica varios cortes de años como hojas separadas y falta consolidarlos—, no por
+extracción.
+
+## H.4 Estado del corpus
+
+| | |
+|---|---:|
+| `mm_series` | **51.687 → 73.472** filas · **1.828 series** |
+| archivos habilitados | 9 de 27 |
+| archivos con «último gana» | **0** (eran 4) |
+| series con coordenada persistidas | **0** |
+| filas con `frequency` NULL | **0** |
+| archivos marcados por truncamiento | **0** |
+| regresión sobre lo persistido | **0 valores, 0 cadencias, 0 desapariciones** |
+| idempotencia | 0 cambios |
+
+**Punto de partida de la sesión: 509 filas y 7 series.**

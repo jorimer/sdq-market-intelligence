@@ -525,7 +525,6 @@ REGISTRY: List[CanonicalSeries] = [
 # motivo se vuelve permanente por inercia y nadie recuerda qué había que arreglar para
 # sacarla. Lo que falta para levantar cada exclusión:
 #
-#   lleg_total.xls  — 4.555 empates en las columnas de tasa de crecimiento.
 #   Los 16 restantes — no evaluados uno a uno todavía; entran cuando se los verifique.
 #
 # Vacío o None en `ingest_canonical` significa "todo el canónico", que es el comportamiento
@@ -576,6 +575,12 @@ PERSISTIBLES_VERIFICADOS: Dict[str, Optional[List[str]]] = {
     # DESCONTINUADA, que su propia nota manda usar solo antes de 2010. Ese amarillo habla de
     # metodología, no de extracción — la hoja extrae limpia y la identidad contable cierra.
     "piianual.xls": None,
+    # Las llegadas de pasajeros, por HOJA: su entrada sigue en `yellow` y con razón, pero por
+    # HOMOGENEIZACIÓN —el archivo publica varios cortes de años como hojas separadas y falta
+    # consolidarlos—, no por extracción. Las cuatro hojas dan 0 duplicados con valores en
+    # conflicto, 0 series con períodos mezclados y 0 códigos desempatados por coordenada.
+    "lleg_total.xls": ["No Residentes 78 - 26", " Residentes 93 - 26",
+                       "Llegada total 93-26", "1993 - 2026"],
 }
 
 

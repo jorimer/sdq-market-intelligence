@@ -14,6 +14,7 @@ from typing import Dict, List, Optional
 from shared.data.base_client import Record
 from shared.data.lineage import Lineage
 
+from .inference import _axis_year
 from .periods import (
     coerce_num,
     es_trimestre_acumulado,
@@ -178,6 +179,21 @@ def _extract_period_rows(grid: Grid, spec: ExtractionSpec, lineage: Lineage,
     return out
 
 
+def _titulo_de_bloque(grid: Grid, period_row: Optional[int], col: int) -> str:
+    """Título del cuadro que empieza en *col*: el texto de la fila de arriba del encabezado.
+
+    Se busca desde esa columna hacia la izquierda porque el título suele estar en la celda
+    del arranque del bloque, pero Excel a veces lo deja una o dos columnas antes.
+    """
+    if period_row is None or period_row == 0:
+        return ""
+    for c in range(col, max(-1, col - 3), -1):
+        v = grid.cell(period_row - 1, c)
+        if isinstance(v, str) and v.strip():
+            return _slug(v)
+    return ""
+
+
 def _extract_matrix(grid: Grid, spec: ExtractionSpec, lineage: Lineage,
                     prefix: str) -> List[Record]:
     """Transpose of period_rows: periods across a header row, series down the rows."""
@@ -203,6 +219,51 @@ def _extract_matrix(grid: Grid, spec: ExtractionSpec, lineage: Lineage,
             m = parse_month(cell)
             if m is not None:
                 col_sub[c] = ("M", m)
+
+    # Un cuadro puede traer OTRO al lado, con su propio eje de años: la hoja de llegadas
+    # pone los años completos y, tras una columna vacía, el corte «enero-julio». Los años se
+    # repiten con valores distintos, y sin decir a qué bloque pertenece cada columna las dos
+    # series compiten por la misma clave. Cuando el eje REINICIA —un año que ya se vio—
+    # empieza un bloque nuevo, y su título (la fila de arriba del encabezado) va al código.
+    # El PRIMER bloque no se califica: es el cuadro principal y su título no aporta.
+    # Una columna SIN NINGÚN dato es un separador entre cuadros, no un período: emitir sus
+    # nulos fabricaría una observación vacía que compite con la real por la misma clave.
+    fin_datos = spec.data_row_end if spec.data_row_end is not None else grid.nrows
+    vacias = {c for c in range(c0, c1)
+              if all(coerce_num(grid.cell(r, c)) is None
+                     for r in range(spec.data_row_start or 0, min(fin_datos, grid.nrows)))}
+
+    col_bloque: Dict[int, str] = {}
+    vistos_anio: set = set()
+    bloque_actual = ""
+    ultimo_declarado: Optional[int] = None
+    cruzo_separador = False
+    for c in range(c0, c1):
+        # El reinicio se detecta sobre el año DECLARADO en el encabezado, no sobre el
+        # rellenado hacia la derecha: con el rellenado, la columna separadora hereda el
+        # último año y dispara el corte una columna antes del cuadro nuevo.
+        declarado = (_axis_year(grid.cell(spec.period_header_row, c))
+                     if spec.period_header_row is not None else None)
+        if declarado is None:
+            cruzo_separador = cruzo_separador or c in vacias
+        else:
+            # Un año REPETIDO en columnas contiguas NO es un reinicio: así se escribe una
+            # matriz trimestral, con el año encima de cada uno de sus cuatro trimestres. El
+            # eje reinicia cuando vuelve un año ya visto que NO es el de la columna anterior,
+            # o cuando vuelve después de una columna separadora — que es donde termina un
+            # cuadro y empieza otro.
+            reinicia = declarado in vistos_anio and (declarado != ultimo_declarado
+                                                     or cruzo_separador)
+            if reinicia:
+                bloque_actual = (_titulo_de_bloque(grid, spec.period_header_row, c)
+                                 or f"bloque_c{c}")
+                vistos_anio = {declarado}
+            else:
+                vistos_anio.add(declarado)
+            ultimo_declarado = declarado
+            cruzo_separador = False
+        if bloque_actual:
+            col_bloque[c] = bloque_actual
 
     # La dimensión de CONCEPTO: no divide el año, distingue magnitudes dentro de él. Va al
     # CÓDIGO de la serie, que es donde el sujeto tiene que viajar — no al período.
@@ -305,11 +366,11 @@ def _extract_matrix(grid: Grid, spec: ExtractionSpec, lineage: Lineage,
         seen[code] = r
         for c in range(c0, c1):
             year = col_year.get(c)
-            if year is None:
+            if year is None or c in vacias:
                 continue
-            dim = col_dim.get(c)
+            sufijos = [x for x in (col_bloque.get(c), col_dim.get(c)) if x]
             out.append(Record(
-                series=f"{prefix}.{code}.{dim}" if dim else f"{prefix}.{code}",
+                series=".".join([f"{prefix}.{code}", *sufijos]),
                 period=period_for(year, c),
                 value=coerce_num(grid.cell(r, c)), lineage=lineage, unit=spec.unit,
             ))
@@ -392,10 +453,26 @@ def _extract_year_blocks(grid: Grid, spec: ExtractionSpec, lineage: Lineage,
                     junto = f"{junto} {x}".strip()
             if junto:
                 propio[c] = junto
+        # Un rótulo de grupo que se REPITE en la fila no identifica a nadie —tampoco al
+        # primero que lo tomó—. En las llegadas de pasajeros el encabezado alterna
+        # `Total | Tasa de Crecimiento | Dominicanos | Tasa de Crecimiento`: las dos tasas
+        # producían el MISMO código y colisionaban en silencio, 4.555 valores resueltos por
+        # orden de lectura. Se califica con el último grupo ÚNICO que las precede, que es lo
+        # que las distingue. Misma regla que `_grupo_a_la_izquierda` en `period_rows`: se
+        # califica a TODOS los que comparten el rótulo, no solo a los que llegan después.
+        cuantos: Dict[str, int] = {}
+        for etiqueta in propio.values():
+            cuantos[etiqueta.lower()] = cuantos.get(etiqueta.lower(), 0) + 1
         current = ""
+        ultimo_unico = ""
         for c in range(c0, c1):
-            if propio.get(c):
-                current = propio[c]
+            rotulo = propio.get(c)
+            if rotulo:
+                if cuantos[rotulo.lower()] > 1 and ultimo_unico:
+                    current = f"{ultimo_unico} {rotulo}"
+                else:
+                    current = rotulo
+                    ultimo_unico = rotulo
             if current:
                 col_super[c] = current
     col_name: Dict[int, str] = {}
