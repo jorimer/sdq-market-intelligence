@@ -417,9 +417,23 @@ T-VL-3. No bloquean T-PS.
 **Antes de escribir una línea de modelo.**
 
 ### Pasos atómicos
-- [ ] **1.** `imae_indice` persistido (T-PS-2). Sin él el nowcast no arranca y **no hay degradación posible**: la serie YoY no sirve para agregar a trimestre.
-- [ ] **2.** `pib_real` con **≥ 60 observaciones trimestrales**. Si sale menos: **PARAR y avisar al dueño.** El BVAR no procede como está especificado; se degrada a VAR bivariado o univariados con indicadores adelantados, y se dice por qué.
-- [ ] **3.** `pib_sectores_origen`: continuidad y cobertura **por sector**. Si menos de 12 de los 17 pasan, la sección sectorial no se publica — media desagregación invita a leer los ausentes como irrelevantes en vez de como no medidos.
+> **T-MP-0 CORRIDO — 2026-09-04, contra la base espejo de producción. Los tres pasan.**
+
+- [x] **1.** `imae_indice` persistido: `bcrd.xls.imae_2018.serie_original_indice`, **235
+      observaciones mensuales** 2007-01 → 2026-07, ninguna nula. PASA.
+- [x] **2.** `pib_real`: `bcrd.xls.pib_2018.serie_original_indice`, **77 trimestres**
+      2007-Q1 → 2026-Q1, **cero huecos**, ninguna nula. PASA con holgura (77 vs 60): el BVAR
+      procede como está especificado.
+- [x] **3.** `pib_sectores_origen`: **24 de 24 actividades** continuas, 33 trimestres cada
+      una, cero huecos, cero nulas. PASA (el piso eran 12).
+      ⚠️ **Pero la PROFUNDIDAD es 33 trimestres, no ~76**: el cuadro por actividad arranca en
+      **2018-Q1**, no en 2007 como estimaba §4.1 del spec de persistencia. Con `MIN_OOS = 12`,
+      un backtest sectorial se come más de un tercio de la muestra. La sección sectorial es
+      viable por el criterio del plan, pero lo que puede AFIRMAR es más chico de lo que el
+      spec suponía — y eso es una decisión de alcance, no un detalle.
+      ⚠️ Un falso negativo evitado al medir: apuntar al bloque `indices_de_volumen_encadenados`
+      (8 series, los agregados) en vez de `indice_de_volumen_por_actividad_economica` daba
+      «3 de 3» y el gate habría dicho NO PUBLICA.
 - [x] **4.** ⚠️ **C8 — verificado 2026-09-03, base dev: `comunicado_tpm` NO existe.** Solo está
       `tpm_forecast_log` (2 filas), y `mm_series` no tiene una sola fila de
       `bcrd.xls.imae_2018.*`. El panel de `tpm_modeling` está vacío: el `[Likely]` de §3.4 del
