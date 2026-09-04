@@ -17,7 +17,7 @@ from __future__ import annotations
 import re
 from typing import List, Optional, Tuple
 
-from .periods import normalize_label, parse_month, parse_quarter, parse_year
+from .periods import coerce_num, normalize_label, parse_month, parse_quarter, parse_year
 from .spec import ExtractionSpec, SeriesSpec
 from .units import sheet_unit, split_header_unit
 from .workbook import Grid, Workbook
@@ -186,9 +186,54 @@ def _axis_year(value) -> Optional[int]:
         return y if 1900 <= y <= 2100 else None
     token = normalize_label(value)
     token = re.sub(r"\s*\d+\s*/", "", token).strip()  # drop "3/" footnotes
+    # Y los marcadores con que el BCRD señala un año PRELIMINAR o revisado: "2011*",
+    # "2013**", "2021 (p)". Se toleraba solo la nota con barra, así que esos años caían del
+    # eje temporal, el rango de columnas se cortaba en el último año "limpio" y las columnas
+    # siguientes —con dato— no se leían nunca: `bpagos` perdía 2011-2013 y `lleg_total` el
+    # año en curso. En `pib_origen_2018` casi todos los años están marcados `(p)`, así que la
+    # heurística no encontraba eje, devolvía confianza 0,0 y el trabajo caía en el modelo,
+    # que a su vez truncaba por su vista previa recortada. Un rótulo no reconocido encadenó
+    # los dos defectos.
+    #
+    # Se recorta SOLO al final, y el año sigue teniendo que ser todo lo que queda: un año
+    # dentro de un subtítulo ("Bases 1999 y 2010") o de un rango ("1991-2013") no es un eje.
+    token = re.sub(r"[\s*]*\(\s*[pe]+\s*\)\s*$", "", token).strip()   # "(p)" / "(e)"
+    token = token.rstrip("* ").strip()                                # "2011*" / "2013 **"
     if re.fullmatch(r"(19|20)\d{2}", token):
         return int(token)
     return None
+
+
+def periodos_sin_leer(grid: Grid, spec) -> List[Tuple[int, int]]:
+    """Períodos que el ENCABEZADO declara y que el rango del spec deja afuera, con dato.
+
+    Es el guard de un defecto que apareció dos veces el mismo día: un spec que corta el rango
+    de columnas antes del último año publicado, y la serie sale corta sin error, sin hueco y
+    sin marca — `PIB$_Trim_Acum` terminaba cinco años antes que sus hojas hermanas, y
+    `bpagos`/`lleg_total` perdían sus últimos años porque el rótulo venía marcado preliminar.
+    Las causas se arreglaron; esto es para que la próxima no sea invisible.
+
+    **La regla NO es «hay números más allá del rango».** Un cuadro con dos bloques —niveles y
+    después «Tasas de Crecimiento», con encabezados `92/91`— tiene números afuera y hace bien
+    en no leerlos: ése fue el falso positivo de `pib_gasto.xls`. Se exige lo preciso: que no
+    quede afuera una columna cuyo encabezado declara un PERÍODO **y** que además trae dato.
+
+    Devuelve ``[(columna, año)]``; vacío cuando no hay nada que reclamar.
+    """
+    c1 = getattr(spec, "value_col_end", None)
+    fila = getattr(spec, "period_header_row", None)
+    if c1 is None or fila is None:
+        return []
+    r0 = getattr(spec, "data_row_start", None) or 0
+    fuera: List[Tuple[int, int]] = []
+    for c in range(c1, grid.ncols):
+        anio = _axis_year(grid.cell(fila, c))
+        if anio is None:
+            continue
+        if any(coerce_num(grid.cell(r, c)) is not None
+               for r in range(r0, min(grid.nrows, r0 + 40))):
+            fuera.append((c, anio))
+    return fuera
 
 
 def _row_is_mostly_numeric(grid: Grid, row: int, c0: int, c1: int) -> bool:

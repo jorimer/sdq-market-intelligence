@@ -443,3 +443,24 @@ tamaño del recorte decidía en silencio la calidad del resultado.
 Preguntarse: si el insumo real supera este límite, ¿el resultado sale mal o sale corto? Y si
 sale corto, ¿alguien se entera? Corolario de verificación: cuando una serie termina antes que
 sus hermanas del mismo libro, sospechar del spec antes que de la fuente.
+
+### 2026-09-03 — Mi primer detector daba un falso positivo por medir lo que era fácil, no lo que importaba
+
+**Síntoma.** Al barrer los specs cacheados buscando lecturas truncadas, marqué `pib_gasto.xls`
+con «22 columnas con dato sin leer» y estuve a un paso de «arreglar» un spec que estaba bien.
+De la columna 24 en adelante ese cuadro tiene OTRO bloque —«Tasas de Crecimiento», con
+encabezados `92/91`, `93/92`—, y no leerlo es lo correcto.
+
+**Causa raíz.** Medí la propiedad cómoda («hay números fuera del rango») en vez de la que
+define el defecto («el encabezado declara un PERÍODO fuera del rango, y esa columna trae
+dato»). La primera es fácil de calcular y tiene falsos positivos estructurales en cualquier
+planilla de dos bloques, que en este corpus son mayoría.
+
+**Regla futura.** Antes de barrer, escribir en una frase qué distingue el caso malo del caso
+bueno, y comprobar que la medición contiene esa distinción. Si el detector no puede explicar
+por qué un caso bueno NO se marca, todavía no es un detector. Y ante el primer positivo:
+abrir el archivo y mirarlo antes de escribir el arreglo — mirar los datos de `pib_gasto` costó
+dos minutos y evitó romper un spec correcto.
+
+**Disparador.** Cualquier barrido, auditoría o guard nuevo sobre un corpus. Correrlo primero
+sobre un caso que se sabe BUENO y verificar que sale limpio, antes de confiar en los positivos.

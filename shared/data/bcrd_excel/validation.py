@@ -61,10 +61,15 @@ class SeriesReport:
 class ValidationReport:
     file: str
     series: List[SeriesReport]
+    #: Avisos de ARCHIVO, no de una serie: hoy, que el rango del spec dejó afuera períodos
+    #: que el encabezado declara. No caben en `series` porque no pertenecen a ninguna —y
+    #: meterlos como una serie falsa desviaría el conteo—, pero tienen que marcar el archivo:
+    #: una lectura truncada sale sin error, sin hueco y sin nada que la delate.
+    avisos: List[str] = field(default_factory=list)
 
     @property
     def ok(self) -> bool:
-        return all(s.ok for s in self.series) and bool(self.series)
+        return all(s.ok for s in self.series) and bool(self.series) and not self.avisos
 
     @property
     def flagged(self) -> List[SeriesReport]:
@@ -76,6 +81,7 @@ class ValidationReport:
             "series_total": len(self.series),
             "series_ok": sum(1 for s in self.series if s.ok),
             "series_flagged": len(self.flagged),
+            "avisos": list(self.avisos),
             "obs_total": sum(s.n_obs for s in self.series),
             "ok": self.ok,
             "flagged": [

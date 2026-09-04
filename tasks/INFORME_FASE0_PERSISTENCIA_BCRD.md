@@ -658,3 +658,73 @@ reciente, 2026-Q1, con dato real. Con los cuatro specs re-inferidos, las cuatro 
   la vista truncada pudo afectar a cualquiera cuyo spec venga del modelo — conviene barrer los
   specs cacheados buscando rangos de columna que se corten antes del último año del encabezado.
 - **Producción**: repetir el diff antes de desplegar, y desatascar alembic en dev.
+
+---
+
+# ANEXO VI — Barrido de specs cacheados (2026-09-03)
+
+Sobre las **27 planillas canónicas / 46 hojas**, comparando cada spec cacheado con lo que la
+planilla realmente trae.
+
+## F.1 El defecto del modelo está cerrado, y era más chico de lo que parecía
+
+De las 46 hojas, **solo cuatro** tenían spec producido por el modelo —las cuatro de
+`pib_origen_2018.xlsx`— y las cuatro ya leen hasta el final. Ninguna otra planilla del canónico
+depende de una inferencia del modelo: la vista previa truncada no dejó más daño en el corpus.
+
+La otra mitad del barrido —26 hojas `period_rows`, donde truncar significa perder SERIES
+enteras y no períodos— salió **limpia**: cero columnas con dato sin declarar.
+
+## F.2 Dos truncamientos reales, y una sola causa detrás
+
+| archivo · hoja | leía | de | períodos perdidos |
+|---|---:|---:|---|
+| `bpagos.xls` · balanza de pagos | <21 | 24 | 2011, 2012, 2013 |
+| `lleg_total.xls` · «1993 - 2026» | <38 | 39 | 2026 (el año en curso) |
+
+**La causa era el rótulo, otra vez.** `_axis_year` —la detección del eje temporal— toleraba la
+nota al pie con barra («2008 3/») y **no los marcadores con que el BCRD señala un año
+preliminar o revisado**: `2011*`, `2013**`, `2021 (p)`. Esos años caían del eje, el rango se
+cortaba en el último año «limpio» y las columnas siguientes, con dato, no se leían nunca.
+
+Recuperado: `bpagos` vuelve con 2011-2013 (54 observaciones cada uno) y `lleg_total` con 2026
+(574 observaciones).
+
+## F.3 El mismo rótulo encadenaba los dos defectos del día
+
+En `pib_origen_2018.xlsx` casi todos los años del encabezado están marcados `(p)`. Con
+`_axis_year` sin arreglar, la heurística **no encontraba eje temporal**, devolvía confianza
+0,0 y el trabajo caía en el modelo — que a su vez truncaba por su vista previa recortada. Un
+solo rótulo no reconocido produjo los dos defectos, uno detrás del otro.
+
+Con el arreglo, la heurística resuelve esas cuatro hojas por su cuenta, y **su lectura es
+idéntica a la del modelo**: mismas 2.145 y 3.234 observaciones, cero diferencias de clave y
+cero de valor. El PIB sectorial deja de depender de una inferencia paga.
+
+## F.4 Un falso positivo que vale la pena conservar
+
+El primer barrido marcó `pib_gasto.xls` con «22 columnas con dato sin leer». Es **correcto**
+que no las lea: de la columna 24 en adelante hay otro bloque, «Tasas de Crecimiento», con
+encabezados `92/91`. Medí la propiedad cómoda —«hay números fuera del rango»— en vez de la que
+define el defecto: **«el encabezado declara un PERÍODO fuera del rango, y esa columna trae
+dato»**. Con la regla afinada, `pib_gasto` sale limpio, y ésa es la regla que quedó en el guard.
+
+## F.5 El guard permanente
+
+`inference.periodos_sin_leer` + `engine._avisar_si_trunca`. El aviso es de ARCHIVO
+(`ValidationReport.avisos`, un campo nuevo porque no pertenece a ninguna serie y meterlo como
+una serie falsa desviaría el conteo), pone el reporte en `ok=False` y viaja a
+`mm_excel_reports` con el detalle de qué períodos se perdieron. Va **primero** en la lista de
+marcas, para que el corte `[:20]` no lo tire justo en los archivos con muchas series marcadas.
+
+Probado en vivo forzando un rango corto sobre `bpagos`: el archivo queda marcado y nombra los
+18 años perdidos. Y no lanza: es un diagnóstico.
+
+## F.6 Estado
+
+| | |
+|---|---:|
+| `mm_series` | **17.115** filas (sin cambio: los dos arreglos son de archivos no habilitados) |
+| regresión sobre lo persistido | **0 valores, 0 cadencias, 0 desapariciones** |
+| archivos marcados por truncamiento tras el barrido | **0** |
+| specs que dependen del modelo | **0** (eran 4) |

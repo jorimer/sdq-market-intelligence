@@ -593,3 +593,64 @@ extractor ya interpretaba como «hasta el final».
 Al corregirlo apareció que las otras TRES hojas del mismo libro tenían el mismo defecto un
 grado más suave: `cols=[1,33)` les comía el trimestre más reciente. Con los cuatro specs
 re-inferidos, las cuatro hojas llegan a **2026-Q1**. `mm_series`: **11.574 → 17.115**.
+
+---
+
+## ✅ BARRIDO HECHO 2026-09-03 — specs cacheados que dejan dato sin leer
+
+Sobre las **27 planillas canónicas / 46 hojas**, con el spec cacheado de cada una.
+
+### Lo primero: el defecto del modelo está CERRADO
+De las 46 hojas, **solo cuatro** tenían spec producido por el modelo — las cuatro de
+`pib_origen_2018.xlsx` — y las cuatro ya leen hasta el final. Ninguna otra planilla del
+canónico depende de una inferencia del modelo, así que la vista previa truncada no dejó más
+daño en el corpus.
+
+### Dos truncamientos REALES, los dos de la heurística
+
+| archivo · hoja | lee | de | períodos que se pierden |
+|---|---:|---:|---|
+| `bpagos.xls` · balanza de pagos | <21 | 24 | **2011, 2012, 2013** |
+| `lleg_total.xls` · «1993 - 2026» | <38 | 39 | **2026** |
+
+Ninguno de los dos está en `PERSISTIBLES_VERIFICADOS`, así que **nada de lo persistido hoy
+está afectado**. `bpagos` es la serie MBP5 histórica y descontinuada —su nota ya dice que se
+use solo antes de 2010—, así que perder 2011-2013 es de bajo impacto. `lleg_total` pierde
+**el año en curso**, que en una serie de llegadas turísticas es el dato que más se mira.
+
+### Un falso positivo que conviene no olvidar
+El primer barrido marcó `pib_gasto.xls` con «22 columnas con dato sin leer». Es correcto que
+no las lea: de la columna 24 en adelante hay OTRO bloque, «Tasas de Crecimiento», con
+encabezados `92/91`, `93/92`… La regla útil no es «hay números más allá» —en un cuadro de dos
+bloques eso es lo normal— sino **«el encabezado declara un PERÍODO más allá del rango leído»**.
+Con la regla afinada, `pib_gasto` sale limpio.
+
+### La otra mitad del barrido: limpia
+26 hojas `period_rows` —donde el spec LISTA sus columnas de valor, y truncar significa perder
+SERIES enteras y no períodos— y **cero** columnas con dato sin declarar.
+
+### Pendiente de decisión
+- [x] **Guard puesto:** `inference.periodos_sin_leer` + `engine._avisar_si_trunca`. El aviso es
+      de ARCHIVO (`ValidationReport.avisos`), pone el reporte en `ok=False` y viaja a
+      `mm_excel_reports` con el detalle de qué períodos se perdieron. Probado en vivo forzando
+      un rango corto sobre `bpagos`: el archivo queda marcado y nombra los 18 años perdidos.
+- [x] **Arreglados los dos, y la causa era una sola.** `_axis_year` toleraba la nota al pie
+      con barra («2008 3/») pero no los marcadores de PRELIMINAR del BCRD: `2011*`, `2013**`,
+      `2021 (p)`. Esos años caían del eje temporal y el rango se cortaba en el último año
+      «limpio». `bpagos` recupera 2011-2013 (54 obs cada uno) y `lleg_total` recupera 2026
+      (574 obs).
+
+### El mismo rótulo encadenaba los dos defectos del día
+En `pib_origen_2018.xlsx` casi todos los años del encabezado están marcados `(p)`. Con
+`_axis_year` sin arreglar, la heurística no encontraba eje temporal, devolvía confianza 0,0 y
+el trabajo caía en el MODELO — que a su vez truncaba por su vista previa recortada. Un solo
+rótulo no reconocido produjo los dos.
+
+Con el arreglo, la heurística resuelve esas cuatro hojas por su cuenta y **su lectura es
+idéntica a la del modelo**: mismas 2.145 y 3.234 observaciones, cero diferencias de clave y
+cero de valor. Así que además de cerrar el truncamiento, el PIB sectorial deja de depender de
+una inferencia paga.
+
+**Alcance del barrido:** 27 planillas / 46 hojas. Solo 4 tenían spec del modelo. 26 hojas
+`period_rows` sin columnas de dato sin declarar. `mm_series` sigue en **17.115** filas, con
+cero regresión.

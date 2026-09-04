@@ -428,6 +428,19 @@ def excel_batch_status() -> Dict[str, Any]:
     return dict(_excel_batch_status)
 
 
+def _flags_del_reporte(report) -> List[Dict[str, Any]]:
+    """Las marcas que se guardan por archivo. El aviso de ARCHIVO va PRIMERO y sin recorte.
+
+    Los avisos de archivo —hoy, que el rango del spec dejó afuera períodos que el encabezado
+    declara— no pertenecen a ninguna serie, así que no vienen en `flagged`. Si se anexaran al
+    final, el corte `[:20]` los tiraría justo en los archivos con muchas series marcadas, que
+    son los que más falta hace mirar.
+    """
+    avisos = list(getattr(report, "avisos", []) or [])
+    cabeza = [{"code": "__archivo__", "flags": avisos}] if avisos else []
+    return cabeza + [{"code": s.code, "flags": s.flags} for s in report.flagged][:20]
+
+
 def _upsert_excel_report(db: Session, fields: Dict[str, Any]) -> None:
     from modules.macro_monitor.models.models import ExcelFileReport
 
@@ -485,7 +498,7 @@ def run_excel_batch(
                     "confidence": r.spec.confidence, "n_records": len(r.records),
                     "n_series": len(r.report.series), "n_flagged": len(r.report.flagged),
                     "persisted": persisted, "error": None,
-                    "flags": [{"code": s.code, "flags": s.flags} for s in r.report.flagged][:20],
+                    "flags": _flags_del_reporte(r.report),
                 })
                 ok += status == "ok"
                 flagged += status == "flagged"
@@ -664,7 +677,7 @@ def ingest_canonical(db: Session, *, persist: bool = False,
                 "frequency": r.spec.frequency, "confidence": r.spec.confidence,
                 "n_records": len(r.records), "n_series": len(r.report.series),
                 "n_flagged": len(r.report.flagged), "persisted": persisted, "error": None,
-                "flags": [{"code": x.code, "flags": x.flags} for x in r.report.flagged][:20],
+                "flags": _flags_del_reporte(r.report),
             })
             ok += status == "ok"
             flagged += status == "flagged"
