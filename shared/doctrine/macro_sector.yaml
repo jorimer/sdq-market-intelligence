@@ -37,10 +37,15 @@ factors:
 
   - key: activity
     label: "Actividad económica (IMAE)"
-    # El BCRD renombró la serie del IMAE a la familia base 2018 (imae → imae_2018) en 2026;
-    # el código viejo ya no existe en prod → el factor quedaba "sin dato". La serie base 2018
-    # trae la variación interanual completa (221 obs, fresca) — la misma familia que usa el TPM.
-    series_code: "bcrd.xls.imae_2018.variacion_porcentual_interanual"
+    # El BCRD renombró la serie del IMAE a la familia base 2018 (imae → imae_2018) en 2026.
+    # SEGUNDA corrección (2026-09-04): el código que quedó acá tampoco existía —el cuadro
+    # publica TRES variantes (original, desestacionalizada, tendencia-ciclo) y el rótulo del
+    # bloque viaja en el código—, así que el factor de ACTIVIDAD llevaba tiempo "sin dato" en
+    # producción sin que nada fallara. Comprobado por la API de prod: el código de abajo tiene
+    # 223 observaciones no nulas hasta 2026-07; el anterior devolvía la lista vacía.
+    # La variante ORIGINAL es la correcta: la desestacionalizada y la de tendencia-ciclo son
+    # transformaciones, y la interanual ya neutraliza la estacionalidad por construcción.
+    series_code: "bcrd.xls.imae_2018.serie_original_variacion_porcentual_interanual"
     unit: "%"
     mode: level
     good_direction: high         # crecimiento de la actividad
@@ -56,7 +61,12 @@ factors:
     series_code: "bcrd.xls.serie_tpm.tasa_de_politica_monetaria"
     unit: "%"
     mode: level
-    scale: 100.0                 # almacenada como fracción (0.0525 → 5.25%)
+    # SIN `scale`. La escala de la TPM la resuelve `canonical.escala_curada`, que es el
+    # ÚNICO dueño de esa corrección y trae el tope que la hace idempotente. Declararla acá
+    # además era una bomba de tiempo: el archivo del BCRD guarda fracciones, la ingesta
+    # canónica ya las corrige a por-ciento, y en cuanto la sincronización corriera este
+    # ×100 se aplicaría ENCIMA — la TPM se habría publicado como «525 %». No falló todavía
+    # porque producción aún sirve los valores viejos.
     good_direction: low          # alta = crédito caro
     favorable_at: 5.0
     adverse_at: 7.0
