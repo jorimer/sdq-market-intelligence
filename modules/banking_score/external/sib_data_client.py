@@ -224,6 +224,16 @@ class SIBDataClient:
     • Provides an async-aware sleep mode for use inside asyncio tasks
     """
 
+    # Régimen de uso del dato, registrado en `shared/data/licenses.py`. Entrada propia
+    # (no la de las superficies abiertas) porque esta vía exige API key: se abrió
+    # `desarrollador.sb.gob.do` el 2026-09-04 para descartar un acuerdo propio del portal
+    # que la emite, y no publica términos — la credencial controla el acceso, no el
+    # régimen de uso.
+    source = "SB"
+    license = ("SB — API pública de Estadísticas del Sistema Financiero v2, con credencial de "
+               "desarrollador. Información pública dominicana: reutilizable con atribución por "
+               "Ley 200-04, Decreto 103-22, NORTIC A3 y Ley 65-00 art. 41.")
+
     # ── Configurable limits ────────────────────────────────────
     RATE_LIMIT_PER_MIN = 120        # SIB documented limit
     SOFT_THRESHOLD     = 100        # Start slowing down here

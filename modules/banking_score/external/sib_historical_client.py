@@ -37,6 +37,17 @@ logger = logging.getLogger("sdq.external.sib_historical")
 # Kept explicit rather than scraped: the microportal is a static snapshot and the
 # URLs are stable content-addressed paths. Re-verify with a HEAD if a load 404s
 # (the SB CDN has renamed assets without notice before — see bcrd-publications).
+
+# Régimen de uso del dato, registrado en `shared/data/licenses.py`. Los términos del
+# portal (leídos el 2026-09-04) son un descargo sobre exactitud, no una prohibición de
+# redistribuir; el pie «Todos los derechos reservados» es plantilla de OGTIC y no fija
+# el régimen del dato público dominicano.
+SOURCE = "SB"
+LICENSE = ("SB — estadísticas del sistema financiero publicadas por la Superintendencia de "
+           "Bancos: portal institucional, series históricas y SIMBAD. Información pública "
+           "dominicana: reutilizable con atribución por Ley 200-04, Decreto 103-22, NORTIC A3 "
+           "y Ley 65-00 art. 41.")
+
 SNAPSHOT_DATE = date(2026, 7, 19)
 
 FILES: List[Dict[str, str]] = [

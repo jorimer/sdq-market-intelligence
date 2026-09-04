@@ -458,6 +458,51 @@ LICENCIAS: Dict[str, Licencia] = {
               "está el archivo y no un régimen de uso. Ahora dice cuál es. Misma base "
               "legal que los estados financieros auditados."),
     ),
+    ("SB — estadísticas del sistema financiero publicadas por la Superintendencia de "
+     "Bancos: portal institucional, series históricas y SIMBAD. Información pública "
+     "dominicana: reutilizable con atribución por Ley 200-04, Decreto 103-22, NORTIC A3 "
+     "y Ley 65-00 art. 41."): Licencia(
+        terminos_url="https://sb.gob.do/terminos-de-uso/",
+        verificado_el="2026-09-04",
+        atribucion=("Fuente: Superintendencia de Bancos de la República Dominicana (SB). "
+                    "Información pública de la República Dominicana."),
+        nota=("`sib_historical_client` (CSV de la Cronología SB en `sb.gob.do/media/`), "
+              "`simbad_client` (Superset público) y `fiduciaria_pdf_client` (PDF de "
+              "estados auditados del portal). Las tres superficies son públicas y sin "
+              "credencial, y SIMBAD enlaza al MISMO documento de términos del portal, no "
+              "tiene uno propio. Leído el 2026-09-04: ese documento es un descargo de "
+              "responsabilidad sobre exactitud y vigencia — NO prohíbe redistribuir, a "
+              "diferencia de Panamá o Uruguay. El pie dice «Todos los derechos "
+              "reservados», que es plantilla de OGTIC y no fija el régimen del dato "
+              "público (ver la regla del encabezado de este módulo). Corrobora la "
+              "apertura: la propia SB publica 10 datasets en datos.gob.do bajo ODbL "
+              "declarada — son administrativos (sanciones, reclamaciones, entidades "
+              "autorizadas), NO la estadística financiera que consumimos, así que valen "
+              "como postura del emisor y no como la licencia de esta superficie. "
+              "Advertencia que hereda quien publique estas cifras: los términos declaran "
+              "que el contenido se publica «de manera transitoria y puede presentar "
+              "discrepancias con las informaciones definitivas»."),
+    ),
+    ("SB — API pública de Estadísticas del Sistema Financiero v2, con credencial de "
+     "desarrollador. Información pública dominicana: reutilizable con atribución por "
+     "Ley 200-04, Decreto 103-22, NORTIC A3 y Ley 65-00 art. 41."): Licencia(
+        terminos_url="https://sb.gob.do/terminos-de-uso/",
+        verificado_el="2026-09-04",
+        atribucion=("Fuente: Superintendencia de Bancos de la República Dominicana (SB), "
+                    "API de Estadísticas del Sistema Financiero. Información pública de "
+                    "la República Dominicana."),
+        nota=("`sib_data_client` contra `apis.sb.gob.do/estadisticas/v2`. Entrada aparte "
+              "de las superficies abiertas porque ésta exige API key: había que descartar "
+              "que el portal que la emite impusiera un acuerdo propio. Abierto "
+              "`desarrollador.sb.gob.do` el 2026-09-04, incluida la pantalla de registro: "
+              "no publica términos, licencia ni condiciones — el único documento de "
+              "términos de la institución es el del portal. Lo que sí declara refuerza la "
+              "apertura: lo llama «nuestro primer API público para acceder a datos "
+              "públicos del Sistema Financiero» y promueve consumirlo desde herramientas "
+              "de ciencia de datos con códigos reproducibles. La credencial controla el "
+              "ACCESO (cuota, identificación del consumidor), no el régimen de uso del "
+              "dato."),
+    ),
     "open-data": Licencia(
         terminos_url=None, verificado_el=None,
         nota=("Dos palabras sin emisor ni cláusula, en el conector de IED del BCRD. La "

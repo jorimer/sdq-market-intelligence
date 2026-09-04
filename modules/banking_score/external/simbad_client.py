@@ -33,6 +33,14 @@ from modules.banking_score.external.sib_data_client import (
 
 logger = logging.getLogger("sdq.banking_score.simbad")
 
+# Régimen de uso del dato, registrado en `shared/data/licenses.py`. SIMBAD no publica
+# términos propios: enlaza al mismo documento del portal de la SB.
+SOURCE = "SB"
+LICENSE = ("SB — estadísticas del sistema financiero publicadas por la Superintendencia de "
+           "Bancos: portal institucional, series históricas y SIMBAD. Información pública "
+           "dominicana: reutilizable con atribución por Ley 200-04, Decreto 103-22, NORTIC A3 "
+           "y Ley 65-00 art. 41.")
+
 SIMBAD_BASE = "https://simbad.sb.gob.do"
 DATASET_BALANCE = 35
 DATASET_INCOME = 34

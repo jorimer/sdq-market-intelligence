@@ -28,6 +28,14 @@ logger = logging.getLogger(__name__)
 
 _HEADERS = {"User-Agent": "SDQ-MIP/1.0"}
 
+# Régimen de uso del dato, registrado en `shared/data/licenses.py`. Cubre los PDF de
+# estados auditados que el portal de la SB publica para las fiduciarias supervisadas.
+SOURCE = "SB"
+LICENSE = ("SB — estadísticas del sistema financiero publicadas por la Superintendencia de "
+           "Bancos: portal institucional, series históricas y SIMBAD. Información pública "
+           "dominicana: reutilizable con atribución por Ley 200-04, Decreto 103-22, NORTIC A3 "
+           "y Ley 65-00 art. 41.")
+
 PORTAL_BASE = "https://www.sb.gob.do"
 _FIDU_PATH = "/supervisados/fiduciarias"
 
