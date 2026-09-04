@@ -1006,3 +1006,78 @@ Los tres gates: `pytest` **7.631 pasados, exit 0** · `ruff` verde · `mypy` **e
 - **Producción**: repetir el diff contra prod antes de desplegar (todo lo medido acá es
   contra dev) y desatascar alembic en dev.
 - **T-PS-4**, el test de integridad permanente, sigue sin hacer.
+
+---
+
+# Anexo X — La poda en producción: lo que hay hoy, y por qué todavía no se ejecuta
+
+Se pidió limpiar en producción las series huérfanas. Lo primero fue mirar qué tiene
+producción, y la respuesta cambia el trabajo.
+
+## X.1 Producción NO está vacía: sirve el corpus viejo
+
+| | |
+|---|---:|
+| commit servido | `e46dfbe` (`main`) — el código **anterior** a esta rama |
+| series en `mm_series` | **705** (660 del motor Excel) |
+| observaciones | **67.764** |
+| `macro-canonical-sync` | registrada, cadencia **mensual** |
+
+Es decir: la sincronización canónica **ya corre en producción**, con el código viejo y sin
+`PERSISTIBLES_VERIFICADOS` (que es de esta rama), así que escribe los 27 archivos con todos
+los defectos que este trabajo corrigió.
+
+## X.2 Cuántas huérfanas serían, medido
+
+Comparando los 660 códigos Excel que produccion sirve contra los **2.096** que produce el
+motor corregido:
+
+| | |
+|---|---:|
+| sobreviven con el mismo código | **295** |
+| quedarían **huérfanas** | **365** · 26.135 observaciones |
+| series **nuevas** que aparecerían | **1.801** |
+
+No son las 249 de dev. En dev el punto de partida era el corpus ya corregido por los bloques
+anteriores; en producción es el corpus original, y por eso hay más arrastre.
+
+Dato colateral: **cero** series con nombre por coordenada se están sirviendo hoy en
+producción.
+
+## X.3 Por qué NO se ejecutó
+
+La poda es correcta **después** de que producción tenga los códigos nuevos, no antes:
+
+1. desplegar el código corregido,
+2. correr `macro-canonical-sync` (escribe los 2.096 códigos),
+3. **entonces** podar los 365.
+
+Ejecutada hoy, borraría 26.135 observaciones que se están sirviendo y no repondría nada — y
+la sincronización del mes siguiente, con el código viejo todavía desplegado, las volvería a
+escribir con el nombre y el valor equivocados. Es un error de ORDEN, y no avisa: el `DELETE`
+funciona perfectamente.
+
+## X.4 La herramienta queda escrita, en ensayo
+
+`scripts/podar_series_huerfanas.py`. Por defecto **no borra**: lista. No trabaja sobre una
+lista escrita a mano —una lista envejece entre que se calcula y se ejecuta, y lo que está en
+juego es un `DELETE`— sino que recalcula el conjunto comparando lo que el destino sirve
+contra lo que el motor produce en ese momento.
+
+Y trae el freno del orden, `service.por_que_no_podar`: si el destino no tiene todavía al
+menos la mitad de las series que el motor produce, **aborta antes de emitir un solo
+`DELETE`**. Hoy contra producción daría 295 de 2.096 — el 14% — y no dejaría podar. Lo
+cubren tres tests, incluido el caso que convierte una poda en un truncado: si la lectura del
+corpus falla y devuelve el conjunto vacío, TODO el destino queda «huérfano».
+
+Ensayo corrido contra producción el 2026-09-04: 365 series, 26.135 observaciones, **nada
+borrado**.
+
+## X.5 La cura durable, que no se hizo
+
+Que un renombrado deje arrastre es una propiedad de `ingest_canonical`: hace upsert y nunca
+poda. Mientras eso siga así, cada corrección del extractor deja series viejas sirviendo
+datos que nadie produce, y hace falta acordarse de limpiarlas. La cura es que la
+sincronización pode lo que ella misma dejó de escribir, en la misma transacción — con su
+propio freno, porque una lectura fallida no puede convertirse en un borrado masivo. Queda
+propuesto, no hecho.

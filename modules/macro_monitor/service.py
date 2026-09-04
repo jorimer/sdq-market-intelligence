@@ -13,7 +13,7 @@ import re
 from calendar import monthrange
 from collections import defaultdict
 from datetime import date
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Set
 
 from sqlalchemy.orm import Session
 
@@ -1211,6 +1211,34 @@ def get_series(db: Session, series_code: str) -> Dict[str, Any]:
         "observations": [{"period": p, "value": v} for p, v in obs],
         "momentum": momentum,
     }
+
+
+#: Qué proporción de lo que produce el motor tiene que estar ya en el destino para que la
+#: poda sea segura. No es un umbral de calidad: es la comprobación de que el PASO 2 —la
+#: sincronización con el código corregido— ya ocurrió. Por debajo, lo que hay en el destino
+#: lo escribió otra versión y borrar dejaría un hueco que nadie repone hasta el mes
+#: siguiente. La mitad es holgado a propósito: no hace falta afinarlo para distinguir «ya
+#: corrió» de «no corrió», y un umbral exacto se rompería con el primer archivo nuevo.
+_MINIMO_DE_LO_NUEVO_YA_PRESENTE = 0.5
+
+
+def por_que_no_podar(vivos: Set[str], en_destino: Set[str]) -> str:
+    """Motivo por el que NO se debe podar ahora, o cadena vacía si se puede.
+
+    La poda solo es correcta DESPUÉS de que el destino haya recibido los códigos nuevos. Si
+    se corre antes, borra observaciones que se están sirviendo y no vuelve nada — y con el
+    código viejo desplegado, la siguiente sincronización las repone con el nombre y el valor
+    equivocados. Este es el paso que impide ese error de ORDEN.
+    """
+    if not vivos:
+        return "el motor no produjo ninguna serie: no hay contra qué comparar"
+    presentes = len(vivos & en_destino)
+    if presentes < len(vivos) * _MINIMO_DE_LO_NUEVO_YA_PRESENTE:
+        return (f"de las {len(vivos)} series que produce el motor, el destino solo tiene "
+                f"{presentes} ({presentes / len(vivos):.0%}). El código corregido no está "
+                f"desplegado o `macro-canonical-sync` no corrió todavía. Borrar ahora "
+                f"dejaría un hueco.")
+    return ""
 
 
 def delete_series(db: Session, series_code: str) -> int:
