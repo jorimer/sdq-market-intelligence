@@ -967,8 +967,8 @@ construida, igual que ve el error del backtest en la misma frase.
       y borra el pronóstico original del historial, que es lo contrario de lo que `revision`
       viene a impedir—; puntuación AUTOMÁTICA, porque un proceso que depende de que alguien se
       acuerde deja de correr el trimestre en que el resultado es malo.
-- [ ] **T-MP-2 · Nowcast** (bridge IMAE→PIB). El criterio de cierre del paquete pide que
-      **le gane a un random walk fuera de muestra**; si no le gana, no se publica.
+- [x] **T-MP-2 · Nowcast** (bridge IMAE→PIB). Le gana al random walk por +62,9% (m1) y
+      +77,9% (m2). Y **`m3` dejó de ser una variante**: ver abajo.
 - [ ] **T-MP-3 · BVAR** con prior Minnesota por observaciones artificiales. Sin apoyo en la
       regla de reacción de TPM (no hay panel).
 - [ ] **T-MP-4 · Sectorial** — se publica, con los 33 trimestres declarados en la metodología.
@@ -1001,3 +1001,37 @@ niveles de intervalo puntuados. Migración con su downgrade; una sola cabeza de 
 Y una que evité: los siete errores de tipo que salieron eran del patrón `Column[...]` que
 llena el baseline (400+). En vez de sumar deuda, se resolvieron en el sitio leyendo a
 variables locales — **mypy exit 0 con cero líneas nuevas de baseline**.
+
+
+### T-MP-2 hecho — y `m3` no era un modelo
+
+El backtest contra el dato real, con corte point-in-time en cada paso:
+
+| | RMSE | random walk | mejora | |
+|---|---:|---:|---:|---|
+| `bridge_imae_pib.m1.v1` | 2,3508 | 6,3433 | **+62,9%** | publica |
+| `bridge_imae_pib.m2.v1` | 1,4045 | 6,3433 | **+77,9%** | publica |
+
+**`m3` daba RMSE 0,0003 y «+100% de mejora».** Eso no es un resultado: es una alarma, y al
+verificarla apareció la causa. **El promedio trimestral del índice del IMAE ES el índice de
+volumen del PIB** — diferencia máxima **0,0015** en los 77 trimestres, y exactamente 0,0 en
+casi todos. El BCRD construye el IMAE así, como indicador mensual calibrado sobre el PIB.
+
+Publicar eso como desempeño de un modelo habría sido de lo más engañoso que esta plataforma
+puede decir. Decisión del dueño: **`m3` sale de las variantes y se trata como cifra
+DETERMINADA**, sin banda de error. Su valor es real y es de OPORTUNIDAD: queda determinada
+~15 días antes de que el BCRD publique el PIB (rezago de 45 días del IMAE contra 60 del PIB).
+
+Tres cosas para que no se pueda malinterpretar después:
+
+1. `estimar(variante=3)` **lanza** y explica por qué, remitiendo a `cifra_determinada`. El
+   backtest de `m3` también.
+2. `CifraDeterminada` **no tiene campo de intervalos**, con un test que falla si aparece:
+   ponerle banda la disfrazaría de pronóstico.
+3. **La identidad se verifica en cada llamada, no se supone.** Es un hecho empírico sobre la
+   fuente, no un teorema: si deja de cumplirse, `cifra_determinada` devuelve `None` y no se
+   publica nada. Hay test que siembra datos donde se rompe y comprueba que el sensor lo dice.
+
+Y un test mío que fallaba y tenía razón el código: usé el 30 de septiembre y no había nada
+que anticipar —a esa altura el BCRD ya publicó—. **La ventana son 15 días**, y ahí está todo
+el valor del producto; el test ahora la ejercita explícitamente.
