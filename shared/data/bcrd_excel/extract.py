@@ -7,6 +7,7 @@ files. All the heterogeneity lives upstream in the spec; here we only replay it.
 from __future__ import annotations
 
 import re
+from dataclasses import replace
 from datetime import date
 from pathlib import Path
 from typing import Dict, List, Optional
@@ -25,6 +26,7 @@ from .periods import (
     parse_year,
 )
 from .spec import ExtractionSpec
+from .units import unidad_declarada_en_el_rotulo
 from .workbook import Grid, Workbook
 
 _LICENSE = "datos oficiales BCRD — uso público con cita"
@@ -308,6 +310,11 @@ def _extract_matrix(grid: Grid, spec: ExtractionSpec, lineage: Lineage,
     # repite los mismos componentes). Se lleva aparte de `ancestors` a propósito: allá una
     # fila de la misma columna reemplaza a la anterior, y acá tiene que persistir.
     section_scope: Dict[int, str] = {}
+    #: base repetida → filas que la usan; y de qué tramo de `out` salió cada fila, para
+    #: poder volver sobre la primera cuando se descubre que el rótulo no era único.
+    repetidos: Dict[str, List[int]] = {}
+    codigo_de_fila: Dict[int, str] = {}
+    indices_de_fila: Dict[int, tuple] = {}
     for r in range(spec.data_row_start, end):
         raw, raw_col = None, label_col
         for c in range(0, max(label_col + 1, c0)):
@@ -361,9 +368,21 @@ def _extract_matrix(grid: Grid, spec: ExtractionSpec, lineage: Lineage,
         code = ".".join(_slug(part) for part in path if _slug(part))
         if acumulado and code:
             code = f"{code}_acumulado"
-        if code in seen:  # ruta repetida (raro): desempate final por fila, nunca fusionar
+        # Un rótulo repetido dentro del cuadro no identifica a nadie —tampoco al primero
+        # que lo tomó—. En la balanza de pagos «Nacionales» y «Zonas Francas» cuelgan de
+        # «Exportaciones» y de «Importaciones» sin numeración ni sangría que las ordene:
+        # marcando solo a la segunda, la primera quedaba como `balanza_de_bienes.nacionales`
+        # —nacionales ¿de qué?— al lado de una que sí decía «importaciones». Se desempatan
+        # LAS DOS y el nombrado semántico les da a ambas su padre. Misma regla que en
+        # `year_blocks` y en `period_rows`.
+        base = code
+        if base in seen:
+            repetidos.setdefault(base, [seen[base]]).append(r)
             code = f"{code}_r{r}"
-        seen[code] = r
+        else:
+            seen[base] = r
+        codigo_de_fila[r] = code
+        desde = len(out)
         for c in range(c0, c1):
             year = col_year.get(c)
             if year is None or c in vacias:
@@ -372,8 +391,18 @@ def _extract_matrix(grid: Grid, spec: ExtractionSpec, lineage: Lineage,
             out.append(Record(
                 series=".".join([f"{prefix}.{code}", *sufijos]),
                 period=period_for(year, c),
-                value=coerce_num(grid.cell(r, c)), lineage=lineage, unit=spec.unit,
+                value=coerce_num(grid.cell(r, c)), lineage=lineage,
+                unit=_unidad(" ".join([*path, *sufijos]), spec),
             ))
+        indices_de_fila[r] = (desde, len(out))
+    # Segunda pasada: la PRIMERA aparición de un código repetido también se desempata. Se
+    # hace al final porque solo al terminar de recorrer se sabe si el rótulo era único.
+    for base, filas in repetidos.items():
+        primera = filas[0]
+        desde, hasta = indices_de_fila.get(primera, (0, 0))
+        for i in range(desde, hasta):
+            out[i] = replace(out[i], series=out[i].series.replace(
+                f"{prefix}.{base}", f"{prefix}.{base}_r{primera}", 1))
     return out
 
 
@@ -414,9 +443,38 @@ def _extract_cross_tab(grid: Grid, spec: ExtractionSpec, lineage: Lineage,
             code = f"{prefix}.{_slug(metric)}"
             out.append(Record(
                 series=code, period=format_period(year, month),
-                value=coerce_num(grid.cell(r, c)), lineage=lineage, unit=spec.unit,
+                value=coerce_num(grid.cell(r, c)), lineage=lineage,
+                unit=_unidad(metric, spec),
             ))
     return out
+
+
+def _unidad(rotulo: str, spec: ExtractionSpec) -> Optional[str]:
+    """La unidad de la serie: lo que declara su ROTULO antes que el título de la hoja.
+
+    `period_rows` resuelve esto al inferir el spec (`_series_from_columns`), pero las otras
+    tres orientaciones le ponían a TODA columna la unidad de hoja. En el IPC por grupos eso
+    dejaba las doce columnas de «Var. %» con `unit='Índice'` — y `infer_nature`, obedeciendo
+    su regla correcta de que la unidad manda, las clasificaba `index`. Es el mismo guard que
+    ya existía en un motor y faltaba en los otros.
+    """
+    return unidad_declarada_en_el_rotulo(rotulo) or spec.unit
+
+
+def _columna_con_contenido(grid: Grid, spec: ExtractionSpec, col: int) -> bool:
+    """¿La columna existe en el cuadro, o es relleno de la hoja?
+
+    Existe si tiene métrica propia o si trae algún número en la región de datos. Una hoja de
+    Excel declara muchas más columnas de las que usa, y sin este freno el rótulo del último
+    grupo se rellenaba hasta el borde declarado.
+    """
+    if spec.metric_header_row is not None and _clean_label(
+            grid.cell(spec.metric_header_row, col)):
+        return True
+    for r in range(spec.data_row_start or 0, grid.nrows):
+        if coerce_num(grid.cell(r, col)) is not None:
+            return True
+    return False
 
 
 def _extract_year_blocks(grid: Grid, spec: ExtractionSpec, lineage: Lineage,
@@ -463,6 +521,17 @@ def _extract_year_blocks(grid: Grid, spec: ExtractionSpec, lineage: Lineage,
         cuantos: Dict[str, int] = {}
         for etiqueta in propio.values():
             cuantos[etiqueta.lower()] = cuantos.get(etiqueta.lower(), 0) + 1
+        # Una columna COMPLETAMENTE en blanco —sin rótulo propio, sin métrica y sin dato—
+        # termina el alcance del grupo. El relleno no tenía freno y seguía hasta
+        # `value_col_end`, que por defecto es el ANCHO DE LA HOJA: en `taap_pasivad.xlsx` la
+        # hoja declara 256 columnas, el cuadro termina en la 14 («Interbancaria», un grupo
+        # sin métrica propia) y las 241 columnas vacías de la derecha heredaban ese nombre —
+        # 27.715 observaciones nulas bajo el código de la tasa interbancaria. No producía
+        # conflicto de valores (son nulas, y el upsert protege el valor real), así que
+        # ningún criterio de conflicto lo veía: lo delata la densidad, ×18,21 filas por
+        # clave. Es la misma regla del separador vacío en `matrix`: un grupo no cruza una
+        # columna que no existe. Con eso, una columna con dato SUELTA a la derecha —la 32
+        # del IPC por grupos, diez valores sin encabezado— tampoco hereda el último grupo.
         current = ""
         ultimo_unico = ""
         for c in range(c0, c1):
@@ -473,6 +542,9 @@ def _extract_year_blocks(grid: Grid, spec: ExtractionSpec, lineage: Lineage,
                 else:
                     current = rotulo
                     ultimo_unico = rotulo
+            elif not _columna_con_contenido(grid, spec, c):
+                current = ""
+                ultimo_unico = ""
             if current:
                 col_super[c] = current
     col_name: Dict[int, str] = {}
@@ -504,7 +576,8 @@ def _extract_year_blocks(grid: Grid, spec: ExtractionSpec, lineage: Lineage,
                 continue
             out.append(Record(
                 series=f"{prefix}.{_slug(col_label)}", period=format_period(year, month),
-                value=coerce_num(grid.cell(r, c)), lineage=lineage, unit=spec.unit,
+                value=coerce_num(grid.cell(r, c)), lineage=lineage,
+                unit=_unidad(col_label, spec),
             ))
     return out
 

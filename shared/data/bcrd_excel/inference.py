@@ -15,12 +15,17 @@ interpreter. The signals it reads:
 from __future__ import annotations
 
 import re
-from typing import List, Optional, Tuple
+from typing import List, Optional, Set, Tuple
 
 from .periods import coerce_num, normalize_label, parse_month, parse_quarter, parse_year
 from .spec import ExtractionSpec, SeriesSpec
-from .units import sheet_unit, split_header_unit
+from .units import sheet_unit, split_header_unit, unidad_declarada_en_el_rotulo
 from .workbook import Grid, Workbook
+
+
+def _hoja(name: str) -> str:
+    """El último nivel de un rótulo compuesto: «Serie Original · Índice» → `indice`."""
+    return _slug(str(name).split(" · ")[-1])
 
 
 def _series_from_columns(grid: Grid, value_cols: List[int], data_row0: int,
@@ -33,33 +38,125 @@ def _series_from_columns(grid: Grid, value_cols: List[int], data_row0: int,
     desempatan por columna, jamás se fusionan."""
     crudos = []
     for c in value_cols:
-        name, unit = split_header_unit(_header_name(grid, c, data_row0))
-        crudos.append((c, name, unit))
+        name, unit = split_header_unit(
+            _header_name(grid, c, data_row0, cols_de_valor=set(value_cols)))
+        # El paréntesis manda; después, lo que el rótulo declara con palabras; recién al
+        # final el título de la hoja. Antes el título pisaba a la columna: «Índice de
+        # Precios al Consumidor» convertía en `index` a toda variación porcentual del
+        # cuadro.
+        crudos.append((c, name, unit or unidad_declarada_en_el_rotulo(name)))
 
     # Un nombre que resulta ser COMPARTIDO no nombra a nadie — tampoco al primero que lo
     # tomó. En el IPC por quintiles la primera columna de tasa es la del quintil 1 y se
     # quedaba con «tasa de inflación» a secas, que es tan ambiguo como los `_c5` de las
     # otras cuatro. Por eso el desempate se decide sobre el CONJUNTO y califica a todos los
     # que comparten un nombre, no solo a los que llegan después.
+    # La colisión se mide sobre la HOJA del rótulo —el último nivel, «Interanual»— y no
+    # sobre el nombre entero. En el IMAE la columna interanual de la Serie Original trae dos
+    # filas de encabezado propias («Variación porcentual» + «Interanual») y las de las otras
+    # dos series traen una sola: mirando el nombre completo, la primera parecía única y se
+    # quedaba sin decir de qué cuadro era, mientras sus dos hermanas sí lo decían. El sujeto
+    # viaja con el número para las tres o para ninguna.
     cuantos: dict[str, int] = {}
     for _c, name, _u in crudos:
-        cuantos[_slug(name)] = cuantos.get(_slug(name), 0) + 1
+        cuantos[_hoja(name)] = cuantos.get(_hoja(name), 0) + 1
+
+    # Qué calificador desempata a los que comparten nombre. Hay dos candidatos —el grupo de
+    # ARRIBA (filas superiores del encabezado, rellenadas desde la izquierda: así escribe
+    # Excel una celda combinada) y el vecino de la IZQUIERDA— y la elección no se puede
+    # tomar columna por columna: un calificador que sale IGUAL para todas las que colisionan
+    # no identifica a ninguna. Con dos niveles el vecino ES el grupo (el índice del quintil
+    # está justo a la izquierda de su tasa, y arriba las cinco dicen «Tasa de Inflación»);
+    # con TRES el vecino es otra métrica del mismo cuadro, y el IMAE salía con el «Promedio
+    # 12 meses» de la Serie Original llamándose `acumulada_promedio_12_meses`.
+    primera = min(value_cols) if value_cols else 0
+    arriba = {c: _grupo_por_encima(grid, c, data_row0, name, primera)
+              for c, name, _u in crudos}
+    columnas_de: dict[str, List[int]] = {}
+    for c, name, _u in crudos:
+        columnas_de.setdefault(_hoja(name), []).append(c)
+    usa_el_de_arriba = {
+        base: (len(cols) > 1
+               and all(arriba.get(c) for c in cols)
+               and len({arriba[c] for c in cols}) == len(cols))
+        for base, cols in columnas_de.items()
+    }
 
     series: List[SeriesSpec] = []
     usados: set[str] = set()
     for c, name, unit in crudos:
         code = _slug(name)
-        if cuantos[code] > 1:
-            grupo = _grupo_a_la_izquierda(grid, c, data_row0, name)
+        if cuantos[_hoja(name)] > 1:
+            grupo = (arriba[c] if usa_el_de_arriba.get(_hoja(name))
+                     else _grupo_a_la_izquierda(grid, c, data_row0, name))
+            if grupo and _slug(f"{grupo} {name}") not in usados:
+                # Un nivel que el nombre ya dice no se repite: la columna de «Respecto al
+                # período anterior» tiene «Variación porcentual» en su propia fila Y en la
+                # del grupo, y concatenar a ciegas produce
+                # `..._variacion_porcentual_variacion_porcentual_...`.
+                niveles = [n for n in grupo.split(" · ")
+                           if _slug(n) not in _slug(name).split("_" * 2)
+                           and _slug(n) not in _slug(name)]
+                grupo = " · ".join(niveles)
             if grupo and _slug(f"{grupo} {name}") not in usados:
                 name = f"{grupo} · {name}"
                 code = _slug(name)
+        # La unidad se decide con el nombre YA COMPLETO: el calificador es parte del rótulo
+        # y suele ser el que declara la magnitud —«Variación porcentual (%)» está en el
+        # nivel de grupo, no en el de la columna—. Decidirla antes dejaba nueve columnas de
+        # variación del IMAE con la unidad de hoja, «Índice».
+        limpio, unidad_del_parentesis = split_header_unit(name)
+        name = limpio or name
+        # …y si el rótulo propio no dice la magnitud, la dice el GRUPO: en el IPC
+        # subyacente las columnas se llaman «Acumulada» e «Interanual» a secas y lo que
+        # declara que son porcentajes está una fila más arriba, en «Inflación Subyacente».
+        # Solo para la UNIDAD: el nombre no se toca, porque calificar todos los nombres del
+        # corpus renombraría series ya persistidas sin necesidad.
+        unidad = (unit or unidad_del_parentesis
+                  or unidad_declarada_en_el_rotulo(name)
+                  or unidad_declarada_en_el_rotulo(arriba.get(c) or "")
+                  or sheet_default)
         if code in usados:
             code = f"{code}_c{c}"
         usados.add(code)
-        series.append(SeriesSpec(code=code, name=name, unit=unit or sheet_default,
-                                 value_col=c))
+        series.append(SeriesSpec(code=code, name=name, unit=unidad, value_col=c))
     return series
+
+
+#: Cuántas filas del encabezado se miran hacia arriba buscando el grupo.
+_FILAS_DE_ENCABEZADO = 6
+
+
+def _grupo_por_encima(grid: Grid, value_col: int, data_row0: int, propio: str,
+                      primera_col: int = 0) -> Optional[str]:
+    """La cadena de grupos que cuelga sobre la columna, de arriba hacia abajo.
+
+    Se lee como Excel la escribe: el rótulo de un grupo vive en la celda combinada más a la
+    izquierda de su tramo, así que para cada fila del encabezado se toma la celda con texto
+    más cercana a la izquierda (incluida la propia). El rodeo no pasa de *primera_col* —la
+    primera columna de valores del cuadro—, que es lo que separa un encabezado de grupo del
+    TÍTULO de la hoja: el título vive en la columna 0, a la izquierda de los ejes, y
+    arrastrarlo bautizaría cada serie con el nombre del documento.
+    """
+    inicio = max(0, data_row0 - _FILAS_DE_ENCABEZADO)
+
+    def _texto(r: int, c: int) -> Optional[str]:
+        return _texto_de_rotulo(grid, r, c)
+
+    filas_propias = [r for r in range(inicio, data_row0) if _texto(r, value_col)]
+    if not filas_propias:
+        return None
+    tope = filas_propias[-1]
+
+    niveles: List[str] = []
+    for r in range(inicio, tope):
+        for c in range(value_col, primera_col - 1, -1):
+            txt = _texto(r, c)
+            if txt:
+                if txt.lower() != propio.lower() and txt not in niveles:
+                    niveles.append(txt)
+                break
+    return " · ".join(niveles) or None
 
 
 #: Cuántas columnas a la izquierda se busca el encabezado del GRUPO. Dos alcanza para el
@@ -413,7 +510,41 @@ def _sparse_year_column(grid: Grid, month_col: int, row0: int) -> Optional[int]:
     return None
 
 
-def _header_name(grid: Grid, value_col: int, data_row0: int) -> str:
+#: Lo que el emisor escribe cuando NO hay dato. `coerce_num` ya los trata como vacío; acá
+#: sirven para lo mismo del otro lado: una celda así tampoco bautiza una serie.
+_MARCADORES_DE_VACIO = {"-", "--", "...", "n.d", "nd", "n/d", "na", "n/a"}
+
+#: La fila de REFERENCIAS de línea con que el BCRD numera sus columnas para escribir sus
+#: propias sumas: `(1)`, `(2)`, `(4)=(1 al 3)`. Es la fila más baja del encabezado, así que
+#: era la que se tomaba como rótulo propio: la base monetaria salía con series llamadas
+#: `me_9` y `valores_3`, y el número tapaba además la cadena de grupos de arriba.
+_REFERENCIA_DE_LINEA = re.compile(r"^\(\s*\d+\s*\)\s*(=.*)?$")
+
+
+def _es_referencia_de_linea(texto) -> bool:
+    """¿La celda es un número de línea del emisor y no un nombre?"""
+    return bool(_REFERENCIA_DE_LINEA.match(str(texto or "").strip()))
+
+
+def _texto_de_rotulo(grid: Grid, r: int, c: int) -> Optional[str]:
+    """El texto de una celda cuando SIRVE COMO RÓTULO, o ``None``.
+
+    No lo son: los números, los marcadores de dato ausente y las referencias de línea. Es la
+    misma regla en los dos buscadores de nombre —el propio y el del grupo—, en un solo lugar
+    para que no se desincronicen."""
+    v = grid.cell(r, c)
+    if v is None or isinstance(v, (int, float)):
+        return None
+    txt = str(v).strip()
+    if not txt or _es_referencia_de_linea(txt):
+        return None
+    if normalize_label(txt).rstrip(".") in _MARCADORES_DE_VACIO:
+        return None
+    return txt
+
+
+def _header_name(grid: Grid, value_col: int, data_row0: int,
+                 cols_de_valor: Optional[Set[int]] = None) -> str:
     """Build a series name from the non-empty header cells above a value column.
 
     La caída a ``value_col - 1`` existe porque a veces el rótulo se escribe una columna a la
@@ -427,16 +558,46 @@ def _header_name(grid: Grid, value_col: int, data_row0: int) -> str:
     ÍNDICE. Un nombre así no es cosmético: dice que el número es una tasa cuando no lo es, y
     quien lo consuma después no tiene cómo saberlo.
     """
-    filas = range(max(0, data_row0 - 6), data_row0)
+    filas = list(range(max(0, data_row0 - 6), data_row0))
 
     def _texto(r: int, c: int):
-        v = grid.cell(r, c)
-        if v is None or isinstance(v, (int, float)):
-            return None
-        return str(v).strip() or None
+        # Un marcador de dato AUSENTE no es un rótulo, y un número de línea tampoco. En el
+        # IPC subyacente las seis filas encima del primer dato son el final de un bloque de
+        # cierres anuales y sus celdas dicen `-`: tres series quedaron llamándose `x`,
+        # `x_c4` y `x_c5`. Ver `_texto_de_rotulo`.
+        return _texto_de_rotulo(grid, r, c)
 
     propio = [c for c in (value_col,) if any(_texto(r, c) for r in filas)]
     cols = propio or [value_col - 1]
+
+    # La ventana fija de seis filas no alcanza cuando entre el encabezado y el primer dato
+    # hay un bloque intermedio. Se sigue buscando hacia arriba SOLO si la ventana no dio
+    # ningún rótulo: donde hoy hay nombre no se toca nada — un renombrado masivo huerfanaría
+    # las series ya persistidas, que se identifican por su código.
+    if not any(_texto(r, c) for r in filas for c in (value_col, value_col - 1)):
+        arriba = [r for r in range(data_row0 - 1, -1, -1)
+                  if any(_texto(r, c) for c in (value_col, value_col - 1))]
+        if arriba:
+            filas = sorted(arriba[:3])
+            propio = [c for c in (value_col,) if any(_texto(r, c) for r in filas)]
+            cols = propio or [value_col - 1]
+        else:
+            # Nada en la columna ni en la de al lado. El rótulo puede estar más a la
+            # izquierda cuando las columnas intermedias son EJES y no series: en
+            # `tasa_ocupacion.xls` el cuadro es `Año | Semestre | valor` y el título vive en
+            # la columna 0, así que la única serie del archivo salía llamándose `col2`.
+            # El rodeo NO cruza otra columna de valor —robarle el rótulo al vecino es
+            # exactamente lo que prohíbe `_header_name` desde el caso de los quintiles— y no
+            # va más allá de cuatro columnas.
+            ajenas = cols_de_valor or set()
+            for c in range(value_col - 2, max(-1, value_col - 5), -1):
+                if c < 0 or c in ajenas:
+                    continue
+                rotulada = [r for r in range(data_row0 - 1, -1, -1) if _texto(r, c)]
+                if rotulada:
+                    filas = sorted(rotulada[:2])
+                    cols = [c]
+                    break
 
     parts: List[str] = []
     for r in filas:

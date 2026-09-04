@@ -114,6 +114,10 @@ def es_trimestre_acumulado(value: Any) -> bool:
     return token in _QUARTERS_ACUMULADOS
 
 
+#: Hasta cuántas palabras puede tener una celda para seguir siendo una ETIQUETA de período.
+_MAX_PALABRAS_DE_ETIQUETA = 4
+
+
 def parse_year(value: Any) -> Optional[int]:
     """``1982`` / ``1982.0`` / ``"1982"`` → 1982; None if not a plausible year."""
     if value is None:
@@ -121,7 +125,16 @@ def parse_year(value: Any) -> Optional[int]:
     if isinstance(value, (int, float)):
         y = int(value)
         return y if 1900 <= y <= 2100 else None
-    m = re.search(r"(19|20)\d{2}", str(value))
+    texto = str(value).strip()
+    # Prosa, no etiqueta. `tasa_ocupacion.xls` cierra la hoja con «a) Las cifras
+    # corresponden a la publicación …» y de ahí salía el período 1986: una observación nula
+    # para un año que el cuadro no publica — una brecha FABRICADA, que es lo contrario de
+    # declarar la que hay. El corte es por forma: las etiquetas de período del corpus
+    # («Dic. 2007», «2016 2/», «2011*», «Enero 2017», «31/12/2009») tienen una o dos
+    # palabras y ninguna llega a cinco.
+    if len(texto.split()) > _MAX_PALABRAS_DE_ETIQUETA:
+        return None
+    m = re.search(r"(19|20)\d{2}", texto)
     if not m:
         return None
     y = int(m.group(0))

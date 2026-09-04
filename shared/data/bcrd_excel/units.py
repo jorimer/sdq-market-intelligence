@@ -71,6 +71,29 @@ def normalize_unit(raw: Optional[str]) -> Optional[str]:
     return raw.strip()[:40]
 
 
+#: Vocabulario con el que el emisor declara, EN PALABRAS, que una columna es un porcentaje.
+#: Corto y explícito a propósito: `tasa` a secas queda afuera porque «tasa de cambio» no es
+#: un porcentaje, y `acumulada`/`interanual` a secas tampoco dicen de qué magnitud son.
+_ROTULO_PORCENTAJE = re.compile(
+    r"(var\.?\s*%|variaci[óo]n\s*%|variaci[óo]n\s+porcentual|porcentual|"
+    r"inflaci[óo]n|tasas?\s+de\s+(inflaci[óo]n|crecimiento|variaci[óo]n))",
+    re.IGNORECASE)
+
+
+def unidad_declarada_en_el_rotulo(name: str) -> Optional[str]:
+    """La unidad que el ROTULO de la columna declara con palabras, o ``None``.
+
+    Existe porque la unidad de HOJA —el título del cuadro— se estaba aplicando a columnas
+    que declaran otra magnitud: 162 series del corpus quedaban con `unit='Índice'` siendo
+    variaciones porcentuales, y `infer_nature` las clasificaba `index` obedeciendo su regla
+    correcta de que la unidad manda. El arreglo no es debilitar esa regla: es no ponerle a
+    la columna una unidad que no es la suya.
+    """
+    if not name:
+        return None
+    return "%" if _ROTULO_PORCENTAJE.search(name) else None
+
+
 def sheet_unit(grid: Any, upper_bound: Optional[int]) -> Optional[str]:
     """Unidad declarada en la ZONA DE TÍTULO de la hoja (filas sobre el encabezado).
 

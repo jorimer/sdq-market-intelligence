@@ -140,6 +140,24 @@ _AMBIGUOUS = re.compile(r"^(?P<base>.+)_r(?P<row>\d+)$")
 _SUFIJO_ACUMULADO = "_acumulado"
 
 
+def _pegar_sin_repetir(head: str, slug: str) -> str:
+    """Une la cabeza de un código con el nombre propuesto sin repetir la ruta común.
+
+    El modelo suele devolver el nombre YA calificado con toda su jerarquía, y la cabeza del
+    código viejo trae esa misma jerarquía: pegarlos a ciegas producía
+    `...balanza_de_bienes.cuenta_corriente.balanza_de_bienes_y_servicios.balanza_de_bienes.
+    importaciones.nacionales`. Un código de serie es un contrato con la base —se persiste y
+    se cita por él— y no puede depender de cuánta ruta haya decidido incluir el modelo.
+    """
+    hs = [x for x in head.split(".") if x]
+    ss = [x for x in slug.split(".") if x]
+    for n in range(min(len(hs), len(ss)), 0, -1):
+        if hs[-n:] == ss[:n]:
+            ss = ss[n:]
+            break
+    return ".".join(hs + ss)
+
+
 def _resolve_ambiguous_names(wb: Workbook, spec: ExtractionSpec, records: List[Record],
                              *, cache: Optional[SpecCache] = None, client: Any = None):
     """Renombra las series que la heurística desempató por número de fila.
@@ -163,20 +181,25 @@ def _resolve_ambiguous_names(wb: Workbook, spec: ExtractionSpec, records: List[R
         return records
 
     cache_key = wb.structure_hash()
-    named: Dict[int, str] = {}
     cached = cache.get_names(cache_key) if cache is not None else None
-    if cached:
-        named = {int(k): v for k, v in cached.items()}
-    else:
+    named: Dict[int, str] = {int(k): v for k, v in (cached or {}).items()}
+    # La caché es PARCIAL, no todo-o-nada. Leerla como "si hay entrada, ya está" dejaba sin
+    # nombre —para siempre, sin error y sin aviso— a toda fila ambigua que apareciera
+    # después de la primera corrida; y vetada al escribir, por no nombrar su sujeto. Se
+    # piden SOLO las que faltan y se fusionan con lo guardado: el ahorro se conserva.
+    faltan = sorted(set(rows_by_code.values()) - set(named))
+    if faltan:
         try:
-            named = name_ambiguous_rows(
-                wb.grid(spec.sheet), sorted(set(rows_by_code.values())), client=client)
-            if cache is not None and named:
-                cache.set_names(cache_key, {str(k): v for k, v in named.items()})
+            nuevos = name_ambiguous_rows(wb.grid(spec.sheet), faltan, client=client)
+            if nuevos:
+                named.update(nuevos)
+                if cache is not None:
+                    cache.set_names(cache_key, {str(k): v for k, v in named.items()})
         except Exception as e:  # noqa: BLE001 — nombrar nunca puede costar la ingesta
             logger.warning("[bcrd_excel] nombrado semántico no aplicado a %s: %s",
                            spec.file, e)
-            return records
+            if not named:
+                return records
 
     prefix = spec.code_prefix or ""
     rename: Dict[str, str] = {}
@@ -196,7 +219,7 @@ def _resolve_ambiguous_names(wb: Workbook, spec: ExtractionSpec, records: List[R
         base = _AMBIGUOUS.match(code.rsplit(".", 1)[1])
         if slug and base and base.group("base").endswith(_SUFIJO_ACUMULADO):
             slug = f"{slug}{_SUFIJO_ACUMULADO}"
-        candidate = f"{head}.{slug}" if slug else code
+        candidate = _pegar_sin_repetir(head, slug) if slug else code
         if candidate in used or candidate == code:
             continue
         used.add(candidate)
