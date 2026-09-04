@@ -26,6 +26,8 @@ import urllib.request
 from datetime import date, datetime, timezone
 from typing import Dict, List, Optional, Tuple
 
+from shared.data.base_client import check_license_for
+
 from modules.banking_score.external.sib_data_client import (
     SIBDataClient,
     cambiaria_display_name,
@@ -40,6 +42,7 @@ LICENSE = ("SB — estadísticas del sistema financiero publicadas por la Superi
            "Bancos: portal institucional, series históricas y SIMBAD. Información pública "
            "dominicana: reutilizable con atribución por Ley 200-04, Decreto 103-22, NORTIC A3 "
            "y Ley 65-00 art. 41.")
+LICENSE_OK = True
 
 SIMBAD_BASE = "https://simbad.sb.gob.do"
 DATASET_BALANCE = 35
@@ -57,6 +60,7 @@ def _post_chart_data(dataset_id: int, columns: List[str], filters: List[Dict],
         "result_format": "json",
         "result_type": "results",
     }
+    check_license_for(SOURCE, LICENSE, LICENSE_OK)
     req = urllib.request.Request(
         f"{SIMBAD_BASE}/api/v1/chart/data",
         data=json.dumps(qc).encode(),

@@ -31,6 +31,8 @@ import tempfile
 from datetime import date, datetime
 from typing import Dict, Iterable, Iterator, List, Optional
 
+from shared.data.base_client import check_license_for
+
 logger = logging.getLogger("sdq.external.sib_historical")
 
 # ── Source registry (public media URLs, snapshot 2026-07-19) ─────────
@@ -47,6 +49,7 @@ LICENSE = ("SB — estadísticas del sistema financiero publicadas por la Superi
            "Bancos: portal institucional, series históricas y SIMBAD. Información pública "
            "dominicana: reutilizable con atribución por Ley 200-04, Decreto 103-22, NORTIC A3 "
            "y Ley 65-00 art. 41.")
+LICENSE_OK = True
 
 SNAPSHOT_DATE = date(2026, 7, 19)
 
@@ -190,6 +193,7 @@ def parse_rows(fileobj: Iterable[str], estado: str, source_file: str,
 
 def download_to_temp(url: str, timeout: float = 600.0) -> str:
     """Stream a CSV to a temp file and return its path. Caller deletes it."""
+    check_license_for(SOURCE, LICENSE, LICENSE_OK)
     import httpx
 
     fd, path = tempfile.mkstemp(suffix=".csv", prefix="sib_hist_")

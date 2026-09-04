@@ -19,6 +19,7 @@ from shared.data.base_client import (
     Mode,
     Record,
     SourceClient,
+    check_license_for,
 )
 from shared.data.lineage import Lineage
 from shared.data.outcomes import LabeledOutcome
@@ -29,6 +30,7 @@ __all__ = [
     "Record",
     "Mode",
     "LicenseError",
+    "check_license_for",
     "Lineage",
     "LabeledOutcome",
 ]

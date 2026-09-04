@@ -31,6 +31,19 @@ class LicenseError(RuntimeError):
     """Raised when a source's data cannot be legally ingested."""
 
 
+def check_license_for(source: str, license: str, license_ok: bool) -> None:
+    """Raise :class:`LicenseError` unless ingestion is permitted.
+
+    Existe como función libre —y no solo como método— porque tres de los conectores de
+    banca son módulos de funciones sin clase donde colgar el contrato, y sin esto la
+    alternativa era una segunda implementación del criterio en cada uno. Un criterio
+    duplicado se desincroniza: `SourceClient.check_license` delega acá para que la
+    condición y el mensaje vivan en un solo lugar.
+    """
+    if not license_ok:
+        raise LicenseError(f"Fuente '{source}': licencia '{license}' no permite ingesta")
+
+
 @dataclass(frozen=True)
 class Record:
     """One normalized observation: a series value for a period, with provenance."""
@@ -64,10 +77,7 @@ class SourceClient(ABC):
     # ── License gate ──────────────────────────────────────────────
     def check_license(self) -> None:
         """Raise :class:`LicenseError` unless ingestion is permitted."""
-        if not self.license_ok:
-            raise LicenseError(
-                f"Fuente '{self.source}': licencia '{self.license}' no permite ingesta"
-            )
+        check_license_for(self.source, self.license, self.license_ok)
 
     # ── Fixture helpers ───────────────────────────────────────────
     def _load_fixture(self, filename: str) -> Dict[str, Any]:
