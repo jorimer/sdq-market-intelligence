@@ -565,9 +565,13 @@ Al medir la cobertura por variable en vez de suponerla:
 ## T-MP-6 · Operación y calendario — `operations.py` (EDIT)
 
 ### Pasos atómicos
-- [ ] **1.** Operación programada registrada con cascada verificada.
-- [ ] **2.** **Consultar el calendario de publicación con el dueño antes de fijarlo.**
-- [ ] **3.** Corrida end-to-end de un trimestre completo.
+- [x] **1.** `macro-forecast-emit` registrada, **anclada al calendario TRIMESTRAL de la fuente y no al reloj** (un intervalo relativo se desfasa solo: así se sirvió Q1 en informes de agosto en el sync de comercio), con `periodo_actual` para que el scheduler distinga «al día» de «falta un trimestre». Cascada `macro-canonical-sync → macro-forecast-emit` verificada por test.
+- [x] **2.** El rezago que manda es el del **IMAE (45 días)**, no el del PIB (60): el valor del nowcast es justamente la ventana de ~15 días entre los dos, y disparar al rezago del PIB llegaría cuando el BCRD ya publicó. `anclaje="trimestral"` usa 45 días, que es el número medido. **El calendario COMERCIAL (cuándo recibe el suscriptor) sigue siendo decisión del dueño** — ver el bloque de decisiones abiertas.
+- [x] **3.** Corrida end-to-end contra el corpus real, y **encontró un defecto que ningún test unitario tenía**: `emitir` escribía pronósticos de horizontes **ya cerrados** al corte. El gate los rechaza al publicar, pero eso llega tarde — la fila quedaba en el ledger y `puntuar_pendientes` **no consulta el gate**: los habría puntuado contra un observado que ya existía cuando se escribieron, inflando el track record con retrospectiva. La regla ahora se aplica al ESCRIBIR.
+
+### Sensor T-MP-6
+- [x] Cadena completa verificada: emisión → ledger congelado con su `as_of` → meta derivada → veredicto del gate. En el corte válido: 2 pronósticos escritos, 6 escenarios contados y no escritos, 0 vencidos; segunda corrida 0 escritos / 2 duplicados. El gate dice **NO ancla** con `n_oos = 0`, que es el estado honesto del día uno.
+- [x] Una emisión vacía **se explica y no falla**: en la ventana entre los dos rezagos la cifra está DETERMINADA por identidad, y decir «sin estimación» haría parecer que falló un modelo que está de más.
 
 ---
 
