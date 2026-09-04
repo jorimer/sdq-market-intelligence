@@ -110,7 +110,14 @@ def discrepancia_de_cadencia(declarada: Optional[str], periodos) -> Optional[str
         return None
     vistas = {cadencia_de_periodo(str(p)) for p in periodos}
     vistas.discard(DESCONOCIDA)
-    if not vistas or vistas == {esperada}:
+    # Basta con que la declarada APAREZCA. Un archivo del BCRD suele traer varias hojas con
+    # cortes distintos de la misma estadística —`tasa_ocupacion.xls` publica dos anuales y
+    # una semestral— y la entrada canónica declara la cadencia de UNA de ellas. Exigir que
+    # fuera la única presente marcaba como parse roto lo que es la forma normal del corpus.
+    # La señal que importa es la AUSENCIA: si ninguna serie del archivo tiene la cadencia
+    # declarada, el eje temporal se leyó mal. Una serie que mezcla formas dentro de sí misma
+    # la caza el criterio de formas mezcladas, que es por serie y más filoso que éste.
+    if not vistas or esperada in vistas:
         return None
     return (f"declarada {esperada}, pero los períodos dicen "
             f"{', '.join(sorted(vistas))}")

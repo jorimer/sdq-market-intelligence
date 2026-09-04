@@ -716,3 +716,40 @@ distintos. Es la doctrina del sujeto, en la orientación que todavía no la apli
 `mm_series` **509 → 73.472** filas y **7 → 1.828** series. Cero archivos con «último gana»,
 cero series con coordenada, cero filas sin cadencia, cero archivos marcados por truncamiento.
 Nueve archivos habilitados de 27; los 18 restantes siguen sin evaluar uno a uno.
+
+---
+
+## 🔵 EN CURSO — Los 18 archivos canónicos restantes
+> Bloque siguiente al de «LOS 4». Nueve archivos habilitados de 27; estos son los otros 18.
+> Instrumental ya construido: la corrida en seco, el barrido de specs cacheados, el guard de
+> truncamiento (`periodos_sin_leer`), la medición de conflictos y el diagnóstico de cadencia.
+
+### Los 18
+`Costo_Canasta_quintiles_base_2019-2020.xlsx` · `Remesas_6.xlsx` · `Serie_TPM.xlsx` ·
+`agregados_monetarios.xlsx` · `base_monetaria.xlsx` · `bpagos.xls` · `bpagos_6.xls` ·
+`ipc_base_2019-2020_serie_referencial.xlsx` · `ipc_grupos_base_2019-2020.xls` ·
+`ipc_quintiles_base_2019-2020.xls` · `ipc_regiones_base_2019-2020.xls` ·
+`ipc_subyacente_base_2019-2020.xlsx` · `pib_gasto.xls` · `reservas_internacionales.xlsx` ·
+`taap_activad.xlsx` · `taap_pasivad.xlsx` · `tasa_desocupacion.xls` · `tasa_ocupacion.xls`
+
+### Criterio de habilitación (el mismo que se aplicó a los 9)
+Un archivo (o una hoja) entra a `PERSISTIBLES_VERIFICADOS` solo si, medido:
+1. **0 duplicados `(serie, período)` con valores en conflicto** — si los hay, el upsert
+   resolvería por orden de lectura y el dato publicado sería arbitrario.
+2. **0 series con formas de período mezcladas** — anual y trimestral en la misma serie
+   significa que el eje temporal se leyó mal.
+3. **0 códigos nombrados por coordenada** (`_c\d+` / `_r\d+`): el sujeto no viaja con el número.
+4. **0 avisos de truncamiento** (`periodos_sin_leer`) y ninguna columna con dato fuera de la
+   lista de series del spec.
+5. **0 discrepancias de cadencia** contra lo que declara el registro canónico.
+6. Y una **verificación de sentido** propia del archivo cuando la hay (identidad contable,
+   YoY reconstruido, suma de partes), no solo ausencia de conflictos.
+
+### Pasos
+- [ ] **1.** Triaje instrumentado de los 18, un cuadro por archivo con los seis criterios.
+- [ ] **2.** Habilitar los que ya pasan, sin tocar código.
+- [ ] **3.** Corregir los que fallan, uno por uno, con test que corra primero contra el
+      código viejo, y volver a medir.
+- [ ] **4.** Corrida canónica completa: regresión (0 valores cambiados, 0 desapariciones),
+      idempotencia, y los tres gates.
+- [ ] **5.** Anexo IX en `tasks/INFORME_FASE0_PERSISTENCIA_BCRD.md` + `lessons.md`.

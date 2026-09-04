@@ -598,6 +598,24 @@ def _registros_de_las_hojas(archivo: str, hojas: List[str], records) -> List[Any
     return elegidos
 
 
+def _con_unidades_curadas(records: List[Any]) -> List[Any]:
+    """Aplica las unidades verificadas del registro canónico antes de escribir.
+
+    Va acá —en la ingesta canónica, no en el extractor— porque es un hecho CURADO por un
+    analista sobre un archivo concreto, con su verificación escrita, y no una regla que el
+    motor pueda derivar de la planilla. Ver `canonical.UNIDADES_CURADAS`.
+    """
+    from dataclasses import replace
+
+    from shared.data.bcrd_excel import canonical
+
+    salida = []
+    for r in records:
+        curada = canonical.unidad_curada(r.series)
+        salida.append(replace(r, unit=curada) if curada and curada != r.unit else r)
+    return salida
+
+
 def ingest_canonical(db: Session, *, persist: bool = False,
                      alcance: Optional[Dict[str, Optional[List[str]]]] = None) -> Dict[str, Any]:
     """Run the engine over ONLY the canonical source files (not the whole catalog).
@@ -647,8 +665,9 @@ def ingest_canonical(db: Session, *, persist: bool = False,
         try:
             r = ingest_excel(entry, cache=cache, use_claude=True)
             status = "ok" if r.report.ok else "flagged"
-            escribibles = (_registros_de_las_hojas(s.source_file, hojas, r.records)
-                           if hojas else r.records)
+            escribibles = _con_unidades_curadas(
+                _registros_de_las_hojas(s.source_file, hojas, r.records)
+                if hojas else r.records)
             persisted = _upsert_records(db, escribibles) if escribir else 0
             if hojas:
                 por_hoja.append(f"{s.source_file}: {len(hojas)} hoja(s), "
