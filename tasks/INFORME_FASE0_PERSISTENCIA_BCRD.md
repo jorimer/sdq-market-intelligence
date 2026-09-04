@@ -728,3 +728,78 @@ Probado en vivo forzando un rango corto sobre `bpagos`: el archivo queda marcado
 | regresión sobre lo persistido | **0 valores, 0 cadencias, 0 desapariciones** |
 | archivos marcados por truncamiento tras el barrido | **0** |
 | specs que dependen del modelo | **0** (eran 4) |
+
+---
+
+# ANEXO VII — Los archivos con «último gana»: tipo de cambio y PII (2026-09-04)
+
+Re-medidos con el código de hoy. **Tres causas distintas**, ninguna era la misma.
+
+## G.1 Tipo de cambio — dos defectos, los dos del parser
+
+`TASA_DOLAR_REFERENCIA_MC.xlsx` publica siete cortes. Dos fallaban:
+
+* **La hoja `Diaria` es una serie diaria de verdad** (`Año | Mes | Día`) y el período no tenía
+  día: los ~22 días hábiles de cada mes colapsaban en `YYYY-MM` y el upsert dejaba uno
+  arbitrario — 19.680 valores en conflicto. De paso la columna `Día` se persistía como si
+  fuera una medición: una serie cuyos «valores» eran 2, 3, 4, 7…
+* **Los cortes trimestrales** rotulan el trimestre con los meses completos (`Enero-Marzo`),
+  grafía que el mapa no tenía; y su año vive en una columna y el trimestre en otra, forma que
+  la inferencia no contemplaba. 367 valores más.
+
+**`YYYY-MM-DD` es ahora la cuarta forma de período de la plataforma**, con su cadencia
+`daily`, su orden cronológico —el día se resuelve ANTES que el mes, o se ordenaría como el
+mes entero— y su inferencia. La columna del día se detecta por el ENCABEZADO, donde el emisor
+la declara, y se confirma contra el contenido: con el rótulo solo, un cuadro de «Días de mora»
+pasaría por eje temporal; con el contenido solo, cualquier columna de enteros chicos lo haría.
+
+Resultado: **las siete hojas con 0 conflictos** y una sola forma de período cada una.
+
+## G.2 Posición de inversión internacional — una dimensión, y un año corrido
+
+Bajo cada año el cuadro trae **seis conceptos**: `Saldo al inicio | Transacciones Netas |
+Variaciones de Tipo de Cambio | Variaciones de Precios | Otras Variaciones | Saldo al final`.
+Es la reconciliación entre el stock de apertura y el de cierre — seis magnitudes, no seis
+veces la misma. El motor solo sabía leer un sub-encabezado si era un PERÍODO, así que los seis
+caían en el mismo `(serie, año)`.
+
+**Y había algo peor debajo.** El cuadro tiene la fila de años y, abajo, una de FECHAS de corte
+(`31/12/2009`). `_axis_year` limpiaba la nota al pie («2008 3/») borrando cualquier `NN/`, así
+que `31/12/2009` quedaba en `2009` y la fila de fechas pasaba por fila de años. El motor la
+elegía, y el año de cada columna salía **corrido**: `Transacciones Netas` de 2011 quedaba
+etiquetado 2010. Un año de desfase en una serie de flujos no lo detecta ningún lector a ojo.
+
+Corregido lo uno y lo otro, la verificación es la que el propio cuadro ofrece: **la identidad
+contable —cierre = apertura + los cuatro flujos— cierra en 2.718 casos y falla en cero.**
+
+| archivo | series antes | series ahora | conflictos |
+|---|---:|---:|---:|
+| `piianual_6.xlsx` | 130 | **780** | 0 |
+| `piianual.xls` | 96 | **576** | 0 |
+
+`pii_mbp5` pasa de `yellow` a `green`: era amarillo porque el archivo no extraía bien, y eso
+dejó de ser cierto. `robustness` describe la EXTRACCIÓN; que la serie esté descontinuada lo
+dice su nota metodológica, no ese campo.
+
+## G.3 Un guard que se autodiagnosticó
+
+Al habilitar el MBP5 por hoja, la ingesta lo marcó `failed` con el motivo exacto: «declara la
+hoja `PII 2005-2013` y ninguna serie empieza con ese prefijo; o el nombre no es ése, o el
+libro tiene UNA sola hoja —ahí el código no lleva segmento de hoja—». Era lo segundo. El guard
+escrito ayer nombró su propio caso límite antes de que yo lo notara.
+
+## G.4 Estado
+
+| | |
+|---|---:|
+| `mm_series` | **17.115 → 51.687** filas |
+| cadencias | `daily` 17.908 · `quarterly` 11.863 · `annual` 14.194 · `monthly` 7.722 |
+| archivos con «último gana» pendientes | **1** (`lleg_total`, era 4) |
+| regresión sobre lo persistido | **0 valores, 0 cadencias, 0 desapariciones** |
+| idempotencia | 0 cambios |
+
+Queda `lleg_total.xls`: en `year_blocks` el encabezado tiene dos niveles (`Total` y
+`Dominicanos`, cada uno con su «Tasa de Crecimiento») y el grupo no viaja al código, así que
+«Tasa de Crecimiento › Igual Mes» aparece dos veces. Es la doctrina del sujeto en la
+orientación que todavía no la aplica: `period_rows` ya tiene `_grupo_a_la_izquierda`,
+`year_blocks` no.

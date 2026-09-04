@@ -48,3 +48,20 @@ def test_un_ano_marcado_sigue_siendo_un_ano(celda, anio):
 ])
 def test_lo_que_no_es_un_eje_de_periodos_sigue_sin_serlo(celda):
     assert _axis_year(celda) is None
+
+
+@pytest.mark.parametrize("celda", [
+    "31/12/2009", "31/12/2010", "1/1/2010", "01/01/2026",
+])
+def test_una_FECHA_no_es_un_eje_de_periodos(celda):
+    """La limpieza de la nota al pie («2008 3/») borraba cualquier `NN/`, así que
+    `31/12/2009` quedaba en `2009` y una fila de FECHAS pasaba por fila de años.
+
+    No es cosmético. En la posición de inversión internacional el cuadro tiene la fila de
+    años y, debajo, una de fechas de corte; el motor elegía la de fechas y el año de cada
+    columna salía CORRIDO: `Transacciones Netas` de 2011 quedaba etiquetado 2010. Un año de
+    desfase en una serie de flujos es un error que ningún lector detecta a ojo.
+
+    La nota al pie es un marcador FINAL; una fecha no lo es.
+    """
+    assert _axis_year(celda) is None

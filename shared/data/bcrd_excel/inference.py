@@ -185,7 +185,12 @@ def _axis_year(value) -> Optional[int]:
         y = int(value)
         return y if 1900 <= y <= 2100 else None
     token = normalize_label(value)
-    token = re.sub(r"\s*\d+\s*/", "", token).strip()  # drop "3/" footnotes
+    # La nota al pie es un marcador FINAL («2008 3/»). Recortar cualquier `NN/` en cualquier
+    # posición convertía una FECHA en un año: `31/12/2009` quedaba en `2009`, y una fila de
+    # fechas de corte pasaba por fila de años. En la posición de inversión internacional el
+    # cuadro trae las dos —años arriba, fechas debajo— y el motor elegía la de fechas: el año
+    # de cada columna salía CORRIDO, con `Transacciones Netas` de 2011 etiquetado 2010.
+    token = re.sub(r"\s+\d+\s*/\s*$", "", token).strip()   # nota al pie final: "2008 3/"
     # Y los marcadores con que el BCRD señala un año PRELIMINAR o revisado: "2011*",
     # "2013**", "2021 (p)". Se toleraba solo la nota con barra, así que esos años caían del
     # eje temporal, el rango de columnas se cortaba en el último año "limpio" y las columnas
@@ -234,6 +239,64 @@ def periodos_sin_leer(grid: Grid, spec) -> List[Tuple[int, int]]:
                for r in range(r0, min(grid.nrows, r0 + 40))):
             fuera.append((c, anio))
     return fuera
+
+
+#: Cómo rotula el emisor la columna del día. Se decide por el ENCABEZADO —que es donde el
+#: emisor lo declara— y no por «la columna trae enteros de 1 a 31», que también describe a un
+#: recuento de sucursales o a una edad.
+_ROTULOS_DE_DIA = {"dia", "día", "day", "dias", "días"}
+
+
+def _day_column(grid: Grid, month_col: int, data_row0: int) -> Optional[int]:
+    """La columna del DÍA en una planilla diaria (`Año | Mes | Día`), o ``None``.
+
+    Se exige rótulo Y contenido: el encabezado tiene que nombrarla, y sus valores tienen que
+    ser días de calendario. Con el rótulo solo, un cuadro que se llame «Días de mora» pasaría
+    por eje temporal; con el contenido solo, cualquier columna de enteros chicos lo haría.
+    """
+    for c in range(month_col + 1, min(grid.ncols, month_col + 3)):
+        rotulado = any(normalize_label(grid.cell(r, c)) in _ROTULOS_DE_DIA
+                       for r in range(max(0, data_row0 - 6), data_row0))
+        if not rotulado:
+            continue
+        vals = [grid.cell(r, c) for r in range(data_row0, min(grid.nrows, data_row0 + 40))]
+        nums = [v for v in vals if isinstance(v, (int, float))]
+        if nums and all(1 <= int(v) <= 31 and float(v) == int(v) for v in nums):
+            return c
+    return None
+
+
+#: Cuántas veces tiene que repetirse un rótulo para ser una DIMENSIÓN y no un nombre suelto.
+#: La firma es la repetición: el mismo juego de conceptos vuelve bajo cada año.
+_MIN_REPETICIONES_DIMENSION = 3
+
+
+def _dimension_row(grid: Grid, r0: Optional[int], r1: int, c0: int, c1: int) -> Optional[int]:
+    """Fila de CONCEPTOS bajo los años: `Saldo al inicio | Transacciones Netas | …`.
+
+    No es un subperíodo —no divide el año— sino una dimensión de la serie: para cada año hay
+    varias magnitudes distintas. Sin reconocerla, las columnas de un año caen todas en el
+    mismo `(serie, año)` y el dedupe «último gana» deja una arbitraria: en la posición de
+    inversión internacional eran 2.970 valores en conflicto, y el archivo publicaba una sexta
+    parte de lo que trae.
+
+    Se exige REPETICIÓN, que es lo que distingue una dimensión de un rótulo suelto: el mismo
+    conjunto de conceptos vuelve bajo cada año. Y se exige que NO sean períodos: si lo fueran,
+    los resolvería `_subperiod_row`, que es quien corresponde.
+    """
+    if r0 is None:
+        return None
+    for r in range(r0 + 1, min(r1, grid.nrows)):
+        etiquetas = [str(grid.cell(r, c)).strip() for c in range(c0, min(c1, grid.ncols))
+                     if isinstance(grid.cell(r, c), str) and str(grid.cell(r, c)).strip()]
+        if len(etiquetas) < _MIN_REPETICIONES_DIMENSION * 2:
+            continue
+        if any(parse_quarter(e) is not None or parse_month(e) is not None for e in etiquetas):
+            continue                      # es un subperíodo, no una dimensión
+        repetidas = len(etiquetas) - len(set(etiquetas))
+        if repetidas >= _MIN_REPETICIONES_DIMENSION:
+            return r
+    return None
 
 
 def _row_is_mostly_numeric(grid: Grid, row: int, c0: int, c1: int) -> bool:
@@ -496,6 +559,12 @@ def infer_spec(wb: Workbook, file: str) -> ExtractionSpec:
         subtotal = _has_subtotal_years(grid, month_col)
         year_col = None if subtotal else _sparse_year_column(grid, month_col, first_month_row)
         value_cols = _value_columns(grid, month_col, first_month_row)
+        # La columna del DÍA es PERÍODO, no una serie. Sin esto nacía una serie cuyos
+        # "valores" eran los días del calendario, y las columnas reales colapsaban todas
+        # en `YYYY-MM` — una observación por mes elegida por orden de lectura.
+        day_col = _day_column(grid, month_col, first_month_row)
+        if day_col is not None:
+            value_cols = [c for c in value_cols if c != day_col]
         # Distinct value columns must map to distinct series codes — never merge two
         # columns into one (e.g. "Acumulada" under both "Serie Original" and "Serie
         # Desestacionalizada"). Disambiguate slug collisions by column so the data
@@ -507,6 +576,7 @@ def infer_spec(wb: Workbook, file: str) -> ExtractionSpec:
         return ExtractionSpec(
             file=file, sheet=grid.name, orientation="period_rows",
             data_row_start=first_month_row, month_col=month_col, year_col=year_col,
+            day_col=day_col,
             subtotal_year_regex=_SUBTOTAL_RE if subtotal else None,
             series=series, structure_hash=sh,
             confidence=round(conf, 2) if resolved else 0.2,
@@ -524,13 +594,18 @@ def infer_spec(wb: Workbook, file: str) -> ExtractionSpec:
         label_col = _label_column(grid, c0, year_row + 1, grid.nrows)
         if label_col is not None:
             sub_row = _subperiod_row(grid, year_row, year_row + 4, c0, c1)
+            # Si bajo los años no hay subperíodos sino CONCEPTOS que se repiten por año,
+            # son una dimensión de la serie, no una división del año.
+            dim_row = (None if sub_row is not None
+                       else _dimension_row(grid, year_row, year_row + 4, c0, c1))
             freq = "quarterly" if sub_row is not None else "annual"
-            data_start = (sub_row if sub_row is not None else year_row) + 1
+            data_start = (max(r for r in (sub_row, dim_row, year_row) if r is not None)) + 1
             conf = min(0.85, 0.5 + 0.03 * min(year_row_count, 12))
             return ExtractionSpec(
                 file=file, sheet=grid.name, orientation="matrix",
                 data_row_start=data_start, period_header_row=year_row,
-                subperiod_header_row=sub_row, label_col=label_col,
+                subperiod_header_row=sub_row, dimension_header_row=dim_row,
+                label_col=label_col,
                 value_col_start=c0, value_col_end=c1, frequency=freq,
                 # Una matriz publica UNA magnitud (balanza en US$, saldos monetarios en
                 # RD$): la unidad de la hoja aplica a todas sus filas. Se escanea solo la
@@ -566,6 +641,26 @@ def infer_spec(wb: Workbook, file: str) -> ExtractionSpec:
     # Annual period_rows: a column of years down the rows (no month axis).
     year_col, year_col_count, first_year_row = _year_column(grid)
     if year_col is not None and year_col_count >= 5 and year_col_count >= year_row_count:
+        # ¿El año viene acompañado de una columna de TRIMESTRE? (`Año | Trimestre | …`, el
+        # corte trimestral del tipo de cambio). Sin mirarla, las cuatro filas de cada año
+        # caen todas en el año y compiten por la misma clave. `month_col` es la columna del
+        # período DENTRO del año y acepta meses o trimestres — ver `_extract_period_rows`.
+        qcol, first_q_row, q_count = _quarter_column(grid)
+        if qcol is not None and qcol != year_col and q_count >= 4:
+            value_cols = [c for c in _value_columns(grid, max(year_col, qcol), first_q_row)
+                          if c not in (year_col, qcol)]
+            series = _series_from_columns(grid, value_cols, first_q_row,
+                                          sheet_unit(grid, first_q_row - 1))
+            if series:
+                conf = min(0.85, 0.5 + 0.02 * q_count)
+                return ExtractionSpec(
+                    file=file, sheet=grid.name, orientation="period_rows",
+                    data_row_start=min(first_year_row, first_q_row),
+                    month_col=qcol, year_col=year_col, series=series,
+                    frequency="quarterly", structure_hash=sh,
+                    confidence=round(conf, 2), method="heuristic",
+                    notes=f"period_rows trimestral: year_col={year_col} quarter_col={qcol}",
+                )
         value_cols = _value_columns(grid, year_col, first_year_row)
         series = _series_from_columns(grid, value_cols, first_year_row,
                                       sheet_unit(grid, first_year_row - 1))

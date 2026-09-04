@@ -427,9 +427,15 @@ REGISTRY: List[CanonicalSeries] = [
         key="pii_mbp5", concept="Posición de inversión internacional (MBP5, histórica)",
         sector="sector_externo",
         source_file="piianual.xls", base="US$ MM", frequency="anual",
-        homogenization="nivel directo",
+        homogenization="nivel directo; cada año trae el saldo de apertura, cuatro flujos "
+                       "(transacciones, tipo de cambio, precios, otras) y el de cierre",
         rationale="Stock de activos y pasivos externos; solvencia externa.",
-        robustness="yellow",
+        # VERDE desde el 2026-09-04. Era amarillo porque el archivo NO extraía bien: sus seis
+        # conceptos por año colapsaban en uno y los flujos salían corridos un año. Corregido,
+        # la identidad contable del propio cuadro —cierre = apertura + los cuatro flujos—
+        # cierra en 768 casos y falla en cero. `robustness` describe la EXTRACCIÓN; que la
+        # serie esté descontinuada lo dice su nota metodológica, no este campo.
+        robustness="green",
     ),
     # ── Sector Monetario y Financiero ────────────────────────────
     CanonicalSeries(
@@ -520,9 +526,7 @@ REGISTRY: List[CanonicalSeries] = [
 # sacarla. Lo que falta para levantar cada exclusión:
 #
 #   lleg_total.xls  — 4.555 empates en las columnas de tasa de crecimiento.
-#   piianual_6.xlsx — 2.970 empates: filas distintas del cuadro colapsan en un mismo código
-#   piianual.xls    — 1.855 empates, mismo motivo. Necesitan que el código lleve su sujeto.
-#   Los 18 restantes — no evaluados uno a uno todavía; entran cuando se los verifique.
+#   Los 16 restantes — no evaluados uno a uno todavía; entran cuando se los verifique.
 #
 # Vacío o None en `ingest_canonical` significa "todo el canónico", que es el comportamiento
 # histórico y el que corresponde cuando esta lista deje de hacer falta.
@@ -561,6 +565,17 @@ PERSISTIBLES_VERIFICADOS: Dict[str, Optional[List[str]]] = {
     # valores en conflicto.
     "TASA_DOLAR_REFERENCIA_MC.xlsx": ["Diaria", "PromMensual", "PromTrimestral", "PromAnual",
                                       "FPMensual", "FPTrimestral", "FPAnual"],
+    # La posición de inversión internacional, los dos manuales. Bajo cada año el cuadro trae
+    # SEIS conceptos —saldo de apertura, cuatro flujos y saldo de cierre— y el motor no sabía
+    # leer un sub-encabezado que no fuera un período: los seis caían en el mismo (serie, año).
+    # Además tomaba como fila de años la de FECHAS de corte, así que los flujos salían
+    # corridos un año. Con las dos cosas corregidas, la IDENTIDAD CONTABLE del propio cuadro
+    # —cierre = apertura + los cuatro flujos— cierra en 2.718 casos y falla en cero.
+    "piianual_6.xlsx": None,
+    # El MBP5 va POR HOJA porque su entrada es `yellow`, y con razón: es la serie histórica y
+    # DESCONTINUADA, que su propia nota manda usar solo antes de 2010. Ese amarillo habla de
+    # metodología, no de extracción — la hoja extrae limpia y la identidad contable cierra.
+    "piianual.xls": None,
 }
 
 

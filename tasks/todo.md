@@ -654,3 +654,56 @@ una inferencia paga.
 **Alcance del barrido:** 27 planillas / 46 hojas. Solo 4 tenían spec del modelo. 26 hojas
 `period_rows` sin columnas de dato sin declarar. `mm_series` sigue en **17.115** filas, con
 cero regresión.
+
+---
+
+## ✅ HECHA 2026-09-04 — T-PS-2d: triaje de los archivos con «último gana» (3 de 4)
+
+Re-medidos con el código de hoy (las cifras del anexo I se mantienen). **Tres causas
+distintas**, ninguna es la misma:
+
+### 1 · `TASA_DOLAR_REFERENCIA_MC.xlsx` — dos problemas, no uno
+
+| hoja | obs | conflictos | qué pasa |
+|---|---:|---:|---|
+| `PromTrimestral` · `FPTrimestral` | 616 | **367** | el trimestre se rotula `Enero-Marzo`, `Abril-Junio`… y `_QUARTERS` solo tiene las formas ABREVIADAS (`ene-mar`). Sin trimestre, las 4 filas del año colapsan en el año. |
+| `PromMensual` · `FPMensual` · `PromAnual` · `FPAnual` | 2.006 | **0** | ya están limpias |
+| `Diaria` | 26.862 | **19.680** | es una serie **DIARIA** de verdad: columnas `Año \| Mes \| Día`. La identidad `(series_code, period)` no tiene día, así que los ~22 días hábiles de cada mes colapsan y sobrevive uno. |
+
+Lo primero es una grafía faltante, del mismo tipo que los rótulos acumulados. Lo segundo es
+una decisión de diseño.
+
+### 2 · `piianual_6.xlsx` y `piianual.xls` — una dimensión que no es período
+
+La fila bajo los años lleva `Saldo al inicio | Transacciones Netas | Variaciones de Tipo de
+cambio | Variaciones de Precio | Otras Variaciones | Saldo al final`: **seis columnas por
+año**, y ninguna es un subperíodo. El spec las ignora (`subperiod_header_row=None`) y las seis
+caen en el mismo año — por eso `activos` en 2009 tiene cinco valores distintos (10.959,6 ·
+−426,7 · −32,7 · 5,8 · 0,0). No son un conflicto: son **seis series distintas** aplastadas en
+una. Bien leídas, el archivo multiplica por seis su información real.
+
+### 3 · `lleg_total.xls` — el grupo no viaja con el número
+
+En `year_blocks`, el encabezado tiene dos niveles: `Total | Tasa de Crecimiento | Dominicanos
+| Tasa de Crecimiento`, y debajo `Mensual | Acumulado | Trimestral | Igual Mes…`. «Tasa de
+Crecimiento › Igual Mes» aparece bajo *Total* y bajo *Dominicanos*: mismo código, datos
+distintos. Es la doctrina del sujeto, en la orientación que todavía no la aplica —
+`period_rows` ya tiene `_grupo_a_la_izquierda`, `year_blocks` no.
+
+### Pasos
+- [x] **1.** Hecho, más el caso `Año | Trimestre | valores` que la inferencia no contemplaba.
+- [x] **2.** Habilitado con **las SIETE hojas**: la diaria también entró.
+- [x] **3.** `YYYY-MM-DD` es la cuarta forma de período, con cadencia `daily`, orden
+      cronológico e inferencia. `ExtractionSpec.day_col` se detecta por el encabezado y se
+      confirma contra el contenido. 17.908 obs diarias, 0 conflictos.
+- [x] **4a.** PII: `dimension_header_row` para los seis conceptos por año, y `_axis_year`
+      dejó de tomar una FECHA por año —tomaba la fila de fechas de corte como fila de años y
+      los flujos salían **corridos un año**—. Verificado con la identidad contable del propio
+      cuadro: **cierra en 2.718 casos y falla en 0**. 130→780 y 96→576 series.
+- [ ] **4b.** `lleg_total`: el grupo en `year_blocks`. ÚNICO pendiente de los cuatro.
+
+### Sensores
+- [x] Los cinco archivos de test nuevos, todos corridos contra el código viejo primero.
+- [x] Las 7 hojas con 0 conflictos. Y las dos PII con 0.
+- [x] **0 valores, 0 cadencias, 0 desapariciones.** `mm_series`: 17.115 → **51.687**.
+- [x] `ruff` verde · `mypy` **exit 0** · `pytest` **7.548, exit 0**.

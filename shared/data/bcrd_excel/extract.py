@@ -204,6 +204,15 @@ def _extract_matrix(grid: Grid, spec: ExtractionSpec, lineage: Lineage,
             if m is not None:
                 col_sub[c] = ("M", m)
 
+    # La dimensión de CONCEPTO: no divide el año, distingue magnitudes dentro de él. Va al
+    # CÓDIGO de la serie, que es donde el sujeto tiene que viajar — no al período.
+    col_dim: Dict[int, str] = {}
+    if spec.dimension_header_row is not None:
+        for c in range(c0, c1):
+            etiqueta = _slug(str(grid.cell(spec.dimension_header_row, c) or ""))
+            if etiqueta:
+                col_dim[c] = etiqueta
+
     def period_for(year: int, c: int) -> str:
         sub = col_sub.get(c)
         if sub and sub[0] == "Q":
@@ -298,8 +307,10 @@ def _extract_matrix(grid: Grid, spec: ExtractionSpec, lineage: Lineage,
             year = col_year.get(c)
             if year is None:
                 continue
+            dim = col_dim.get(c)
             out.append(Record(
-                series=f"{prefix}.{code}", period=period_for(year, c),
+                series=f"{prefix}.{code}.{dim}" if dim else f"{prefix}.{code}",
+                period=period_for(year, c),
                 value=coerce_num(grid.cell(r, c)), lineage=lineage, unit=spec.unit,
             ))
     return out

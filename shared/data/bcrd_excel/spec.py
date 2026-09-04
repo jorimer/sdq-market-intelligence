@@ -77,6 +77,10 @@ class ExtractionSpec:
     # ── matrix (periods across columns, series down rows) ────────
     period_header_row: Optional[int] = None       # row of years across columns
     subperiod_header_row: Optional[int] = None     # row of quarters/months (optional)
+    #: Fila de CONCEPTOS bajo cada año: `Saldo al inicio | Transacciones Netas | Variaciones
+    #: de Precios…`. No es un subperíodo —no divide el año— sino una DIMENSIÓN de la serie:
+    #: seis magnitudes distintas por año. Sin ella las seis caían en el mismo (serie, año).
+    dimension_header_row: Optional[int] = None
     label_col: Optional[int] = None                # column holding each row's series name
     frequency: Optional[str] = None                # "annual" | "quarterly" | "monthly"
 
