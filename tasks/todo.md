@@ -745,11 +745,27 @@ Un archivo (o una hoja) entra a `PERSISTIBLES_VERIFICADOS` solo si, medido:
 6. Y una **verificación de sentido** propia del archivo cuando la hay (identidad contable,
    YoY reconstruido, suma de partes), no solo ausencia de conflictos.
 
+### Un séptimo criterio, que salió del triaje
+**Densidad: filas contra claves distintas.** `taap_pasivad.xlsx` emitía 29.325 filas para
+1.610 observaciones reales (×18,21) y todas las de más eran NULAS, así que ninguno de los
+seis criterios lo veía. Un cuadro mal leído puede no producir un solo conflicto.
+
+Y una corrección al instrumento antes que a los archivos: la primera medición contaba como
+conflicto cualquier duplicado, y la mayoría eran valor contra NULO —que el upsert ya
+protege—. Separadas las dos cosas, de 6 archivos «en falla» quedaron 3.
+
 ### Pasos
-- [ ] **1.** Triaje instrumentado de los 18, un cuadro por archivo con los seis criterios.
-- [ ] **2.** Habilitar los que ya pasan, sin tocar código.
-- [ ] **3.** Corregir los que fallan, uno por uno, con test que corra primero contra el
-      código viejo, y volver a medir.
-- [ ] **4.** Corrida canónica completa: regresión (0 valores cambiados, 0 desapariciones),
-      idempotencia, y los tres gates.
-- [ ] **5.** Anexo IX en `tasks/INFORME_FASE0_PERSISTENCIA_BCRD.md` + `lessons.md`.
+- [x] **1.** Triaje de los 18 con los seis criterios más la densidad.
+- [x] **2.** Habilitados los 27 archivos del registro: 18 nuevos, todos verificados.
+- [x] **3.** Ocho defectos del nombrado y de la unidad, cada uno con su test corrido antes
+      contra el código viejo. El peor: el IMAE, encendido desde el primer bloque, tenía dos
+      series que no se persistían nunca y siete que no decían de qué cuadro eran.
+- [x] **4.** Corrida completa: **73.472 → 101.251** filas, **1.828 → 2.103** series, **0
+      valores cambiados** en lo que ya existía, 1.125 correcciones de metadato, idempotente.
+      Gates: pytest 7.631 exit 0 · ruff verde · mypy exit 0.
+- [x] **5.** Anexo IX en el informe y entrada en `lessons.md`.
+
+### Lo que queda declarado
+249 series huérfanas por renombrado (248 reaparecen con su nombre bueno; la otra era una
+columna fantasma con un solo valor real) — limpiadas en dev, **hay que repetirlo en prod**.
+`pib_nominal_gasto` sigue sin puente. Producción y T-PS-4, sin empezar.

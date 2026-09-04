@@ -865,3 +865,144 @@ extracción.
 | idempotencia | 0 cambios |
 
 **Punto de partida de la sesión: 509 filas y 7 series.**
+
+---
+
+# Anexo IX — Los 18 archivos restantes: el corpus canónico completo
+
+Nueve archivos estaban habilitados; estos son los otros dieciocho. El triaje partió de los
+seis criterios ya usados, y el instrumento se corrigió antes que los archivos: la primera
+medición contaba como «conflicto» cualquier duplicado, y **la mayoría eran valor contra
+NULO**, que el upsert ya protege desde el bloque anterior. Separadas las dos cosas, de 6
+archivos «en falla» quedaron 3.
+
+## IX.1 El criterio que faltaba: la DENSIDAD
+
+Ninguno de los seis criterios veía el peor defecto del lote. `taap_pasivad.xlsx` emitía
+**29.325 filas para 1.610 observaciones reales** —×18,21— y todas las de más eran nulas, así
+que no había conflicto de valores que medir. La hoja declara **256 columnas**, el cuadro
+termina en la 14 («Interbancaria», un grupo sin métrica propia) y el relleno del
+super-encabezado no tenía freno: las 241 columnas vacías heredaban ese nombre.
+
+> **Filas contra claves distintas** es ahora parte del triaje. Un cuadro mal leído puede no
+> producir ni un solo conflicto.
+
+El mismo defecto, más chico, en el IPC por grupos (×1,32) y en las llegadas —donde la
+columna fantasma llegó a publicar **un valor real inventado**: un «6.944 %» suelto en la
+columna 54, a 36 columnas del final del cuadro, bajo el código de la tasa de crecimiento de
+extranjeros—.
+
+## IX.2 Ocho defectos del nombrado, una sola doctrina
+
+Todos son la misma frase rota —*el sujeto viaja con el número*— o su gemela, *la unidad
+viaja con el número*.
+
+| # | Qué pasaba | Dónde se veía |
+|---|---|---|
+| 1 | El relleno del grupo se pasaba del final del cuadro | `taap_pasivad`, `ipc_grupos`, `lleg_total` |
+| 2 | Un guion (`-`) contaba como rótulo | `ipc_subyacente`: `x`, `x_c4`, `x_c5` |
+| 3 | El número de línea del emisor (`(9)`, `(4)=(1 al 3)`) contaba como rótulo **y tapaba el grupo** | `base_monetaria`: `me_9`, `me_11`, `valores_3` |
+| 4 | La ventana de seis filas no llega si hay un bloque intermedio | `ipc_subyacente`: `col2` |
+| 5 | El rodeo a la izquierda no cruzaba los ejes | `tasa_ocupacion`: `col2` |
+| 6 | Con TRES niveles, el calificador está arriba y no al lado | `imae_2018`: 9 de 14 columnas |
+| 7 | La unidad de HOJA pisaba a la de la columna | 162 series `Índice` siendo tasas |
+| 8 | Un rótulo repetido dejaba sin calificar al PRIMERO | `bpagos`: «Nacionales» a secas |
+
+Más dos del nombrado semántico: el modelo devuelve el nombre ya calificado y se le anteponía
+la ruta otra vez (códigos de 140 caracteres con la jerarquía duplicada), y **la caché de
+nombres era todo-o-nada** — una fila ambigua nueva se quedaba sin nombre para siempre, sin
+error y sin aviso, y vetada al escribir.
+
+El caso 6 merece nombrarse aparte. El IMAE está encendido desde el primer bloque y tenía
+**dos series que no se persistían nunca** (`interanual_c13`, `promedio_12_meses_c15`, ambas
+de la Tendencia-Ciclo) y siete más que no decían de qué cuadro eran. Leído bien el
+encabezado, las catorce columnas salen simétricas — y **el puente canónico del IMAE vuelve a
+ser el que el registro declaraba al principio**, `serie_original_variacion_porcentual_interanual`,
+que se había «corregido» porque no resolvía a nada.
+
+> Un puente que no resuelve puede estar acusando al extractor, no al registro.
+
+## IX.3 Tres correcciones al registro, con evidencia
+
+**La cadencia de las series de empleo.** `tasa_ocupacion` y `tasa_desocupacion` declaraban
+`trimestral`. El archivo no publica un solo trimestre: son dos hojas anuales y dos
+semestrales (las encuestas de abril y octubre). 83 y 125 observaciones, cero trimestrales.
+
+**La unidad de las remesas.** La hoja se titula «MILLONES DE US$» y trae 280.155.040 para
+enero de 2010 — juntas, las dos cosas dirían 280 billones de dólares en un mes. Los doce
+meses de 2010 suman **3.682.932.483** y la balanza de pagos MBP6 del propio BCRD publica
+**remesas 2010 = 3.683 millones de US$**. Las celdas están en US$ y el rótulo se equivoca por
+un factor de un millón. Entra por `UNIDADES_CURADAS`, que es la excepción a «la unidad la
+declara el emisor» y para admitir un caso exige una verificación contra **otra publicación
+del mismo emisor**, escrita al lado de la corrección.
+
+**Cómo se contrasta la cadencia.** El detector exigía que la declarada fuera la ÚNICA forma
+presente en el archivo, y un archivo del BCRD suele traer varias hojas con cortes distintos.
+Ahora la señal es la AUSENCIA: si ninguna serie tiene la cadencia declarada, el eje temporal
+se leyó mal. Lo que mide una serie mezclada dentro de sí misma lo caza el criterio de formas
+mezcladas, que es por serie y más filoso.
+
+## IX.4 La verificación de SENTIDO, archivo por archivo
+
+No alcanza con que no haya conflictos. Donde el cuadro trae una identidad, se computó:
+
+| Verificación | Resultado |
+|---|---|
+| IPC por grupos: cada «Var. %» contra la variación mensual de su índice | **11 de 12 exactas** (0,000000); alimentos difiere 0,0038 pp en 1 mes de 330 — redondeo del emisor |
+| IPC subyacente: ídem | **318 de 318 exactas** |
+| IPC serie referencial: ídem | **24 de 24 exactas** |
+| Reservas: netas ≤ brutas | **0 violaciones** en 284 meses comunes |
+| Tasas pasivas: el promedio ponderado entre el mínimo y el máximo de los plazos | **0 fuera de rango** en 115 meses |
+| Base monetaria: la identidad contable en sus dos niveles | **0 fallas** en 290 meses, error 0,0000 |
+
+## IX.5 Robustez: siete suben, tres entran por hoja
+
+El guard `test_lo_habilitado_para_escribir_declara_ser_robusto` frenó el encendido de diez
+archivos declarados `yellow`. La respuesta fue mirar de qué hablaba cada amarillo:
+
+- **De extracción, y ya está medido → `green`**: `ipc_subyacente`, `taap_activad`,
+  `taap_pasivad`, `base_monetaria`, `Remesas_6`.
+- **De metodología, no de lectura → `green` + nota que viaja al cliente**: `bpagos.xls`
+  (MBP5, descontinuada) y `ipc_base_..._referencial` (serie de empalme). Mismo criterio que
+  se aplicó a `piianual.xls` en el bloque anterior.
+- **De homogeneización → sigue `yellow`, entra POR HOJA**: `pib_gasto.xls` (2 hojas),
+  `tasa_ocupacion.xls` (3) y `tasa_desocupacion.xls` (4).
+
+## IX.6 Estado del corpus
+
+| | antes | ahora |
+|---|---:|---:|
+| archivos habilitados | 9 de 27 | **27 de 27** |
+| `mm_series` | 73.472 filas | **101.251** |
+| series | 1.828 | **2.103** |
+| valores cambiados en las claves que ya existían | — | **0** |
+| correcciones de metadato (`Índice`→`%`, `index`→`rate`) | — | **1.125** |
+| duplicados con valores en conflicto | 0 | **0** |
+| series con formas de período mezcladas | 0 | **0** |
+| códigos por coordenada persistidos | 0 | **0** |
+| filas sin cadencia | 0 | **0** |
+| archivos marcados por truncamiento | 0 | **0** |
+| idempotencia | 0 cambios | **0 cambios** |
+
+**Punto de partida de todo el trabajo: 509 filas y 7 series.**
+
+Los tres gates: `pytest` **7.631 pasados, exit 0** · `ruff` verde · `mypy` **exit 0**.
+
+## IX.7 Lo que queda declarado, no resuelto
+
+- **249 series quedan huérfanas por el renombrado.** 248 reaparecen con su nombre bueno y la
+  restante era la columna fantasma de las llegadas. La ingesta no borra, así que hay que
+  limpiarlas explícitamente: se hizo en la base de dev usada para medir, y **hay que
+  repetirlo en producción** después del primer despliegue. Un renombrado masivo deja
+  arrastre, y el arrastre no avisa.
+- **La caché de specs vive en `data/`, que está en `.gitignore`.** Producción la reconstruye
+  sola en su próxima corrida, y eso incluye pagar una vez las llamadas de nombrado de las
+  filas recién desempatadas.
+- **`pib_nominal_gasto` sigue sin puente** (`excel_series_suffix`): el archivo publica
+  niveles y ponderaciones en dos cuadros por hoja y falta decidir cuál es la serie canónica.
+  Es uno de los 17 sin puente del inventario del punto 5.
+- **Las 509 filas del conector API tienen `nature` NULL.** Vienen de antes de que existiera
+  la columna y esta ingesta no las toca — es otra ruta (`ingest_series`).
+- **Producción**: repetir el diff contra prod antes de desplegar (todo lo medido acá es
+  contra dev) y desatascar alembic en dev.
+- **T-PS-4**, el test de integridad permanente, sigue sin hacer.

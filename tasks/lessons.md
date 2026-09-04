@@ -488,3 +488,77 @@ existen para eso y me avisaron gratis.
 **Disparador.** Cualquier heurística nueva en `inference.py` o `extract.py` que dispare sobre
 una señal estructural (un valor que se repite, una fila que aparece, una columna vacía).
 Preguntarse qué caso NORMAL exhibe esa misma señal.
+
+---
+
+## Un criterio que no falla nunca puede estar mirando el lugar equivocado
+
+**Síntoma.** Habilité `taap_pasivad.xlsx` con los seis criterios en verde —0 duplicados con
+valores en conflicto, 0 períodos mezclados, 0 códigos por coordenada, 0 avisos de
+truncamiento, 0 discrepancias de cadencia— y el archivo emitía **29.325 filas para 1.610
+observaciones reales**. Las 27.715 de más eran nulas, bajo el código de la tasa
+interbancaria, porque las 241 columnas de relleno de la hoja heredaban ese rótulo.
+
+**Causa raíz.** Mis seis criterios eran todos criterios de CONFLICTO: preguntan si dos
+valores se pelean por la misma clave. Un cuadro mal leído que produce nulos no pelea con
+nadie. Construí el juego de criterios a partir del defecto del bloque anterior («último
+gana») y me quedé con esa forma de mirar.
+
+**Regla futura.** Junto a los criterios de conflicto va uno de VOLUMEN: filas contra claves
+distintas, y claves contra el rectángulo serie×período. Una densidad de ×18 —o una cobertura
+del 15% donde se esperaba 100%— no dice qué está mal, pero dice que hay algo, y es lo único
+que se ve cuando el defecto produce vacío en vez de contradicción.
+
+**Disparador.** Cualquier tabla de triaje que declare «pasa». Antes de firmarla, mirar los
+conteos brutos al lado de los ceros: si un archivo tiene 14 series y 29.325 filas para 115
+períodos, la aritmética no cierra aunque todos los criterios estén en verde.
+
+---
+
+## Un puente que no resuelve puede estar acusando al extractor
+
+**Síntoma.** En la fase 0 encontré que el registro canónico declaraba para el IMAE el sufijo
+`serie_original_variacion_porcentual_interanual` y que **ninguna serie del archivo terminaba
+así**. Lo tomé como un error del registro, computé cuál de las cuatro candidatas era la buena
+—coincidencia exacta, 0,00000 pp, contra la variación interanual del índice— y corregí el
+registro a `variacion_porcentual_interanual`. La verificación numérica estaba bien hecha y la
+conclusión era falsa.
+
+**Causa raíz.** El sufijo declarado era el correcto desde el principio. Lo que estaba roto era
+el extractor: el IMAE tiene un encabezado de TRES niveles y el nombrado solo sabía calificar
+con el vecino de la izquierda, así que nueve de sus catorce columnas perdían el nombre de su
+cuadro y dos se desempataban por coordenada (y no se persistían). Al arreglar el encabezado,
+la declaración original volvió a resolver, y a resolver a una sola serie. Corregí el mapa
+porque no coincidía con el territorio, sin comprobar que el territorio estuviera bien medido.
+
+**Regla futura.** Cuando una declaración curada por un analista no coincide con lo que produce
+el motor, las dos hipótesis valen lo mismo hasta que una se descarte. Antes de tocar la
+declaración: mirar si lo que el motor produce tiene sentido POR SÍ MISMO. Nueve de catorce
+columnas sin decir de qué cuadro son, y dos llamadas `_c13` y `_c15`, no es una lectura sana —
+y eso se veía sin saber nada del IMAE.
+
+**Disparador.** Todo cambio a `excel_series_suffix`, `api_series` o cualquier otro puente del
+registro canónico. Primero listar TODAS las series que el archivo produce y preguntarse si esa
+lista es plausible.
+
+---
+
+## Cachear un resultado parcial como si fuera total lo congela para siempre
+
+**Síntoma.** Cambié qué filas se consideran ambiguas —al desempatar también la primera
+aparición de un rótulo repetido, 140 filas más— y ninguna se nombró. Salieron con su
+coordenada (`_rNN`) y el veto de la frontera de escritura las descartó: **129 series de un
+archivo ya encendido habrían dejado de persistirse**, sin error y sin aviso.
+
+**Causa raíz.** La caché de nombres se leía todo-o-nada: «si hay entrada para este hash, ya
+está resuelto». Es cierto el día que se escribe y deja de serlo en cuanto cambia el conjunto
+de filas que necesitan nombre. La caché guardaba una RESPUESTA cuando lo que tenía que guardar
+era un MAPA parcial.
+
+**Regla futura.** Una caché indexada por un hash de la ENTRADA (la estructura de la hoja) no
+puede usarse como si estuviera indexada por la PREGUNTA (qué filas hay que nombrar). Al leerla,
+comparar lo pedido contra lo guardado y pedir la diferencia.
+
+**Disparador.** Toda caché cuya clave describe el insumo y cuyo valor responde una consulta
+sobre él. Preguntarse: si mañana cambia la consulta, ¿esta caché devuelve una respuesta vieja
+o admite que le falta?
