@@ -804,3 +804,87 @@ valores cambiados.
 Tres puentes canónicos nuevos donde no había decisión de analista que tomar (`remesas` —el
 archivo produce UNA serie—, `tpm`, `ipc_subyacente`): las excepciones sin puente bajan de 18 a
 **15**, cada una con su motivo escrito y verificado por un test que rechaza los genéricos.
+
+---
+
+## 🔵 PROPUESTO — BLOQUE PP · Procedencia de proyección
+> Spec: `docs/SPEC_PROCEDENCIA_PROYECCION.md` (traído al repo hoy; vivía sin commitear en el
+> checkout principal, igual que el de persistencia). Gate previo **CERRADO**: asimetría sí,
+> `MIN_OOS = 12`, `N ≥ 8`.
+
+### Qué se construye
+Un cuarto estado, `PROJECTED`, entre «tengo el dato» y «declaro la brecha». Hoy
+`is_forward_looking` ya detecta lo prospectivo y `_forward_gaps` lo declara brecha: falta la
+vía legítima al otro lado del `if`. Una proyección ancla **solo si trae backtest**; si no,
+se degrada a `GAP` **con el motivo escrito**, para que el informe diga por qué no se estimó.
+
+### Verificación previa, hecha antes de planear
+A diferencia del spec de persistencia —cuyos números de línea habían corrido ~30—, **este
+spec está verificado contra el código y sus anclas son exactas**: `_evidence_state` :47,
+`SubQuestion` :64, `anchored` :78, `VariableSignal` :66, `state_counts` :148, `_real_credit`
+:155, `by_state` :173, `registry_passages` :36, `orchestrator` :110 y `_forward_gaps` :114,
+`provenance_paragraph` :140, la ruta `quality` :479. Las trece coinciden.
+
+Una corrección al plan igual: `by_state` (`signals.py:173`) **hoy inicializa tres claves y
+acumula con `.get(k, 0)`**, así que no explota con una cuarta; el cambio es de consistencia
+de reporte, no un arreglo de bug. El plan ya lo dice y se confirma.
+
+### Pasos
+- [x] **T-PP-1 · Vocabulario.** `PROJECTED`, alias, `ProjectionMeta` frozen (16 campos, §3.2),
+      `projection` en `VariableSignal`. `normalize_state` sigue mandando lo desconocido a
+      `GAP`: una cadena no reconocida nunca escala a proyección.
+- [x] **T-PP-2 · Cobertura y su asimetría.** `_projected_credit` con `real_fraction` (no
+      `1.0` plano), `coverage_projected` como propiedad HERMANA. **El test que manda:**
+      convertir una señal `GAP` en `PROJECTED` admisible y comprobar que `coverage_real`
+      queda IDÉNTICO. Más el diff de `scripts/build_estado.py` sobre los 17 productos: si se
+      movió un decimal, es un bug.
+- [x] **T-PP-3 · Gate de admisión** (`shared/registry/projection.py`, nuevo). Las once
+      condiciones de rechazo, una por test. `MIN_OOS = 12`.
+- [ ] **T-PP-4 · Anclaje condicionado.** `anchored` con **desempaquetado de la tupla** —una
+      tupla no vacía es siempre truthy, y retornarla directo ancla TODA proyección, que es lo
+      contrario de lo que el bloque existe para lograr—. Cableado en tres puntos, ninguno en
+      `_evidence_state`.
+- [ ] **T-PP-5 · Prosa.** El error va en la MISMA frase que la proyección, nunca en
+      limitaciones al final.
+- [ ] **T-PP-6 · Cerebro y API.** Cuarto párrafo del `EPISTEMIC_STANDARD` en el núcleo (es
+      regla de la casa, no de macro) y `quality` aditivo. Grepear `by_state` en `frontend/`.
+
+### Cómo lo voy a partir en PRs
+1. **T-PP-1 + T-PP-2 + T-PP-3** — vocabulario, cobertura y gate. Todo interno, sin cambiar
+   comportamiento observable: el test de no-regresión de cobertura es el que lo cierra.
+2. **T-PP-4** — el anclaje. Es el que cambia qué se publica, y va solo.
+3. **T-PP-5 + T-PP-6** — prosa, Cerebro y API.
+
+### Lo que NO se hace acá
+Ningún modelo de proyección: eso es BLOQUE MP y depende de este. Sin `PROJECTED` no hay
+dónde poner un pronóstico; con `PROJECTED` y sin motor, el gate simplemente degrada todo a
+`GAP` — que es el comportamiento correcto y el de hoy.
+
+
+### PR 1 del bloque PP — hecho
+`PROJECTED` en el vocabulario, `ProjectionMeta` (16 campos), `coverage_projected` como
+propiedad hermana y el gate de admisión con sus once condiciones de rechazo, una por test.
+
+**El sensor que gobierna el bloque, con dientes.** La primera versión comparó los 17 ejes sin
+base: los 17 salían «pendiente de cableado», sin señales, y la comparación era de ceros contra
+ceros — un sensor que pasa sin mirar. Con la base de dev y los productos registrados
+(`import app.main`, que es lo que los registra) el sensor mide de verdad:
+
+| | |
+|---|---:|
+| ejes / variables | 17 / **134** |
+| ejes cuya `coverage_real` se movió | **0** |
+| media de cobertura, antes → después | 0,3609 → **0,3609** |
+| `by_state`, antes | `{real: 62, rubric: 9, gap: 63}` |
+| `by_state`, después | `{real: 62, rubric: 9, **projected: 0**, gap: 63}` |
+
+**Dos correcciones al plan, con evidencia.** `scripts/build_estado.py`, que el plan nombra
+como el sensor, **no existe** — la cobertura se computa en `shared/registry/service.py`, y de
+ahí sale la medición de arriba. Y `shared/data_api` ya expone la cuarta clave como
+consecuencia de `state_counts`: es aditivo (el frontend lee `.real`/`.rubric`/`.gap` por
+nombre, no itera), pero adelanta parte de T-PP-6.
+
+**Deuda declarada:** `fin_del_periodo` vive ahora en `shared/data/periodos.py`, y hay DOS
+copias previas del mismo parse —`modules/macro_monitor/service.py` y
+`modules/trade_intel/products.py`— escritas antes. No se unifican acá porque tocarlas es otro
+cambio; queda anotado para que la próxima apunte a la de `shared/` y no escriba una cuarta.
