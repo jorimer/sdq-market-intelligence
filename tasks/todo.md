@@ -769,3 +769,38 @@ protege—. Separadas las dos cosas, de 6 archivos «en falla» quedaron 3.
 249 series huérfanas por renombrado (248 reaparecen con su nombre bueno; la otra era una
 columna fantasma con un solo valor real) — limpiadas en dev, **hay que repetirlo en prod**.
 `pib_nominal_gasto` sigue sin puente. Producción y T-PS-4, sin empezar.
+
+
+---
+
+## ✅ COMPLETADO — T-PS-4 + la cura durable del arrastre
+
+### La sincronización poda lo que ella misma dejó de escribir
+`ingest_canonical(..., podar=True)`, encendido en la operación mensual. Cuatro frenos, y cada
+uno tapa una forma concreta de destruir dato publicado: apagado por defecto · un archivo que
+FALLÓ no autoriza a borrar sus series · una lectura que no produjo nada, tampoco · y un TOPE
+proporcional que frena y REPORTA si la poda se llevaría más de la mitad de un archivo, porque
+un renombrado de esa escala es un evento humano y no algo que una tarea mensual decida sola.
+Siete tests, todos corridos antes contra el código viejo.
+
+### T-PS-4 · las siete aserciones de §4
+`modules/macro_monitor/tests/test_persistencia_canonica.py`, **137 casos**. El contrato se
+congela en un MANIFIESTO comiteado —generado de una corrida real— porque CI no tiene el
+corpus y un test que se conforme con una base vacía pasa siempre. `min_obs` es un
+**trinquete**: `scripts/generar_manifiesto_canonico.py` se niega a bajarlo, porque regenerar
+sería el gesto que borra la evidencia del defecto que el manifiesto existe para detectar.
+
+Dientes probados rompiendo el contrato de a una cosa: detecta las seis (entrada sin serie,
+renombrado, hueco, cadencia contradictoria, períodos mezclados, `pib_real` por debajo de 60).
+
+### Lo que encontró en su primera corrida
+**Dos huecos en la Tasa de Política Monetaria.** El BCRD rotula «Feb1» y «Mar2» —la llamada a
+nota pegada al mes, sin espacio ni barra— y esas dos filas se descartaban en silencio.
+No eran meses cualesquiera: **febrero de 2013 y marzo de 2020**, los dos en que el BCRD movió
+la tasa (0,05 → 0,0425; y 0,045 → 0,035 al empezar la pandemia). Justo lo que un modelo con
+rezagos necesita y lo que un ojo no echa de menos. Recuperadas: 101.251 → 101.257 filas, 0
+valores cambiados.
+
+Tres puentes canónicos nuevos donde no había decisión de analista que tomar (`remesas` —el
+archivo produce UNA serie—, `tpm`, `ipc_subyacente`): las excepciones sin puente bajan de 18 a
+**15**, cada una con su motivo escrito y verificado por un test que rechaza los genéricos.

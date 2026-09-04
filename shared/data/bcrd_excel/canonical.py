@@ -285,7 +285,9 @@ REGISTRY: List[CanonicalSeries] = [
         # está por encima de un bloque de cierres anuales y lo que hay justo arriba del
         # primer dato son guiones—. Nombradas bien, la variación mensual coincide EXACTO con
         # la de su índice en las 318 comparaciones.
-        robustness="green",
+        # El puente apunta al ÍNDICE, no a ninguna de sus tres variaciones: es el nivel, y
+        # la comprobación que lo eligió es que las tres variaciones se derivan de él.
+        robustness="green", excel_series_suffix=".ipc_subyacente",
     ),
     # ── Sector Real ──────────────────────────────────────────────
     CanonicalSeries(
@@ -432,7 +434,8 @@ REGISTRY: List[CanonicalSeries] = [
                   "BCRD (2010 = 3.683 millones, y los doce meses suman 3.682.932.483).",
         # A `green`: la duda que sostenía el amarillo era la unidad, y quedó resuelta con una
         # comprobación contra otra publicación del emisor, no con una impresión.
-        robustness="green",
+        # El puente no era una decisión de analista: el archivo produce UNA sola serie.
+        robustness="green", excel_series_suffix=".valor",
     ),
     # Posición de inversión internacional: MISMA situación que la balanza de pagos —
     # dos ediciones del manual del FMI, dos archivos, y estábamos leyendo el viejo.
@@ -466,7 +469,9 @@ REGISTRY: List[CanonicalSeries] = [
         source_file="Serie_TPM.xlsx", base="%", frequency="mensual",
         homogenization="nivel directo",
         rationale="Instrumento central de política monetaria del BCRD.",
-        robustness="green",
+        # De las tres series del archivo (TPM, lombarda y facilidad de depósito), la TPM se
+        # nombra sola: no hay elección que hacer.
+        robustness="green", excel_series_suffix=".tasa_de_politica_monetaria",
     ),
     CanonicalSeries(
         key="agregados_monetarios", concept="Agregados monetarios (M1, M2…)",
@@ -718,6 +723,28 @@ PERSISTIBLES_VERIFICADOS: Dict[str, Optional[List[str]]] = {
     "tasa_desocupacion.xls": ["Anual 1960-1990", "Anual 1991-2016",
                               " Semestral Abril 2000-2016", "Semestral Octubre 2000-2016"],
 }
+
+
+def codigo_de(entrada: CanonicalSeries, codigos) -> Optional[str]:
+    """El `series_code` al que apunta el puente de *entrada*, o ``None``.
+
+    El sufijo identifica DENTRO del archivo de la entrada, no en todo el corpus, y resolverlo
+    globalmente devuelve la serie equivocada: `serie_original_indice` existe en el PIB y en el
+    IMAE, y `quintil_3` en el IPC por quintiles y en el costo de la canasta — cinco de los
+    treinta y cuatro puentes colisionan así. Por eso el emparejamiento se acota al prefijo del
+    `source_file`, que es el otro campo que la entrada ya declara.
+
+    Devuelve ``None`` si la entrada no tiene puente o si el sufijo no resuelve a EXACTAMENTE
+    una serie: dos es tan poco útil como cero, y elegir una sería adivinar.
+    """
+    from .extract import default_prefix
+
+    if not entrada.excel_series_suffix:
+        return None
+    prefijo = default_prefix(entrada.source_file) + "."
+    hits = [c for c in codigos
+            if str(c).startswith(prefijo) and str(c).endswith(entrada.excel_series_suffix)]
+    return hits[0] if len(hits) == 1 else None
 
 
 def registry() -> List[CanonicalSeries]:

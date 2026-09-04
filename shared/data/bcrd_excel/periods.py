@@ -51,7 +51,15 @@ def parse_month(value: Any) -> Optional[int]:
         return _MONTHS[token]
     # first whitespace-delimited word (handles "Dic. 2007" style cells)
     first = token.split()[0].rstrip(".")
-    return _MONTHS.get(first)
+    if first in _MONTHS:
+        return _MONTHS[first]
+    # La llamada a NOTA pegada al nombre, sin espacio ni barra: la serie de Tasa de Política
+    # Monetaria rotula «Feb1» y «Mar2». Esas dos filas se descartaban en silencio y la serie
+    # salía con dos huecos internos — en febrero de 2013 y marzo de 2020, los dos meses en
+    # que el BCRD movió la tasa. Se recorta solo si lo que queda ES un mes conocido: así
+    # «T1», «Trim1» o «2013» siguen sin serlo.
+    sin_llamada = re.sub(r"\d+$", "", first).rstrip(". ")
+    return _MONTHS.get(sin_llamada)
 
 
 # quarter label → 1..4. Covers BCRD's many spellings: month-range ("E-M", "A-J",

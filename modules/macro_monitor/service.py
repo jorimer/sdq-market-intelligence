@@ -616,8 +616,57 @@ def _con_unidades_curadas(records: List[Any]) -> List[Any]:
     return salida
 
 
+#: Cuánto de un archivo puede llevarse la poda automática antes de frenar y pedir ojos.
+#: Un renombrado masivo legítimo existe —pasó al corregir el motor en septiembre de 2026, y
+#: dejó huérfano el 100% de dos archivos— pero es un evento HUMANO. Una tarea mensual que se
+#: lleva la mitad de un archivo sola es, casi siempre, un bug de extracción.
+_TOPE_DE_PODA = 0.5
+
+
+def _podar_lo_que_ya_no_se_escribe(db: Session, archivo: str,
+                                   escritos: Set[str]) -> tuple:
+    """Borra los códigos del *archivo* que esta corrida NO escribió.
+
+    Devuelve ``(códigos_podados, observaciones_borradas, freno)``. Se cuentan las dos cosas
+    a propósito: los códigos son lo que se decidió, las observaciones son el daño.
+
+    Los frenos, cada uno tapando una forma concreta de destruir dato publicado:
+
+    * **Nunca desde un conjunto vacío.** Si la lectura no produjo ninguna serie, eso es un
+      bug nuestro y tomarlo como verdad borraría el archivo entero. (El archivo que directamente
+      falla ni siquiera llega acá: la excepción corta antes.)
+    * **Tope proporcional.** Si se llevaría más de `_TOPE_DE_PODA` de los códigos
+      persistidos del archivo, no se ejecuta y se devuelve el motivo para que lo mire una
+      persona. Un renombrado grande es legítimo y raro; una tarea mensual no lo decide sola.
+
+    El alcance es el PREFIJO del archivo, no las hojas: una serie que quedó de cuando el
+    libro se ingería entero y hoy no se escribe es exactamente lo que hay que podar.
+    """
+    from shared.data.bcrd_excel.extract import default_prefix
+
+    if not escritos:
+        return 0, 0, ""
+    prefijo = default_prefix(archivo) + "."
+    presentes = {c for (c,) in db.query(MacroSeries.series_code)
+                 .filter(MacroSeries.series_code.like(f"{prefijo}%")).distinct()}
+    sobran = presentes - escritos
+    if not sobran:
+        return 0, 0, ""
+    if len(sobran) > len(presentes) * _TOPE_DE_PODA:
+        return 0, 0, (f"{archivo}: la poda se llevaría {len(sobran)} de {len(presentes)} "
+                      f"códigos; se frenó por el tope y no se borró nada")
+    filas = (db.query(MacroSeries)
+             .filter(MacroSeries.series_code.in_(sorted(sobran)))
+             .delete(synchronize_session=False))
+    db.commit()
+    logger.info("[macro] %s: %d código(s) podados por no escribirse ya, %d observación(es) "
+                "(%s)", archivo, len(sobran), filas, ", ".join(sorted(sobran)[:5]))
+    return len(sobran), filas, ""
+
+
 def ingest_canonical(db: Session, *, persist: bool = False,
-                     alcance: Optional[Dict[str, Optional[List[str]]]] = None) -> Dict[str, Any]:
+                     alcance: Optional[Dict[str, Optional[List[str]]]] = None,
+                     podar: bool = False) -> Dict[str, Any]:
     """Run the engine over ONLY the canonical source files (not the whole catalog).
 
     Dedupes shared source files (e.g. reserves brutas/netas come from one file).
@@ -631,6 +680,12 @@ def ingest_canonical(db: Session, *, persist: bool = False,
     Es un mapa ``{archivo: None | [hojas]}``: `None` habilita el archivo entero y una lista
     habilita SOLO esas hojas, para los libros en que unas extraen bien y otras no. Ver
     `canonical.PERSISTIBLES_VERIFICADOS`, que además declara por qué está afuera cada uno.
+
+    *podar* hace que la ingesta se lleve su propio arrastre: los códigos de un archivo que
+    esta corrida NO escribió se borran. Existe porque el upsert nunca podaba y un renombrado
+    del extractor dejaba el código viejo sirviendo datos que ya nadie produce —365 series en
+    producción el 2026-09-04, que hubo que limpiar a mano—. Va apagado por defecto y con
+    cuatro frenos; ver `_podar_lo_que_ya_no_se_escribe`.
     """
     from shared.data.bcrd_excel import canonical
     from shared.data.bcrd_excel.catalog import find_entry
@@ -644,6 +699,9 @@ def ingest_canonical(db: Session, *, persist: bool = False,
     omitidos: List[str] = []
     discrepancias: List[str] = []
     por_hoja: List[str] = []
+    podados_total = 0
+    filas_podadas = 0
+    poda_frenada: List[str] = []
     # Un archivo puede declarar VARIAS series canónicas (el IPC general y la inflación
     # interanual salen del mismo). La cadencia se verifica contra cada declaración, no
     # contra la primera que aparezca.
@@ -669,6 +727,21 @@ def ingest_canonical(db: Session, *, persist: bool = False,
                 _registros_de_las_hojas(s.source_file, hojas, r.records)
                 if hojas else r.records)
             persisted = _upsert_records(db, escribibles) if escribir else 0
+            if escribir and podar:
+                # La poda va DESPUÉS del upsert y sobre lo que esta corrida escribió: así el
+                # conjunto contra el que se compara es un hecho de esta corrida, no una
+                # lista de otro lado. Nunca lanza: una poda que rompe la ingesta que la
+                # produce es peor que el arrastre que viene a limpiar.
+                try:
+                    n, filas, freno = _podar_lo_que_ya_no_se_escribe(
+                        db, s.source_file, {r.series for r in escribibles})
+                    podados_total += n
+                    filas_podadas += filas
+                    if freno:
+                        poda_frenada.append(freno)
+                except Exception:  # noqa: BLE001
+                    logger.warning("no se pudo podar %s", s.source_file, exc_info=True)
+                    db.rollback()
             if hojas:
                 por_hoja.append(f"{s.source_file}: {len(hojas)} hoja(s), "
                                 f"{len(escribibles)} de {len(r.records)} registros")
@@ -724,8 +797,17 @@ def ingest_canonical(db: Session, *, persist: bool = False,
     if por_hoja:
         logger.info("[macro] ingesta canónica: alcance por HOJA en %d archivo(s): %s",
                     len(por_hoja), "; ".join(por_hoja))
+    if poda_frenada:
+        logger.warning("[macro] ingesta canónica: la poda se FRENÓ en %d archivo(s) — se "
+                       "llevaría más de lo que un renombrado normal justifica, y eso lo "
+                       "mira una persona: %s", len(poda_frenada), "; ".join(poda_frenada))
+    if podados_total:
+        logger.info("[macro] ingesta canónica: %d código(s) podados (%d observaciones) por "
+                    "no escribirse ya en esta corrida", podados_total, filas_podadas)
     return {"files": len(seen), "ok": ok, "flagged": flagged, "failed": failed,
             "persisted": persistidos_total,
+            "pruned": podados_total, "pruned_rows": filas_podadas,
+            "prune_halted": poda_frenada,
             "persist_scope": (dict(sorted(habilitados.items())) if habilitados else "todos"),
             "sheet_scope": por_hoja,
             "skipped_by_scope": sorted(omitidos),
