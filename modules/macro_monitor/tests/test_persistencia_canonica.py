@@ -72,14 +72,6 @@ SIN_PUENTE = {
     "base_monetaria":
         "restringida y amplia son dos definiciones, las dos oficiales y las dos publicadas. "
         "Elegir una en el registro escondería la otra.",
-    "tasa_activa":
-        "el archivo publica la tasa por plazo y por sector más dos promedios (simple y "
-        "ponderado). El ponderado es el candidato natural, pero es una decisión de método "
-        "que todavía no se tomó.",
-    "tasa_pasiva":
-        "mismo cuadro que la activa —tasa por plazo y por sector, más promedio simple y "
-        "ponderado— y la misma decisión de método pendiente: cuál de los dos promedios es "
-        "«la» tasa pasiva no lo puede resolver el código.",
     "tipo_cambio":
         "siete cortes (diario, mensual, trimestral, anual y sus versiones de fin de "
         "período) y compra/venta en cada uno: catorce series. Cuál es «el» tipo de cambio "

@@ -74,6 +74,27 @@ SERIES_NOTES = {
         "de un índice es un promedio ponderado, no una suma — no se reconstruye sumando los "
         "trimestres."
     ),
+    "bcrd.xls.taap_activa.": (
+        "Tasa activa promedio ponderada, tramo HISTÓRICO 1998-2007. El BCRD publica esta "
+        "serie en CUATRO archivos por período (hasta 2007, 2008-2012, 2013-2016, 2017 en "
+        "adelante) y NINGUNO SOLAPA con el siguiente, así que el empalme se DOCUMENTA y NO SE "
+        "MIDE contra un período común. Lo que sí se midió: los tres saltos de empalme "
+        "(+0,62 · +2,24 · −0,06 pp) caen dentro del movimiento mensual normal de la serie "
+        "—mediana 0,49, p90 1,28— y los seis saltos más grandes de los 343 meses ocurren "
+        "todos DENTRO de un tramo, ninguno en un empalme. La columna de este tramo se llama "
+        "«Promedio» y no «Promedio Ponderado»: se comprobó que NO es el promedio simple de "
+        "los plazos (difiere 1,03 pp en media), y que un empalme simple↔ponderado habría "
+        "dejado un escalón del orden de 1,8 pp, no de 0,62."
+    ),
+    "bcrd.xls.taap_pasiva.": (
+        "Tasa pasiva promedio ponderada, tramo HISTÓRICO 1998-2007. Misma estructura de "
+        "cuatro archivos, ninguno solapa con el siguiente, y mismo criterio: el empalme se "
+        "DOCUMENTA y NO SE MIDE contra un período común. Saltos de empalme "
+        "−0,25 · +0,42 · +0,15 pp, dentro de su variación mensual normal (mediana 0,36, "
+        "p90 1,02). Verificación conjunta: en los 343 meses empalmados el spread "
+        "activa−pasiva es SIEMPRE positivo (media 6,50 pp, mínimo 1,66), sin una sola "
+        "inversión — un empalme mal armado habría producido al menos una."
+    ),
     "bcrd.xls.bpagos.": (
         "Balanza de pagos bajo el MBP5 (quinta edición del manual) — serie HISTÓRICA y "
         "DESCONTINUADA: el BCRD dejó de actualizar este archivo en 2019. Úsese solo para el "
@@ -502,8 +523,70 @@ REGISTRY: List[CanonicalSeries] = [
         # heredaba el rótulo del último grupo. Corregido, las 15 series salen con 0
         # duplicados en conflicto y el promedio ponderado cae entre el mínimo y el máximo de
         # los plazos en los 115 meses.
-        robustness="green", api_series="bcrd.monetarias.tasas_de_interes.activa",
+        #
+        # El puente estaba sin declarar «porque la elección entre promedio simple y ponderado
+        # era una decisión de método pendiente». La decisión la resolvió el EMPALME: los tres
+        # tramos históricos apuntan al ponderado, y declararlo en ellos y no acá dejaría la
+        # serie imposible de armar. Es el ponderado, y ahora se dice.
+        robustness="green", excel_series_suffix=".promedio_ponderado",
+        api_series="bcrd.monetarias.tasas_de_interes.activa",
         api_transform="identity",
+    ),
+    # Los TRES tramos históricos de cada tasa. El BCRD publica activa y pasiva en cuatro
+    # archivos por período, y el registro solo declaraba el vigente (2017→): la serie
+    # empezaba en 2017 y el bloque del BVAR se quedaba sin la crisis de 2003, que es el
+    # episodio de estrés más informativo que tiene el país. Con los cuatro tramos son 343
+    # meses, 1998-01 → 2026-07. El empalme se declara en `SERIES_NOTES`.
+    CanonicalSeries(
+        key="tasa_activa_1998_2007", concept="Tasa de interés activa (tramo 1998-2007)",
+        sector="sector_monetario_financiero", source_file="taap_activa.xls", base="%",
+        frequency="mensual",
+        homogenization="tramo del empalme; ver la nota metodológica del prefijo",
+        rationale="Contiene la crisis bancaria de 2003-2004, cuando la tasa activa pasó de "
+                  "20% a 27,5% y volvió a 15% en tres años. Un modelo entrenado solo desde "
+                  "2008 nunca vio un episodio así.",
+        robustness="green", excel_series_suffix="p_l_a_z_o_s_promedio",
+    ),
+    CanonicalSeries(
+        key="tasa_activa_2008_2012", concept="Tasa de interés activa (tramo 2008-2012)",
+        sector="sector_monetario_financiero", source_file="taap_activad-2008-2012.xls",
+        base="%", frequency="mensual",
+        homogenization="tramo del empalme; ver la nota metodológica del prefijo",
+        rationale="Cubre la crisis financiera global y su transmisión al costo del crédito.",
+        robustness="green", excel_series_suffix=".promedio_ponderado",
+    ),
+    CanonicalSeries(
+        key="tasa_activa_2013_2016", concept="Tasa de interés activa (tramo 2013-2016)",
+        sector="sector_monetario_financiero", source_file="taap_activad-2013-2016.xlsx",
+        base="%", frequency="mensual",
+        homogenization="tramo del empalme; ver la nota metodológica del prefijo",
+        rationale="Cierra el hueco entre el tramo de la crisis y el archivo vigente.",
+        robustness="green", excel_series_suffix=".promedio_ponderado",
+    ),
+    CanonicalSeries(
+        key="tasa_pasiva_1998_2007", concept="Tasa de interés pasiva (tramo 1998-2007)",
+        sector="sector_monetario_financiero", source_file="taap_pasiva.xls", base="%",
+        frequency="mensual",
+        homogenization="tramo del empalme; ver la nota metodológica del prefijo",
+        rationale="El otro lado del spread en la crisis de 2003: la tasa pasiva se disparó "
+                  "con la corrida y el spread se comprimió a 1,66 pp.",
+        robustness="green", excel_series_suffix=".promedio",
+    ),
+    CanonicalSeries(
+        key="tasa_pasiva_2008_2012", concept="Tasa de interés pasiva (tramo 2008-2012)",
+        sector="sector_monetario_financiero", source_file="taap_pasivad-2008-2012.xls",
+        base="%", frequency="mensual",
+        homogenization="tramo del empalme; ver la nota metodológica del prefijo",
+        rationale="Contraparte pasiva del tramo 2008-2012 de la activa.",
+        robustness="green", excel_series_suffix=".promedio_ponderado",
+    ),
+    CanonicalSeries(
+        key="tasa_pasiva_2013_2016", concept="Tasa de interés pasiva (tramo 2013-2016)",
+        sector="sector_monetario_financiero", source_file="taap_pasivad-2013-2016.xlsx",
+        base="%", frequency="mensual",
+        homogenization="tramo del empalme; ver la nota metodológica del prefijo",
+        rationale="Contraparte pasiva del tramo 2013-2016 de la activa.",
+        robustness="green", excel_series_suffix=".promedio_ponderado",
     ),
     CanonicalSeries(
         key="tasa_pasiva", concept="Tasa de interés pasiva", sector="sector_monetario_financiero",
@@ -512,8 +595,10 @@ REGISTRY: List[CanonicalSeries] = [
         rationale="Retorno del ahorro; junto con la activa define el spread bancario.",
         # A `green`: mismo defecto y misma comprobación que la activa. Traía 27.715
         # observaciones nulas de más —las 241 columnas de relleno heredaban «Interbancaria»—
-        # y ahora son 1.610 claves, todas distintas.
-        robustness="green", api_series="bcrd.monetarias.tasas_de_interes.pasiva",
+        # y ahora son 1.610 claves, todas distintas. Y mismo puente, por el mismo motivo: lo
+        # fija el empalme con los tres tramos históricos.
+        robustness="green", excel_series_suffix=".promedio_ponderado",
+        api_series="bcrd.monetarias.tasas_de_interes.pasiva",
         api_transform="identity",
     ),
     # ── Mercado Cambiario ────────────────────────────────────────
@@ -697,6 +782,17 @@ PERSISTIBLES_VERIFICADOS: Dict[str, Optional[List[str]]] = {
     # 115 meses.
     "taap_pasivad.xlsx": None,
     "taap_activad.xlsx": None,
+    # Los tres tramos históricos de cada tasa, triados con los mismos seis criterios: los
+    # seis dan densidad ×1,00, 0 duplicados en conflicto, 0 series con períodos mezclados,
+    # 0 códigos por coordenada y 0 avisos de truncamiento. Verificación de sentido conjunta:
+    # en los 343 meses empalmados el spread activa−pasiva es siempre positivo, sin una sola
+    # inversión.
+    "taap_activa.xls": None,
+    "taap_activad-2008-2012.xls": None,
+    "taap_activad-2013-2016.xlsx": None,
+    "taap_pasiva.xls": None,
+    "taap_pasivad-2008-2012.xls": None,
+    "taap_pasivad-2013-2016.xlsx": None,
     "Serie_TPM.xlsx": None,
     "agregados_monetarios.xlsx": None,
     "base_monetaria.xlsx": None,

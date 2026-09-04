@@ -254,6 +254,62 @@
    "primero": "2003-01",
    "huecos": 0
   },
+  "tasa_activa": {
+   "code": "bcrd.xls.taap_activad.promedio_ponderado",
+   "cadencia": "monthly",
+   "min_obs": 115,
+   "primero": "2017-01",
+   "huecos": 0
+  },
+  "tasa_activa_1998_2007": {
+   "code": "bcrd.xls.taap_activa.p_l_a_z_o_s_promedio",
+   "cadencia": "monthly",
+   "min_obs": 120,
+   "primero": "1998-01",
+   "huecos": 0
+  },
+  "tasa_activa_2008_2012": {
+   "code": "bcrd.xls.taap_activad_2008_2012.promedio_ponderado",
+   "cadencia": "monthly",
+   "min_obs": 60,
+   "primero": "2008-01",
+   "huecos": 0
+  },
+  "tasa_activa_2013_2016": {
+   "code": "bcrd.xls.taap_activad_2013_2016.promedio_ponderado",
+   "cadencia": "monthly",
+   "min_obs": 48,
+   "primero": "2013-01",
+   "huecos": 0
+  },
+  "tasa_pasiva": {
+   "code": "bcrd.xls.taap_pasivad.promedio_ponderado",
+   "cadencia": "monthly",
+   "min_obs": 115,
+   "primero": "2017-01",
+   "huecos": 0
+  },
+  "tasa_pasiva_1998_2007": {
+   "code": "bcrd.xls.taap_pasiva.promedio",
+   "cadencia": "monthly",
+   "min_obs": 120,
+   "primero": "1998-01",
+   "huecos": 0
+  },
+  "tasa_pasiva_2008_2012": {
+   "code": "bcrd.xls.taap_pasivad_2008_2012.promedio_ponderado",
+   "cadencia": "monthly",
+   "min_obs": 60,
+   "primero": "2008-01",
+   "huecos": 0
+  },
+  "tasa_pasiva_2013_2016": {
+   "code": "bcrd.xls.taap_pasivad_2013_2016.promedio_ponderado",
+   "cadencia": "monthly",
+   "min_obs": 48,
+   "primero": "2013-01",
+   "huecos": 0
+  },
   "tpm": {
    "code": "bcrd.xls.serie_tpm.tasa_de_politica_monetaria",
    "cadencia": "monthly",
