@@ -611,8 +611,14 @@ def _con_unidades_curadas(records: List[Any]) -> List[Any]:
 
     salida = []
     for r in records:
+        cambios: Dict[str, Any] = {}
         curada = canonical.unidad_curada(r.series)
-        salida.append(replace(r, unit=curada) if curada and curada != r.unit else r)
+        if curada and curada != r.unit:
+            cambios["unit"] = curada
+        escalado = canonical.escala_curada(r.series, r.value)
+        if escalado is not None and escalado != r.value:
+            cambios["value"] = escalado
+        salida.append(replace(r, **cambios) if cambios else r)
     return salida
 
 
