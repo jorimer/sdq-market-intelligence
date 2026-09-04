@@ -208,6 +208,19 @@ def _run_canonical_ingest(params, user_id, set_phase) -> Dict:
         # un evento humano y no algo que una tarea mensual decida sola.
         result = ingest_canonical(db, persist=True, podar=True,
                                   alcance=PERSISTIBLES_VERIFICADOS)
+        # La puntuación de pronósticos va ENGANCHADA a la ingesta, no en una operación que
+        # alguien tenga que acordarse de correr: un proceso así deja de correr justo el
+        # trimestre en que el resultado es malo. Cada corrida busca los `pending` cuyo
+        # período ya tenga observado y los puntúa.
+        set_phase("puntuando pronósticos con observado disponible")
+        from modules.macro_monitor.forecasting.ledger import puntuar_pendientes
+
+        try:
+            result["forecasts_scored"] = puntuar_pendientes(db)
+        except Exception:  # noqa: BLE001 — puntuar nunca puede tumbar la ingesta
+            logger.warning("no se pudieron puntuar los pronósticos", exc_info=True)
+            db.rollback()
+            result["forecasts_scored"] = None
         set_phase("reconstruyendo snapshot (momentum + señales)")
         snap = build_snapshot(db)
         result["snapshot"] = {"period": snap.get("period"),

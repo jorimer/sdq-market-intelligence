@@ -955,12 +955,13 @@ persistencia estimaba 2007→2026 en §4.1, y esa estimación era `[Guessing]`. 
 un backtest sectorial consume más de un tercio de la muestra.
 
 La sección sectorial pasa el gate del plan, pero **lo que puede afirmar es más chico de lo que
-el spec suponía**. Eso es una decisión de alcance y la dejo para el dueño, no la tomo yo:
-publicar el sectorial con esa profundidad, o dejarlo fuera de la v1 y publicar solo nowcast y
-horizonte, que sí tienen 77 y 235 observaciones detrás.
+el spec suponía**. **DECIDIDO por el dueño (2026-09-04): se publica el sectorial con esa profundidad, y los 33
+trimestres se DECLARAN en la metodología.** No se esconde el tamaño de la muestra detrás de
+una cifra: quien lea una proyección sectorial tiene que poder ver sobre cuánta historia está
+construida, igual que ve el error del backtest en la misma frase.
 
 ### Pasos propuestos, en el orden del spec
-- [ ] **T-MP-1 · El ledger PRIMERO.** No se negocia (§1). `mm_forecast_log` con clave única de
+- [x] **T-MP-1 · El ledger PRIMERO.** No se negocia (§1). `mm_forecast_log` con clave única de
       CINCO campos incluido `revision`; `status` solo `pending|scored` y el linaje en
       `superseded_by` aparte —poner `"superseded"` como status saca la revisión 0 del cómputo
       y borra el pronóstico original del historial, que es lo contrario de lo que `revision`
@@ -970,7 +971,7 @@ horizonte, que sí tienen 77 y 235 observaciones detrás.
       **le gane a un random walk fuera de muestra**; si no le gana, no se publica.
 - [ ] **T-MP-3 · BVAR** con prior Minnesota por observaciones artificiales. Sin apoyo en la
       regla de reacción de TPM (no hay panel).
-- [ ] **T-MP-4 · Sectorial** — sujeto a la decisión de alcance de arriba.
+- [ ] **T-MP-4 · Sectorial** — se publica, con los 33 trimestres declarados en la metodología.
 - [ ] **T-MP-5 · Procedencia**: cablear `ProjectionMeta` del motor al registro. Es lo que
       enciende el trabajo del BLOQUE PP: hasta que esto exista, ninguna señal llega proyectada.
 - [ ] **T-MP-6 · Producto y calendario.**
@@ -979,3 +980,24 @@ horizonte, que sí tienen 77 y 235 observaciones detrás.
 El ledger va solo en un PR (es esquema + migración + puntuación). Nowcast en otro, con su
 backtest contra random walk como sensor. BVAR en un tercero, con los dos casos límite del
 prior. Sectorial y cableado al final.
+
+
+### T-MP-1 hecho — el ledger, antes que cualquier modelo
+`mm_forecast_log` con la clave de CINCO campos, `status` solo `pending|scored`, el linaje en
+`superseded_by` aparte, puntuación automática enganchada a la ingesta canónica y los DOS
+niveles de intervalo puntuados. Migración con su downgrade; una sola cabeza de alembic.
+
+**Dos cosas que aparecieron al hacerlo:**
+
+1. **La tabla no se registraba en `Base.metadata` al arrancar la app** — y `tpm_forecast_log`
+   tampoco, desde que se creó. Una tabla así no la crea `create_all` en dev ni en tests, y un
+   `alembic revision --autogenerate` **propone borrarla**: no la ve en el modelo y sí en la
+   base. Registradas las dos en `models/__init__.py`, con un test que lo vigila.
+2. **Un reemplazo de texto me metió la puntuación en la operación equivocada** —
+   `macro-live-sync` en vez de `macro-canonical-sync`—, porque las dos comparten la línea
+   `set_phase("reconstruyendo snapshot…")`. Lo cazó `ruff` con un `F821`: la variable
+   `result` no existe en esa función. Un reemplazo por cadena no verifica en qué función cae.
+
+Y una que evité: los siete errores de tipo que salieron eran del patrón `Column[...]` que
+llena el baseline (400+). En vez de sumar deuda, se resolvieron en el sitio leyendo a
+variables locales — **mypy exit 0 con cero líneas nuevas de baseline**.
