@@ -575,6 +575,41 @@ Al medir la cobertura por variable en vez de suponerla:
 
 ---
 
+## T-MP-7 · El producto de proyecciones como eje propio — `products_forecast.py` (NUEVO)
+
+> Nació de una decisión del dueño («se vende aparte») y de una medición que la primera forma
+> de cumplirla NO soportaba.
+
+### Lo que se midió antes de construir
+
+| `special:macro-forecast` | |
+|---|---|
+| ¿es suscripción? | **no** — `is_subscription_sku` solo admite insight/all_access/enterprise |
+| intervalos | **solo `once`** — incompatible con el cobro anual decidido |
+| acceso que concede | **ninguno** — `sku_grants` devuelve `[]` |
+
+Un `special:` es, por diseño, una compra puntual cotizada a medida cuya entrega media un
+analista. Segunda decisión: **eje propio del catálogo**, que gana `insight:macro_forecast`
+con intervalos mensual/anual y grants reales **sin tocar `shared/billing`** — código de cobro
+en vivo. Comprobado: `allowed_intervals` → `['monthly','annual']`, `sku_grants` →
+`[('macro_forecast','insight')]`.
+
+### Pasos atómicos
+- [x] **1.** `CatalogEntry` + `MacroForecastProduct` en `modules/macro_monitor/`, con su motor y no en `app/`.
+- [x] **2.** Tres niveles. El tercero **no es relleno para cumplir el contrato**: es donde viven los ESCENARIOS a 3-8 trimestres, que deliberadamente no llevan track record.
+- [x] **3.** Toda la prosa se **COMPUTA**. No pasa por el motor de IA, y no es una omisión: un informe de errores, coberturas empíricas y una reconciliación exacta no tiene nada que redactar. Un modelo escribiéndola inventaría los números que el producto existe para probar.
+- [x] **4.** `variable_signals()` con peso REAL —acá el índice ES la proyección, así que `coverage_projected` sí dice algo, a diferencia del eje macro—. Una proyección que no pasa el gate sale como **GAP con su motivo**, no como `PROJECTED` degradada.
+- [x] **5.** Las **cuatro superficies** que el framework exigía, encontradas corriendo sus tests en vez de recordándolas: etiqueta de archivo, resumidor de data-pull, keywords de ruteo y el tercer nivel. Es el patrón del anuario —cuatro registros de a uno, ninguno falla— pero esta vez los guards los cazaron todos.
+- [x] **6.** Muestra curada que se renderiza en los tres niveles, y que enseña a propósito **un resultado incómodo**: una proyección que no alcanza a anclar y un intervalo del 90 % que sobre-cubre.
+- [ ] **7.** **Tarifa: falta que el dueño fije el precio.** No se hardcodea; se publica con `create_tariff` y hasta entonces el nivel queda inactivo, que es el comportamiento correcto.
+
+### Sensor T-MP-7
+- [x] El eje **no invade** a los productos en producción: las seis preguntas típicas de los otros ejes rutean igual que antes. Con keywords amplias el test falla; con keywords vacías falla el contraejemplo. Los dos lados.
+- [x] `insight:macro_forecast` admite `annual` y concede grant — comprobado, no supuesto.
+- [x] El catálogo del frontend se arma del API: no hay lista hardcodeada que actualizar (verificado).
+
+---
+
 # BLOQUE VL · Valuador de entidades (eje `valuation`)
 
 > **Precondición:** T-MP completo — el valuador consume ROE proyectado.

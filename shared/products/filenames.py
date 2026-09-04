@@ -48,6 +48,7 @@ EJE_LABELS = {
     "insurance": "Seguros",
     "pension": "Pensiones",
     "macro": "Macro",
+    "macro_forecast": "Proyecciones",
     "monetary_policy": "Politica-Monetaria",
     "trade": "Comercio",
     "tourism": "Turismo",
