@@ -590,3 +590,35 @@ la pérdida dura lo que tarda la reposición.
 **Disparador.** Cualquier borrado masivo cuya lista se calcule ejecutando código local contra
 una fuente compartida. Preguntarse: ¿esta lista la MEDÍ en el destino, o la deduje? Y en
 particular, ¿hay un modelo en algún punto de la cadena que la produce?
+
+
+---
+
+## Un identificador que produce un modelo no es estable, y un `series_code` es un contrato
+
+**Síntoma.** Después de desplegar la poda automática, la primera sincronización en producción
+podó **40 series de 2.103** cuando yo había anunciado que no podaría ninguna. Ningún dato se
+perdió —los valores se reescribieron bajo nombres nuevos y la poda se llevó los viejos, que es
+lo que debe hacer— pero cuarenta `series_code` publicados cambiaron solos:
+`pibk_trim.indice_de_volumen_por_actividad_economica.*` pasó a
+`pibk_trim.indices_de_volumen_encadenados.*`, dos redacciones del mismo encabezado.
+
+**Causa raíz.** Las filas que la heurística no puede jerarquizar las nombra el MODELO, y ese
+resultado se cacheaba en `data/bcrd_excel/specs.json` — un directorio gitignored que en
+Railway es el filesystem del contenedor, o sea que **cada deploy lo borra**. Sin caché se
+vuelve a preguntar, y la respuesta no es la misma dos veces. Traté una salida de modelo como
+si fuera determinista solo porque estaba cacheada; la caché escondía la inestabilidad, y el
+deploy la destapaba. Es la misma causa que unas horas antes había hecho que la poda manual
+quisiera borrar 53 series recién escritas: el mismo no-determinismo, visto entre entornos en
+vez de entre corridas.
+
+**Regla futura.** Si la salida de un modelo se convierte en un IDENTIFICADOR —una clave
+primaria, un código que se persiste, una ruta que alguien va a citar— no alcanza con
+cachearla: hay que **congelarla en el repositorio** y hacer que lo congelado le gane a
+cualquier respuesta nueva. La caché es una optimización; el contrato es un artefacto que se
+revisa como código. Y el momento de descubrirlo no puede ser el deploy: la prueba es borrar
+la caché, correr sin acceso al modelo y comprobar que los identificadores salen idénticos.
+
+**Disparador.** Cualquier lugar donde el texto que devuelve un modelo termine formando una
+clave: `series_code`, slugs, nombres de archivo, rutas de API. Preguntarse qué pasa si mañana
+contesta distinto — y si la respuesta es «cambia una clave publicada», congelarla.
