@@ -1035,3 +1035,50 @@ Tres cosas para que no se pueda malinterpretar después:
 Y un test mío que fallaba y tenía razón el código: usé el 30 de septiembre y no había nada
 que anticipar —a esa altura el BCRD ya publicó—. **La ventana son 15 días**, y ahí está todo
 el valor del producto; el test ahora la ejercita explícitamente.
+
+
+---
+
+## Los tramos históricos de tasas — me equivoqué y el dueño tenía razón
+
+Dije que **2017 era piso duro** para cualquier tasa bancaria. Lo dije mirando `mm_series`,
+que solo tiene el archivo vigente porque es el único que el registro declaraba. El catálogo
+tiene **cuatro tramos** de cada tasa, y el dueño los señaló:
+
+| | meses | rango |
+|---|---:|---|
+| `taap_activa.xls` | 120 | **1998-01 → 2007-12** |
+| `taap_activad-2008-2012.xls` | 60 | 2008-01 → 2012-12 |
+| `taap_activad-2013-2016.xlsx` | 48 | 2013-01 → 2016-12 |
+| `taap_activad.xlsx` | 115 | 2017-01 → 2026-07 |
+
+**343 meses continuos.** Es la quinta vez que aparece lo mismo: la fuente publica más de lo
+que persistimos.
+
+### Y el segundo error: excluir 1998-2007
+Argumenté que la columna vieja (`Promedio` bajo *PLAZOS*) probablemente fuera el promedio
+SIMPLE y no el ponderado. Era una suposición sin medir, y al medirla apuntó al revés:
+
+- **NO es el promedio simple** de los seis plazos: difiere 1,03 pp en media, hasta 2,98.
+- En 2008-2012, donde el BCRD publica los dos, **simple y ponderado se separan 1,83 pp** en
+  media.
+- El salto de empalme 2007→2008 es **+0,62 pp**. Si la vieja fuera el simple, el escalón
+  sería del orden de 1,8. Es un ponderado.
+
+### Verificación de sentido, la que decide
+En los **343 meses** empalmados el spread activa−pasiva es **siempre positivo** —media 6,50
+pp, mínimo 1,66— **sin una sola inversión**. Un empalme mal armado habría producido al menos
+una. Y en la crisis de 2003 el spread se comprime a 1,66-3,08 pp, que es exactamente lo que
+se espera cuando la tasa pasiva se dispara con la corrida.
+
+### Lo hecho
+Los seis tramos dados de alta y triados con los mismos criterios: densidad ×1,00, 0
+conflictos, 0 períodos mezclados, 0 códigos por coordenada, 0 avisos. **33 archivos
+habilitados**, `mm_series` 101.257 → **105.745** filas, **0 valores cambiados**.
+
+Y una decisión que el empalme forzó: `tasa_activa` y `tasa_pasiva` **no declaraban puente**
+—«la elección entre simple y ponderado es una decisión de método pendiente»—. Declararlo en
+los tres tramos y no en el vigente dejaba la serie imposible de armar. Es el ponderado, y
+ahora se dice: las excepciones sin puente bajan de 15 a **13**.
+
+**El bloque del BVAR son 5 variables**, y el cuello de botella vuelve a ser el PIB.
