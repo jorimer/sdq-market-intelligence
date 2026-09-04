@@ -1,0 +1,265 @@
+{
+ "_generado": "2026-09-04",
+ "_fuente": "corrida canónica completa contra la base de dev, espejo verificado de producción (2.103 series del motor Excel en las dos)",
+ "series": {
+  "costo_canasta_quintil_1": {
+   "code": "bcrd.xls.costo_canasta_quintiles_base_2019_2020.quintil_1",
+   "cadencia": "monthly",
+   "min_obs": 103,
+   "primero": "2018-01",
+   "huecos": 0
+  },
+  "costo_canasta_quintil_2": {
+   "code": "bcrd.xls.costo_canasta_quintiles_base_2019_2020.quintil_2",
+   "cadencia": "monthly",
+   "min_obs": 103,
+   "primero": "2018-01",
+   "huecos": 0
+  },
+  "costo_canasta_quintil_3": {
+   "code": "bcrd.xls.costo_canasta_quintiles_base_2019_2020.quintil_3",
+   "cadencia": "monthly",
+   "min_obs": 103,
+   "primero": "2018-01",
+   "huecos": 0
+  },
+  "costo_canasta_quintil_4": {
+   "code": "bcrd.xls.costo_canasta_quintiles_base_2019_2020.quintil_4",
+   "cadencia": "monthly",
+   "min_obs": 103,
+   "primero": "2018-01",
+   "huecos": 0
+  },
+  "costo_canasta_quintil_5": {
+   "code": "bcrd.xls.costo_canasta_quintiles_base_2019_2020.quintil_5",
+   "cadencia": "monthly",
+   "min_obs": 103,
+   "primero": "2018-01",
+   "huecos": 0
+  },
+  "imae": {
+   "code": "bcrd.xls.imae_2018.serie_original_variacion_porcentual_interanual",
+   "cadencia": "monthly",
+   "min_obs": 235,
+   "primero": "2007-01",
+   "huecos": 0
+  },
+  "imae_indice": {
+   "code": "bcrd.xls.imae_2018.serie_original_indice",
+   "cadencia": "monthly",
+   "min_obs": 235,
+   "primero": "2007-01",
+   "huecos": 0
+  },
+  "ipc_empalme": {
+   "code": "bcrd.xls.ipc_base_2019_2020_serie_referencial.indice",
+   "cadencia": "monthly",
+   "min_obs": 25,
+   "primero": "2019-10",
+   "huecos": 0
+  },
+  "ipc_general": {
+   "code": "bcrd.xls.ipc_base_2019_2020.indice",
+   "cadencia": "monthly",
+   "min_obs": 511,
+   "primero": "1984-01",
+   "huecos": 0
+  },
+  "ipc_grupo_alimentos_y_bebidas_no_alcoholicas": {
+   "code": "bcrd.xls.ipc_grupos_base_2019_2020.alimentos_y_bebidas_no_alcoholicas_indice",
+   "cadencia": "monthly",
+   "min_obs": 331,
+   "primero": "1999-01",
+   "huecos": 0
+  },
+  "ipc_grupo_bebidas_alcoholicas_y_tabaco": {
+   "code": "bcrd.xls.ipc_grupos_base_2019_2020.bebidas_alcoholicas_y_tabaco_indice",
+   "cadencia": "monthly",
+   "min_obs": 331,
+   "primero": "1999-01",
+   "huecos": 0
+  },
+  "ipc_grupo_bienes_y_servicios_diversos": {
+   "code": "bcrd.xls.ipc_grupos_base_2019_2020.bienes_y_servicios_diversos_indice",
+   "cadencia": "monthly",
+   "min_obs": 331,
+   "primero": "1999-01",
+   "huecos": 0
+  },
+  "ipc_grupo_comunicaciones": {
+   "code": "bcrd.xls.ipc_grupos_base_2019_2020.comunicaciones_indice",
+   "cadencia": "monthly",
+   "min_obs": 331,
+   "primero": "1999-01",
+   "huecos": 0
+  },
+  "ipc_grupo_educacion": {
+   "code": "bcrd.xls.ipc_grupos_base_2019_2020.educacion_indice",
+   "cadencia": "monthly",
+   "min_obs": 331,
+   "primero": "1999-01",
+   "huecos": 0
+  },
+  "ipc_grupo_muebles": {
+   "code": "bcrd.xls.ipc_grupos_base_2019_2020.muebles_indice",
+   "cadencia": "monthly",
+   "min_obs": 331,
+   "primero": "1999-01",
+   "huecos": 0
+  },
+  "ipc_grupo_prendas_de_vestir_y_calzado": {
+   "code": "bcrd.xls.ipc_grupos_base_2019_2020.prendas_de_vestir_y_calzado_indice",
+   "cadencia": "monthly",
+   "min_obs": 331,
+   "primero": "1999-01",
+   "huecos": 0
+  },
+  "ipc_grupo_recreacion_y_cultura": {
+   "code": "bcrd.xls.ipc_grupos_base_2019_2020.recreacion_y_cultura_indice",
+   "cadencia": "monthly",
+   "min_obs": 331,
+   "primero": "1999-01",
+   "huecos": 0
+  },
+  "ipc_grupo_restaurantes_y_hoteles": {
+   "code": "bcrd.xls.ipc_grupos_base_2019_2020.restaurantes_y_hoteles_indice",
+   "cadencia": "monthly",
+   "min_obs": 331,
+   "primero": "1999-01",
+   "huecos": 0
+  },
+  "ipc_grupo_salud": {
+   "code": "bcrd.xls.ipc_grupos_base_2019_2020.salud_indice",
+   "cadencia": "monthly",
+   "min_obs": 331,
+   "primero": "1999-01",
+   "huecos": 0
+  },
+  "ipc_grupo_transporte": {
+   "code": "bcrd.xls.ipc_grupos_base_2019_2020.transporte_indice",
+   "cadencia": "monthly",
+   "min_obs": 331,
+   "primero": "1999-01",
+   "huecos": 0
+  },
+  "ipc_grupo_vivienda": {
+   "code": "bcrd.xls.ipc_grupos_base_2019_2020.vivienda_indice",
+   "cadencia": "monthly",
+   "min_obs": 331,
+   "primero": "1999-01",
+   "huecos": 0
+  },
+  "ipc_quintil_1": {
+   "code": "bcrd.xls.ipc_quintiles_base_2019_2020.quintil_1",
+   "cadencia": "monthly",
+   "min_obs": 70,
+   "primero": "2020-10",
+   "huecos": 0
+  },
+  "ipc_quintil_2": {
+   "code": "bcrd.xls.ipc_quintiles_base_2019_2020.quintil_2",
+   "cadencia": "monthly",
+   "min_obs": 70,
+   "primero": "2020-10",
+   "huecos": 0
+  },
+  "ipc_quintil_3": {
+   "code": "bcrd.xls.ipc_quintiles_base_2019_2020.quintil_3",
+   "cadencia": "monthly",
+   "min_obs": 70,
+   "primero": "2020-10",
+   "huecos": 0
+  },
+  "ipc_quintil_4": {
+   "code": "bcrd.xls.ipc_quintiles_base_2019_2020.quintil_4",
+   "cadencia": "monthly",
+   "min_obs": 70,
+   "primero": "2020-10",
+   "huecos": 0
+  },
+  "ipc_quintil_5": {
+   "code": "bcrd.xls.ipc_quintiles_base_2019_2020.quintil_5",
+   "cadencia": "monthly",
+   "min_obs": 70,
+   "primero": "2020-10",
+   "huecos": 0
+  },
+  "ipc_region_este": {
+   "code": "bcrd.xls.ipc_regiones_base_2019_2020.region_este",
+   "cadencia": "monthly",
+   "min_obs": 187,
+   "primero": "2011-01",
+   "huecos": 0
+  },
+  "ipc_region_norte": {
+   "code": "bcrd.xls.ipc_regiones_base_2019_2020.region_norte",
+   "cadencia": "monthly",
+   "min_obs": 187,
+   "primero": "2011-01",
+   "huecos": 0
+  },
+  "ipc_region_ozama": {
+   "code": "bcrd.xls.ipc_regiones_base_2019_2020.region_ozama",
+   "cadencia": "monthly",
+   "min_obs": 187,
+   "primero": "2011-01",
+   "huecos": 0
+  },
+  "ipc_region_sur": {
+   "code": "bcrd.xls.ipc_regiones_base_2019_2020.region_sur",
+   "cadencia": "monthly",
+   "min_obs": 187,
+   "primero": "2011-01",
+   "huecos": 0
+  },
+  "ipc_subyacente": {
+   "code": "bcrd.xls.ipc_subyacente_base_2019_2020.ipc_subyacente",
+   "cadencia": "monthly",
+   "min_obs": 319,
+   "primero": "2000-01",
+   "huecos": 0
+  },
+  "pib_deflactor": {
+   "code": "bcrd.xls.pib_deflactor_2018.deflactor_del_pib",
+   "cadencia": "quarterly",
+   "min_obs": 33,
+   "primero": "2018-Q1",
+   "huecos": 0
+  },
+  "pib_real": {
+   "code": "bcrd.xls.pib_2018.serie_original_indice",
+   "cadencia": "quarterly",
+   "min_obs": 77,
+   "primero": "2007-Q1",
+   "huecos": 0
+  },
+  "remesas": {
+   "code": "bcrd.xls.remesas_6.valor",
+   "cadencia": "monthly",
+   "min_obs": 204,
+   "primero": "2010-01",
+   "huecos": 0
+  },
+  "reservas_brutas": {
+   "code": "bcrd.xls.reservas_internacionales.reservas_brutas",
+   "cadencia": "monthly",
+   "min_obs": 288,
+   "primero": "2003-01",
+   "huecos": 0
+  },
+  "reservas_netas": {
+   "code": "bcrd.xls.reservas_internacionales.reservas_netas",
+   "cadencia": "monthly",
+   "min_obs": 288,
+   "primero": "2003-01",
+   "huecos": 0
+  },
+  "tpm": {
+   "code": "bcrd.xls.serie_tpm.tasa_de_politica_monetaria",
+   "cadencia": "monthly",
+   "min_obs": 273,
+   "primero": "2004-01",
+   "huecos": 0
+  }
+ }
+}

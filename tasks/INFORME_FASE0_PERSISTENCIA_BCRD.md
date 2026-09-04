@@ -1081,3 +1081,70 @@ datos que nadie produce, y hace falta acordarse de limpiarlas. La cura es que la
 sincronización pode lo que ella misma dejó de escribir, en la misma transacción — con su
 propio freno, porque una lectura fallida no puede convertirse en un borrado masivo. Queda
 propuesto, no hecho.
+
+---
+
+# Anexo XI — Ejecutado en producción: el corpus corregido, y lo que enseñó la poda
+
+## XI.1 La secuencia, con su verificación en cada paso
+
+| paso | resultado |
+|---|---|
+| merge del PR #1073 | `main` en `8d091c9` |
+| deploy | prod sirve `8d091c9` y **CONTIENE** el cambio (`esperar_deploy.py`, que pregunta por contención y no por igualdad) |
+| ¿el código nuevo SIRVE, o solo está desplegado? | ocho valores del registro que este PR movió, servidos por la API: los ocho coinciden |
+| `macro-canonical-sync` | 27 archivos · 22 ok · 5 flagged · **0 failed** · 100.744 obs · 0 discrepancias de cadencia |
+| poda | **365 series, 28.963 observaciones** |
+| re-sincronización | 100.744 obs · **3 series reaparecieron** |
+| ensayo final | **0 huérfanas** |
+
+`mm_series` en producción: de **705 series / 67.764 obs** a **2.148 series / 102.748 obs**,
+de las cuales **2.103 son del motor Excel**.
+
+## XI.2 El defecto que la primera medición destapó, y no era del corpus
+
+El primer ensayo tras sincronizar dio **418** huérfanas, no 365. Las 53 de diferencia eran
+series **recién escritas y correctas**:
+
+| en producción | en la corrida local |
+|---|---|
+| `lleg_total…via_aerea.volumen.no_residentes` | `…via_aerea.total.no_residentes` |
+| `bpagos…balanza_comercial.exportaciones.nacionales` | `bpagos.balanza_comercial.balanza_de_pagos.cuenta_corriente…` |
+
+Es la misma fila, nombrada distinto: el rótulo de una fila ambigua lo resuelve el MODELO, y
+no da la misma respuesta en los dos entornos. La herramienta comparaba el destino contra lo
+que produce el motor **corriendo acá**, y por eso las marcaba como sobrantes. Las habría
+borrado sin un solo error visible.
+
+La regla que lo cierra es observable y no depende del modelo: **un código que no estaba en el
+destino ANTES de la sincronización, lo escribió la sincronización.** De ahí que `--antes` sea
+obligatorio para borrar.
+
+Antes de ejecutar se cruzó contra la cuenta que reporta el propio prod, donde está
+disponible: en `piianual` (96), `piianual_6` (130), `pib_origen_2018` (0) y `Remesas_6` (0)
+el conjunto candidato coincide EXACTO con las huérfanas derivadas de `n_series`; en
+`lleg_total` da 26 contra 28 — se queda corto, que es el lado seguro.
+
+## XI.3 Las tres que volvieron, y por qué eso es una prueba y no un error
+
+De las 365 podadas reaparecieron **3**, las tres de `bpagos.xls`: «Nacionales» y «Zonas
+Francas» bajo importaciones, y «Otros» bajo egresos de servicios. Son filas sin numeración ni
+sangría —la jerarquía existe solo en la aritmética— que únicamente el modelo puede ordenar, y
+las rotuló distinto en cada entorno.
+
+Volvieron con sus datos: la poda borra la copia, no la fuente. **Pérdida neta: cero.** Y la
+reaparición es la única prueba directa de que el motor del destino sí las produce, así que
+pasan a `--vivas` y no se vuelven a tocar. Sin eso, cada poda las borraría y cada
+sincronización las repondría, todos los meses.
+
+## XI.4 Verificado contra los NÚMEROS, no contra los códigos
+
+En producción, después de todo:
+
+| | |
+|---|---:|
+| series con nombre por coordenada | **0** |
+| identidad contable de la base monetaria | **0 fallas** en 290 meses, error 0,0000 |
+| el puente canónico del IMAE ES la variación interanual de su índice | 223 comparaciones, error máx **0,00000 pp** |
+| naturalezas | stock 1.417 · flow 278 · index 230 · rate 170 · unknown 53 |
+| huérfanas pendientes | **0** |

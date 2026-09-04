@@ -199,7 +199,14 @@ def _run_canonical_ingest(params, user_id, set_phase) -> Dict:
         # empates (misma serie y período, valores distintos) que el upsert resuelve por
         # orden de lectura y sin dejar marca. El reporte de cobertura se conserva completo
         # porque es con lo que se decide qué habilitar después.
-        result = ingest_canonical(db, persist=True,
+        # `podar=True`: la sincronización se lleva su propio arrastre. El upsert nunca
+        # podaba, así que cada renombrado del extractor dejaba el código viejo sirviendo
+        # datos que ya nadie produce —365 series en producción, que hubo que limpiar a
+        # mano—. Va con cuatro frenos (ver `_podar_lo_que_ya_no_se_escribe`); el que
+        # importa acá es el TOPE: si la poda se llevaría más de la mitad de un archivo, no
+        # la ejecuta y la reporta en `prune_halted`, porque un renombrado de esa escala es
+        # un evento humano y no algo que una tarea mensual decida sola.
+        result = ingest_canonical(db, persist=True, podar=True,
                                   alcance=PERSISTIBLES_VERIFICADOS)
         set_phase("reconstruyendo snapshot (momentum + señales)")
         snap = build_snapshot(db)
