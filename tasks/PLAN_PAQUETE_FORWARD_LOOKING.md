@@ -525,16 +525,40 @@ T-VL-3. No bloquean T-PS.
 
 ## T-MP-5 · Procedencia y reporte — `products.py`, `variable_signals()` (EDIT)
 
+> **Corrección al plan.** Decía «`products.py`, `variable_signals()` (EDIT)». No existe un
+> `modules/macro_monitor/products.py`: el producto del eje es `MacroProduct` y vive en
+> **`app/products_macro.py`**; y `variable_signals()` **no existía** —había que crearlo, no
+> editarlo—. El eje caía al fallback a-nivel-producto.
+
 ### Pasos atómicos
-- [ ] **1.** `variable_signals()` emite `state=PROJECTED` con `ProjectionMeta` completo.
-- [ ] **2.** **El ledger es la fuente de verdad**; la meta se construye leyendo de él, nunca al revés. Mapeo campo a campo en §3.6.2.
-- [ ] **3.** `coverage_real` del eje macro **no cambia**.
-- [ ] **4.** Secciones de reporte de §5, con **"Desempeño de nuestras proyecciones anteriores" en el CUERPO**, no en anexo. Es el argumento de venta, no la letra chica.
-- [ ] **5.** SKU y tarifa vía `shared/billing/skus.py:45-53` y `tariffs.py:81`. **No hardcodear precio.**
+- [x] **1.** `variable_signals()` NUEVO en `app/products_macro.py`, con `state=PROJECTED` y `ProjectionMeta` completo para lo proyectado.
+- [x] **2.** **El ledger es la fuente de verdad**: `forecasting/procedencia.py` DERIVA la meta en cada lectura y no la guarda en ningún lado. `track_record()` es el único que computa `n_oos`, error, calibración y solapamiento.
+- [x] **3.** `coverage_real` no se infla: las señales proyectadas entran con **peso 0**, porque las dos coberturas son ponderadas y una proyectada con peso > 0 entraría al denominador y la BAJARÍA. Hay test que compara con y sin. Corolario: `coverage_projected` del eje da 0,0 y **no es un bug** — mide sustitución del índice, y el índice macro es real.
+- [x] **4.** Sección «Desempeño de nuestras proyecciones anteriores» **en el cuerpo** de los dos niveles nombrados, con su texto **computado** del ledger (`forecasting/desempeno.py`), nunca redactado por un modelo. Aparece con o sin resultados.
+- [x] **4b.** `forecasting/emision.py`: sin emisión el cableado nunca lleva corriente y no se puede verificar. Nowcast m1/m2 + los horizontes con track record del BVAR; los escenarios se CUENTAN y no se escriben.
+- [ ] **5.** SKU y tarifa. **Bloqueado por una decisión del dueño**, no por trabajo: los SKU derivan del `sector_key` (`insight:macro`, `deep_dive:macro`) y el precio ya es una fila de base (`create_tariff`), así que «no hardcodear precio» ya se cumple. Lo que falta decidir es si la proyección se vende **dentro** del eje macro o como SKU aparte — y que §5 pide «suscripción trimestral» cuando `VALID_INTERVALS` solo tiene `once | monthly | annual`.
 
 ### Sensor T-MP-5
-- [ ] Gate de honestidad deja pasar una pregunta prospectiva real.
-- [ ] `ESTADO_BACKTEST` de clase presente (lo exige `shared/products/tests/test_estado_de_validacion.py`).
+- [x] Una proyección **sin backtest en el ledger no ancla**: sale con `n_oos = 0` y el gate la rechaza con su motivo, en vez de silenciarse.
+- [x] `coverage_real` idéntico con y sin las señales proyectadas.
+- [x] `ESTADO_BACKTEST` de clase ya presente en `MacroProduct`.
+- [ ] Corrida end-to-end de una pregunta prospectiva contra datos reales — va con T-MP-6, que es quien programa la emisión.
+
+### Lo que la medición destapó (dos defectos VIVOS, ajenos al plan)
+
+Al medir la cobertura por variable en vez de suponerla:
+
+1. **El factor de ACTIVIDAD estaba sin dato en producción.** La doctrina apuntaba a
+   `bcrd.xls.imae_2018.variacion_porcentual_interanual`, que la API de prod devuelve **vacía**.
+   El código real es `…imae_2018.serie_original_variacion_porcentual_interanual`: **223 obs
+   hasta 2026-07**. El comentario del YAML decía que ese código ya se había arreglado una vez
+   en 2026 — se rompió de nuevo y nada falló, porque el fixture del test se escribió COPIANDO
+   la doctrina.
+2. **Una mina de doble escalado en la TPM, que puse yo.** La ingesta canónica ya corrige la
+   fracción a por-ciento (`escala_curada`, con tope), y la doctrina seguía declarando
+   `scale: 100.0`. Producción todavía sirve los valores viejos, así que no falló; **en cuanto
+   la sincronización corriera, la TPM se publicaba como «525 %»** en el contrato que
+   `banking_score` consume. Cura: un solo dueño de la escala + guard estructural.
 
 ---
 

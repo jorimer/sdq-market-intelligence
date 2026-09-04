@@ -1,65 +1,57 @@
-# T-MP-4 · Sectorial — plan
+# T-MP-5 · Procedencia y reporte — plan
 
-## Lo que la medición cambió (antes de escribir una línea de modelo)
+## Lo que el plan decía y NO es cierto
 
-El spec fija la **restricción de agregación** contra el PIB agregado. Medí primero, y el
-cuadro que parecía el natural para imponerla —`incidencia_por_actividad_economica`— **no
-cierra en el archivo del BCRD**. Verificado celda por celda contra `pib_origen_2018.xlsx`,
-hoja `PIBK_Trim`, filas 84-115: nuestra extracción es fiel, el que no cierra es el origen.
+El plan dice «`products.py`, `variable_signals()` **(EDIT)**». Comprobado en el código:
 
-| identidad en el cuadro de INCIDENCIA (29 trimestres) | resultado |
+| lo que decía el plan | lo medido |
 |---|---|
-| Σ(agropecuario+industrias+servicios) − valor_agregado | **exacto 0,0000** en 28; **−1,9451** en 2021-Q4 |
-| valor_agregado + impuestos − PIB | **nunca 0**; \|d\| medio 0,22 pp, máximo **1,29** (2021-Q3) |
-| Σ(sub-actividades) − servicios | ~0,01-0,05, salvo **−1,18** en 2021-Q1 |
-| Σ(sub-actividades) − manufactura local | hasta **0,39** |
+| hay un `modules/macro_monitor/products.py` | **no existe**. El producto del eje es `MacroProduct`, y vive en **`app/products_macro.py`** (787 líneas) |
+| `variable_signals()` se EDITA | **no existe** en `MacroProduct` — `'variable_signals' in type(p).__dict__` da `False`. Hay que CREARLO |
 
-O sea: el cuadro de incidencias del BCRD tiene residuos propios y dos trimestres con
-defectos francos. **No puede ser el sustrato de una restricción exacta.**
+Verificado instanciando el registro con `app.main` importado: 17 ejes implementados, `macro`
+entre ellos, resuelto a `app/products_macro.py`.
 
-El cuadro **nominal** sí lo es:
+## Y un hallazgo que el plan no anticipaba
 
-| `PIB$_Trim` · `valor_agregado_por_actividad_economica` | resultado |
-|---|---|
-| todos los grupos y subgrupos, 33 trimestres (2018-Q1 → 2026-Q1) | error **0,00000** |
-| **17 actividades + impuestos − PIB** | error máximo **0,000000000** millones RD$ |
+`MacroProduct` **ya tiene superficie de pronósticos**: `canonical_forecasts()` y
+`forecast_observations()`, hoy cableadas al ledger de TPM (`tpm_modeling/ledger.py`) y
+sirviendo por el Data API. El ledger nuevo (`mm_forecast_log`) tiene que entrar por ahí
+también, o las proyecciones macro existirán en la base y **no** en la superficie que el
+cliente consulta. Es exactamente el patrón de «un tipo nuevo se registra en TODAS sus
+superficies, o desaparece».
 
-Y las 17 actividades del spec existen, exactamente: agropecuario · minas · manufactura
-local · zonas francas · construcción · energía y agua · comercio · hoteles · transporte ·
-comunicaciones · intermediación financiera · inmobiliarias · enseñanza · salud ·
-administración pública · servicios profesionales · otras actividades de servicios.
+## Lo que YA está construido y dormido
 
-## El límite que hay que declarar, no esconder
+Todo el aguas-abajo del BLOQUE PP está hecho y con test: el pasaje del registro propaga la
+meta, `Evidence` la toma, el orquestador escribe en la `SubQuestion`, el gate de admisión
+decide, la prosa de procedencia la narra y `coverage_projected` la publica. Lo vigila
+`shared/research/tests/test_cableado_de_proyeccion.py`, en sus tres puntos.
 
-Con índices encadenados **la agregación exacta contra el PIB publicado es imposible**, y no
-por nuestro método: es la no-aditividad del encadenamiento. Reconstruí el crecimiento del
-PIB agregando las 17 actividades con pesos nominales:
-
-| ponderación | error medio | máximo |
-|---|---:|---:|
-| participación nominal en t−4 | **0,149 pp** | 0,625 |
-| participación nominal del año previo | 0,176 pp | 1,029 |
-
-**Nuestro agregador es más ajustado que el propio cuadro de incidencias del BCRD**
-(0,149 / 0,63 contra 0,22 / 1,29). El sensor del plan dice «reconciliación exacta»: lo es
-**contra el agregado que publicamos**, y la distancia contra el PIB publicado del BCRD se
-mide y se declara en la metodología. No se finge que sea cero.
+**Lo único que falta es el ORIGEN**: ningún producto emite hoy una señal `PROJECTED`.
 
 ## Pasos
 
-- [ ] **1.** `forecasting/sectoral.py`: las 17 actividades + impuestos, con la partición
-      verificada; ponderación nominal en t−4 (elegida por medición, no por defecto).
-- [ ] **2.** Método elegido **con la data en mano**: comparar contra la línea base ingenua
-      («cada sector crece como el PIB», que es la proporción sin corrección). Si el método
-      no le gana fuera de muestra, se publica la línea base y se dice.
-- [ ] **3.** Reconciliación contra el PIB del BVAR, con el ajuste **reportado por sector**;
-      si la brecha excede lo que el error histórico de agregación explica, se declara en vez
-      de prorratearse en silencio.
-- [ ] **4.** Sector con huecos o cambio de base: **no se proyecta**, se declara brecha.
-- [ ] **5.** Profundidad **33 trimestres** declarada (decisión del dueño), y el backtest
-      sectorial declara su n, que es corto.
+- [ ] **1.** `forecasting/procedencia.py`: `ProjectionMeta` construido **leyendo del ledger**
+      —`track_record()` ya devuelve `n_oos`, `rmse`, `interval_coverage` y `overlapping`—,
+      nunca al revés. Es el `[Lock]` de §3.6.2.
+- [ ] **2.** `MacroProduct.variable_signals()` NUEVO: las variables macro reales, y las
+      proyectadas con `state=PROJECTED` + meta completa. Una proyección sin fila en el
+      ledger no se emite.
+- [ ] **3.** `coverage_real` del eje macro **no cambia** — medido antes y después, no
+      supuesto.
+- [ ] **4.** Las proyecciones macro entran a `canonical_forecasts()`/`forecast_observations()`
+      junto a las de TPM.
+- [ ] **5.** Secciones de reporte de §5, con **«Desempeño de nuestras proyecciones
+      anteriores» en el CUERPO**.
+- [ ] **6.** SKU y tarifa vía `shared/billing/skus.py` y `tariffs.py`. **Sin precio
+      hardcodeado.**
+- [ ] **7.** `ESTADO_BACKTEST` de clase: ya existe en `MacroProduct` y declara el motor
+      `macro_political_risk`. Hay que revisar si añadir el motor de proyección **cambia lo
+      que el eje puede afirmar**, y cruzarlo contra `shared.validation.frescura.MOTORES` —
+      un producto no puede reclamar un motor que nadie registró.
 
 ## Sensor
-- [ ] Reconciliación exacta contra el agregado publicado (test).
-- [ ] Sectores no proyectables declarados (test).
-- [ ] La partición 17+impuestos=PIB se verifica en el dato, no se supone (test).
+- [ ] Gate de honestidad deja pasar una pregunta prospectiva real (extremo a extremo).
+- [ ] Una proyección sin backtest en el ledger **no** ancla.
+- [ ] `coverage_real` del eje macro idéntico antes y después.
