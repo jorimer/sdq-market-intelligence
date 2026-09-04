@@ -10,6 +10,9 @@ ingesta canónica (el except hace rollback y continúa).
 """
 from types import SimpleNamespace
 
+from shared.data.base_client import Record
+from shared.data.lineage import Lineage
+
 import pytest
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
@@ -59,7 +62,13 @@ def test_ingest_canonical_continues_after_a_failing_file(db, monkeypatch):
         report = SimpleNamespace(ok=True, series=[], flagged=[])
         spec = SimpleNamespace(method="heuristic", orientation="period_rows",
                                frequency="monthly", confidence=0.9)
-        return SimpleNamespace(records=[object()], report=report, spec=spec)
+        # Un Record de verdad, no un `object()` opaco: por la ruta de escritura pasan
+        # ahora otros pasos además del upsert (las unidades curadas del registro
+        # canónico), y un centinela sin forma haría fallar la ingesta por un motivo que
+        # no es el que este test mide.
+        rec = Record(series="bcrd.xls.x.y", period="2020-01", value=1.0,
+                     lineage=Lineage(source="BCRD", license="público"))
+        return SimpleNamespace(records=[rec], report=report, spec=spec)
 
     # El primer archivo en procesarse revienta el upsert (simula la truncación);
     # los demás persisten normal. Sin el rollback, el reporte de fallo también

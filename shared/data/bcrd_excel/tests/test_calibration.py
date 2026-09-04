@@ -157,7 +157,11 @@ def test_matrix_quarterly_synthetic():
 # ── Quarterly period_rows: quarters down a column, year via subtotal ──
 def test_pib_trimestral_quarters():
     spec, recs = _extract("pib_2018.xlsx")
-    assert spec.orientation == "period_rows" and spec.frequency == "trimestral"
+    # "quarterly", no "trimestral": esta aserción FIJABA el defecto. La rama de
+    # `period_rows` trimestral escribía la cadencia en español mientras sus dos hermanas la
+    # escribían en inglés, y ese valor termina en `mm_series.frequency`, que se sirve por la
+    # Data API. Lo vigila `test_vocabulario_de_frecuencia.py`.
+    assert spec.orientation == "period_rows" and spec.frequency == "quarterly"
     idx = _series(recs, "serie_original_indice")
     # quarter revealed by the trailing "Promedio 2007" marker; quarterly periods
     assert idx["2007-Q1"] == pytest.approx(56.2, abs=0.1)

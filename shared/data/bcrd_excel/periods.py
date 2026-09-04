@@ -56,9 +56,29 @@ def parse_month(value: Any) -> Optional[int]:
 
 # quarter label → 1..4. Covers BCRD's many spellings: month-range ("E-M", "A-J",
 # "J-S", "O-D"; "Ene-Mar"), Roman ("I".."IV"), and "T1"/"1T"/"Trim 1"/"Q1".
+#: Los rótulos del cuadro ACUMULADO: el rango va siempre desde enero, y el trimestre es aquel
+#: en que CIERRA. El BCRD publica cada cuadro trimestral dos veces —el flujo del trimestre
+#: (`A-J` = abril-junio) y el acumulado del año (`E-J` = enero-junio)— y solo estaban los
+#: primeros: los otros tres no resolvían trimestre, caían al AÑO, y las tres columnas de un
+#: año competían por la misma clave. El dedupe «último gana» dejaba una arbitraria. En el PIB
+#: por sector de origen eran 1.660 duplicados con valores distintos.
+#:
+#: `E-M` (enero-marzo) no está acá a propósito: es el primer trimestre en los DOS cuadros y
+#: vale lo mismo en ambos, así que no distingue uno de otro.
+_QUARTERS_ACUMULADOS: dict[str, int] = {
+    "e-j": 2, "e-s": 3, "e-d": 4,
+    "ene-jun": 2, "ene-sep": 3, "ene-dic": 4,
+    "enero-junio": 2, "enero-septiembre": 3, "enero-diciembre": 4,
+}
+
 _QUARTERS: dict[str, int] = {
+    **_QUARTERS_ACUMULADOS,
     "e-m": 1, "a-j": 2, "j-s": 3, "o-d": 4,
     "ene-mar": 1, "abr-jun": 2, "jul-sep": 3, "oct-dic": 4,
+    # Con los meses COMPLETOS: así rotula el tipo de cambio sus cortes trimestrales
+    # (`Enero-Marzo`, `Abril-Junio`). Estaban solo las formas abreviadas, y sin trimestre
+    # las cuatro filas de cada año colapsaban en el año — 367 valores en conflicto.
+    "enero-marzo": 1, "abril-junio": 2, "julio-septiembre": 3, "octubre-diciembre": 4,
     "ene-marzo": 1, "i": 1, "ii": 2, "iii": 3, "iv": 4,
     "t1": 1, "t2": 2, "t3": 3, "t4": 4,
     "1t": 1, "2t": 2, "3t": 3, "4t": 4,
@@ -82,6 +102,22 @@ def parse_quarter(value: Any) -> Optional[int]:
     return None
 
 
+def es_trimestre_acumulado(value: Any) -> bool:
+    """¿El rótulo denota un acumulado del año (enero a…) en vez del flujo del trimestre?
+
+    Lo decide el ENCABEZADO del cuadro, que es donde el emisor lo declara — no el nombre del
+    archivo ni una lista escrita a mano. Sirve para que la serie extraída diga en su código
+    que es acumulada: sin eso, el acumulado y el flujo comparten sujeto, unidad y período, y
+    quien agrupe por el nombre de la serie sumaría los dos.
+    """
+    token = normalize_label(value).rstrip(".").strip().replace(" ", "")
+    return token in _QUARTERS_ACUMULADOS
+
+
+#: Hasta cuántas palabras puede tener una celda para seguir siendo una ETIQUETA de período.
+_MAX_PALABRAS_DE_ETIQUETA = 4
+
+
 def parse_year(value: Any) -> Optional[int]:
     """``1982`` / ``1982.0`` / ``"1982"`` → 1982; None if not a plausible year."""
     if value is None:
@@ -89,15 +125,33 @@ def parse_year(value: Any) -> Optional[int]:
     if isinstance(value, (int, float)):
         y = int(value)
         return y if 1900 <= y <= 2100 else None
-    m = re.search(r"(19|20)\d{2}", str(value))
+    texto = str(value).strip()
+    # Prosa, no etiqueta. `tasa_ocupacion.xls` cierra la hoja con «a) Las cifras
+    # corresponden a la publicación …» y de ahí salía el período 1986: una observación nula
+    # para un año que el cuadro no publica — una brecha FABRICADA, que es lo contrario de
+    # declarar la que hay. El corte es por forma: las etiquetas de período del corpus
+    # («Dic. 2007», «2016 2/», «2011*», «Enero 2017», «31/12/2009») tienen una o dos
+    # palabras y ninguna llega a cinco.
+    if len(texto.split()) > _MAX_PALABRAS_DE_ETIQUETA:
+        return None
+    m = re.search(r"(19|20)\d{2}", texto)
     if not m:
         return None
     y = int(m.group(0))
     return y if 1900 <= y <= 2100 else None
 
 
-def format_period(year: int, month: Optional[int], quarter: Optional[int] = None) -> str:
-    """``(2007, 5) → "2007-05"``; ``(2007, None, 2) → "2007-Q2"``; ``(2007, None) → "2007"``."""
+def format_period(year: int, month: Optional[int], quarter: Optional[int] = None,
+                  day: Optional[int] = None) -> str:
+    """``(2007, 5) → "2007-05"``; ``(2007, None, 2) → "2007-Q2"``; ``(2007, None) → "2007"``;
+    ``(2007, 5, day=9) → "2007-05-09"``.
+
+    El DÍA es la cuarta forma de período de la plataforma. Existe porque el tipo de cambio se
+    publica diario: sin día, los ~22 días hábiles de un mes colapsaban en `YYYY-MM` y el
+    upsert dejaba uno arbitrario — 19.680 valores en conflicto en un solo archivo.
+    """
+    if month is not None and day is not None:
+        return f"{int(year):04d}-{int(month):02d}-{int(day):02d}"
     if month is not None:
         return f"{int(year):04d}-{int(month):02d}"
     if quarter is not None:

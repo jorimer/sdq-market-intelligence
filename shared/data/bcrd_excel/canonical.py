@@ -18,7 +18,7 @@ See ``docs/SERIES_CANONICAS_BCRD.md`` for the full rationale.
 from __future__ import annotations
 
 from dataclasses import asdict, dataclass
-from typing import List, Optional
+from typing import Dict, List, Optional
 
 Robustness = str  # "green" | "yellow" | "red"
 
@@ -60,6 +60,19 @@ SERIES_NOTES = {
         "2005-2013 — serie HISTÓRICA y DESCONTINUADA. Úsese solo para el período previo "
         "a 2009. NO es comparable ni encadenable con la serie MBP6 "
         "(bcrd.xls.piianual_6.*)."
+    ),
+    "bcrd.xls.pib_origen_2018.pib_trim_acum.": (
+        "PIB por actividad ACUMULADO del año: el valor de un trimestre es el corrido desde "
+        "enero (el de Q2 es enero-junio, no abril-junio). NO se compara ni se suma con la "
+        "serie de flujo trimestral (bcrd.xls.pib_origen_2018.pib_trim.*), que mide el "
+        "trimestre solo; el acumulado del cuarto trimestre ES el año completo."
+    ),
+    "bcrd.xls.pib_origen_2018.pibk_trim_acum.": (
+        "Índice de volumen encadenado por actividad, ACUMULADO del año: el valor de un "
+        "trimestre corresponde al corrido desde enero. NO se compara ni se encadena con la "
+        "serie de flujo trimestral (bcrd.xls.pib_origen_2018.pibk_trim.*). Ojo: el acumulado "
+        "de un índice es un promedio ponderado, no una suma — no se reconstruye sumando los "
+        "trimestres."
     ),
     "bcrd.xls.bpagos.": (
         "Balanza de pagos bajo el MBP5 (quinta edición del manual) — serie HISTÓRICA y "
@@ -243,7 +256,12 @@ REGISTRY: List[CanonicalSeries] = [
         homogenization="serie referencial ya encadenada por el BCRD (no encadenamos nosotros)",
         rationale="El propio BCRD publica el empalme oficial de bases; preferirlo a un "
                   "encadenamiento propio reduce el riesgo metodológico.",
-        robustness="yellow", api_series="bcrd.ipc.indice", api_transform="yoy",
+        # De `yellow` a `green`: el amarillo era del EMPALME —una cautela metodológica sobre
+        # cómo encadenar con la serie base—, no de la extracción. Las 25 observaciones
+        # (oct-2019 → oct-2021) salen limpias y su variación mensual coincide EXACTO con la
+        # de su propio índice en las 24 comparaciones posibles. Que sea una serie puente lo
+        # dice su `homogenization`, no este campo.
+        robustness="green", api_series="bcrd.ipc.indice", api_transform="yoy",
         excel_series_suffix="indice",
     ),
     CanonicalSeries(
@@ -263,7 +281,11 @@ REGISTRY: List[CanonicalSeries] = [
         source_file="ipc_subyacente_base_2019-2020.xlsx", base="2019-2020", frequency="mensual",
         homogenization="base vigente; YoY para comparabilidad",
         rationale="Núcleo inflacionario: excluye los componentes volátiles; guía de política.",
-        robustness="yellow",
+        # A `green`: sus cuatro columnas salían `col2`, `x`, `x_c4` y `x_c5` —el encabezado
+        # está por encima de un bloque de cierres anuales y lo que hay justo arriba del
+        # primer dato son guiones—. Nombradas bien, la variación mensual coincide EXACTO con
+        # la de su índice en las 318 comparaciones.
+        robustness="green",
     ),
     # ── Sector Real ──────────────────────────────────────────────
     CanonicalSeries(
@@ -275,7 +297,33 @@ REGISTRY: List[CanonicalSeries] = [
         homogenization="índice + YoY (interanual base-invariante)",
         rationale="Único indicador de actividad de alta frecuencia; mensual desde 2007.",
         robustness="green", api_series="bcrd.sector_real.imaes", api_transform="identity",
+        # Este sufijo VOLVIÓ a ser el que el registro declaraba al principio, y la vuelta
+        # dice algo. En su momento no resolvía a ninguna serie y se corrigió a
+        # `variacion_porcentual_interanual`, eligiendo entre cuatro candidatas por
+        # coincidencia CON EL DATO —error 0,00000 pp contra la variación interanual del
+        # índice original—. La causa real no era el sufijo: era que el encabezado de TRES
+        # niveles se leía mal y nueve de las catorce columnas perdían el nombre de su cuadro
+        # (dos ni siquiera se persistían, desempatadas por coordenada). Leído bien, la
+        # declaración original vuelve a valer y es única. Un puente que no resuelve puede
+        # estar acusando al extractor, no al registro. Lo vigila
+        # `tests/test_puentes_canonicos.py`, que además re-verifica la identidad numérica.
         excel_series_suffix="serie_original_variacion_porcentual_interanual",
+    ),
+    CanonicalSeries(
+        key="imae_indice", concept="IMAE — índice de actividad (nivel)", sector="sector_real",
+        source_file="imae_2018.xlsx", base="2018=100", frequency="mensual",
+        homogenization="nivel del índice en la base vigente; la variación se deriva como YoY",
+        # Son DOS series, no una corregida. La YoY no permite reconstruir el nivel, y el
+        # nowcast necesita el NIVEL: la bridge equation agrega el índice mensual a trimestre
+        # y lo regresa contra el PIB. Con la serie de variación ese agregado no se puede
+        # construir. Además `tpm_modeling/dataset.py` ya consume este `series_code` para el
+        # output gap, así que el índice hacía falta y el registro no lo declaraba —el dato
+        # entraba igual porque la ingesta es por ARCHIVO, pero sin declararlo ninguna
+        # verificación podía vigilarlo.
+        rationale="Nivel de actividad de alta frecuencia: es el insumo del nowcast trimestral "
+                  "del PIB y del output gap, que necesitan el índice y no su variación.",
+        robustness="green", api_series="bcrd.sector_real.imaes", api_transform="identity",
+        excel_series_suffix="serie_original_indice",
     ),
     CanonicalSeries(
         key="pib_real", concept="PIB real (crecimiento)", sector="sector_real",
@@ -285,6 +333,28 @@ REGISTRY: List[CanonicalSeries] = [
         rationale="Base oficial vigente; el crecimiento real es la medida citable y base-invariante.",
         robustness="green",  # period_rows trimestral (trimestres + marcador de año)
         excel_series_suffix="serie_original_indice",
+    ),
+    CanonicalSeries(
+        key="pib_sectores_origen", concept="PIB por sector de origen (desagregación sectorial)",
+        sector="sector_real",
+        # OJO — el archivo NO es `PIB_sectores_origen.xls`, que es el que uno esperaría por el
+        # nombre y el que el spec de persistencia señalaba. Ése está CONGELADO: su
+        # `last-modified` es del 2019-02-23 y sus dos hojas son «Trim Acum 91-14», o sea que
+        # termina en 2014 y en la base vieja. Es la misma trampa del IMAE: el BCRD migró a un
+        # archivo base 2018 y el anterior quedó quieto. El vigente se actualizó el 2026-06-29.
+        source_file="pib_origen_2018.xlsx", base="2018", frequency="trimestral",
+        homogenization="índice de volumen encadenado referenciado a 2018, por actividad; "
+                       "el crecimiento se deriva como YoY, que es invariante a la base",
+        rationale="La desagregación por actividad del PIB: es lo que permite decir qué sector "
+                  "empuja o frena el crecimiento, y el insumo de la proyección sectorial.",
+        # AMARILLO, y el motivo es concreto: de las cuatro hojas del libro, las dos
+        # trimestrales (`PIB$_Trim`, `PIBK_Trim`) extraen limpias —162 series, todas con
+        # períodos trimestrales 2018-Q1→2025-Q4, cero duplicados con valores en conflicto—
+        # pero las dos ACUMULADAS mezclan períodos anuales y trimestrales dentro de la misma
+        # serie y producen 1.660 duplicados con valores distintos, que el upsert resolvería
+        # por orden de lectura. Como la ingesta es por ARCHIVO y no por hoja, el libro entero
+        # queda fuera de `PERSISTIBLES_VERIFICADOS` hasta que las acumuladas se parseen bien.
+        robustness="yellow",
     ),
     CanonicalSeries(
         key="pib_nominal_gasto", concept="PIB nominal por gasto", sector="sector_real",
@@ -344,15 +414,25 @@ REGISTRY: List[CanonicalSeries] = [
                   "2010. NO es comparable ni encadenable con la serie MBP6 — el cambio de "
                   "manual reclasifica bienes para transformación (zonas francas, material "
                   "en RD) y cambia convenciones de la cuenta financiera.",
-        robustness="yellow",
+        # A `green`, por el mismo criterio que `pii_mbp5`: el amarillo hablaba de
+        # METODOLOGÍA —que la serie está descontinuada y no se encadena—, y eso ya lo dice su
+        # nota, que viaja al cliente por la Data API. La extracción es limpia: 54 series,
+        # 0 duplicados en conflicto, y las sub-filas repetidas («Nacionales», «Zonas
+        # Francas», que cuelgan tanto de exportaciones como de importaciones) ya se
+        # califican las dos.
+        robustness="green",
     ),
     CanonicalSeries(
         key="remesas", concept="Remesas", sector="sector_externo",
         source_file="Remesas_6.xlsx", base="US$ MM", frequency="mensual",
         homogenization="nivel directo (matriz años×meses)",
-        rationale="Mayor flujo externo de divisas del país; soporte del consumo. "
-                  "Ojo: las celdas vienen en US$ (no millones pese al rótulo) — verificar unidad.",
-        robustness="yellow",  # extrae como matriz; revisar la unidad declarada
+        rationale="Mayor flujo externo de divisas del país; soporte del consumo. La hoja se "
+                  "titula «MILLONES DE US$» y las celdas están en US$: la unidad se corrige "
+                  "en `UNIDADES_CURADAS`, verificada contra la balanza de pagos del propio "
+                  "BCRD (2010 = 3.683 millones, y los doce meses suman 3.682.932.483).",
+        # A `green`: la duda que sostenía el amarillo era la unidad, y quedó resuelta con una
+        # comprobación contra otra publicación del emisor, no con una impresión.
+        robustness="green",
     ),
     # Posición de inversión internacional: MISMA situación que la balanza de pagos —
     # dos ediciones del manual del FMI, dos archivos, y estábamos leyendo el viejo.
@@ -370,9 +450,15 @@ REGISTRY: List[CanonicalSeries] = [
         key="pii_mbp5", concept="Posición de inversión internacional (MBP5, histórica)",
         sector="sector_externo",
         source_file="piianual.xls", base="US$ MM", frequency="anual",
-        homogenization="nivel directo",
+        homogenization="nivel directo; cada año trae el saldo de apertura, cuatro flujos "
+                       "(transacciones, tipo de cambio, precios, otras) y el de cierre",
         rationale="Stock de activos y pasivos externos; solvencia externa.",
-        robustness="yellow",
+        # VERDE desde el 2026-09-04. Era amarillo porque el archivo NO extraía bien: sus seis
+        # conceptos por año colapsaban en uno y los flujos salían corridos un año. Corregido,
+        # la identidad contable del propio cuadro —cierre = apertura + los cuatro flujos—
+        # cierra en 768 casos y falla en cero. `robustness` describe la EXTRACCIÓN; que la
+        # serie esté descontinuada lo dice su nota metodológica, no este campo.
+        robustness="green",
     ),
     # ── Sector Monetario y Financiero ────────────────────────────
     CanonicalSeries(
@@ -394,14 +480,24 @@ REGISTRY: List[CanonicalSeries] = [
         source_file="base_monetaria.xlsx", base="RD$ MM", frequency="mensual",
         homogenization="nivel directo",
         rationale="Dinero primario emitido por el banco central.",
-        robustness="yellow",
+        # A `green`: sus catorce columnas salían con el NÚMERO DE LÍNEA del emisor por
+        # nombre —`me_9`, `me_11`, `valores_3`— porque la fila de referencias `(1)`…`(14)`,
+        # con la que el BCRD escribe sus propias sumas, contaba como rótulo y tapaba la
+        # cadena de grupos de arriba. Con eso corregido, la IDENTIDAD CONTABLE del cuadro
+        # cierra EXACTO en los dos niveles y en los 290 meses: restringida = (1)+(2)+(3), y
+        # amplia = restringida + los nueve componentes.
+        robustness="green",
     ),
     CanonicalSeries(
         key="tasa_activa", concept="Tasa de interés activa", sector="sector_monetario_financiero",
         source_file="taap_activad.xlsx", base="%", frequency="mensual",
         homogenization="nivel directo",
         rationale="Costo del crédito; el API solo da el último dato → el Excel aporta historia.",
-        robustness="yellow", api_series="bcrd.monetarias.tasas_de_interes.activa",
+        # A `green`: la hoja declara 256 columnas y el cuadro termina en la 15; el relleno
+        # heredaba el rótulo del último grupo. Corregido, las 15 series salen con 0
+        # duplicados en conflicto y el promedio ponderado cae entre el mínimo y el máximo de
+        # los plazos en los 115 meses.
+        robustness="green", api_series="bcrd.monetarias.tasas_de_interes.activa",
         api_transform="identity",
     ),
     CanonicalSeries(
@@ -409,7 +505,10 @@ REGISTRY: List[CanonicalSeries] = [
         source_file="taap_pasivad.xlsx", base="%", frequency="mensual",
         homogenization="nivel directo",
         rationale="Retorno del ahorro; junto con la activa define el spread bancario.",
-        robustness="yellow", api_series="bcrd.monetarias.tasas_de_interes.pasiva",
+        # A `green`: mismo defecto y misma comprobación que la activa. Traía 27.715
+        # observaciones nulas de más —las 241 columnas de relleno heredaban «Interbancaria»—
+        # y ahora son 1.610 claves, todas distintas.
+        robustness="green", api_series="bcrd.monetarias.tasas_de_interes.pasiva",
         api_transform="identity",
     ),
     # ── Mercado Cambiario ────────────────────────────────────────
@@ -425,14 +524,19 @@ REGISTRY: List[CanonicalSeries] = [
     # ── Mercado de Trabajo ───────────────────────────────────────
     CanonicalSeries(
         key="tasa_ocupacion", concept="Tasa de ocupación", sector="mercado_de_trabajo",
-        source_file="tasa_ocupacion.xls", base="%", frequency="trimestral",
+        # `frequency` decía «trimestral» y el archivo no publica un solo trimestre: trae
+        # «Anual 1960-1984», «Anual 1991-2016» y «Semestral 2000-2016» (las encuestas de
+        # abril y octubre). Medido, no supuesto — 83 observaciones, ninguna trimestral.
+        source_file="tasa_ocupacion.xls", base="%", frequency="anual",
         homogenization="ojo quiebre ENFT→ENCFT (2021): tratar como dos tramos, no empalmar directo",
         rationale="Mercado laboral. El cambio de encuesta en 2021 no es empalmable sin ajuste.",
         robustness="yellow",
     ),
     CanonicalSeries(
         key="tasa_desocupacion", concept="Tasa de desocupación", sector="mercado_de_trabajo",
-        source_file="tasa_desocupacion.xls", base="%", frequency="trimestral",
+        # Igual que la de ocupación: dos hojas anuales y dos semestrales (abril y octubre),
+        # 125 observaciones, cero trimestrales. La declaración decía «trimestral».
+        source_file="tasa_desocupacion.xls", base="%", frequency="anual",
         homogenization="idem (quiebre ENFT→ENCFT 2021)",
         rationale="Desempleo abierto; indicador social y de holgura del mercado laboral.",
         robustness="yellow",
@@ -446,6 +550,174 @@ REGISTRY: List[CanonicalSeries] = [
         robustness="yellow",
     ),
 ]
+
+
+# Qué archivos del canónico se PERSISTEN hoy. El registro dice qué series son citables; esto
+# dice cuáles de ellas ya se pueden escribir sin degradar la base, que es otra pregunta.
+#
+# Sale de la corrida en seco del 2026-09-03 (`tasks/INFORME_FASE0_PERSISTENCIA_BCRD.md`):
+# de los 26 archivos canónicos, éstos cuatro son los únicos verificados sin colisiones, sin
+# huecos, sin nulos internos y —sobre todo— sin duplicados intra-lote que traigan valores
+# DISTINTOS para la misma (serie, período). Ese último es el que manda: `_upsert_records`
+# resuelve esos empates con "último gana", por orden de lectura y sin dejar marca, y en la
+# corrida hubo 29.427 casos repartidos en 176 series de otros cuatro archivos.
+#
+# ES UNA LISTA TRANSITORIA, y por eso cada exclusión lleva su motivo: una lista blanca sin
+# motivo se vuelve permanente por inercia y nadie recuerda qué había que arreglar para
+# sacarla. Lo que falta para levantar cada exclusión:
+#
+#   Los 16 restantes — no evaluados uno a uno todavía; entran cuando se los verifique.
+#
+# Vacío o None en `ingest_canonical` significa "todo el canónico", que es el comportamiento
+# histórico y el que corresponde cuando esta lista deje de hacer falta.
+#
+# El valor es `None` para habilitar el ARCHIVO ENTERO, o la lista de HOJAS habilitadas cuando
+# el libro trae unas que extraen bien y otras que no. Es un solo diccionario y no una lista de
+# archivos más un mapa de hojas al lado: dos estructuras que hay que mantener en sincronía se
+# desincronizan, y de eso este repo ya tiene lecciones escritas.
+#
+# Los nombres de hoja son los del libro, tal como los ve quien lo abre en Excel; el prefijo
+# del código lo arma el motor con su propio `_slug`.
+#: Unidades CURADAS: los casos en que el emisor rotuló mal su propia planilla, con la
+#: verificación que lo demuestra al lado. La regla general no cambia —la unidad la declara
+#: el emisor y `series_nature` se construyó sobre eso—; esto es la excepción, y para entrar
+#: exige una comprobación CONTRA OTRA PUBLICACIÓN DEL MISMO EMISOR, escrita acá. Una unidad
+#: no se corrige porque el número «se ve raro».
+#:
+#: Clave: prefijo del código de serie. Valor: (unidad correcta, evidencia).
+UNIDADES_CURADAS: Dict[str, tuple] = {
+    "bcrd.xls.remesas_6.": (
+        "US$",
+        "La hoja se titula «MILLONES DE US$» y trae 280.155.040 para enero de 2010: juntas, "
+        "las dos cosas dirían 280 billones de dólares en un mes. La suma de los doce meses "
+        "de 2010 da 3.682.932.483, y la balanza de pagos MBP6 del propio BCRD publica "
+        "remesas 2010 = 3.683 millones de US$. Las celdas están en US$ y el rótulo se "
+        "equivoca por un factor de un millón.",
+    ),
+}
+
+
+def unidad_curada(series_code: str) -> Optional[str]:
+    """La unidad verificada de una serie cuando el emisor rotuló mal, o ``None``."""
+    for prefijo, (unidad, _evidencia) in UNIDADES_CURADAS.items():
+        if str(series_code).startswith(prefijo):
+            return unidad
+    return None
+
+
+PERSISTIBLES_VERIFICADOS: Dict[str, Optional[List[str]]] = {
+    "pib_2018.xlsx": None,            # PIB real trimestral: 77 trimestres 2007-Q1→2026-Q1
+    "imae_2018.xlsx": None,           # IMAE mensual, incluido el índice que consume el nowcast
+    "ipc_base_2019-2020.xls": None,   # IPC general: 511 meses desde 1984
+    "pib_deflactor_2018.xlsx": None,  # deflactor del PIB: 33 trimestres desde 2018-Q1
+    # El PIB por sector de origen entra POR HOJA. Las dos trimestrales extraen limpias —162
+    # series, 2018-Q1→2025-Q4, cero duplicados con valores en conflicto—; las dos ACUMULADAS
+    # mezclan períodos anuales y trimestrales dentro de la misma serie y producen 1.660
+    # duplicados con valores distintos, que el upsert resolvería por orden de lectura.
+    # Las cuatro entran: los rótulos del cuadro acumulado (`E-J`/`E-S`/`E-D`) no resolvían
+    # trimestre y las tres columnas de cada año colapsaban en la misma clave; corregido en
+    # `periods.py`, las cuatro hojas dan 0 duplicados con valores en conflicto y 0 series con
+    # períodos mezclados. Las acumuladas declaran su naturaleza en el código —`_acumulado`—
+    # y en una nota metodológica que viaja al cliente por la Data API.
+    # Se listan LAS CUATRO en vez de poner `None`: el valor es el mismo hoy, pero la lista
+    # dice cuáles se verificaron una por una, y si el BCRD agrega una quinta hoja no se
+    # habilita sola sin que alguien la mire.
+    "pib_origen_2018.xlsx": ["PIB$_Trim", "PIBK_Trim",
+                             "PIB$_Trim_Acum", "PIBK_Trim_Acum"],
+    # El tipo de cambio, con sus SIETE cortes. Tenía dos defectos distintos y los dos eran
+    # del parser: la hoja `Diaria` es una serie diaria de verdad —`Año | Mes | Día`— y el
+    # período no tenía día, así que los ~22 días hábiles de cada mes colapsaban; y los cortes
+    # trimestrales rotulan el trimestre con los meses completos (`Enero-Marzo`), grafía que
+    # el mapa no tenía. Con las dos cosas corregidas, las siete hojas dan 0 duplicados con
+    # valores en conflicto.
+    "TASA_DOLAR_REFERENCIA_MC.xlsx": ["Diaria", "PromMensual", "PromTrimestral", "PromAnual",
+                                      "FPMensual", "FPTrimestral", "FPAnual"],
+    # La posición de inversión internacional, los dos manuales. Bajo cada año el cuadro trae
+    # SEIS conceptos —saldo de apertura, cuatro flujos y saldo de cierre— y el motor no sabía
+    # leer un sub-encabezado que no fuera un período: los seis caían en el mismo (serie, año).
+    # Además tomaba como fila de años la de FECHAS de corte, así que los flujos salían
+    # corridos un año. Con las dos cosas corregidas, la IDENTIDAD CONTABLE del propio cuadro
+    # —cierre = apertura + los cuatro flujos— cierra en 2.718 casos y falla en cero.
+    "piianual_6.xlsx": None,
+    # El MBP5 va POR HOJA porque su entrada es `yellow`, y con razón: es la serie histórica y
+    # DESCONTINUADA, que su propia nota manda usar solo antes de 2010. Ese amarillo habla de
+    # metodología, no de extracción — la hoja extrae limpia y la identidad contable cierra.
+    "piianual.xls": None,
+    # Las llegadas de pasajeros, por HOJA: su entrada sigue en `yellow` y con razón, pero por
+    # HOMOGENEIZACIÓN —el archivo publica varios cortes de años como hojas separadas y falta
+    # consolidarlos—, no por extracción. Las cuatro hojas dan 0 duplicados con valores en
+    # conflicto, 0 series con períodos mezclados y 0 códigos desempatados por coordenada.
+    "lleg_total.xls": ["No Residentes 78 - 26", " Residentes 93 - 26",
+                       "Llegada total 93-26", "1993 - 2026"],
+    # ── Los 18 restantes, triados uno por uno contra los seis criterios ──────────────
+    # Los seis: 0 duplicados (serie, período) con valores en conflicto · 0 series con formas
+    # de período mezcladas · 0 códigos desempatados por coordenada · 0 avisos de truncamiento
+    # · 0 discrepancias de cadencia contra el registro · y una verificación de SENTIDO propia
+    # del archivo, que es la que distingue «no hay conflictos» de «está bien leído».
+    #
+    # Precios. Las doce «Var. %» del IPC por grupos se comprobaron contra la variación
+    # mensual de su propio índice: once cierran EXACTO (0,000000) y la de alimentos difiere
+    # 0,0038 pp en un mes de 330 — redondeo del emisor, no un parse. Las de quintiles y
+    # regiones ya estaban verificadas así cuando se arregló `_grupo_a_la_izquierda`.
+    "ipc_grupos_base_2019-2020.xls": None,
+    "ipc_quintiles_base_2019-2020.xls": None,
+    "ipc_regiones_base_2019-2020.xls": None,
+    # El subyacente publica un bloque de cierres anuales ENTRE el encabezado y la serie
+    # mensual: el buscador de nombres miraba las seis filas de encima del primer dato, ahí
+    # solo hay guiones, y las cuatro series salían `col2`, `x`, `x_c4`, `x_c5` (dos de ellas
+    # ni se persistían). Corregido, su variación mensual cierra exacto contra su índice en
+    # las 318 comparaciones.
+    "ipc_subyacente_base_2019-2020.xlsx": None,
+    # La serie referencial son 25 meses (oct-2019 → oct-2021) y eso NO es una lectura corta:
+    # es el empalme de la base nueva y el archivo no publica más. Variación mensual contra
+    # índice: 24 de 24 exactas.
+    "ipc_base_2019-2020_serie_referencial.xlsx": None,
+    "Costo_Canasta_quintiles_base_2019-2020.xlsx": None,
+    # Sector externo. `bpagos` y `bpagos_6` tienen «Nacionales» y «Zonas Francas» dos veces
+    # —bajo exportaciones y bajo importaciones— sin numeración ni sangría que las ordene, y
+    # solo la SEGUNDA se desempataba: la primera quedaba como `balanza_de_bienes.nacionales`
+    # al lado de una que sí decía «importaciones». Ahora se califican las dos.
+    "bpagos_6.xls": None,
+    "bpagos.xls": None,
+    "reservas_internacionales.xlsx": None,   # netas ≤ brutas en los 284 meses comunes
+    # Las remesas entran con la unidad CORREGIDA: la hoja dice «MILLONES DE US$» y las celdas
+    # están en US$. Ver `UNIDADES_CURADAS`, que trae la verificación contra la balanza de
+    # pagos del propio BCRD.
+    "Remesas_6.xlsx": None,
+    # Sector monetario. Las pasivas tenían 27.715 observaciones nulas de más: la hoja declara
+    # 256 columnas, el cuadro termina en la 14 —«Interbancaria», un grupo sin métrica
+    # propia— y las 241 vacías heredaban ese nombre. No producía conflicto de valores, así
+    # que ningún criterio lo veía; lo delató la densidad, ×18,21 filas por clave. Verificado
+    # además que el promedio ponderado cae entre el mínimo y el máximo de los plazos en los
+    # 115 meses.
+    "taap_pasivad.xlsx": None,
+    "taap_activad.xlsx": None,
+    "Serie_TPM.xlsx": None,
+    "agregados_monetarios.xlsx": None,
+    "base_monetaria.xlsx": None,
+    # Sector real. El PIB por gasto es el archivo que destapó el falso positivo del guard de
+    # truncamiento: sus «22 columnas con dato sin leer» eran un segundo cuadro de tasas de
+    # crecimiento, no una lectura corta.
+    # El PIB por gasto sigue `yellow` —los dos cuadros por hoja mezclan niveles y
+    # ponderaciones, y falta decidir qué serie del archivo es la canónica: la entrada
+    # `pib_nominal_gasto` no declara puente—, así que entra POR HOJA, que son las dos que
+    # tiene. Es el archivo que destapó el falso positivo del guard de truncamiento: sus «22
+    # columnas con dato sin leer» eran un segundo cuadro de tasas de crecimiento.
+    "pib_gasto.xls": ["Valores Corrientes", "Valores Encadenados"],
+    # Mercado de trabajo. Las dos son series DESCONTINUADAS (terminan en 2016) y su entrada
+    # sigue en `yellow` por eso, no por extracción. Su `frequency` decía «trimestral» y el
+    # archivo no publica un solo trimestre — corregido a «anual» con la evidencia al lado de
+    # cada entrada. La hoja semestral de ocupación tenía la única serie del archivo llamada
+    # `col2`: el título del cuadro está dos columnas a la izquierda porque las dos de en
+    # medio son ejes (año y semestre).
+    # Las dos entran POR HOJA y su entrada sigue `yellow`: son series DESCONTINUADAS
+    # (terminan en 2016) y el archivo publica cortes anuales y semestrales que habría que
+    # consolidar antes de citarlos como una sola serie. El amarillo es de homogeneización,
+    # no de extracción — las siete hojas salen limpias.
+    "tasa_ocupacion.xls": ["Anual 1960-1984", "Anual 1991-2016", "Semestral 2000-2016"],
+    "tasa_desocupacion.xls": ["Anual 1960-1990", "Anual 1991-2016",
+                              " Semestral Abril 2000-2016", "Semestral Octubre 2000-2016"],
+}
 
 
 def registry() -> List[CanonicalSeries]:

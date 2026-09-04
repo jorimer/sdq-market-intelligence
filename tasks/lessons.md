@@ -331,3 +331,234 @@ Cada entrada sigue esta estructura:
 - **Causa raíz**: `_direction_refs` lee `context["indicadores"]` esperando un MAPA indicador→blob y hace `.items()`. Mi contexto usaba la misma clave para una LISTA de filas. El `except Exception` que envuelve el chequeo —correcto como red, «best-effort: jamás rompe la generación»— convirtió una incompatibilidad de forma en un guard ausente. Es la lección de «un guard sin su input no falla, DESAPARECE», ahora por una vía nueva: no por falta de input, sino por input de otra forma bajo el mismo nombre.
 - **Regla**: un guard que dependa de la FORMA del contexto valida esa forma explícitamente (`isinstance`) y registra que se salta, en vez de dejar que la excepción lo apague dentro de un `except` genérico. Y al servir un contexto nuevo a una ruta compartida, revisar qué claves ya tienen significado allí: reusar un nombre con otra estructura es indistinguible de no pasarlo. Verificación mínima: leer el log de una generación real buscando `no pudo completarse` / `omitido` antes de dar por bueno que los guards corrieron.
 - **Disparador**: agregar una sección o un eje que sirva un contexto nuevo a `narrative_engine.generate`; cualquier `except Exception` alrededor de una verificación. ¿El guard corrió, o solo no rompió?
+
+### 2026-09-03 — Filtré por el nombre del archivo y declaré vacía una serie que tenía 511 observaciones
+
+**Síntoma.** En la fase 0 de la ingesta canónica BCRD reporté «`ipc_general`: 0 series, 0
+obs» y lo escribí como hallazgo, cuando la serie existía completa: 511 observaciones de
+1984-01 a 2026-07, sin huecos. Casi entra a un informe con recomendación de negocio.
+
+**Causa raíz.** Filtré los códigos producidos con
+`c.startswith("bcrd.xls.ipc_base_2019-2020.")`, tomando el `source_file` del canónico como
+si fuera el prefijo del `series_code`. No lo es: `default_prefix` **slugifica y pasa a
+minúsculas**, así que `ipc_base_2019-2020.xls` produce `bcrd.xls.ipc_base_2019_2020`. Mi
+filtro no encontró nada y **la ausencia se leyó como hallazgo en vez de como filtro roto**.
+Afecta a 10 de los 26 archivos del canónico (todos los que llevan guion o mayúscula).
+
+**Regla futura.** Un filtro que devuelve CERO es sospechoso antes que informativo: antes de
+reportar una ausencia, comprobar que el filtro encuentra algo en el caso donde sabés que hay
+dato. Y para componer un identificador derivado, **usar la función que lo compone**
+(`default_prefix`), nunca reconstruirlo a mano a partir del insumo — la transformación que
+aplica es justamente la que no ves. Es la misma familia que «una aserción de AUSENCIA pasa
+sola» y que «un `@parametrize` vacío sale SKIPPED, no FAILED».
+
+**Disparador.** Cada vez que un conteo, un filtro o un barrido dé 0, vacío o «no encontrado»,
+y eso se vaya a reportar como conclusión. También al escribir el test de T-PS-4: tiene que
+usar `default_prefix`, no `bcrd.xls.{stem}.{sufijo}`.
+
+### 2026-09-03 — `git checkout .` para restaurar UN stash me borró cuatro archivos sin commitear
+
+**Síntoma.** Para comprobar que unos tests nuevos tenían dientes, guardé mis 3 archivos de
+código con `git stash push -- <esos 3>`, corrí los tests contra el código viejo (fallaron,
+bien) y restauré con `git checkout . && git stash apply`. El `git checkout .` revirtió
+**todos** los archivos rastreados modificados del árbol, no solo los tres del stash: perdí
+las secciones nuevas de `tasks/todo.md`, la entrada de `tasks/lessons.md` y los siete tests
+que acababa de escribir en `test_upsert_dedupe.py` y `test_canonical.py`. Nada de eso estaba
+en el stash ni commiteado: irrecuperable desde git. Lo reescribí desde el contexto.
+
+**Causa raíz.** Dos errores encadenados. (1) `git checkout .` no tiene alcance: opera sobre
+todo el árbol, mientras que mi `stash push` sí lo tenía. Restaurar con una herramienta más
+ancha que la que guardó es asimétrico, y la diferencia se la come el trabajo no guardado.
+(2) Más de fondo: llevaba una sesión entera de trabajo valioso sin commitear. **El commit no
+es el final del trabajo, es lo que lo vuelve recuperable.** La memoria ya tenía esta lección
+por haber destruido trabajo de OTRA sesión (`sesiones-concurrentes-mismo-arbol`); la
+repetí contra mí mismo, que es la versión barata de la misma factura.
+
+**Regla futura.** Para volver atrás un stash parcial, revertir **exactamente los mismos
+paths** que se guardaron: `git checkout -- <los mismos paths>`, nunca `.`. Y antes de
+cualquier maniobra de stash/checkout, **commitear lo que ya está bien** — un commit WIP
+cuesta diez segundos y es la única red. Para probar que un test tiene dientes hay
+alternativas sin tocar el árbol: `git stash show -p | git apply -R` sobre paths concretos,
+o —mejor— revertir a mano la línea del fix, correr, y volver a ponerla.
+
+**Disparador.** Cualquier `git checkout`, `git restore` o `git stash pop/apply` cuando
+`git status` muestre archivos modificados que NO son los que estoy manipulando. Mirar
+`git status --short` ANTES y confirmar que la lista de paths de la restauración coincide con
+la del guardado.
+
+### 2026-09-03 — Puse un diagnóstico ANTES de lo que diagnostica, y sin protección: tumbaba los 26 archivos
+
+**Síntoma.** Al agregar a `ingest_canonical` la verificación de cadencia —comparar lo que el
+registro DECLARA contra lo que dicen los períodos— la puse antes del upsert y sin `try`. Un
+registro con otra forma (`records=[object()]`, sin `.series`) levantaba `AttributeError`
+dentro del `try` general del bucle, que lo cuenta como archivo fallido: los 26 pasaban a
+`failed` y **no se persistía absolutamente nada**. La ingesta entera muerta por el
+observador. Lo cazó un test que ya existía —
+`test_ingest_canonical_continues_after_a_failing_file`— y que simula justo el escenario de
+producción de un upsert envenenado.
+
+**Causa raíz.** Confundí un diagnóstico con un gate. Un gate puede y debe frenar; un
+diagnóstico solo mira. Al ponerlo en el camino crítico y sin aislar, le di poder de veto a
+algo que solo tenía que reportar. Y el orden lo empeoraba: corría **antes** de la escritura,
+así que ni siquiera fallaba después de haber hecho el trabajo útil.
+
+**Regla futura.** Todo lo que solo OBSERVA va después del trabajo que observa y envuelto en
+`try/except` con log — el idioma que este repo ya usa en la contabilidad de LLM («best-effort
+de punta a punta: jamás lanza»). Antes de agregar una llamada dentro de un `try` grande que
+convierte excepciones en «fallo del archivo», preguntarse: **si esto revienta, ¿qué deja de
+pasar?** Si la respuesta incluye «no se persiste el dato», está en el lugar equivocado.
+
+**Disparador.** Agregar cualquier verificación, métrica, log enriquecido o telemetría dentro
+de un bucle que ya tiene un `except` que degrada el resultado. También: cuando un test viejo
+empieza a fallar con un contador en cero (`ok + flagged == 0`), sospechar de lo que agregué
+en el camino, no del test.
+
+### 2026-09-03 — Al modelo se le mostraban 12 columnas de un cuadro de 34, y contestó lo que vio
+
+**Síntoma.** La hoja `PIB$_Trim_Acum` del PIB por sector de origen terminaba en **2020-Q2**
+mientras sus tres hojas hermanas del MISMO libro llegaban a 2025-Q4: 10 de 32 trimestres, sin
+error, sin marca, sin hueco visible — la serie simplemente se acababa cinco años antes. Y las
+otras tres perdían el trimestre más reciente (2026-Q1) por la misma causa, medio grado más
+suave.
+
+**Causa raíz.** Cuando la heurística no resuelve una hoja, el trabajo cae en el modelo, y la
+vista previa que se le arma tiene `PREVIEW_COLS = 12`. El encabezado de la vista declaraba
+`dims=78x34`, pero solo se mostraban 12 columnas y **nada decía que estuviera cortada**. El
+modelo emitió `value_col_end=11`: la respuesta correcta para lo que veía. Re-inferir daba
+exactamente lo mismo, así que no era un caché viejo — era reproducible.
+
+Y no se arregla ensanchando la vista: de las 27 planillas canónicas, **21 pasan de 12
+columnas** y una llega a 256.
+
+**Regla futura.** Cuando se le recorta el insumo al modelo —columnas, filas, cantidad de
+ítems por pedido—, **el recorte tiene que estar declarado en el propio insumo** y el pedido
+debe ofrecer una salida que no dependa de ver todo (acá: dejar el fin del rango abierto, que
+el extractor ya interpretaba como «hasta el final»). Un modelo que contesta bien sobre un
+insumo incompleto produce un resultado incompleto que parece completo. Es la misma familia
+que el nombrado que devolvía «0 de 64» por truncamiento de la respuesta: en los dos casos el
+tamaño del recorte decidía en silencio la calidad del resultado.
+
+**Disparador.** Cualquier constante que limite lo que el modelo VE o lo que puede DEVOLVER
+(`PREVIEW_*`, `max_tokens`, tamaño de lote, `[:N]` sobre una lista que va al prompt).
+Preguntarse: si el insumo real supera este límite, ¿el resultado sale mal o sale corto? Y si
+sale corto, ¿alguien se entera? Corolario de verificación: cuando una serie termina antes que
+sus hermanas del mismo libro, sospechar del spec antes que de la fuente.
+
+### 2026-09-03 — Mi primer detector daba un falso positivo por medir lo que era fácil, no lo que importaba
+
+**Síntoma.** Al barrer los specs cacheados buscando lecturas truncadas, marqué `pib_gasto.xls`
+con «22 columnas con dato sin leer» y estuve a un paso de «arreglar» un spec que estaba bien.
+De la columna 24 en adelante ese cuadro tiene OTRO bloque —«Tasas de Crecimiento», con
+encabezados `92/91`, `93/92`—, y no leerlo es lo correcto.
+
+**Causa raíz.** Medí la propiedad cómoda («hay números fuera del rango») en vez de la que
+define el defecto («el encabezado declara un PERÍODO fuera del rango, y esa columna trae
+dato»). La primera es fácil de calcular y tiene falsos positivos estructurales en cualquier
+planilla de dos bloques, que en este corpus son mayoría.
+
+**Regla futura.** Antes de barrer, escribir en una frase qué distingue el caso malo del caso
+bueno, y comprobar que la medición contiene esa distinción. Si el detector no puede explicar
+por qué un caso bueno NO se marca, todavía no es un detector. Y ante el primer positivo:
+abrir el archivo y mirarlo antes de escribir el arreglo — mirar los datos de `pib_gasto` costó
+dos minutos y evitó romper un spec correcto.
+
+**Disparador.** Cualquier barrido, auditoría o guard nuevo sobre un corpus. Correrlo primero
+sobre un caso que se sabe BUENO y verificar que sale limpio, antes de confiar en los positivos.
+
+### 2026-09-04 — Mi regla nueva rompió un caso legítimo que un test viejo ya cubría
+
+**Síntoma.** Al enseñarle al motor que un eje de años REINICIADO es otro cuadro, la primera
+versión trataba cualquier año repetido como reinicio. En una matriz trimestral el año se
+escribe encima de **cada uno de sus cuatro trimestres** (`2010 2010 2010 2010 2011…`), así que
+la regla partía cada año en cuatro «bloques» y el cuadro entero salía mal. Lo cazó
+`test_matrix_quarterly_synthetic`, un test de calibración que existía desde antes.
+
+**Causa raíz.** Generalicé desde UN archivo. Miré `lleg_total`, vi «un año que vuelve» y lo
+convertí en regla sin preguntarme en qué OTRA forma legítima aparece un año repetido en este
+corpus — y aparece en la más común de todas, la matriz trimestral. La condición correcta no
+era «vuelve un año visto» sino «vuelve un año visto **que no es el de la columna anterior**, o
+vuelve después de una columna separadora».
+
+**Regla futura.** Antes de convertir una observación en regla del motor, buscar el
+CONTRAEJEMPLO en el propio corpus: ¿dónde más aparece esta señal, y ahí qué significa? Un
+patrón visto en un archivo es una hipótesis, no una regla. Y correr la suite del motor
+—no solo los tests nuevos— antes de dar por buena una generalización: los tests de calibración
+existen para eso y me avisaron gratis.
+
+**Disparador.** Cualquier heurística nueva en `inference.py` o `extract.py` que dispare sobre
+una señal estructural (un valor que se repite, una fila que aparece, una columna vacía).
+Preguntarse qué caso NORMAL exhibe esa misma señal.
+
+---
+
+## Un criterio que no falla nunca puede estar mirando el lugar equivocado
+
+**Síntoma.** Habilité `taap_pasivad.xlsx` con los seis criterios en verde —0 duplicados con
+valores en conflicto, 0 períodos mezclados, 0 códigos por coordenada, 0 avisos de
+truncamiento, 0 discrepancias de cadencia— y el archivo emitía **29.325 filas para 1.610
+observaciones reales**. Las 27.715 de más eran nulas, bajo el código de la tasa
+interbancaria, porque las 241 columnas de relleno de la hoja heredaban ese rótulo.
+
+**Causa raíz.** Mis seis criterios eran todos criterios de CONFLICTO: preguntan si dos
+valores se pelean por la misma clave. Un cuadro mal leído que produce nulos no pelea con
+nadie. Construí el juego de criterios a partir del defecto del bloque anterior («último
+gana») y me quedé con esa forma de mirar.
+
+**Regla futura.** Junto a los criterios de conflicto va uno de VOLUMEN: filas contra claves
+distintas, y claves contra el rectángulo serie×período. Una densidad de ×18 —o una cobertura
+del 15% donde se esperaba 100%— no dice qué está mal, pero dice que hay algo, y es lo único
+que se ve cuando el defecto produce vacío en vez de contradicción.
+
+**Disparador.** Cualquier tabla de triaje que declare «pasa». Antes de firmarla, mirar los
+conteos brutos al lado de los ceros: si un archivo tiene 14 series y 29.325 filas para 115
+períodos, la aritmética no cierra aunque todos los criterios estén en verde.
+
+---
+
+## Un puente que no resuelve puede estar acusando al extractor
+
+**Síntoma.** En la fase 0 encontré que el registro canónico declaraba para el IMAE el sufijo
+`serie_original_variacion_porcentual_interanual` y que **ninguna serie del archivo terminaba
+así**. Lo tomé como un error del registro, computé cuál de las cuatro candidatas era la buena
+—coincidencia exacta, 0,00000 pp, contra la variación interanual del índice— y corregí el
+registro a `variacion_porcentual_interanual`. La verificación numérica estaba bien hecha y la
+conclusión era falsa.
+
+**Causa raíz.** El sufijo declarado era el correcto desde el principio. Lo que estaba roto era
+el extractor: el IMAE tiene un encabezado de TRES niveles y el nombrado solo sabía calificar
+con el vecino de la izquierda, así que nueve de sus catorce columnas perdían el nombre de su
+cuadro y dos se desempataban por coordenada (y no se persistían). Al arreglar el encabezado,
+la declaración original volvió a resolver, y a resolver a una sola serie. Corregí el mapa
+porque no coincidía con el territorio, sin comprobar que el territorio estuviera bien medido.
+
+**Regla futura.** Cuando una declaración curada por un analista no coincide con lo que produce
+el motor, las dos hipótesis valen lo mismo hasta que una se descarte. Antes de tocar la
+declaración: mirar si lo que el motor produce tiene sentido POR SÍ MISMO. Nueve de catorce
+columnas sin decir de qué cuadro son, y dos llamadas `_c13` y `_c15`, no es una lectura sana —
+y eso se veía sin saber nada del IMAE.
+
+**Disparador.** Todo cambio a `excel_series_suffix`, `api_series` o cualquier otro puente del
+registro canónico. Primero listar TODAS las series que el archivo produce y preguntarse si esa
+lista es plausible.
+
+---
+
+## Cachear un resultado parcial como si fuera total lo congela para siempre
+
+**Síntoma.** Cambié qué filas se consideran ambiguas —al desempatar también la primera
+aparición de un rótulo repetido, 140 filas más— y ninguna se nombró. Salieron con su
+coordenada (`_rNN`) y el veto de la frontera de escritura las descartó: **129 series de un
+archivo ya encendido habrían dejado de persistirse**, sin error y sin aviso.
+
+**Causa raíz.** La caché de nombres se leía todo-o-nada: «si hay entrada para este hash, ya
+está resuelto». Es cierto el día que se escribe y deja de serlo en cuanto cambia el conjunto
+de filas que necesitan nombre. La caché guardaba una RESPUESTA cuando lo que tenía que guardar
+era un MAPA parcial.
+
+**Regla futura.** Una caché indexada por un hash de la ENTRADA (la estructura de la hoja) no
+puede usarse como si estuviera indexada por la PREGUNTA (qué filas hay que nombrar). Al leerla,
+comparar lo pedido contra lo guardado y pedir la diferencia.
+
+**Disparador.** Toda caché cuya clave describe el insumo y cuyo valor responde una consulta
+sobre él. Preguntarse: si mañana cambia la consulta, ¿esta caché devuelve una respuesta vieja
+o admite que le falta?

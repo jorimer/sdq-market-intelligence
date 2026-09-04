@@ -20,7 +20,7 @@ from shared.data.base_client import Record
 from .catalog import CatalogEntry
 from .download import DEFAULT_CACHE_DIR, fetch_excel
 from .extract import _slug, default_prefix, extract_records
-from .inference import data_sheets, infer_spec
+from .inference import data_sheets, infer_spec, periodos_sin_leer
 from .interpreter import interpret_spec, name_ambiguous_rows
 from .spec import ExtractionSpec
 from .validation import ValidationReport, validate
@@ -109,7 +109,53 @@ def build_spec(
     return spec
 
 
+def _avisar_si_trunca(grid, spec, file_label: str, acumulador: List[str]) -> None:
+    """¿El spec deja afuera períodos que el encabezado declara? Se REGISTRA, no se corrige.
+
+    Corregirlo acá sería adivinar; declararlo es lo que hace que alguien mire. El defecto que
+    esto vigila —una serie que sale corta sin error ni hueco— apareció dos veces el mismo día
+    y en las dos la única señal fue comparar a mano una hoja contra su hermana.
+
+    Nunca lanza: es un diagnóstico, y un diagnóstico que rompe la ingesta que diagnostica es
+    peor que no tenerlo.
+    """
+    try:
+        fuera = periodos_sin_leer(grid, spec)
+    except Exception:  # noqa: BLE001
+        return
+    if not fuera:
+        return
+    detalle = (f"{getattr(grid, 'name', '?')}: el rango llega hasta la columna "
+               f"{spec.value_col_end} y quedan afuera, CON DATO, los períodos "
+               f"{[a for _c, a in fuera]}")
+    acumulador.append(detalle)
+    logger.warning("[bcrd_excel] %s — %s. La serie va a salir corta sin que nada más lo "
+                   "diga.", file_label, detalle)
+
+
 _AMBIGUOUS = re.compile(r"^(?P<base>.+)_r(?P<row>\d+)$")
+
+#: Lo declara `extract` cuando el encabezado del cuadro dice que el período es corrido
+#: desde enero. Vive acá también porque el renombrado tiene que conservarlo.
+_SUFIJO_ACUMULADO = "_acumulado"
+
+
+def _pegar_sin_repetir(head: str, slug: str) -> str:
+    """Une la cabeza de un código con el nombre propuesto sin repetir la ruta común.
+
+    El modelo suele devolver el nombre YA calificado con toda su jerarquía, y la cabeza del
+    código viejo trae esa misma jerarquía: pegarlos a ciegas producía
+    `...balanza_de_bienes.cuenta_corriente.balanza_de_bienes_y_servicios.balanza_de_bienes.
+    importaciones.nacionales`. Un código de serie es un contrato con la base —se persiste y
+    se cita por él— y no puede depender de cuánta ruta haya decidido incluir el modelo.
+    """
+    hs = [x for x in head.split(".") if x]
+    ss = [x for x in slug.split(".") if x]
+    for n in range(min(len(hs), len(ss)), 0, -1):
+        if hs[-n:] == ss[:n]:
+            ss = ss[n:]
+            break
+    return ".".join(hs + ss)
 
 
 def _resolve_ambiguous_names(wb: Workbook, spec: ExtractionSpec, records: List[Record],
@@ -135,20 +181,25 @@ def _resolve_ambiguous_names(wb: Workbook, spec: ExtractionSpec, records: List[R
         return records
 
     cache_key = wb.structure_hash()
-    named: Dict[int, str] = {}
     cached = cache.get_names(cache_key) if cache is not None else None
-    if cached:
-        named = {int(k): v for k, v in cached.items()}
-    else:
+    named: Dict[int, str] = {int(k): v for k, v in (cached or {}).items()}
+    # La caché es PARCIAL, no todo-o-nada. Leerla como "si hay entrada, ya está" dejaba sin
+    # nombre —para siempre, sin error y sin aviso— a toda fila ambigua que apareciera
+    # después de la primera corrida; y vetada al escribir, por no nombrar su sujeto. Se
+    # piden SOLO las que faltan y se fusionan con lo guardado: el ahorro se conserva.
+    faltan = sorted(set(rows_by_code.values()) - set(named))
+    if faltan:
         try:
-            named = name_ambiguous_rows(
-                wb.grid(spec.sheet), sorted(set(rows_by_code.values())), client=client)
-            if cache is not None and named:
-                cache.set_names(cache_key, {str(k): v for k, v in named.items()})
+            nuevos = name_ambiguous_rows(wb.grid(spec.sheet), faltan, client=client)
+            if nuevos:
+                named.update(nuevos)
+                if cache is not None:
+                    cache.set_names(cache_key, {str(k): v for k, v in named.items()})
         except Exception as e:  # noqa: BLE001 — nombrar nunca puede costar la ingesta
             logger.warning("[bcrd_excel] nombrado semántico no aplicado a %s: %s",
                            spec.file, e)
-            return records
+            if not named:
+                return records
 
     prefix = spec.code_prefix or ""
     rename: Dict[str, str] = {}
@@ -159,7 +210,16 @@ def _resolve_ambiguous_names(wb: Workbook, spec: ExtractionSpec, records: List[R
             continue
         head = code.rsplit(".", 1)[0]
         slug = ".".join(_slug(part) for part in pretty.split(">") if _slug(part))
-        candidate = f"{head}.{slug}" if slug else code
+        # El calificador de ACUMULADO no se pierde al renombrar. El nombre semántico
+        # REEMPLAZA la hoja del código, así que un `agropecuario_acumulado_r46` volvía como
+        # `ponderacion...agropecuario` — sin decir que es el corrido del año. Eran 96 de las
+        # 163 series acumuladas del PIB por origen, y quedaban indistinguibles de las de
+        # flujo salvo por el segmento de hoja. Lo que el cuadro declara sobre su período no
+        # puede depender de si al modelo le tocó renombrar esa fila.
+        base = _AMBIGUOUS.match(code.rsplit(".", 1)[1])
+        if slug and base and base.group("base").endswith(_SUFIJO_ACUMULADO):
+            slug = f"{slug}{_SUFIJO_ACUMULADO}"
+        candidate = _pegar_sin_repetir(head, slug) if slug else code
         if candidate in used or candidate == code:
             continue
         used.add(candidate)
@@ -196,7 +256,9 @@ def ingest_excel(
     # descartaba el resto en silencio (15 hojas perdidas en 5 de los 23 canónicos).
     sheets = data_sheets(wb)
     spec = build_spec(wb, file_label, cache=cache, use_claude=use_claude, client=client)
+    truncados: List[str] = []
     if len(sheets) <= 1:
+        _avisar_si_trunca(wb.grid(spec.sheet), spec, file_label, truncados)
         records = extract_records(wb, spec)
         if use_claude:
             records = _resolve_ambiguous_names(wb, spec, records, cache=cache, client=client)
@@ -211,6 +273,7 @@ def ingest_excel(
                 # distintas y no deben colisionar (No Residentes vs Residentes).
                 base = sheet_spec.code_prefix or default_prefix(file_label)
                 sheet_spec.code_prefix = f"{base}.{_slug(grid.name)}"
+                _avisar_si_trunca(grid, sheet_spec, file_label, truncados)
                 sheet_records = extract_records(sub, sheet_spec)
                 if use_claude:
                     sheet_records = _resolve_ambiguous_names(
@@ -223,6 +286,7 @@ def ingest_excel(
             spec = build_spec(wb, file_label, cache=cache, use_claude=use_claude,
                               client=client)
     report = validate(records, file=file_label, references=references, bands=bands)
+    report.avisos = truncados
     logger.info(
         "[bcrd_excel] %s: %d obs, %d series, validación %s (%s, conf %.2f)",
         file_label, len(records), len(report.series),

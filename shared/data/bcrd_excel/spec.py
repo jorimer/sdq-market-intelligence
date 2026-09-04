@@ -56,6 +56,9 @@ class ExtractionSpec:
     # ── period_rows ──────────────────────────────────────────────
     month_col: Optional[int] = None
     year_col: Optional[int] = None
+    #: Columna del DÍA, cuando la planilla publica una serie diaria (`Año | Mes | Día`).
+    #: Sin ella los ~22 días hábiles de un mes colapsaban en `YYYY-MM`.
+    day_col: Optional[int] = None
     subtotal_year_regex: Optional[str] = None
     series: List[SeriesSpec] = field(default_factory=list)
 
@@ -74,6 +77,10 @@ class ExtractionSpec:
     # ── matrix (periods across columns, series down rows) ────────
     period_header_row: Optional[int] = None       # row of years across columns
     subperiod_header_row: Optional[int] = None     # row of quarters/months (optional)
+    #: Fila de CONCEPTOS bajo cada año: `Saldo al inicio | Transacciones Netas | Variaciones
+    #: de Precios…`. No es un subperíodo —no divide el año— sino una DIMENSIÓN de la serie:
+    #: seis magnitudes distintas por año. Sin ella las seis caían en el mismo (serie, año).
+    dimension_header_row: Optional[int] = None
     label_col: Optional[int] = None                # column holding each row's series name
     frequency: Optional[str] = None                # "annual" | "quarterly" | "monthly"
 

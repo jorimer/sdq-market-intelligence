@@ -13,12 +13,13 @@ import re
 from calendar import monthrange
 from collections import defaultdict
 from datetime import date
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Set
 
 from sqlalchemy.orm import Session
 
 from shared.data.base_client import SourceClient
 from shared.data.bcrd_client import bcrd_client, resolve_bcrd_client, series_label
+from shared.data.series_cadence import cadencia_de_periodo, discrepancia_de_cadencia
 from shared.data.series_nature import infer_nature
 from shared.data.bcrd_excel.canonical import (
     curated_label as canonical_label,
@@ -53,7 +54,14 @@ DEBT_SERIES = "public_debt_gdp"
 #: del IPC por quintiles coincide con error 0,00000 pp con la variación mensual de su
 #: índice—. Descartar un dato porque el nombre está roto es arreglar el síntoma tirando la
 #: medición.
-_CODIGO_SIN_SUJETO = re.compile(r"_c\d+$")
+#:
+#: Vale para las DOS coordenadas. Cubría solo la columna (`_c<n>`), y la de FILA (`_r<n>`)
+#: pasaba: un cuadro que repite los mismos sectores en tres bloques —nivel, tasa de
+#: crecimiento, incidencia— produce `agropecuario`, `agropecuario_r46` y `agropecuario_r83`,
+#: y las dos últimas dicen en qué FILA estaban, no cuál de los tres miden. El PIB sectorial
+#: por origen entra con ~196 series así. Al agregarse esta mitad no se vetó nada de lo
+#: existente: había CERO códigos `_r<n>` en las 600 series del canónico.
+_CODIGO_SIN_SUJETO = re.compile(r"_[cr]\d+$")
 
 
 def _sin_sujeto(codigo: str) -> bool:
@@ -109,13 +117,30 @@ def _upsert_records(db: Session, records) -> int:
         # código de la serie a la vista. Hacerlo al leer obligaría a cada consumidor a
         # repetir la inferencia — y a equivocarse cada uno a su manera.
         nat = infer_nature(unit=r.unit, code=r.series)
+        # La CADENCIA también se resuelve en la ingesta, por el mismo motivo que la
+        # naturaleza: dejarla nula obligaba a cada lector a derivarla, y el que la sirve por
+        # la Data API lo hacía sobre el conjunto de períodos de la serie —devolviendo
+        # "unknown" en cuanto uno solo tuviera otro formato—. Acá se resuelve por FILA, que
+        # es donde la etiqueta del período es inequívoca.
+        cad = cadencia_de_periodo(str(r.period))
         if row is None:
             db.add(MacroSeries(
                 series_code=r.series, period=r.period, value=r.value,
                 unit=r.unit, source=src, published_at=pub, license=lic, nature=nat,
+                frequency=cad,
             ))
         else:
-            row.value = r.value
+            # "Un valor real jamás lo pisa un vacío" vale también ENTRE corridas, no solo
+            # dentro del lote. Esta rama hacía la asignación incondicional: un lote posterior
+            # con una celda que el BCRD todavía no publicó —o un parse fallido— BORRABA el
+            # valor ya persistido, en silencio. Mientras `mm_series` no tuvo el corpus Excel
+            # el defecto no podía destruir nada porque no había qué pisar; encender la
+            # persistencia es lo que lo vuelve vivo, porque desde la segunda corrida toda
+            # observación entra por acá. El guard frena el nulo y nada más: un valor real
+            # posterior sigue actualizando, que es como entra una revisión del emisor.
+            if r.value is not None:
+                row.value = r.value
+            row.frequency = cad
             row.unit = r.unit
             row.source = src
             row.published_at = pub
@@ -403,6 +428,19 @@ def excel_batch_status() -> Dict[str, Any]:
     return dict(_excel_batch_status)
 
 
+def _flags_del_reporte(report) -> List[Dict[str, Any]]:
+    """Las marcas que se guardan por archivo. El aviso de ARCHIVO va PRIMERO y sin recorte.
+
+    Los avisos de archivo —hoy, que el rango del spec dejó afuera períodos que el encabezado
+    declara— no pertenecen a ninguna serie, así que no vienen en `flagged`. Si se anexaran al
+    final, el corte `[:20]` los tiraría justo en los archivos con muchas series marcadas, que
+    son los que más falta hace mirar.
+    """
+    avisos = list(getattr(report, "avisos", []) or [])
+    cabeza = [{"code": "__archivo__", "flags": avisos}] if avisos else []
+    return cabeza + [{"code": s.code, "flags": s.flags} for s in report.flagged][:20]
+
+
 def _upsert_excel_report(db: Session, fields: Dict[str, Any]) -> None:
     from modules.macro_monitor.models.models import ExcelFileReport
 
@@ -460,7 +498,7 @@ def run_excel_batch(
                     "confidence": r.spec.confidence, "n_records": len(r.records),
                     "n_series": len(r.report.series), "n_flagged": len(r.report.flagged),
                     "persisted": persisted, "error": None,
-                    "flags": [{"code": s.code, "flags": s.flags} for s in r.report.flagged][:20],
+                    "flags": _flags_del_reporte(r.report),
                 })
                 ok += status == "ok"
                 flagged += status == "flagged"
@@ -504,19 +542,114 @@ def get_canonical_registry(db: Session) -> Dict[str, Any]:
     return {"series": out, "count": len(out)}
 
 
-def ingest_canonical(db: Session, *, persist: bool = False) -> Dict[str, Any]:
+def _discrepancias_de_cadencia(entradas, records) -> List[str]:
+    """Dónde la cadencia DECLARADA por el registro contradice a la de los períodos.
+
+    El puente entre una entrada canónica (clave ``pib_real``) y las series persistidas
+    (``bcrd.xls.pib_2018.serie_original_indice``) es ``excel_series_suffix``; una entrada sin
+    él no tiene a qué serie apuntar y no se puede verificar — son 17 de 50, y eso es un hecho
+    declarado, no un olvido. Ver §4 del spec de persistencia.
+    """
+    periodos_por_serie: Dict[str, List[str]] = defaultdict(list)
+    for rec in records:
+        periodos_por_serie[str(rec.series)].append(str(rec.period))
+
+    out: List[str] = []
+    for s in entradas:
+        if not s.excel_series_suffix:
+            continue
+        for code, periodos in periodos_por_serie.items():
+            if not code.endswith(s.excel_series_suffix):
+                continue
+            detalle = discrepancia_de_cadencia(s.frequency, periodos)
+            if detalle:
+                out.append(f"{s.key} · {code}: {detalle}")
+    return out
+
+
+def _registros_de_las_hojas(archivo: str, hojas: List[str], records) -> List[Any]:
+    """Los registros que salieron de *hojas*, por el prefijo que el motor le pone al código.
+
+    Un libro multi-hoja produce ``bcrd.xls.<archivo>.<hoja>.<métrica>``; el segmento de hoja
+    lo arma el motor con su propio ``_slug``, así que acá se usa ESE, no una transformación
+    escrita a mano — reconstruir un identificador derivado a ojo es cómo se llega a un filtro
+    que no encuentra nada y se lee como que la hoja venía vacía.
+
+    **El punto final del prefijo no es cosmético:** `pib_trim` es prefijo de `pib_trim_acum`,
+    y sin él habilitar la hoja limpia arrastraría la rota, que es justo lo que este alcance
+    existe para impedir.
+
+    Lanza si las hojas declaradas no producen nada: puede ser un nombre mal escrito o un libro
+    de UNA sola hoja —ahí el motor no pone segmento de hoja y el prefijo no matchea nunca—, y
+    escribir cero en silencio se lee, meses después, como que la fuente dejó de traer datos.
+    """
+    from shared.data.bcrd_excel.extract import _slug, default_prefix
+
+    base = default_prefix(archivo)
+    prefijos = tuple(f"{base}.{_slug(h)}." for h in hojas)
+    elegidos = [x for x in records if str(x.series).startswith(prefijos)]
+    if not elegidos:
+        raise ValueError(
+            f"El alcance de {archivo} declara la(s) hoja(s) {hojas} y ninguna serie extraída "
+            f"empieza con {list(prefijos)}. O el nombre de la hoja no es ése, o el libro tiene "
+            f"una sola hoja (ahí el código no lleva segmento de hoja y el alcance por hoja no "
+            f"aplica)."
+        )
+    return elegidos
+
+
+def _con_unidades_curadas(records: List[Any]) -> List[Any]:
+    """Aplica las unidades verificadas del registro canónico antes de escribir.
+
+    Va acá —en la ingesta canónica, no en el extractor— porque es un hecho CURADO por un
+    analista sobre un archivo concreto, con su verificación escrita, y no una regla que el
+    motor pueda derivar de la planilla. Ver `canonical.UNIDADES_CURADAS`.
+    """
+    from dataclasses import replace
+
+    from shared.data.bcrd_excel import canonical
+
+    salida = []
+    for r in records:
+        curada = canonical.unidad_curada(r.series)
+        salida.append(replace(r, unit=curada) if curada and curada != r.unit else r)
+    return salida
+
+
+def ingest_canonical(db: Session, *, persist: bool = False,
+                     alcance: Optional[Dict[str, Optional[List[str]]]] = None) -> Dict[str, Any]:
     """Run the engine over ONLY the canonical source files (not the whole catalog).
 
     Dedupes shared source files (e.g. reserves brutas/netas come from one file).
     Upserts a per-file report; with *persist*, upserts the extracted series too.
+
+    *alcance* acota QUÉ SE ESCRIBE, no qué se lee: se recorren y se reportan los 26 archivos
+    igual —el reporte de cobertura es el instrumento con el que se decide qué habilitar
+    después, y perderlo sería quedarse ciego justo donde falta mirar— pero solo se persiste lo
+    que esté en el mapa. `None` = todo, el comportamiento histórico.
+
+    Es un mapa ``{archivo: None | [hojas]}``: `None` habilita el archivo entero y una lista
+    habilita SOLO esas hojas, para los libros en que unas extraen bien y otras no. Ver
+    `canonical.PERSISTIBLES_VERIFICADOS`, que además declara por qué está afuera cada uno.
     """
     from shared.data.bcrd_excel import canonical
     from shared.data.bcrd_excel.catalog import find_entry
     from shared.data.bcrd_excel.engine import SpecCache, ingest_excel
 
+    habilitados = dict(alcance) if alcance else None
     cache = SpecCache()
     seen: set = set()
     ok = flagged = failed = 0
+    persistidos_total = 0
+    omitidos: List[str] = []
+    discrepancias: List[str] = []
+    por_hoja: List[str] = []
+    # Un archivo puede declarar VARIAS series canónicas (el IPC general y la inflación
+    # interanual salen del mismo). La cadencia se verifica contra cada declaración, no
+    # contra la primera que aparezca.
+    por_archivo: Dict[str, List[Any]] = defaultdict(list)
+    for s in canonical.registry():
+        por_archivo[s.source_file].append(s)
     for s in canonical.registry():
         if s.source_file in seen:
             continue
@@ -525,17 +658,45 @@ def ingest_canonical(db: Session, *, persist: bool = False) -> Dict[str, Any]:
         if entry is None:
             failed += 1
             continue
+        escribir = persist and (habilitados is None or s.source_file in habilitados)
+        hojas = habilitados.get(s.source_file) if (habilitados and escribir) else None
+        if persist and not escribir:
+            omitidos.append(s.source_file)
         try:
             r = ingest_excel(entry, cache=cache, use_claude=True)
             status = "ok" if r.report.ok else "flagged"
-            persisted = _upsert_records(db, r.records) if persist else 0
+            escribibles = _con_unidades_curadas(
+                _registros_de_las_hojas(s.source_file, hojas, r.records)
+                if hojas else r.records)
+            persisted = _upsert_records(db, escribibles) if escribir else 0
+            if hojas:
+                por_hoja.append(f"{s.source_file}: {len(hojas)} hoja(s), "
+                                f"{len(escribibles)} de {len(r.records)} registros")
+            # La cadencia que el registro DECLARA contra la que dicen los períodos. No se
+            # usa para elegir el valor —eso lo resuelve la etiqueta del período, que es
+            # dato— sino para detectar un eje temporal mal leído: una serie declarada
+            # trimestral cuyos períodos salen mensuales tiene el parse roto, y la serie
+            # entera es sospechosa. Se DECLARA en vez de resolverse en silencio.
+            #
+            # Va DESPUÉS del upsert y no puede lanzar: es un diagnóstico, y un diagnóstico
+            # que rompe lo que diagnostica es peor que no tenerlo. Escrito primero antes y
+            # sin proteger, un registro con otra forma tumbaba el archivo ENTERO —los 26
+            # pasaban a `failed` y no se persistía nada—. Lo cazó
+            # `test_ingest_canonical_continues_after_a_failing_file`.
+            try:
+                discrepancias.extend(
+                    _discrepancias_de_cadencia(por_archivo[s.source_file], r.records))
+            except Exception:  # noqa: BLE001 — el diagnóstico jamás rompe la ingesta
+                logger.debug("no se pudo verificar la cadencia de %s", entry.filename,
+                             exc_info=True)
+            persistidos_total += persisted
             _upsert_excel_report(db, {
                 "file_url": entry.url, "filename": entry.filename, "sector": entry.sector,
                 "status": status, "method": r.spec.method, "orientation": r.spec.orientation,
                 "frequency": r.spec.frequency, "confidence": r.spec.confidence,
                 "n_records": len(r.records), "n_series": len(r.report.series),
                 "n_flagged": len(r.report.flagged), "persisted": persisted, "error": None,
-                "flags": [{"code": x.code, "flags": x.flags} for x in r.report.flagged][:20],
+                "flags": _flags_del_reporte(r.report),
             })
             ok += status == "ok"
             flagged += status == "flagged"
@@ -550,7 +711,25 @@ def ingest_canonical(db: Session, *, persist: bool = False) -> Dict[str, Any]:
                 "status": "failed", "error": str(e)[:500],
             })
     logger.info("[macro] ingesta canónica: %d ok, %d marcados, %d fallidos", ok, flagged, failed)
-    return {"files": len(seen), "ok": ok, "flagged": flagged, "failed": failed}
+    if omitidos:
+        # Lo acotado se DECLARA. Un alcance que recorta en silencio se lee, tres meses
+        # después, como que esos archivos no traían nada.
+        logger.info("[macro] ingesta canónica: %d archivo(s) leídos y reportados pero NO "
+                    "persistidos por alcance (%s): %s", len(omitidos),
+                    "canonical.PERSISTIBLES_VERIFICADOS", ", ".join(sorted(omitidos)))
+    if discrepancias:
+        logger.warning("[macro] ingesta canónica: %d serie(s) con la cadencia DECLARADA en "
+                       "contra de sus períodos — el eje temporal se leyó mal: %s",
+                       len(discrepancias), "; ".join(discrepancias[:8]))
+    if por_hoja:
+        logger.info("[macro] ingesta canónica: alcance por HOJA en %d archivo(s): %s",
+                    len(por_hoja), "; ".join(por_hoja))
+    return {"files": len(seen), "ok": ok, "flagged": flagged, "failed": failed,
+            "persisted": persistidos_total,
+            "persist_scope": (dict(sorted(habilitados.items())) if habilitados else "todos"),
+            "sheet_scope": por_hoja,
+            "skipped_by_scope": sorted(omitidos),
+            "cadence_mismatches": discrepancias}
 
 
 def start_canonical_ingest_background(*, persist: bool = False) -> Dict[str, Any]:
@@ -709,12 +888,21 @@ _Q_START = {1: (1, 1), 2: (4, 1), 3: (7, 1), 4: (10, 1)}
 def period_end_date(period: Optional[str]) -> Optional[date]:
     """Date a period label CLOSES on, for chronological ordering.
 
-    Handles ``YYYY``, ``YYYY-MM`` and ``YYYY-Qn`` (case-insensitive). Returns
-    None when unparseable, so callers can decide how to treat it.
+    Handles ``YYYY``, ``YYYY-MM``, ``YYYY-Qn`` (case-insensitive) and ``YYYY-MM-DD``.
+    Returns None when unparseable, so callers can decide how to treat it.
+
+    El DÍA se resuelve PRIMERO: `2026-03-07` también empieza con algo que parece `YYYY-MM`,
+    y sin este orden un día se ordenaría como si fuera el mes entero.
     """
     if not period:
         return None
     p = period.strip().upper()
+    m = re.fullmatch(r"(\d{4})-(\d{2})-(\d{2})", p)
+    if m:
+        try:
+            return date(int(m.group(1)), int(m.group(2)), int(m.group(3)))
+        except ValueError:
+            return None
     m = re.fullmatch(r"(\d{4})", p)
     if m:
         return date(int(m.group(1)), 12, 31)
@@ -732,10 +920,19 @@ def period_end_date(period: Optional[str]) -> Optional[date]:
 
 def period_start_date(period: Optional[str]) -> Optional[date]:
     """Date a period label STARTS on. A period is "future" iff its start > today
-    (so the current, in-progress period is kept; only genuinely-future ones drop)."""
+    (so the current, in-progress period is kept; only genuinely-future ones drop).
+
+    Un día empieza y termina el mismo día; el orden de las ramas importa por lo mismo que en
+    :func:`period_end_date`."""
     if not period:
         return None
     p = period.strip().upper()
+    m = re.fullmatch(r"(\d{4})-(\d{2})-(\d{2})", p)
+    if m:
+        try:
+            return date(int(m.group(1)), int(m.group(2)), int(m.group(3)))
+        except ValueError:
+            return None
     m = re.fullmatch(r"(\d{4})", p)
     if m:
         return date(int(m.group(1)), 1, 1)
@@ -1016,6 +1213,34 @@ def get_series(db: Session, series_code: str) -> Dict[str, Any]:
     }
 
 
+#: Qué proporción de lo que produce el motor tiene que estar ya en el destino para que la
+#: poda sea segura. No es un umbral de calidad: es la comprobación de que el PASO 2 —la
+#: sincronización con el código corregido— ya ocurrió. Por debajo, lo que hay en el destino
+#: lo escribió otra versión y borrar dejaría un hueco que nadie repone hasta el mes
+#: siguiente. La mitad es holgado a propósito: no hace falta afinarlo para distinguir «ya
+#: corrió» de «no corrió», y un umbral exacto se rompería con el primer archivo nuevo.
+_MINIMO_DE_LO_NUEVO_YA_PRESENTE = 0.5
+
+
+def por_que_no_podar(vivos: Set[str], en_destino: Set[str]) -> str:
+    """Motivo por el que NO se debe podar ahora, o cadena vacía si se puede.
+
+    La poda solo es correcta DESPUÉS de que el destino haya recibido los códigos nuevos. Si
+    se corre antes, borra observaciones que se están sirviendo y no vuelve nada — y con el
+    código viejo desplegado, la siguiente sincronización las repone con el nombre y el valor
+    equivocados. Este es el paso que impide ese error de ORDEN.
+    """
+    if not vivos:
+        return "el motor no produjo ninguna serie: no hay contra qué comparar"
+    presentes = len(vivos & en_destino)
+    if presentes < len(vivos) * _MINIMO_DE_LO_NUEVO_YA_PRESENTE:
+        return (f"de las {len(vivos)} series que produce el motor, el destino solo tiene "
+                f"{presentes} ({presentes / len(vivos):.0%}). El código corregido no está "
+                f"desplegado o `macro-canonical-sync` no corrió todavía. Borrar ahora "
+                f"dejaría un hueco.")
+    return ""
+
+
 def delete_series(db: Session, series_code: str) -> int:
     """Delete every observation of *series_code*.  Returns rows removed.
 
@@ -1088,7 +1313,9 @@ def _infer_frequency(periods: List[str]) -> str:
     kinds = set()
     for p in periods:
         p = (p or "").strip()
-        if re.fullmatch(r"\d{4}", p):
+        if re.fullmatch(r"\d{4}-\d{2}-\d{2}", p):
+            kinds.add("daily")
+        elif re.fullmatch(r"\d{4}", p):
             kinds.add("annual")
         elif re.fullmatch(r"\d{4}-Q[1-4]", p, re.IGNORECASE):
             kinds.add("quarterly")

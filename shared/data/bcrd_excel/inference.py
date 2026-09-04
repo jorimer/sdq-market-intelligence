@@ -15,12 +15,17 @@ interpreter. The signals it reads:
 from __future__ import annotations
 
 import re
-from typing import List, Optional, Tuple
+from typing import List, Optional, Set, Tuple
 
-from .periods import normalize_label, parse_month, parse_quarter, parse_year
+from .periods import coerce_num, normalize_label, parse_month, parse_quarter, parse_year
 from .spec import ExtractionSpec, SeriesSpec
-from .units import sheet_unit, split_header_unit
+from .units import sheet_unit, split_header_unit, unidad_declarada_en_el_rotulo
 from .workbook import Grid, Workbook
+
+
+def _hoja(name: str) -> str:
+    """El último nivel de un rótulo compuesto: «Serie Original · Índice» → `indice`."""
+    return _slug(str(name).split(" · ")[-1])
 
 
 def _series_from_columns(grid: Grid, value_cols: List[int], data_row0: int,
@@ -33,33 +38,125 @@ def _series_from_columns(grid: Grid, value_cols: List[int], data_row0: int,
     desempatan por columna, jamás se fusionan."""
     crudos = []
     for c in value_cols:
-        name, unit = split_header_unit(_header_name(grid, c, data_row0))
-        crudos.append((c, name, unit))
+        name, unit = split_header_unit(
+            _header_name(grid, c, data_row0, cols_de_valor=set(value_cols)))
+        # El paréntesis manda; después, lo que el rótulo declara con palabras; recién al
+        # final el título de la hoja. Antes el título pisaba a la columna: «Índice de
+        # Precios al Consumidor» convertía en `index` a toda variación porcentual del
+        # cuadro.
+        crudos.append((c, name, unit or unidad_declarada_en_el_rotulo(name)))
 
     # Un nombre que resulta ser COMPARTIDO no nombra a nadie — tampoco al primero que lo
     # tomó. En el IPC por quintiles la primera columna de tasa es la del quintil 1 y se
     # quedaba con «tasa de inflación» a secas, que es tan ambiguo como los `_c5` de las
     # otras cuatro. Por eso el desempate se decide sobre el CONJUNTO y califica a todos los
     # que comparten un nombre, no solo a los que llegan después.
+    # La colisión se mide sobre la HOJA del rótulo —el último nivel, «Interanual»— y no
+    # sobre el nombre entero. En el IMAE la columna interanual de la Serie Original trae dos
+    # filas de encabezado propias («Variación porcentual» + «Interanual») y las de las otras
+    # dos series traen una sola: mirando el nombre completo, la primera parecía única y se
+    # quedaba sin decir de qué cuadro era, mientras sus dos hermanas sí lo decían. El sujeto
+    # viaja con el número para las tres o para ninguna.
     cuantos: dict[str, int] = {}
     for _c, name, _u in crudos:
-        cuantos[_slug(name)] = cuantos.get(_slug(name), 0) + 1
+        cuantos[_hoja(name)] = cuantos.get(_hoja(name), 0) + 1
+
+    # Qué calificador desempata a los que comparten nombre. Hay dos candidatos —el grupo de
+    # ARRIBA (filas superiores del encabezado, rellenadas desde la izquierda: así escribe
+    # Excel una celda combinada) y el vecino de la IZQUIERDA— y la elección no se puede
+    # tomar columna por columna: un calificador que sale IGUAL para todas las que colisionan
+    # no identifica a ninguna. Con dos niveles el vecino ES el grupo (el índice del quintil
+    # está justo a la izquierda de su tasa, y arriba las cinco dicen «Tasa de Inflación»);
+    # con TRES el vecino es otra métrica del mismo cuadro, y el IMAE salía con el «Promedio
+    # 12 meses» de la Serie Original llamándose `acumulada_promedio_12_meses`.
+    primera = min(value_cols) if value_cols else 0
+    arriba = {c: _grupo_por_encima(grid, c, data_row0, name, primera)
+              for c, name, _u in crudos}
+    columnas_de: dict[str, List[int]] = {}
+    for c, name, _u in crudos:
+        columnas_de.setdefault(_hoja(name), []).append(c)
+    usa_el_de_arriba = {
+        base: (len(cols) > 1
+               and all(arriba.get(c) for c in cols)
+               and len({arriba[c] for c in cols}) == len(cols))
+        for base, cols in columnas_de.items()
+    }
 
     series: List[SeriesSpec] = []
     usados: set[str] = set()
     for c, name, unit in crudos:
         code = _slug(name)
-        if cuantos[code] > 1:
-            grupo = _grupo_a_la_izquierda(grid, c, data_row0, name)
+        if cuantos[_hoja(name)] > 1:
+            grupo = (arriba[c] if usa_el_de_arriba.get(_hoja(name))
+                     else _grupo_a_la_izquierda(grid, c, data_row0, name))
+            if grupo and _slug(f"{grupo} {name}") not in usados:
+                # Un nivel que el nombre ya dice no se repite: la columna de «Respecto al
+                # período anterior» tiene «Variación porcentual» en su propia fila Y en la
+                # del grupo, y concatenar a ciegas produce
+                # `..._variacion_porcentual_variacion_porcentual_...`.
+                niveles = [n for n in grupo.split(" · ")
+                           if _slug(n) not in _slug(name).split("_" * 2)
+                           and _slug(n) not in _slug(name)]
+                grupo = " · ".join(niveles)
             if grupo and _slug(f"{grupo} {name}") not in usados:
                 name = f"{grupo} · {name}"
                 code = _slug(name)
+        # La unidad se decide con el nombre YA COMPLETO: el calificador es parte del rótulo
+        # y suele ser el que declara la magnitud —«Variación porcentual (%)» está en el
+        # nivel de grupo, no en el de la columna—. Decidirla antes dejaba nueve columnas de
+        # variación del IMAE con la unidad de hoja, «Índice».
+        limpio, unidad_del_parentesis = split_header_unit(name)
+        name = limpio or name
+        # …y si el rótulo propio no dice la magnitud, la dice el GRUPO: en el IPC
+        # subyacente las columnas se llaman «Acumulada» e «Interanual» a secas y lo que
+        # declara que son porcentajes está una fila más arriba, en «Inflación Subyacente».
+        # Solo para la UNIDAD: el nombre no se toca, porque calificar todos los nombres del
+        # corpus renombraría series ya persistidas sin necesidad.
+        unidad = (unit or unidad_del_parentesis
+                  or unidad_declarada_en_el_rotulo(name)
+                  or unidad_declarada_en_el_rotulo(arriba.get(c) or "")
+                  or sheet_default)
         if code in usados:
             code = f"{code}_c{c}"
         usados.add(code)
-        series.append(SeriesSpec(code=code, name=name, unit=unit or sheet_default,
-                                 value_col=c))
+        series.append(SeriesSpec(code=code, name=name, unit=unidad, value_col=c))
     return series
+
+
+#: Cuántas filas del encabezado se miran hacia arriba buscando el grupo.
+_FILAS_DE_ENCABEZADO = 6
+
+
+def _grupo_por_encima(grid: Grid, value_col: int, data_row0: int, propio: str,
+                      primera_col: int = 0) -> Optional[str]:
+    """La cadena de grupos que cuelga sobre la columna, de arriba hacia abajo.
+
+    Se lee como Excel la escribe: el rótulo de un grupo vive en la celda combinada más a la
+    izquierda de su tramo, así que para cada fila del encabezado se toma la celda con texto
+    más cercana a la izquierda (incluida la propia). El rodeo no pasa de *primera_col* —la
+    primera columna de valores del cuadro—, que es lo que separa un encabezado de grupo del
+    TÍTULO de la hoja: el título vive en la columna 0, a la izquierda de los ejes, y
+    arrastrarlo bautizaría cada serie con el nombre del documento.
+    """
+    inicio = max(0, data_row0 - _FILAS_DE_ENCABEZADO)
+
+    def _texto(r: int, c: int) -> Optional[str]:
+        return _texto_de_rotulo(grid, r, c)
+
+    filas_propias = [r for r in range(inicio, data_row0) if _texto(r, value_col)]
+    if not filas_propias:
+        return None
+    tope = filas_propias[-1]
+
+    niveles: List[str] = []
+    for r in range(inicio, tope):
+        for c in range(value_col, primera_col - 1, -1):
+            txt = _texto(r, c)
+            if txt:
+                if txt.lower() != propio.lower() and txt not in niveles:
+                    niveles.append(txt)
+                break
+    return " · ".join(niveles) or None
 
 
 #: Cuántas columnas a la izquierda se busca el encabezado del GRUPO. Dos alcanza para el
@@ -185,9 +282,117 @@ def _axis_year(value) -> Optional[int]:
         y = int(value)
         return y if 1900 <= y <= 2100 else None
     token = normalize_label(value)
-    token = re.sub(r"\s*\d+\s*/", "", token).strip()  # drop "3/" footnotes
+    # La nota al pie es un marcador FINAL («2008 3/»). Recortar cualquier `NN/` en cualquier
+    # posición convertía una FECHA en un año: `31/12/2009` quedaba en `2009`, y una fila de
+    # fechas de corte pasaba por fila de años. En la posición de inversión internacional el
+    # cuadro trae las dos —años arriba, fechas debajo— y el motor elegía la de fechas: el año
+    # de cada columna salía CORRIDO, con `Transacciones Netas` de 2011 etiquetado 2010.
+    token = re.sub(r"\s+\d+\s*/\s*$", "", token).strip()   # nota al pie final: "2008 3/"
+    # Y los marcadores con que el BCRD señala un año PRELIMINAR o revisado: "2011*",
+    # "2013**", "2021 (p)". Se toleraba solo la nota con barra, así que esos años caían del
+    # eje temporal, el rango de columnas se cortaba en el último año "limpio" y las columnas
+    # siguientes —con dato— no se leían nunca: `bpagos` perdía 2011-2013 y `lleg_total` el
+    # año en curso. En `pib_origen_2018` casi todos los años están marcados `(p)`, así que la
+    # heurística no encontraba eje, devolvía confianza 0,0 y el trabajo caía en el modelo,
+    # que a su vez truncaba por su vista previa recortada. Un rótulo no reconocido encadenó
+    # los dos defectos.
+    #
+    # Se recorta SOLO al final, y el año sigue teniendo que ser todo lo que queda: un año
+    # dentro de un subtítulo ("Bases 1999 y 2010") o de un rango ("1991-2013") no es un eje.
+    token = re.sub(r"[\s*]*\(\s*[pe]+\s*\)\s*$", "", token).strip()   # "(p)" / "(e)"
+    token = token.rstrip("* ").strip()                                # "2011*" / "2013 **"
     if re.fullmatch(r"(19|20)\d{2}", token):
         return int(token)
+    return None
+
+
+def periodos_sin_leer(grid: Grid, spec) -> List[Tuple[int, int]]:
+    """Períodos que el ENCABEZADO declara y que el rango del spec deja afuera, con dato.
+
+    Es el guard de un defecto que apareció dos veces el mismo día: un spec que corta el rango
+    de columnas antes del último año publicado, y la serie sale corta sin error, sin hueco y
+    sin marca — `PIB$_Trim_Acum` terminaba cinco años antes que sus hojas hermanas, y
+    `bpagos`/`lleg_total` perdían sus últimos años porque el rótulo venía marcado preliminar.
+    Las causas se arreglaron; esto es para que la próxima no sea invisible.
+
+    **La regla NO es «hay números más allá del rango».** Un cuadro con dos bloques —niveles y
+    después «Tasas de Crecimiento», con encabezados `92/91`— tiene números afuera y hace bien
+    en no leerlos: ése fue el falso positivo de `pib_gasto.xls`. Se exige lo preciso: que no
+    quede afuera una columna cuyo encabezado declara un PERÍODO **y** que además trae dato.
+
+    Devuelve ``[(columna, año)]``; vacío cuando no hay nada que reclamar.
+    """
+    c1 = getattr(spec, "value_col_end", None)
+    fila = getattr(spec, "period_header_row", None)
+    if c1 is None or fila is None:
+        return []
+    r0 = getattr(spec, "data_row_start", None) or 0
+    fuera: List[Tuple[int, int]] = []
+    for c in range(c1, grid.ncols):
+        anio = _axis_year(grid.cell(fila, c))
+        if anio is None:
+            continue
+        if any(coerce_num(grid.cell(r, c)) is not None
+               for r in range(r0, min(grid.nrows, r0 + 40))):
+            fuera.append((c, anio))
+    return fuera
+
+
+#: Cómo rotula el emisor la columna del día. Se decide por el ENCABEZADO —que es donde el
+#: emisor lo declara— y no por «la columna trae enteros de 1 a 31», que también describe a un
+#: recuento de sucursales o a una edad.
+_ROTULOS_DE_DIA = {"dia", "día", "day", "dias", "días"}
+
+
+def _day_column(grid: Grid, month_col: int, data_row0: int) -> Optional[int]:
+    """La columna del DÍA en una planilla diaria (`Año | Mes | Día`), o ``None``.
+
+    Se exige rótulo Y contenido: el encabezado tiene que nombrarla, y sus valores tienen que
+    ser días de calendario. Con el rótulo solo, un cuadro que se llame «Días de mora» pasaría
+    por eje temporal; con el contenido solo, cualquier columna de enteros chicos lo haría.
+    """
+    for c in range(month_col + 1, min(grid.ncols, month_col + 3)):
+        rotulado = any(normalize_label(grid.cell(r, c)) in _ROTULOS_DE_DIA
+                       for r in range(max(0, data_row0 - 6), data_row0))
+        if not rotulado:
+            continue
+        vals = [grid.cell(r, c) for r in range(data_row0, min(grid.nrows, data_row0 + 40))]
+        nums = [v for v in vals if isinstance(v, (int, float))]
+        if nums and all(1 <= int(v) <= 31 and float(v) == int(v) for v in nums):
+            return c
+    return None
+
+
+#: Cuántas veces tiene que repetirse un rótulo para ser una DIMENSIÓN y no un nombre suelto.
+#: La firma es la repetición: el mismo juego de conceptos vuelve bajo cada año.
+_MIN_REPETICIONES_DIMENSION = 3
+
+
+def _dimension_row(grid: Grid, r0: Optional[int], r1: int, c0: int, c1: int) -> Optional[int]:
+    """Fila de CONCEPTOS bajo los años: `Saldo al inicio | Transacciones Netas | …`.
+
+    No es un subperíodo —no divide el año— sino una dimensión de la serie: para cada año hay
+    varias magnitudes distintas. Sin reconocerla, las columnas de un año caen todas en el
+    mismo `(serie, año)` y el dedupe «último gana» deja una arbitraria: en la posición de
+    inversión internacional eran 2.970 valores en conflicto, y el archivo publicaba una sexta
+    parte de lo que trae.
+
+    Se exige REPETICIÓN, que es lo que distingue una dimensión de un rótulo suelto: el mismo
+    conjunto de conceptos vuelve bajo cada año. Y se exige que NO sean períodos: si lo fueran,
+    los resolvería `_subperiod_row`, que es quien corresponde.
+    """
+    if r0 is None:
+        return None
+    for r in range(r0 + 1, min(r1, grid.nrows)):
+        etiquetas = [str(grid.cell(r, c)).strip() for c in range(c0, min(c1, grid.ncols))
+                     if isinstance(grid.cell(r, c), str) and str(grid.cell(r, c)).strip()]
+        if len(etiquetas) < _MIN_REPETICIONES_DIMENSION * 2:
+            continue
+        if any(parse_quarter(e) is not None or parse_month(e) is not None for e in etiquetas):
+            continue                      # es un subperíodo, no una dimensión
+        repetidas = len(etiquetas) - len(set(etiquetas))
+        if repetidas >= _MIN_REPETICIONES_DIMENSION:
+            return r
     return None
 
 
@@ -305,7 +510,41 @@ def _sparse_year_column(grid: Grid, month_col: int, row0: int) -> Optional[int]:
     return None
 
 
-def _header_name(grid: Grid, value_col: int, data_row0: int) -> str:
+#: Lo que el emisor escribe cuando NO hay dato. `coerce_num` ya los trata como vacío; acá
+#: sirven para lo mismo del otro lado: una celda así tampoco bautiza una serie.
+_MARCADORES_DE_VACIO = {"-", "--", "...", "n.d", "nd", "n/d", "na", "n/a"}
+
+#: La fila de REFERENCIAS de línea con que el BCRD numera sus columnas para escribir sus
+#: propias sumas: `(1)`, `(2)`, `(4)=(1 al 3)`. Es la fila más baja del encabezado, así que
+#: era la que se tomaba como rótulo propio: la base monetaria salía con series llamadas
+#: `me_9` y `valores_3`, y el número tapaba además la cadena de grupos de arriba.
+_REFERENCIA_DE_LINEA = re.compile(r"^\(\s*\d+\s*\)\s*(=.*)?$")
+
+
+def _es_referencia_de_linea(texto) -> bool:
+    """¿La celda es un número de línea del emisor y no un nombre?"""
+    return bool(_REFERENCIA_DE_LINEA.match(str(texto or "").strip()))
+
+
+def _texto_de_rotulo(grid: Grid, r: int, c: int) -> Optional[str]:
+    """El texto de una celda cuando SIRVE COMO RÓTULO, o ``None``.
+
+    No lo son: los números, los marcadores de dato ausente y las referencias de línea. Es la
+    misma regla en los dos buscadores de nombre —el propio y el del grupo—, en un solo lugar
+    para que no se desincronicen."""
+    v = grid.cell(r, c)
+    if v is None or isinstance(v, (int, float)):
+        return None
+    txt = str(v).strip()
+    if not txt or _es_referencia_de_linea(txt):
+        return None
+    if normalize_label(txt).rstrip(".") in _MARCADORES_DE_VACIO:
+        return None
+    return txt
+
+
+def _header_name(grid: Grid, value_col: int, data_row0: int,
+                 cols_de_valor: Optional[Set[int]] = None) -> str:
     """Build a series name from the non-empty header cells above a value column.
 
     La caída a ``value_col - 1`` existe porque a veces el rótulo se escribe una columna a la
@@ -319,16 +558,46 @@ def _header_name(grid: Grid, value_col: int, data_row0: int) -> str:
     ÍNDICE. Un nombre así no es cosmético: dice que el número es una tasa cuando no lo es, y
     quien lo consuma después no tiene cómo saberlo.
     """
-    filas = range(max(0, data_row0 - 6), data_row0)
+    filas = list(range(max(0, data_row0 - 6), data_row0))
 
     def _texto(r: int, c: int):
-        v = grid.cell(r, c)
-        if v is None or isinstance(v, (int, float)):
-            return None
-        return str(v).strip() or None
+        # Un marcador de dato AUSENTE no es un rótulo, y un número de línea tampoco. En el
+        # IPC subyacente las seis filas encima del primer dato son el final de un bloque de
+        # cierres anuales y sus celdas dicen `-`: tres series quedaron llamándose `x`,
+        # `x_c4` y `x_c5`. Ver `_texto_de_rotulo`.
+        return _texto_de_rotulo(grid, r, c)
 
     propio = [c for c in (value_col,) if any(_texto(r, c) for r in filas)]
     cols = propio or [value_col - 1]
+
+    # La ventana fija de seis filas no alcanza cuando entre el encabezado y el primer dato
+    # hay un bloque intermedio. Se sigue buscando hacia arriba SOLO si la ventana no dio
+    # ningún rótulo: donde hoy hay nombre no se toca nada — un renombrado masivo huerfanaría
+    # las series ya persistidas, que se identifican por su código.
+    if not any(_texto(r, c) for r in filas for c in (value_col, value_col - 1)):
+        arriba = [r for r in range(data_row0 - 1, -1, -1)
+                  if any(_texto(r, c) for c in (value_col, value_col - 1))]
+        if arriba:
+            filas = sorted(arriba[:3])
+            propio = [c for c in (value_col,) if any(_texto(r, c) for r in filas)]
+            cols = propio or [value_col - 1]
+        else:
+            # Nada en la columna ni en la de al lado. El rótulo puede estar más a la
+            # izquierda cuando las columnas intermedias son EJES y no series: en
+            # `tasa_ocupacion.xls` el cuadro es `Año | Semestre | valor` y el título vive en
+            # la columna 0, así que la única serie del archivo salía llamándose `col2`.
+            # El rodeo NO cruza otra columna de valor —robarle el rótulo al vecino es
+            # exactamente lo que prohíbe `_header_name` desde el caso de los quintiles— y no
+            # va más allá de cuatro columnas.
+            ajenas = cols_de_valor or set()
+            for c in range(value_col - 2, max(-1, value_col - 5), -1):
+                if c < 0 or c in ajenas:
+                    continue
+                rotulada = [r for r in range(data_row0 - 1, -1, -1) if _texto(r, c)]
+                if rotulada:
+                    filas = sorted(rotulada[:2])
+                    cols = [c]
+                    break
 
     parts: List[str] = []
     for r in filas:
@@ -451,6 +720,12 @@ def infer_spec(wb: Workbook, file: str) -> ExtractionSpec:
         subtotal = _has_subtotal_years(grid, month_col)
         year_col = None if subtotal else _sparse_year_column(grid, month_col, first_month_row)
         value_cols = _value_columns(grid, month_col, first_month_row)
+        # La columna del DÍA es PERÍODO, no una serie. Sin esto nacía una serie cuyos
+        # "valores" eran los días del calendario, y las columnas reales colapsaban todas
+        # en `YYYY-MM` — una observación por mes elegida por orden de lectura.
+        day_col = _day_column(grid, month_col, first_month_row)
+        if day_col is not None:
+            value_cols = [c for c in value_cols if c != day_col]
         # Distinct value columns must map to distinct series codes — never merge two
         # columns into one (e.g. "Acumulada" under both "Serie Original" and "Serie
         # Desestacionalizada"). Disambiguate slug collisions by column so the data
@@ -462,6 +737,7 @@ def infer_spec(wb: Workbook, file: str) -> ExtractionSpec:
         return ExtractionSpec(
             file=file, sheet=grid.name, orientation="period_rows",
             data_row_start=first_month_row, month_col=month_col, year_col=year_col,
+            day_col=day_col,
             subtotal_year_regex=_SUBTOTAL_RE if subtotal else None,
             series=series, structure_hash=sh,
             confidence=round(conf, 2) if resolved else 0.2,
@@ -479,13 +755,18 @@ def infer_spec(wb: Workbook, file: str) -> ExtractionSpec:
         label_col = _label_column(grid, c0, year_row + 1, grid.nrows)
         if label_col is not None:
             sub_row = _subperiod_row(grid, year_row, year_row + 4, c0, c1)
+            # Si bajo los años no hay subperíodos sino CONCEPTOS que se repiten por año,
+            # son una dimensión de la serie, no una división del año.
+            dim_row = (None if sub_row is not None
+                       else _dimension_row(grid, year_row, year_row + 4, c0, c1))
             freq = "quarterly" if sub_row is not None else "annual"
-            data_start = (sub_row if sub_row is not None else year_row) + 1
+            data_start = (max(r for r in (sub_row, dim_row, year_row) if r is not None)) + 1
             conf = min(0.85, 0.5 + 0.03 * min(year_row_count, 12))
             return ExtractionSpec(
                 file=file, sheet=grid.name, orientation="matrix",
                 data_row_start=data_start, period_header_row=year_row,
-                subperiod_header_row=sub_row, label_col=label_col,
+                subperiod_header_row=sub_row, dimension_header_row=dim_row,
+                label_col=label_col,
                 value_col_start=c0, value_col_end=c1, frequency=freq,
                 # Una matriz publica UNA magnitud (balanza en US$, saldos monetarios en
                 # RD$): la unidad de la hoja aplica a todas sus filas. Se escanea solo la
@@ -506,7 +787,14 @@ def infer_spec(wb: Workbook, file: str) -> ExtractionSpec:
             return ExtractionSpec(
                 file=file, sheet=grid.name, orientation="period_rows",
                 data_row_start=first_q_row, month_col=qcol,
-                subtotal_year_regex=_SUBTOTAL_RE, series=series, frequency="trimestral",
+                # El vocabulario de esta columna es inglés y NO es una preferencia de
+                # estilo: `mm_series.frequency` se sirve por la Data API que consume PMS, y
+                # los otros módulos que la pueblan escriben inglés. Esta rama decía
+                # "trimestral" mientras sus dos hermanas, tres líneas arriba y abajo, decían
+                # "quarterly" y "annual". Lo vigila
+                # `tests/test_vocabulario_de_frecuencia.py`, que lee el código con `ast`
+                # porque el defecto vivía en UNA rama de tres.
+                subtotal_year_regex=_SUBTOTAL_RE, series=series, frequency="quarterly",
                 structure_hash=sh, confidence=round(min(0.82, 0.5 + 0.04 * q_count), 2),
                 method="heuristic", notes="period_rows trimestral (marcador de año)",
             )
@@ -514,6 +802,26 @@ def infer_spec(wb: Workbook, file: str) -> ExtractionSpec:
     # Annual period_rows: a column of years down the rows (no month axis).
     year_col, year_col_count, first_year_row = _year_column(grid)
     if year_col is not None and year_col_count >= 5 and year_col_count >= year_row_count:
+        # ¿El año viene acompañado de una columna de TRIMESTRE? (`Año | Trimestre | …`, el
+        # corte trimestral del tipo de cambio). Sin mirarla, las cuatro filas de cada año
+        # caen todas en el año y compiten por la misma clave. `month_col` es la columna del
+        # período DENTRO del año y acepta meses o trimestres — ver `_extract_period_rows`.
+        qcol, first_q_row, q_count = _quarter_column(grid)
+        if qcol is not None and qcol != year_col and q_count >= 4:
+            value_cols = [c for c in _value_columns(grid, max(year_col, qcol), first_q_row)
+                          if c not in (year_col, qcol)]
+            series = _series_from_columns(grid, value_cols, first_q_row,
+                                          sheet_unit(grid, first_q_row - 1))
+            if series:
+                conf = min(0.85, 0.5 + 0.02 * q_count)
+                return ExtractionSpec(
+                    file=file, sheet=grid.name, orientation="period_rows",
+                    data_row_start=min(first_year_row, first_q_row),
+                    month_col=qcol, year_col=year_col, series=series,
+                    frequency="quarterly", structure_hash=sh,
+                    confidence=round(conf, 2), method="heuristic",
+                    notes=f"period_rows trimestral: year_col={year_col} quarter_col={qcol}",
+                )
         value_cols = _value_columns(grid, year_col, first_year_row)
         series = _series_from_columns(grid, value_cols, first_year_row,
                                       sheet_unit(grid, first_year_row - 1))

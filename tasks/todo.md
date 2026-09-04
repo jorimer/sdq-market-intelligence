@@ -259,3 +259,513 @@ pytest --cov=shared/validation --cov=modules/sector_intel/validation --cov-repor
 - [ ] Reviewer subagent (diff + tarea + CLAUDE.md + lessons): titular = IC-mean con t, pooled secundario y etiquetado, parcial `sector_growth_T` intacto, strings en español.
 - [ ] Verificar E2E en prod: tab "Validación" muestra el titular nuevo + badge "Inconclusivo por potencia".
 - [ ] Entrada en `tasks/lessons.md` (síntoma/causa/regla/disparador).
+
+---
+
+## ✅ EJECUTADA 2026-09-03 — Fase 0 (T-PS-0): corrida en seco de la ingesta canónica BCRD
+> **Informe: `tasks/INFORME_FASE0_PERSISTENCIA_BCRD.md`.** 26 archivos, 0 fallidos, 75,2 s,
+> US$0,096. Artefacto `/tmp/fase0_bcrd_would_write.json`. Base del dueño intacta (md5).
+> Spec: `docs/SPEC_PERSISTENCIA_SERIES_BCRD.md` §3.1.
+
+- [x] **E1 — 600 series nuevas, 55.759 obs, CERO colisiones** y cero `None` que pisen un
+      no-nulo. Las 7 series vivas están en otro espacio de nombres y no se cruzan.
+- [x] **E2 — `pib_real` = 77 trimestres ≥ 60: el BVAR de T-MP-3 PROCEDE.** 2007-Q1→2026-Q1,
+      sin huecos ni nulos. `ipc_general` 511 desde 1984; índice del IMAE 235.
+- [x] **E3 — trampas 1 y 2 CONFIRMADAS; trampa 3 REFUTADA.** `ingest_canonical` ingiere
+      archivos completos, así que `excel_series_suffix` NO gobierna la ingesta y el índice
+      del IMAE ya se ingiere. Y el sufijo que declara la entrada `imae` no resuelve a
+      ninguna serie: es la única de 33 con el puente roto.
+- [x] **E4 — 17 de 50 entradas sin `excel_series_suffix`**, todas con archivo que sí produce
+      series. El prefijo del código NO es el nombre del archivo (`default_prefix` slugifica).
+- [x] **E5 — informe entregado** con recomendación explícita.
+- [x] **Hallazgo nuevo:** 29.427 duplicados intra-lote con valores distintos, resueltos por
+      «último gana» en silencio. 176 series, 4 archivos, ninguno de la vía de proyección.
+
+---
+
+## ✅ HECHA 2026-09-03 — T-PS-3-acotado: `persist=True` en 4 archivos · commit `eab91d0`
+> Autorizada por el dueño tras el informe de fase 0. Decisiones tomadas: el guard de nulos
+> va en este PR (no en T-PS-1), y el alcance es **cablear + verificar en dev**, sin desplegar.
+
+- [x] **1. Lista blanca declarada** `canonical.PERSISTIBLES_VERIFICADOS`: los 4 archivos,
+      con el motivo de cada exclusión y qué falta para levantarla. Transitoria por diseño.
+- [x] **2. `ingest_canonical(solo_archivos=...)`** acota lo que se ESCRIBE, no lo que se
+      lee: los 26 se siguen reportando. Default `None` = comportamiento histórico.
+- [x] **3. `operations.py` pasa la lista blanca** a `macro-canonical-sync`.
+- [x] **4. Guard de nulos §2.2.1** en la rama de actualización de `_upsert_records`.
+- [x] **S1/S2 — tests con dientes**, corridos contra el código VIEJO primero: el del guard
+      falló con `None == 3.14`; los 4 del alcance fallaron con la firma vieja.
+- [x] **S3 — VERDE.** Dos corridas: 6.390 filas · 34 series · 5.881 persistidas cada vez.
+      **0 valores cambiados, 0 no-nulos perdidos, 0 claves que aparezcan o desaparezcan.**
+      Las 7 series preexistentes: 0 cambios. Hallazgo: la base dev está una migración
+      atrás (`mm_series.nature`), y ese fallo se reporta como CONTADOR (`persisted: 0`),
+      no como error — quien despliegue tiene que mirar `persisted`, no el estado.
+- [x] **S4 — los tres VERDES.** `pytest` 7.434 pasados / 0 fallidos (exit 0) · `ruff` All
+      checks passed · `mypy | mypy-baseline filter` **exit code 0**. En la primera pasada
+      falló `test_directorio_sqlite.py`: lo causé yo, el script descartable construía un
+      engine sin `ensure_sqlite_directory`. Corregido en el script — el guard tenía razón
+      y eximirlo habría sido apagar el instrumento.
+
+### Fuera de alcance, declarado
+- `frequency` no se propaga acá (T-PS-1). Las 5.881 filas entran con NULL; el backfill
+  futuro pasa de 509 a 6.390 filas, no a las 56.268 del canónico completo.
+- No se despliega a producción. En prod la base no está vacía y el diff de la fase 0 fue
+  contra dev.
+- T-PS-2 sigue pendiente, ahora con **tres** trabajos: `pib_sectores_origen`, `imae_indice`
+  y **corregir el sufijo roto de la entrada `imae`**.
+
+---
+
+## ✅ HECHA 2026-09-03 — T-PS-1: `frequency` en `_upsert_records` + backfill
+> El paso 3 de T-PS-1 (guard de nulos §2.2.1) **ya se hizo** en `eab91d0`.
+> Queda la propagación de `frequency` y la migración de backfill.
+
+### Lo que la investigación cambió respecto del plan escrito
+
+- **C6 se queda corta: no son dos vocabularios, son TRES en el mismo campo.**
+  `inference.py:509` escribe `frequency="trimestral"` mientras sus hermanas de `:489` y
+  `:525` escriben `"quarterly"` y `"annual"` — tres líneas de distancia, misma función. El
+  caché de layouts ya tiene los cuatro valores conviviendo: `'quarterly'`, `'annual'`,
+  `None` y `'trimestral'`. **Es un bug puntual y entra en este PR.**
+- **El vocabulario NO es una preferencia: lo decide un contrato vivo.** `service.py:1169`
+  sirve `frequency` por la Data API que consume PMS, hoy derivándolo con `_infer_frequency`,
+  que devuelve **inglés**. Además lo escriben en inglés otros siete sitios
+  (`insurance_intel` ×5, `pension_intel` ×2) y lo declara el comentario de `models.py:40`.
+  Poblar la columna en español cambiaría `quarterly` → `trimestral` en una respuesta que
+  hoy ya se sirve. **Va en inglés**, y lo español del canónico se traduce al escribir.
+- **`Record` no lleva `frequency`** (`base_client.py:35-48`), así que el escalón 2 de la
+  cascada necesita un parámetro nuevo en `_upsert_records` — que tiene **6 sitios de
+  llamada**.
+- **`spec.frequency` viene `None` en 2 de los 4 archivos encendidos** (`imae_2018.xlsx` e
+  `ipc_base_2019-2020.xls`). El escalón 2 no está disponible la mitad de las veces.
+- **`mm_series` NO tiene columna `note`.** El §3.2 del spec pide que lo inferido quede
+  «marcado en `note`»: **no es implementable como está escrito**. Y sin marca, un valor
+  inferido es indistinguible de uno declarado — que es exactamente lo que la doctrina de la
+  casa prohíbe.
+
+### Propuesta de diseño (invierte la cascada del spec §3.2, y por qué)
+
+El spec ordena: canónico → spec de extracción → inferencia. Propongo: **el formato del
+período manda, y la declaración del canónico es la AUTORIDAD CONTRA LA QUE SE VERIFICA.**
+
+- El período (`2026-Q1`, `2026-07`) **no es una inferencia**: lo fija el parser al
+  normalizar y determina la cadencia sin ambigüedad, fila por fila. Cobertura 100%.
+- La declaración del canónico es por SERIE, pero un archivo produce muchas series
+  (`imae_2018.xlsx` produce 12): aplicarle a las 12 la frecuencia de la entrada canónica es
+  una suposición que hoy sale bien **por casualidad** — en los 4 archivos encendidos todas
+  las series comparten cadencia, y eso no es una regla.
+- Donde declarado y derivado **discrepan**, eso es un defecto que se SURFACEA (es la
+  aserción 5 de §4: «ninguna serie trimestral tiene períodos con formato mensual»), no algo
+  que se resuelva en silencio eligiendo uno.
+
+Así no hace falta la columna `note`: no se escribe nada inferido-y-sin-marca, porque lo que
+se escribe es derivado de dato real, y lo declarado se usa para detectar el error.
+
+### Pasos atómicos
+
+- [x] **1.** `inference.py:509` corregido. Test ESTRUCTURAL con `ast`
+      (`test_vocabulario_de_frecuencia.py`) porque el defecto vivía en UNA rama de tres.
+- [x] **2.** Hecho. El helper se promovió a `shared/data/series_cadence.py` —hermano de
+      `series_nature.py`— en vez de escribir una tercera copia del que ya duplicaban
+      `insurance_intel` y `pension_intel`.
+- [x] **3.** `_discrepancias_de_cadencia` en `ingest_canonical`, que devuelve
+      `cadence_mismatches` y avisa por log. En la corrida real: **0 discrepancias**.
+- [x] **4.** `a4c7e1b9d302_backfill_mm_series_frequency.py`, data-only. Verificada sobre
+      copia de dev: **509 → 0 NULL** (16 quarterly + 493 monthly), 0 valores alterados.
+
+### Sensores
+
+- [x] **S1 — VERDE, con dientes probados.** Contra el código viejo, `frequency` salía
+      `{None}` en las tres filas: la aserción del test nuevo no pasaba.
+- [x] **S2 — VERDE, y es el sensor que decidió el vocabulario.** `canonical_series_for_api`
+      corrida contra las dos bases: **7 series, 0 cambios de valor** en `frequency`.
+- [x] **S3 — VERDE.** Incluye el caso de las 17 entradas sin puente: no se pueden
+      verificar y, sobre todo, no producen falso positivo.
+- [x] **S4 — VERDE.** Y la corrida completa sobre la base encendida: **6.390 filas, 0 con
+      `frequency` NULL, 0 fuera del vocabulario**, idempotente en valor Y en cadencia.
+- [x] **S5.** `ruff` verde · `mypy` **exit 0** (con +1 línea de baseline, el mismo patrón
+      que sus 5 vecinas de esta función: `row.nature = nat` es una de ellas) · `pytest` abajo.
+
+---
+
+## ✅ HECHA 2026-09-03 — T-PS-2: series faltantes en el canónico
+> Tres trabajos. Los dos del IMAE son directos y con evidencia. El tercero **no es el que
+> el spec describe**: el archivo que nombra está congelado desde 2019.
+
+### Trabajo 1 · el sufijo roto de la entrada `imae` — RESUELTO CON DATO
+
+La entrada declara `excel_series_suffix="serie_original_variacion_porcentual_interanual"` y
+**ninguna** de las 12 series del archivo termina así: es la única de 33 entradas con puente
+que no resuelve. Cuál es la correcta se COMPUTÓ, no se eligió por parecido de nombre: contra
+la YoY calculada del índice original, sobre 223 períodos comparables,
+
+| candidata | error medio |
+|---|---:|
+| **`variacion_porcentual_interanual`** | **0,00000 pp** |
+| `interanual` | 0,31017 pp |
+| `variacion_porcentual_acumulada` | 1,87588 pp |
+| `interanual_acumulada` | 1,89979 pp |
+
+- [x] **1.** Hecho. Test con fixture real: los 4 casos fallaban antes.
+
+### Trabajo 2 · `imae_indice`
+
+- [x] **2.** Hecho. **34 entradas con puente, 0 sin resolver** (antes: 1).
+      El dato **ya está persistido** (235 obs, 2007-01→2026-07, sin huecos ni nulos): la
+      ingesta es por ARCHIVO y el sufijo no la gobierna. Esto es DECLARACIÓN, no un cambio de
+      datos — y es lo que permite que el test de §4 lo vigile y que `tpm_modeling` deje de
+      consumir un `series_code` que ningún registro declara.
+
+### Trabajo 3 · el PIB sectorial: **el spec nombra el archivo equivocado**
+
+`PIB_sectores_origen.xls` (§3.3 del spec) está **congelado: `last-modified` 2019-02-23**.
+Sus dos hojas son «Trim Acum 91-14» — llega a 2014, en base vieja — y sus 132 series MEZCLAN
+períodos anuales y trimestrales dentro de la misma serie (`1991` → `2009-Q1`). Es la trampa 1
+otra vez: el BCRD migró a un archivo base 2018 y el viejo quedó quieto.
+
+El vigente es **`pib_origen_2018.xlsx`**, `last-modified` **2026-06-29**: cuatro hojas
+(nominal y volumen encadenado, trimestral y trimestral acumulado), **2018-Q1 → 2025-Q4**.
+
+**Pero tampoco está listo, por otro motivo.** De sus 98 series trimestrales de volumen
+encadenado, cada sector aparece TRES veces y dos llevan el número de fila en el nombre. Qué
+es cada una se computó contra el dato:
+
+| serie | qué es | evidencia |
+|---|---|---|
+| `agropecuario` | índice de volumen (nivel) | base 2018=100 |
+| `agropecuario_r46` | **tasa de crecimiento interanual** | error 0,00000 pp vs la YoY del nivel |
+| `agropecuario_r83` | **incidencia** (contribución al crecimiento) | valores de orden 0,2 |
+
+El contenido es correcto; **el nombre no dice cuál de las tres es**. Y el guard de la
+frontera de escritura solo veta coordenadas de COLUMNA (`_c\d+$`, `service.py:57`): las de
+FILA pasan. Serían ~196 series persistidas con un nombre que no dice qué miden — la doctrina
+del sujeto, incumplida en la puerta que existe para eso.
+
+Dato para decidir: **hoy hay CERO series `_rNN` en las 600 del canónico completo**, así que
+extender el guard no vetaría nada de lo que ya existe.
+
+- [x] **3a.** Corregido en el anexo III del informe, con `last-modified` de los dos archivos.
+- [x] **3b.** Hecha, en `yellow` y FUERA de `PERSISTIBLES_VERIFICADOS`. Declarando
+      en `homogenization` y `robustness` que dos de cada tres series están sin nombrar.
+      **NO entra en `PERSISTIBLES_VERIFICADOS`**: el registro declara qué es citable; la
+      escritura espera al nombrado.
+- [x] **3c.** Extendido a `_[cr]\d+$`. No vetó nada existente (había 0 códigos `_rNN`).
+
+### Sensores
+- [x] **S1 — VERDE con dientes.** Los 4 fallaban antes: «ninguna de las 14 series termina
+      así» y «el registro no declara `imae_indice`».
+- [x] **S2 — VERDE.** Barrido sobre las 600 series: 34 con puente, 0 sin resolver. Más dos
+      guards nuevos: lo habilitado para escribir debe declararse `green`, y el registro no
+      puede apuntar a un archivo congelado.
+- [x] **S3 — VERDE.** 6.390 filas, 0 valores cambiados, 0 cadencias cambiadas, 0
+      discrepancias. `omitidos` pasó de 22 a 23: el archivo nuevo se lee y NO se escribe.
+- [x] **S4.** `ruff` verde · `mypy` **exit 0** (sin sumar baseline: anoté la función en vez
+      de aceptar la nota) · `pytest` abajo.
+
+### Hallazgo que T-PS-2 destapa y NO resuelve
+El nombrado era necesario pero **no suficiente**. Con los nombres arreglados,
+`pib_origen_2018.xlsx` sigue sin poder persistirse: sus dos hojas **acumuladas** mezclan
+períodos anuales y trimestrales dentro de la misma serie y producen **1.660 duplicados con
+valores distintos** en 159 series. Las dos hojas trimestrales —`PIB$_Trim` y `PIBK_Trim`,
+justo las que T-MP necesita— extraen limpias: 162 series, 2018-Q1→2025-Q4, cero conflictos.
+
+Como la ingesta es por ARCHIVO y no por hoja, el libro entero queda fuera. Para habilitarlo
+hacen falta **una de dos**: arreglar el parseo de las acumuladas, o que el alcance de
+escritura pueda declararse por HOJA y no solo por archivo.
+
+---
+
+## ✅ HECHA 2026-09-03 — T-PS-2b: alcance de escritura POR HOJA
+> Sale del hallazgo de T-PS-2: `pib_origen_2018.xlsx` tiene dos hojas limpias y dos rotas, y
+> la ingesta es por ARCHIVO, así que el libro entero quedó fuera.
+
+### Qué se habilitaría
+
+| hoja | series | obs | estado |
+|---|---:|---:|---|
+| `PIB$_Trim` | 65 | 2.080 | limpia — 0 conflictos, 0 períodos mezclados |
+| `PIBK_Trim` | 97 | 3.104 | limpia — 0 conflictos, 0 períodos mezclados |
+| `PIB$_Trim_Acum` | 65 | 650 | **fuera** — 252 duplicados con valor distinto |
+| `PIBK_Trim_Acum` | 98 | 3.136 | **fuera** — 1.408 duplicados con valor distinto |
+
+`mm_series` pasaría de **6.390 a 11.574** filas (+162 series).
+
+### Diseño
+
+- **Una sola estructura, no dos.** `PERSISTIBLES_VERIFICADOS` pasa de lista a diccionario
+  `{archivo: None | [hojas]}`: `None` = el archivo entero (lo de hoy), una lista = solo esas
+  hojas. Dos estructuras paralelas —una de archivos y otra de hojas— se desincronizan, y ya
+  hay lecciones en este repo sobre eso.
+- **El filtro es por PREFIJO de código**, `bcrd.xls.<archivo>.<slug_de_hoja>.`, construido con
+  el `_slug` del propio motor y no a mano. ⚠️ **El punto final no es cosmético**: `pib_trim`
+  es prefijo de `pib_trim_acum`, y sin él habilitar la hoja limpia arrastraría la rota.
+- **Solo aplica a libros multi-hoja.** En un libro de una sola hoja el motor NO pone segmento
+  de hoja en el código (`bcrd.xls.<archivo>.<métrica>`), así que declarar hojas ahí no
+  matchearía nada — eso tiene que fallar ruidosamente, no en silencio.
+- Se sigue leyendo y reportando todo; lo acotado se declara en el resultado y en el log,
+  ahora con el detalle de hoja.
+
+### Pasos atómicos
+- [x] **1.** Hecho: `{archivo: None | [hojas]}`, una sola estructura.
+- [x] **2.** `solo_archivos` → `alcance`. No queda ninguna referencia al nombre viejo.
+- [x] **3.** Con `_slug` y `default_prefix` del motor, no reconstruidos a mano.
+- [x] **4.** Sigue pasando la constante.
+- [x] **5.** `PIB$_Trim` y `PIBK_Trim` habilitadas.
+
+### Sensores
+- [x] **S1 — VERDE con dientes demostrados.** Un filtro sin el punto final devuelve
+      `['pib_trim', 'pib_trim_acum']`; con el punto, solo `['pib_trim']`.
+- [x] **S2 — VERDE.** El archivo queda `failed` con el motivo en el reporte, no en cero silencioso.
+- [x] **S3 — VERDE.** 11.574 filas exactas. 162 series nuevas, **todas** `quarterly`
+      2018-Q1→2025-Q4. **0 observaciones** de las dos acumuladas. **0 series con coordenada**
+      (el guard vetó `salud_r69`, la única que el modelo no nombró). Idempotente: 0 cambios.
+- [x] **S4.** `ruff` verde · `mypy` **exit 0** sin sumar baseline · `pytest` abajo.
+
+### El guard de robustez pasa a ser por hoja (decisión del dueño)
+`robustness` sigue describiendo el ARCHIVO. La regla ahora dice: un archivo habilitado
+**entero** debe ser `green`; uno habilitado **por hojas** puede ser `yellow` —eso es
+justamente lo que `yellow` significa— siempre que nombre cuáles, y una lista vacía se rechaza
+porque sería habilitar nada pareciendo que se habilitó algo.
+
+---
+
+## ✅ HECHA 2026-09-03 — T-PS-2c: las hojas ACUMULADAS del PIB sectorial
+
+### Causa raíz, verificada
+
+Las hojas trimestrales rotulan sus columnas `E-M · A-J · J-S · O-D`; las acumuladas,
+`E-M · E-J · E-S · E-D` (enero a marzo / junio / septiembre / diciembre). El mapa
+`_QUARTERS` de `periods.py:59` tiene los cuatro primeros y **ninguno de los acumulados**:
+
+```
+parse_quarter('A-J') -> 2     parse_quarter('E-J') -> None
+parse_quarter('J-S') -> 3     parse_quarter('E-S') -> None
+parse_quarter('O-D') -> 4     parse_quarter('E-D') -> None
+```
+
+Sin trimestre, la columna cae al AÑO. Así que de cada año, `E-M` sale como `2018-Q1` y las
+otras tres colapsan las tres en `2018` — y el dedupe «último gana» deja una arbitraria:
+
+```
+2018      103.871   ← E-J
+2018      145.421   ← E-S     las tres compiten por la misma clave
+2018      192.372   ← E-D
+2018-Q1    52.442   ← E-M
+```
+
+Eso explica las tres cifras del anexo III de una sola vez: los 1.660 duplicados con valores
+distintos, las 163 series que mezclan formas de período, y por qué la hoja acumulada tenía
+10 observaciones por serie en vez de 32.
+
+### El arreglo
+
+- [x] **1.** Hecho. Y el calificador `_acumulado` viaja en el CÓDIGO, decidido por el
+      encabezado del propio cuadro; el renombrado semántico ya no se lo lleva puesto (perdía
+      96 de 163). Más nota metodológica por prefijo, que viaja al cliente por la Data API.
+- [x] **2.** Las cuatro hojas habilitadas: **0 duplicados con valor distinto y 0 series con
+      períodos mezclados** en las cuatro.
+
+### ⚠️ La decisión que no puedo tomar yo
+Con el arreglo, el valor de `pib_trim_acum.agropecuario` en `2019-Q2` es el **acumulado
+enero-junio**, no el flujo del trimestre. Lo distingue el segmento de hoja del código
+(`pib_trim_acum` frente a `pib_trim`) y nada más: mismo sujeto, misma unidad, mismo período.
+Un consumidor que agrupe por el nombre de la serie sin mirar la hoja sumaría peras con
+manzanas. Ver la pregunta al dueño.
+
+### Sensores
+- [x] **S1 — VERDE con dientes.** Antes: `E-J`/`E-S`/`E-D` → `None`.
+- [x] **S2 — VERDE.** Y verificado contra el dato real: la suma de los 4 flujos de 2019
+      da 197.776,4 y el acumulado de Q4 da 197.776,4 — diferencia 0,0000.
+- [x] **S3 — VERDE.** Las 11.574 claves previas conservaron valor y cadencia; **0 cambios,
+      0 desapariciones, 0 claves nuevas fuera del PIB por origen**.
+- [x] **S4.** `ruff` verde · `mypy` **exit 0** · `pytest` abajo.
+
+### Hallazgo mayor que esto destapó: la vista previa del modelo estaba TRUNCADA
+Al abrir la hoja acumulada apareció que terminaba en **2020-Q2** y no en 2025-Q4. No era el
+rótulo: su spec venía del MODELO con `value_col_end=11` sobre un cuadro de 34 columnas, y
+re-inferir daba lo mismo. La vista previa muestra `PREVIEW_COLS = 12` y **no declaraba estar
+cortada**: el modelo contestó el rango que veía.
+
+No se arregla ensanchando la vista —21 de 27 planillas pasan de 12 columnas, una llega a 256—:
+la vista ahora AVISA que está truncada y el pedido ofrece dejar el rango abierto, que el
+extractor ya interpretaba como «hasta el final».
+
+Al corregirlo apareció que las otras TRES hojas del mismo libro tenían el mismo defecto un
+grado más suave: `cols=[1,33)` les comía el trimestre más reciente. Con los cuatro specs
+re-inferidos, las cuatro hojas llegan a **2026-Q1**. `mm_series`: **11.574 → 17.115**.
+
+---
+
+## ✅ BARRIDO HECHO 2026-09-03 — specs cacheados que dejan dato sin leer
+
+Sobre las **27 planillas canónicas / 46 hojas**, con el spec cacheado de cada una.
+
+### Lo primero: el defecto del modelo está CERRADO
+De las 46 hojas, **solo cuatro** tenían spec producido por el modelo — las cuatro de
+`pib_origen_2018.xlsx` — y las cuatro ya leen hasta el final. Ninguna otra planilla del
+canónico depende de una inferencia del modelo, así que la vista previa truncada no dejó más
+daño en el corpus.
+
+### Dos truncamientos REALES, los dos de la heurística
+
+| archivo · hoja | lee | de | períodos que se pierden |
+|---|---:|---:|---|
+| `bpagos.xls` · balanza de pagos | <21 | 24 | **2011, 2012, 2013** |
+| `lleg_total.xls` · «1993 - 2026» | <38 | 39 | **2026** |
+
+Ninguno de los dos está en `PERSISTIBLES_VERIFICADOS`, así que **nada de lo persistido hoy
+está afectado**. `bpagos` es la serie MBP5 histórica y descontinuada —su nota ya dice que se
+use solo antes de 2010—, así que perder 2011-2013 es de bajo impacto. `lleg_total` pierde
+**el año en curso**, que en una serie de llegadas turísticas es el dato que más se mira.
+
+### Un falso positivo que conviene no olvidar
+El primer barrido marcó `pib_gasto.xls` con «22 columnas con dato sin leer». Es correcto que
+no las lea: de la columna 24 en adelante hay OTRO bloque, «Tasas de Crecimiento», con
+encabezados `92/91`, `93/92`… La regla útil no es «hay números más allá» —en un cuadro de dos
+bloques eso es lo normal— sino **«el encabezado declara un PERÍODO más allá del rango leído»**.
+Con la regla afinada, `pib_gasto` sale limpio.
+
+### La otra mitad del barrido: limpia
+26 hojas `period_rows` —donde el spec LISTA sus columnas de valor, y truncar significa perder
+SERIES enteras y no períodos— y **cero** columnas con dato sin declarar.
+
+### Pendiente de decisión
+- [x] **Guard puesto:** `inference.periodos_sin_leer` + `engine._avisar_si_trunca`. El aviso es
+      de ARCHIVO (`ValidationReport.avisos`), pone el reporte en `ok=False` y viaja a
+      `mm_excel_reports` con el detalle de qué períodos se perdieron. Probado en vivo forzando
+      un rango corto sobre `bpagos`: el archivo queda marcado y nombra los 18 años perdidos.
+- [x] **Arreglados los dos, y la causa era una sola.** `_axis_year` toleraba la nota al pie
+      con barra («2008 3/») pero no los marcadores de PRELIMINAR del BCRD: `2011*`, `2013**`,
+      `2021 (p)`. Esos años caían del eje temporal y el rango se cortaba en el último año
+      «limpio». `bpagos` recupera 2011-2013 (54 obs cada uno) y `lleg_total` recupera 2026
+      (574 obs).
+
+### El mismo rótulo encadenaba los dos defectos del día
+En `pib_origen_2018.xlsx` casi todos los años del encabezado están marcados `(p)`. Con
+`_axis_year` sin arreglar, la heurística no encontraba eje temporal, devolvía confianza 0,0 y
+el trabajo caía en el MODELO — que a su vez truncaba por su vista previa recortada. Un solo
+rótulo no reconocido produjo los dos.
+
+Con el arreglo, la heurística resuelve esas cuatro hojas por su cuenta y **su lectura es
+idéntica a la del modelo**: mismas 2.145 y 3.234 observaciones, cero diferencias de clave y
+cero de valor. Así que además de cerrar el truncamiento, el PIB sectorial deja de depender de
+una inferencia paga.
+
+**Alcance del barrido:** 27 planillas / 46 hojas. Solo 4 tenían spec del modelo. 26 hojas
+`period_rows` sin columnas de dato sin declarar. `mm_series` sigue en **17.115** filas, con
+cero regresión.
+
+---
+
+## ✅ HECHA 2026-09-04 — T-PS-2d: triaje de los archivos con «último gana» (LOS 4)
+
+Re-medidos con el código de hoy (las cifras del anexo I se mantienen). **Tres causas
+distintas**, ninguna es la misma:
+
+### 1 · `TASA_DOLAR_REFERENCIA_MC.xlsx` — dos problemas, no uno
+
+| hoja | obs | conflictos | qué pasa |
+|---|---:|---:|---|
+| `PromTrimestral` · `FPTrimestral` | 616 | **367** | el trimestre se rotula `Enero-Marzo`, `Abril-Junio`… y `_QUARTERS` solo tiene las formas ABREVIADAS (`ene-mar`). Sin trimestre, las 4 filas del año colapsan en el año. |
+| `PromMensual` · `FPMensual` · `PromAnual` · `FPAnual` | 2.006 | **0** | ya están limpias |
+| `Diaria` | 26.862 | **19.680** | es una serie **DIARIA** de verdad: columnas `Año \| Mes \| Día`. La identidad `(series_code, period)` no tiene día, así que los ~22 días hábiles de cada mes colapsan y sobrevive uno. |
+
+Lo primero es una grafía faltante, del mismo tipo que los rótulos acumulados. Lo segundo es
+una decisión de diseño.
+
+### 2 · `piianual_6.xlsx` y `piianual.xls` — una dimensión que no es período
+
+La fila bajo los años lleva `Saldo al inicio | Transacciones Netas | Variaciones de Tipo de
+cambio | Variaciones de Precio | Otras Variaciones | Saldo al final`: **seis columnas por
+año**, y ninguna es un subperíodo. El spec las ignora (`subperiod_header_row=None`) y las seis
+caen en el mismo año — por eso `activos` en 2009 tiene cinco valores distintos (10.959,6 ·
+−426,7 · −32,7 · 5,8 · 0,0). No son un conflicto: son **seis series distintas** aplastadas en
+una. Bien leídas, el archivo multiplica por seis su información real.
+
+### 3 · `lleg_total.xls` — el grupo no viaja con el número
+
+En `year_blocks`, el encabezado tiene dos niveles: `Total | Tasa de Crecimiento | Dominicanos
+| Tasa de Crecimiento`, y debajo `Mensual | Acumulado | Trimestral | Igual Mes…`. «Tasa de
+Crecimiento › Igual Mes» aparece bajo *Total* y bajo *Dominicanos*: mismo código, datos
+distintos. Es la doctrina del sujeto, en la orientación que todavía no la aplica —
+`period_rows` ya tiene `_grupo_a_la_izquierda`, `year_blocks` no.
+
+### Pasos
+- [x] **1.** Hecho, más el caso `Año | Trimestre | valores` que la inferencia no contemplaba.
+- [x] **2.** Habilitado con **las SIETE hojas**: la diaria también entró.
+- [x] **3.** `YYYY-MM-DD` es la cuarta forma de período, con cadencia `daily`, orden
+      cronológico e inferencia. `ExtractionSpec.day_col` se detecta por el encabezado y se
+      confirma contra el contenido. 17.908 obs diarias, 0 conflictos.
+- [x] **4a.** PII: `dimension_header_row` para los seis conceptos por año, y `_axis_year`
+      dejó de tomar una FECHA por año —tomaba la fila de fechas de corte como fila de años y
+      los flujos salían **corridos un año**—. Verificado con la identidad contable del propio
+      cuadro: **cierra en 2.718 casos y falla en 0**. 130→780 y 96→576 series.
+- [x] **4b.** `lleg_total`, con DOS defectos de la misma familia: el grupo repetido en
+      `year_blocks` (`Tasa de Crecimiento` bajo *Total* y bajo *Dominicanos*) y **dos cuadros
+      en la misma hoja** con el eje de años reiniciado —los años completos y el corte
+      «enero-julio», con 2023-2025 en los dos y valores distintos—. De 4.555 conflictos a
+      **0**; de 59 a 99 series. Habilitado por hoja.
+
+### Sensores
+- [x] Los cinco archivos de test nuevos, todos corridos contra el código viejo primero.
+- [x] Las 7 hojas con 0 conflictos. Y las dos PII con 0.
+- [x] **0 valores, 0 cadencias, 0 desapariciones.** `mm_series`: 17.115 → **51.687**.
+- [x] `ruff` verde · `mypy` **exit 0** · `pytest` **7.548, exit 0**.
+
+### Cierre del bloque: los cuatro archivos, cerrados
+`mm_series` **509 → 73.472** filas y **7 → 1.828** series. Cero archivos con «último gana»,
+cero series con coordenada, cero filas sin cadencia, cero archivos marcados por truncamiento.
+Nueve archivos habilitados de 27; los 18 restantes siguen sin evaluar uno a uno.
+
+---
+
+## 🔵 EN CURSO — Los 18 archivos canónicos restantes
+> Bloque siguiente al de «LOS 4». Nueve archivos habilitados de 27; estos son los otros 18.
+> Instrumental ya construido: la corrida en seco, el barrido de specs cacheados, el guard de
+> truncamiento (`periodos_sin_leer`), la medición de conflictos y el diagnóstico de cadencia.
+
+### Los 18
+`Costo_Canasta_quintiles_base_2019-2020.xlsx` · `Remesas_6.xlsx` · `Serie_TPM.xlsx` ·
+`agregados_monetarios.xlsx` · `base_monetaria.xlsx` · `bpagos.xls` · `bpagos_6.xls` ·
+`ipc_base_2019-2020_serie_referencial.xlsx` · `ipc_grupos_base_2019-2020.xls` ·
+`ipc_quintiles_base_2019-2020.xls` · `ipc_regiones_base_2019-2020.xls` ·
+`ipc_subyacente_base_2019-2020.xlsx` · `pib_gasto.xls` · `reservas_internacionales.xlsx` ·
+`taap_activad.xlsx` · `taap_pasivad.xlsx` · `tasa_desocupacion.xls` · `tasa_ocupacion.xls`
+
+### Criterio de habilitación (el mismo que se aplicó a los 9)
+Un archivo (o una hoja) entra a `PERSISTIBLES_VERIFICADOS` solo si, medido:
+1. **0 duplicados `(serie, período)` con valores en conflicto** — si los hay, el upsert
+   resolvería por orden de lectura y el dato publicado sería arbitrario.
+2. **0 series con formas de período mezcladas** — anual y trimestral en la misma serie
+   significa que el eje temporal se leyó mal.
+3. **0 códigos nombrados por coordenada** (`_c\d+` / `_r\d+`): el sujeto no viaja con el número.
+4. **0 avisos de truncamiento** (`periodos_sin_leer`) y ninguna columna con dato fuera de la
+   lista de series del spec.
+5. **0 discrepancias de cadencia** contra lo que declara el registro canónico.
+6. Y una **verificación de sentido** propia del archivo cuando la hay (identidad contable,
+   YoY reconstruido, suma de partes), no solo ausencia de conflictos.
+
+### Un séptimo criterio, que salió del triaje
+**Densidad: filas contra claves distintas.** `taap_pasivad.xlsx` emitía 29.325 filas para
+1.610 observaciones reales (×18,21) y todas las de más eran NULAS, así que ninguno de los
+seis criterios lo veía. Un cuadro mal leído puede no producir un solo conflicto.
+
+Y una corrección al instrumento antes que a los archivos: la primera medición contaba como
+conflicto cualquier duplicado, y la mayoría eran valor contra NULO —que el upsert ya
+protege—. Separadas las dos cosas, de 6 archivos «en falla» quedaron 3.
+
+### Pasos
+- [x] **1.** Triaje de los 18 con los seis criterios más la densidad.
+- [x] **2.** Habilitados los 27 archivos del registro: 18 nuevos, todos verificados.
+- [x] **3.** Ocho defectos del nombrado y de la unidad, cada uno con su test corrido antes
+      contra el código viejo. El peor: el IMAE, encendido desde el primer bloque, tenía dos
+      series que no se persistían nunca y siete que no decían de qué cuadro eran.
+- [x] **4.** Corrida completa: **73.472 → 101.251** filas, **1.828 → 2.103** series, **0
+      valores cambiados** en lo que ya existía, 1.125 correcciones de metadato, idempotente.
+      Gates: pytest 7.631 exit 0 · ruff verde · mypy exit 0.
+- [x] **5.** Anexo IX en el informe y entrada en `lessons.md`.
+
+### Lo que queda declarado
+249 series huérfanas por renombrado (248 reaparecen con su nombre bueno; la otra era una
+columna fantasma con un solo valor real) — limpiadas en dev, **hay que repetirlo en prod**.
+`pib_nominal_gasto` sigue sin puente. Producción y T-PS-4, sin empezar.
