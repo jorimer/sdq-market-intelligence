@@ -32,6 +32,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from modules.macro_monitor.forecasting import bloque, bvar, ledger, nowcast
+from shared.data.periodos import fin_del_periodo
 
 logger = logging.getLogger("sdq.macro.forecasting.emision")
 
@@ -54,11 +55,33 @@ class Emision:
     escritos: int
     omitidos_por_duplicado: int
     escenarios_no_registrados: int
+    #: Horizontes descartados por estar ya cerrados al corte. Ver `_es_hacia_adelante`.
+    omitidos_por_vencidos: int = 0
     motivos: Tuple[str, ...] = ()
 
     @property
     def hubo_algo(self) -> bool:
         return self.escritos > 0 or self.omitidos_por_duplicado > 0
+
+
+def _es_hacia_adelante(horizonte: str, corte: date) -> bool:
+    """¿El período *horizonte* seguía abierto en la fecha *corte*?
+
+    Escribir un «pronóstico» de un trimestre que ya cerró no es un descuido cosmético: la
+    puntuación automática lo va a evaluar contra un observado que **ya existía cuando se
+    escribió la fila**, y el track record se infla con retrospectiva. Es exactamente la
+    contaminación que toda la disciplina point-in-time existe para impedir, entrando por la
+    puerta de atrás.
+
+    El gate de admisión ya rechaza estas metas (`as_of` posterior al cierre del período), pero
+    rechazar al PUBLICAR llega tarde: la fila igual quedó en el ledger y la puntuación no
+    consulta el gate. La regla se aplica al ESCRIBIR.
+
+    Un horizonte relativo (`+4T`) no resuelve a un período absoluto: no se puede verificar, y
+    lo que no se puede verificar no se descarta — se deja pasar.
+    """
+    cierre = fin_del_periodo(horizonte)
+    return cierre is None or cierre > corte
 
 
 def _escribir(db: Session, *, model_id: str, horizonte: str, as_of: str, punto: float,
@@ -81,7 +104,7 @@ def emitir(db: Session, *, as_of: Optional[date] = None) -> Emision:
     """Corre los modelos al corte *as_of* y escribe sus pronósticos al ledger."""
     corte = as_of or date.today()
     iso = corte.isoformat()
-    escritos = omitidos = escenarios = 0
+    escritos = omitidos = escenarios = vencidos = 0
     motivos: List[str] = []
 
     # ── Nowcast del trimestre en curso ──────────────────────────────────────────────
@@ -92,7 +115,12 @@ def emitir(db: Session, *, as_of: Optional[date] = None) -> Emision:
             motivos.append(f"nowcast m{variante}: {e}")
             continue
         if est is None:
-            motivos.append(f"nowcast m{variante}: sin estimación para el corte {iso}")
+            motivos.append(f"nowcast m{variante}: {_por_que_no_hay_nowcast(db, corte)}")
+            continue
+        if not _es_hacia_adelante(est.horizon, corte):
+            vencidos += 1
+            motivos.append(f"nowcast m{variante} {est.horizon}: el período ya había cerrado "
+                           f"al corte {iso}; no se registra")
             continue
         r = _escribir(db, model_id=est.model_id, horizonte=est.horizon, as_of=iso,
                       punto=est.point, intervalos=[list(t) for t in est.intervals],
@@ -117,6 +145,12 @@ def emitir(db: Session, *, as_of: Optional[date] = None) -> Emision:
         motivos.append("bvar: el bloque no alcanzó para proyectar")
     else:
         for p in proy.pronosticos():
+            if not _es_hacia_adelante(p.horizonte, corte):
+                vencidos += 1
+                motivos.append(f"bvar {p.horizonte}: el período ya había cerrado al corte "
+                               f"{iso}; el bloque va atrasado respecto de la fecha de "
+                               "emisión y el modelo no alcanza a decir nada del futuro")
+                continue
             r = _escribir(db, model_id=p.model_id, horizonte=p.horizonte, as_of=iso,
                           punto=p.punto, intervalos=[list(t) for t in p.intervalos],
                           objetivo=p.target_series)
@@ -129,4 +163,24 @@ def emitir(db: Session, *, as_of: Optional[date] = None) -> Emision:
         escenarios = len(proy.escenarios())
 
     return Emision(escritos=escritos, omitidos_por_duplicado=omitidos,
-                   escenarios_no_registrados=escenarios, motivos=tuple(motivos))
+                   escenarios_no_registrados=escenarios, omitidos_por_vencidos=vencidos,
+                   motivos=tuple(motivos))
+
+
+def _por_que_no_hay_nowcast(db: Session, corte: date) -> str:
+    """El motivo REAL, que casi nunca es «falló».
+
+    En la ventana de ~15 días entre el rezago del IMAE y el del PIB, el trimestre tiene sus
+    tres meses publicados y su índice queda DETERMINADO por identidad aritmética: no hay nada
+    que estimar. Reportar eso como «sin estimación» lo haría parecer una falla de un modelo
+    que en realidad está de más.
+    """
+    try:
+        cifra = nowcast.cifra_determinada(db, corte)
+    except Exception:  # noqa: BLE001
+        cifra = None
+    if cifra is not None:
+        return (f"el trimestre {cifra.horizon} está DETERMINADO por identidad (los tres "
+                "meses del IMAE ya publicados); no se estima ni entra al ledger, se sirve "
+                "como cifra determinada")
+    return f"no hay panel suficiente al corte {corte.isoformat()}"
