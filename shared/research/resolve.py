@@ -34,6 +34,14 @@ AXIS_KEYWORDS: Dict[str, Tuple[str, ...]] = {
                             "como le fue en el año", "balance del año"),
     "macro": ("macro", "inflacion", "pib", "crecimiento", "riesgo pais", "fiscal",
               "deficit", "reservas", "tipo de cambio", "soberano"),
+    # PROSPECTIVO. Las keywords son DELIBERADAMENTE estrechas: si repitiera "pib" o
+    # "crecimiento" competiría con el eje macro en toda pregunta del presente y lo invadiría
+    # —le pasó a `law`, que se activaba en 6 de 9 preguntas—. Cada término de esta lista
+    # solo aparece cuando la pregunta mira hacia ADELANTE; ninguno describe el estado actual.
+    "macro_forecast": ("proyeccion", "proyecciones", "pronostico", "pronosticos",
+                       "nowcast", "escenario macro", "cuanto va a crecer",
+                       "perspectivas de crecimiento", "hacia donde va la economia",
+                       "track record de proyecciones"),
     "monetary_policy": ("politica monetaria", "tpm", "tasa de politica", "tasa de interes",
                         "bcrd tasa", "postura monetaria"),
     "trade": ("comercio exterior", "exportacion", "importacion", "balanza", "arancel",
