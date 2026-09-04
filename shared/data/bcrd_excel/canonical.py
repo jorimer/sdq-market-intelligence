@@ -18,7 +18,7 @@ See ``docs/SERIES_CANONICAS_BCRD.md`` for the full rationale.
 from __future__ import annotations
 
 from dataclasses import asdict, dataclass
-from typing import List, Optional
+from typing import Dict, List, Optional
 
 Robustness = str  # "green" | "yellow" | "red"
 
@@ -516,12 +516,26 @@ REGISTRY: List[CanonicalSeries] = [
 #
 # Vacío o None en `ingest_canonical` significa "todo el canónico", que es el comportamiento
 # histórico y el que corresponde cuando esta lista deje de hacer falta.
-PERSISTIBLES_VERIFICADOS: List[str] = [
-    "pib_2018.xlsx",              # PIB real trimestral: 77 trimestres 2007-Q1→2026-Q1
-    "imae_2018.xlsx",             # IMAE mensual, incluido el índice que consume el nowcast
-    "ipc_base_2019-2020.xls",     # IPC general: 511 meses desde 1984
-    "pib_deflactor_2018.xlsx",    # deflactor del PIB: 33 trimestres desde 2018-Q1
-]
+#
+# El valor es `None` para habilitar el ARCHIVO ENTERO, o la lista de HOJAS habilitadas cuando
+# el libro trae unas que extraen bien y otras que no. Es un solo diccionario y no una lista de
+# archivos más un mapa de hojas al lado: dos estructuras que hay que mantener en sincronía se
+# desincronizan, y de eso este repo ya tiene lecciones escritas.
+#
+# Los nombres de hoja son los del libro, tal como los ve quien lo abre en Excel; el prefijo
+# del código lo arma el motor con su propio `_slug`.
+PERSISTIBLES_VERIFICADOS: Dict[str, Optional[List[str]]] = {
+    "pib_2018.xlsx": None,            # PIB real trimestral: 77 trimestres 2007-Q1→2026-Q1
+    "imae_2018.xlsx": None,           # IMAE mensual, incluido el índice que consume el nowcast
+    "ipc_base_2019-2020.xls": None,   # IPC general: 511 meses desde 1984
+    "pib_deflactor_2018.xlsx": None,  # deflactor del PIB: 33 trimestres desde 2018-Q1
+    # El PIB por sector de origen entra POR HOJA. Las dos trimestrales extraen limpias —162
+    # series, 2018-Q1→2025-Q4, cero duplicados con valores en conflicto—; las dos ACUMULADAS
+    # mezclan períodos anuales y trimestrales dentro de la misma serie y producen 1.660
+    # duplicados con valores distintos, que el upsert resolvería por orden de lectura.
+    # `PIB$_Trim_Acum` y `PIBK_Trim_Acum` entran cuando su parseo se arregle.
+    "pib_origen_2018.xlsx": ["PIB$_Trim", "PIBK_Trim"],
+}
 
 
 def registry() -> List[CanonicalSeries]:

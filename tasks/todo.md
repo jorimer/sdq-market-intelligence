@@ -472,3 +472,57 @@ justo las que T-MP necesita— extraen limpias: 162 series, 2018-Q1→2025-Q4, c
 Como la ingesta es por ARCHIVO y no por hoja, el libro entero queda fuera. Para habilitarlo
 hacen falta **una de dos**: arreglar el parseo de las acumuladas, o que el alcance de
 escritura pueda declararse por HOJA y no solo por archivo.
+
+---
+
+## ✅ HECHA 2026-09-03 — T-PS-2b: alcance de escritura POR HOJA
+> Sale del hallazgo de T-PS-2: `pib_origen_2018.xlsx` tiene dos hojas limpias y dos rotas, y
+> la ingesta es por ARCHIVO, así que el libro entero quedó fuera.
+
+### Qué se habilitaría
+
+| hoja | series | obs | estado |
+|---|---:|---:|---|
+| `PIB$_Trim` | 65 | 2.080 | limpia — 0 conflictos, 0 períodos mezclados |
+| `PIBK_Trim` | 97 | 3.104 | limpia — 0 conflictos, 0 períodos mezclados |
+| `PIB$_Trim_Acum` | 65 | 650 | **fuera** — 252 duplicados con valor distinto |
+| `PIBK_Trim_Acum` | 98 | 3.136 | **fuera** — 1.408 duplicados con valor distinto |
+
+`mm_series` pasaría de **6.390 a 11.574** filas (+162 series).
+
+### Diseño
+
+- **Una sola estructura, no dos.** `PERSISTIBLES_VERIFICADOS` pasa de lista a diccionario
+  `{archivo: None | [hojas]}`: `None` = el archivo entero (lo de hoy), una lista = solo esas
+  hojas. Dos estructuras paralelas —una de archivos y otra de hojas— se desincronizan, y ya
+  hay lecciones en este repo sobre eso.
+- **El filtro es por PREFIJO de código**, `bcrd.xls.<archivo>.<slug_de_hoja>.`, construido con
+  el `_slug` del propio motor y no a mano. ⚠️ **El punto final no es cosmético**: `pib_trim`
+  es prefijo de `pib_trim_acum`, y sin él habilitar la hoja limpia arrastraría la rota.
+- **Solo aplica a libros multi-hoja.** En un libro de una sola hoja el motor NO pone segmento
+  de hoja en el código (`bcrd.xls.<archivo>.<métrica>`), así que declarar hojas ahí no
+  matchearía nada — eso tiene que fallar ruidosamente, no en silencio.
+- Se sigue leyendo y reportando todo; lo acotado se declara en el resultado y en el log,
+  ahora con el detalle de hoja.
+
+### Pasos atómicos
+- [x] **1.** Hecho: `{archivo: None | [hojas]}`, una sola estructura.
+- [x] **2.** `solo_archivos` → `alcance`. No queda ninguna referencia al nombre viejo.
+- [x] **3.** Con `_slug` y `default_prefix` del motor, no reconstruidos a mano.
+- [x] **4.** Sigue pasando la constante.
+- [x] **5.** `PIB$_Trim` y `PIBK_Trim` habilitadas.
+
+### Sensores
+- [x] **S1 — VERDE con dientes demostrados.** Un filtro sin el punto final devuelve
+      `['pib_trim', 'pib_trim_acum']`; con el punto, solo `['pib_trim']`.
+- [x] **S2 — VERDE.** El archivo queda `failed` con el motivo en el reporte, no en cero silencioso.
+- [x] **S3 — VERDE.** 11.574 filas exactas. 162 series nuevas, **todas** `quarterly`
+      2018-Q1→2025-Q4. **0 observaciones** de las dos acumuladas. **0 series con coordenada**
+      (el guard vetó `salud_r69`, la única que el modelo no nombró). Idempotente: 0 cambios.
+- [x] **S4.** `ruff` verde · `mypy` **exit 0** sin sumar baseline · `pytest` abajo.
+
+### El guard de robustez pasa a ser por hoja (decisión del dueño)
+`robustness` sigue describiendo el ARCHIVO. La regla ahora dice: un archivo habilitado
+**entero** debe ser `green`; uno habilitado **por hojas** puede ser `yellow` —eso es
+justamente lo que `yellow` significa— siempre que nombre cuáles, y una lista vacía se rechaza
+porque sería habilitar nada pareciendo que se habilitó algo.

@@ -104,8 +104,8 @@ def _fake_ingest_por_archivo(entry, **kw):
 
 def test_el_alcance_acota_lo_que_se_escribe_pero_no_lo_que_se_lee(db, monkeypatch):
     monkeypatch.setattr("shared.data.bcrd_excel.engine.ingest_excel", _fake_ingest_por_archivo)
-    solo = ["pib_2018.xlsx", "imae_2018.xlsx"]
-    out = service.ingest_canonical(db, persist=True, solo_archivos=solo)
+    solo = {"pib_2018.xlsx": None, "imae_2018.xlsx": None}
+    out = service.ingest_canonical(db, persist=True, alcance=solo)
 
     # se LEEN y se reportan todos los archivos del canónico...
     assert db.query(ExcelFileReport).count() == out["files"]
@@ -116,7 +116,7 @@ def test_el_alcance_acota_lo_que_se_escribe_pero_no_lo_que_se_lee(db, monkeypatc
     # lo omitido se DECLARA en el resultado, no desaparece
     assert set(out["skipped_by_scope"]) == {
         s.source_file for s in canonical.registry() if s.source_file not in solo}
-    assert out["persist_scope"] == sorted(solo)
+    assert set(out["persist_scope"]) == set(solo)
 
 
 def test_sin_alcance_se_escribe_todo_el_canonico(db, monkeypatch):
@@ -133,7 +133,7 @@ def test_el_alcance_no_escribe_nada_sin_persist(db, monkeypatch):
     """`solo_archivos` acota la escritura; no la habilita. Sin `persist` no se escribe nada,
     y el reporte de cobertura sigue saliendo completo."""
     monkeypatch.setattr("shared.data.bcrd_excel.engine.ingest_excel", _fake_ingest_por_archivo)
-    out = service.ingest_canonical(db, persist=False, solo_archivos=["pib_2018.xlsx"])
+    out = service.ingest_canonical(db, persist=False, alcance={"pib_2018.xlsx": None})
     assert db.query(MacroSeries).count() == 0
     assert db.query(ExcelFileReport).count() == out["files"]
 
@@ -147,17 +147,30 @@ def test_los_persistibles_verificados_existen_en_el_registro():
 
 
 def test_lo_habilitado_para_escribir_declara_ser_robusto():
-    """Un archivo no entra a `PERSISTIBLES_VERIFICADOS` si su propia entrada del registro
-    dice que no extrae limpio. Son dos afirmaciones distintas —«es la fuente citable» y
-    «ya se puede escribir sin degradar la base»— y la segunda no puede contradecir a la
-    primera. El PIB por origen es el caso: entra al registro en `yellow` porque dos de sus
-    cuatro hojas mezclan períodos anuales y trimestrales, y por eso NO se habilita."""
+    """«Es la fuente citable» y «ya se puede escribir sin degradar la base» son dos
+    afirmaciones distintas, y la segunda no puede contradecir a la primera.
+
+    La regla es POR HOJA porque el alcance lo es: un archivo habilitado ENTERO (valor `None`)
+    tiene que declararse `green`; uno habilitado por HOJAS puede ser `yellow` —eso es
+    justamente lo que `yellow` dice: parte del libro no extrae limpio— siempre que nombre
+    cuáles. Lo que no se admite es habilitar entero algo que el propio registro marca como no
+    confiable, ni «habilitar por hojas» con la lista vacía, que sería habilitar nada y
+    parecer que se habilitó algo."""
     por_archivo = {}
     for s in canonical.registry():
         por_archivo.setdefault(s.source_file, []).append(s.robustness)
-    malos = [f for f in canonical.PERSISTIBLES_VERIFICADOS
-             if any(r != "green" for r in por_archivo.get(f, []))]
-    assert not malos, f"habilitados para escribir pese a no ser 'green': {malos}"
+    enteros_no_green, hojas_vacias = [], []
+    for archivo, hojas in canonical.PERSISTIBLES_VERIFICADOS.items():
+        robusteces = por_archivo.get(archivo, [])
+        if hojas is None:
+            if any(r != "green" for r in robusteces):
+                enteros_no_green.append(archivo)
+        elif not hojas:
+            hojas_vacias.append(archivo)
+    assert not enteros_no_green, (
+        f"habilitados ENTEROS pese a no ser 'green': {enteros_no_green}. Si solo algunas "
+        f"hojas extraen limpio, habilitá esas hojas en vez del archivo.")
+    assert not hojas_vacias, f"habilitados 'por hojas' con la lista vacía: {hojas_vacias}"
 
 
 def test_el_pib_sectorial_apunta_al_archivo_VIGENTE_no_al_congelado():
@@ -172,3 +185,60 @@ def test_el_pib_sectorial_apunta_al_archivo_VIGENTE_no_al_congelado():
     congelados = {"PIB_sectores_origen.xls", "imae.xlsx"}
     usados = {x.source_file for x in canonical.registry()}
     assert not (usados & congelados), f"el registro apunta a archivos congelados: {usados & congelados}"
+
+
+# ── Alcance por HOJA ─────────────────────────────────────────────────────────────
+#
+# Un libro puede traer hojas que extraen bien y hojas que no. El PIB por sector de origen es
+# el caso: sus dos hojas trimestrales salen limpias y las dos ACUMULADAS mezclan períodos
+# anuales y trimestrales en la misma serie, con 1.660 duplicados de valores distintos. Como la
+# ingesta es por archivo, sin alcance por hoja el libro entero se quedaba afuera.
+
+
+def _fake_multihoja(entry, **kw):
+    """Un libro de dos hojas cuyos slugs son uno PREFIJO del otro — la trampa real."""
+    lin = Lineage(source="BCRD", license="x", fetched_at=date.today())
+    recs, series = [], []
+    for hoja in ("pib_trim", "pib_trim_acum"):
+        code = f"bcrd.xls.pib_origen_2018.{hoja}.agropecuario"
+        recs.append(Record(series=code, period="2020-Q1", value=1.0, lineage=lin))
+        series.append(SimpleNamespace(code=code, flags=[]))
+    spec = SimpleNamespace(method="heuristic", orientation="matrix",
+                           frequency="quarterly", confidence=0.8)
+    return SimpleNamespace(file=entry.filename, spec=spec, records=recs,
+                           report=SimpleNamespace(ok=True, series=series, flagged=[]))
+
+
+def test_habilitar_una_hoja_no_arrastra_la_que_la_tiene_de_PREFIJO(db, monkeypatch):
+    """`pib_trim` es prefijo de `pib_trim_acum`. Sin el punto final en el prefijo del filtro,
+    habilitar la hoja limpia metería la rota — que es exactamente lo que este alcance existe
+    para impedir."""
+    monkeypatch.setattr("shared.data.bcrd_excel.engine.ingest_excel", _fake_multihoja)
+    monkeypatch.setattr("shared.data.bcrd_excel.catalog.find_entry",
+                        lambda fn: SimpleNamespace(url=f"http://x/{fn}", filename=fn, sector="s"))
+    service.ingest_canonical(db, persist=True,
+                             alcance={"pib_origen_2018.xlsx": ["PIB$_Trim"]})
+    escritos = {r.series_code for r in db.query(MacroSeries).all()}
+    assert escritos == {"bcrd.xls.pib_origen_2018.pib_trim.agropecuario"}
+
+
+def test_declarar_una_hoja_que_no_produce_nada_FALLA_ruidosamente(db, monkeypatch):
+    """Escribir cero en silencio se lee, meses después, como que la fuente dejó de traer
+    datos. Un nombre de hoja mal escrito —o un libro de UNA hoja, donde el código no lleva
+    segmento de hoja— tiene que quedar registrado como fallo del archivo."""
+    monkeypatch.setattr("shared.data.bcrd_excel.engine.ingest_excel", _fake_multihoja)
+    monkeypatch.setattr("shared.data.bcrd_excel.catalog.find_entry",
+                        lambda fn: SimpleNamespace(url=f"http://x/{fn}", filename=fn, sector="s"))
+    out = service.ingest_canonical(db, persist=True,
+                                   alcance={"pib_origen_2018.xlsx": ["Hoja Que No Existe"]})
+    assert db.query(MacroSeries).count() == 0
+    assert out["failed"] >= 1
+    fallo = db.query(ExcelFileReport).filter_by(status="failed").first()
+    assert fallo is not None and "alcance" in (fallo.error or "").lower()
+
+
+def test_las_hojas_habilitadas_del_pib_sectorial_son_las_limpias():
+    """Las dos ACUMULADAS quedan afuera hasta que su parseo se arregle."""
+    hojas = canonical.PERSISTIBLES_VERIFICADOS["pib_origen_2018.xlsx"]
+    assert hojas == ["PIB$_Trim", "PIBK_Trim"]
+    assert not any("Acum" in h for h in hojas)

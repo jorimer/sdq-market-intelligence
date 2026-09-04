@@ -554,31 +554,65 @@ def _discrepancias_de_cadencia(entradas, records) -> List[str]:
     return out
 
 
+def _registros_de_las_hojas(archivo: str, hojas: List[str], records) -> List[Any]:
+    """Los registros que salieron de *hojas*, por el prefijo que el motor le pone al código.
+
+    Un libro multi-hoja produce ``bcrd.xls.<archivo>.<hoja>.<métrica>``; el segmento de hoja
+    lo arma el motor con su propio ``_slug``, así que acá se usa ESE, no una transformación
+    escrita a mano — reconstruir un identificador derivado a ojo es cómo se llega a un filtro
+    que no encuentra nada y se lee como que la hoja venía vacía.
+
+    **El punto final del prefijo no es cosmético:** `pib_trim` es prefijo de `pib_trim_acum`,
+    y sin él habilitar la hoja limpia arrastraría la rota, que es justo lo que este alcance
+    existe para impedir.
+
+    Lanza si las hojas declaradas no producen nada: puede ser un nombre mal escrito o un libro
+    de UNA sola hoja —ahí el motor no pone segmento de hoja y el prefijo no matchea nunca—, y
+    escribir cero en silencio se lee, meses después, como que la fuente dejó de traer datos.
+    """
+    from shared.data.bcrd_excel.extract import _slug, default_prefix
+
+    base = default_prefix(archivo)
+    prefijos = tuple(f"{base}.{_slug(h)}." for h in hojas)
+    elegidos = [x for x in records if str(x.series).startswith(prefijos)]
+    if not elegidos:
+        raise ValueError(
+            f"El alcance de {archivo} declara la(s) hoja(s) {hojas} y ninguna serie extraída "
+            f"empieza con {list(prefijos)}. O el nombre de la hoja no es ése, o el libro tiene "
+            f"una sola hoja (ahí el código no lleva segmento de hoja y el alcance por hoja no "
+            f"aplica)."
+        )
+    return elegidos
+
+
 def ingest_canonical(db: Session, *, persist: bool = False,
-                     solo_archivos: Optional[List[str]] = None) -> Dict[str, Any]:
+                     alcance: Optional[Dict[str, Optional[List[str]]]] = None) -> Dict[str, Any]:
     """Run the engine over ONLY the canonical source files (not the whole catalog).
 
     Dedupes shared source files (e.g. reserves brutas/netas come from one file).
     Upserts a per-file report; with *persist*, upserts the extracted series too.
 
-    *solo_archivos* acota QUÉ SE ESCRIBE, no qué se lee: se recorren y se reportan los 26
-    archivos igual —el reporte de cobertura es el instrumento con el que se decide qué
-    habilitar después, y perderlo sería quedarse ciego justo donde falta mirar— pero solo se
-    persisten los que estén en la lista. `None` = todos, el comportamiento histórico.
-    Ver `canonical.PERSISTIBLES_VERIFICADOS` para qué archivos están habilitados y por qué
-    cada uno de los otros no.
+    *alcance* acota QUÉ SE ESCRIBE, no qué se lee: se recorren y se reportan los 26 archivos
+    igual —el reporte de cobertura es el instrumento con el que se decide qué habilitar
+    después, y perderlo sería quedarse ciego justo donde falta mirar— pero solo se persiste lo
+    que esté en el mapa. `None` = todo, el comportamiento histórico.
+
+    Es un mapa ``{archivo: None | [hojas]}``: `None` habilita el archivo entero y una lista
+    habilita SOLO esas hojas, para los libros en que unas extraen bien y otras no. Ver
+    `canonical.PERSISTIBLES_VERIFICADOS`, que además declara por qué está afuera cada uno.
     """
     from shared.data.bcrd_excel import canonical
     from shared.data.bcrd_excel.catalog import find_entry
     from shared.data.bcrd_excel.engine import SpecCache, ingest_excel
 
-    alcance = set(solo_archivos) if solo_archivos else None
+    habilitados = dict(alcance) if alcance else None
     cache = SpecCache()
     seen: set = set()
     ok = flagged = failed = 0
     persistidos_total = 0
     omitidos: List[str] = []
     discrepancias: List[str] = []
+    por_hoja: List[str] = []
     # Un archivo puede declarar VARIAS series canónicas (el IPC general y la inflación
     # interanual salen del mismo). La cadencia se verifica contra cada declaración, no
     # contra la primera que aparezca.
@@ -593,13 +627,19 @@ def ingest_canonical(db: Session, *, persist: bool = False,
         if entry is None:
             failed += 1
             continue
-        escribir = persist and (alcance is None or s.source_file in alcance)
+        escribir = persist and (habilitados is None or s.source_file in habilitados)
+        hojas = habilitados.get(s.source_file) if (habilitados and escribir) else None
         if persist and not escribir:
             omitidos.append(s.source_file)
         try:
             r = ingest_excel(entry, cache=cache, use_claude=True)
             status = "ok" if r.report.ok else "flagged"
-            persisted = _upsert_records(db, r.records) if escribir else 0
+            escribibles = (_registros_de_las_hojas(s.source_file, hojas, r.records)
+                           if hojas else r.records)
+            persisted = _upsert_records(db, escribibles) if escribir else 0
+            if hojas:
+                por_hoja.append(f"{s.source_file}: {len(hojas)} hoja(s), "
+                                f"{len(escribibles)} de {len(r.records)} registros")
             # La cadencia que el registro DECLARA contra la que dicen los períodos. No se
             # usa para elegir el valor —eso lo resuelve la etiqueta del período, que es
             # dato— sino para detectar un eje temporal mal leído: una serie declarada
@@ -649,9 +689,13 @@ def ingest_canonical(db: Session, *, persist: bool = False,
         logger.warning("[macro] ingesta canónica: %d serie(s) con la cadencia DECLARADA en "
                        "contra de sus períodos — el eje temporal se leyó mal: %s",
                        len(discrepancias), "; ".join(discrepancias[:8]))
+    if por_hoja:
+        logger.info("[macro] ingesta canónica: alcance por HOJA en %d archivo(s): %s",
+                    len(por_hoja), "; ".join(por_hoja))
     return {"files": len(seen), "ok": ok, "flagged": flagged, "failed": failed,
             "persisted": persistidos_total,
-            "persist_scope": sorted(alcance) if alcance else "todos",
+            "persist_scope": (dict(sorted(habilitados.items())) if habilitados else "todos"),
+            "sheet_scope": por_hoja,
             "skipped_by_scope": sorted(omitidos),
             "cadence_mismatches": discrepancias}
 

@@ -516,3 +516,60 @@ alcance de escritura se pueda declarar por HOJA y no solo por archivo.
 | S2 · ninguna entrada con puente sin resolver | **34 con puente, 0 sin resolver.** Más dos guards: lo habilitado debe ser `green`, y el registro no puede apuntar a un archivo congelado |
 | S3 · la ingesta encendida no se mueve | 6.390 filas, **0 valores y 0 cadencias cambiados**, 0 discrepancias; `omitidos` 22 → 23 |
 | S4 · los tres gates | `ruff` verde · `mypy` **exit 0**, sin sumar baseline · `pytest` verde |
+
+---
+
+# ANEXO IV — Alcance de escritura POR HOJA (2026-09-03)
+
+> Sale del hallazgo de T-PS-2: un libro con hojas buenas y hojas rotas quedaba entero afuera
+> porque la ingesta es por archivo.
+
+## D.1 Diseño
+
+- **Una sola estructura.** `PERSISTIBLES_VERIFICADOS` pasa de lista a
+  `{archivo: None | [hojas]}`: `None` habilita el archivo entero, una lista habilita solo esas
+  hojas. Dos estructuras paralelas —archivos por un lado, hojas por otro— se desincronizan.
+- **El filtro es por prefijo de código**, `bcrd.xls.<archivo>.<slug_de_hoja>.`, armado con el
+  `_slug` y el `default_prefix` del propio motor. Reconstruir a mano un identificador derivado
+  es cómo se llega a un filtro que no encuentra nada y se lee como que la hoja venía vacía.
+- **⚠️ El punto final del prefijo no es cosmético.** `pib_trim` es prefijo de `pib_trim_acum`:
+  sin él, habilitar la hoja limpia arrastra la rota — exactamente lo que este alcance existe
+  para impedir. Demostrado: el filtro sin punto devuelve `['pib_trim', 'pib_trim_acum']`.
+- **Declarar hojas que no producen nada FALLA ruidosamente.** Un nombre mal escrito, o un libro
+  de una sola hoja (donde el motor no pone segmento de hoja), quedan como `failed` con el
+  motivo en el reporte. Escribir cero en silencio se lee, meses después, como que la fuente
+  dejó de traer datos.
+
+## D.2 Resultado
+
+| | |
+|---|---:|
+| `mm_series` | **6.390 → 11.574** filas |
+| series nuevas | **162** (65 de `PIB$_Trim` + 97 de `PIBK_Trim`) |
+| rango | 2018-Q1 → 2025-Q4, **una sola cadencia**: `quarterly` |
+| observaciones de las dos hojas ACUMULADAS | **0** |
+| series con coordenada (`_cN`/`_rN`) persistidas | **0** |
+| idempotencia (2ª corrida) | 0 valores, 0 cadencias, 0 claves de diferencia |
+| discrepancias de cadencia | 0 |
+
+Las 162 series quedan repartidas en cuatro bloques **nombrados**: nivel (67), ponderación
+(32), incidencia (32) y tasas de crecimiento (31). El guard vetó `salud_r69` —la única fila
+que el modelo no llegó a nombrar—, que es el comportamiento correcto: se declara la ausencia
+en vez de publicar una serie que no dice qué mide.
+
+## D.3 El guard de robustez, ahora por hoja
+
+`robustness` sigue describiendo el ARCHIVO. La regla pasa a: un archivo habilitado **entero**
+debe ser `green`; uno habilitado **por hojas** puede ser `yellow` —eso es justamente lo que
+`yellow` significa: parte del libro no extrae limpio— siempre que nombre cuáles. Una lista
+vacía se rechaza: sería habilitar nada pareciendo que se habilitó algo.
+
+## D.4 Qué queda
+
+- **Las dos hojas acumuladas** (`PIB$_Trim_Acum`, `PIBK_Trim_Acum`) siguen fuera: mezclan
+  períodos anuales y trimestrales en la misma serie, con 1.660 duplicados de valores
+  distintos. Entran cuando su parseo se arregle.
+- **Los 4 archivos con «último gana»** (`TASA_DOLAR_REFERENCIA_MC`, `lleg_total`, `piianual_6`,
+  `piianual`), empezando por la decisión de diseño de `tipo_cambio`: una serie **diaria** no
+  entra en una identidad `(series_code, period)` mensual.
+- **Producción**: repetir el diff antes de desplegar, y desatascar alembic en dev.

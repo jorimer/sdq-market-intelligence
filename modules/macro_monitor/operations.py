@@ -200,7 +200,7 @@ def _run_canonical_ingest(params, user_id, set_phase) -> Dict:
         # orden de lectura y sin dejar marca. El reporte de cobertura se conserva completo
         # porque es con lo que se decide qué habilitar después.
         result = ingest_canonical(db, persist=True,
-                                  solo_archivos=PERSISTIBLES_VERIFICADOS)
+                                  alcance=PERSISTIBLES_VERIFICADOS)
         set_phase("reconstruyendo snapshot (momentum + señales)")
         snap = build_snapshot(db)
         result["snapshot"] = {"period": snap.get("period"),
