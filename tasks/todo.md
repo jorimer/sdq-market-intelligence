@@ -925,3 +925,57 @@ API, al lado de la real y nunca sumada.
 
 **BLOQUE PP cerrado.** Lo que sigue es MP, el motor, que tiene como precondición dura este
 bloque y el de persistencia — los dos ya están.
+
+---
+
+## 🔵 PROPUESTO — BLOQUE MP · Motor de proyección macro
+> Spec: `docs/SPEC_MOTOR_PROYECCION_MACRO.md` (traído al repo hoy; vivía sin commitear en el
+> checkout principal, como los otros dos). Precondición dura: PS y PP completos — **los dos
+> están**.
+
+### T-MP-0 · Los tres gates de viabilidad — CORRIDO, los tres pasan
+
+| gate | medido | veredicto |
+|---|---|---|
+| `imae_indice` persistido | 235 obs mensuales, 2007-01 → 2026-07, 0 nulas | **PASA** |
+| `pib_real` ≥ 60 trimestres | **77**, 2007-Q1 → 2026-Q1, **0 huecos** | **PASA** — el BVAR procede |
+| `pib_sectores_origen` ≥ 12 de 17 | **24 de 24** actividades, 0 huecos | **PASA** |
+
+Y el cuarto punto ya estaba verificado: `comunicado_tpm` no existe, así que **T-MP-3 no puede
+apoyarse en la regla de reacción** todavía.
+
+**Sin dependencias nuevas.** El spec ya resolvió que `statsmodels` no aporta nada acá —no
+ofrece BVAR con prior Minnesota— y que el prior se implementa con observaciones artificiales
+sobre OLS, ~40 líneas auditables, verificables contra dos casos conocidos: con tightness → 0
+converge al random walk, con tightness → ∞ al OLS sin restringir.
+
+### ⚠️ Lo que la medición cambia respecto del spec
+El cuadro por actividad arranca en **2018-Q1**: son **33 trimestres**, no ~76. El spec de
+persistencia estimaba 2007→2026 en §4.1, y esa estimación era `[Guessing]`. Con `MIN_OOS = 12`
+un backtest sectorial consume más de un tercio de la muestra.
+
+La sección sectorial pasa el gate del plan, pero **lo que puede afirmar es más chico de lo que
+el spec suponía**. Eso es una decisión de alcance y la dejo para el dueño, no la tomo yo:
+publicar el sectorial con esa profundidad, o dejarlo fuera de la v1 y publicar solo nowcast y
+horizonte, que sí tienen 77 y 235 observaciones detrás.
+
+### Pasos propuestos, en el orden del spec
+- [ ] **T-MP-1 · El ledger PRIMERO.** No se negocia (§1). `mm_forecast_log` con clave única de
+      CINCO campos incluido `revision`; `status` solo `pending|scored` y el linaje en
+      `superseded_by` aparte —poner `"superseded"` como status saca la revisión 0 del cómputo
+      y borra el pronóstico original del historial, que es lo contrario de lo que `revision`
+      viene a impedir—; puntuación AUTOMÁTICA, porque un proceso que depende de que alguien se
+      acuerde deja de correr el trimestre en que el resultado es malo.
+- [ ] **T-MP-2 · Nowcast** (bridge IMAE→PIB). El criterio de cierre del paquete pide que
+      **le gane a un random walk fuera de muestra**; si no le gana, no se publica.
+- [ ] **T-MP-3 · BVAR** con prior Minnesota por observaciones artificiales. Sin apoyo en la
+      regla de reacción de TPM (no hay panel).
+- [ ] **T-MP-4 · Sectorial** — sujeto a la decisión de alcance de arriba.
+- [ ] **T-MP-5 · Procedencia**: cablear `ProjectionMeta` del motor al registro. Es lo que
+      enciende el trabajo del BLOQUE PP: hasta que esto exista, ninguna señal llega proyectada.
+- [ ] **T-MP-6 · Producto y calendario.**
+
+### Cómo lo partiría
+El ledger va solo en un PR (es esquema + migración + puntuación). Nowcast en otro, con su
+backtest contra random walk como sensor. BVAR en un tercero, con los dos casos límite del
+prior. Sectorial y cableado al final.
