@@ -60,11 +60,25 @@ _SECTION_TITLES = {
 
 #: Por qué el eje no puede entregar todavía. Se declara en una constante y no en un `if`
 #: suelto para que el motivo viaje a readiness, al registro y al informe con el mismo texto.
-SIN_MOTOR = (
-    "El motor de valuación todavía no existe: faltan el costo de capital y el modelo de "
-    "Excess Return. El eje está dado de alta para que su procedencia, su doctrina y su "
-    "contrato queden fijados antes de que haya cifras — no para entregar."
+#:
+#: CORREGIDO. Antes decía que el motor no existía, y eso dejó de ser cierto cuando se
+#: construyeron el costo de capital y el Excess Return — pero el texto quedó, y readiness
+#: siguió publicando «sin motor» durante todo ese tiempo. El costo de decir mal lo que falta
+#: es concreto: «sin motor» se lee como código faltante y manda a escribir código, cuando lo
+#: que falta es el DATO, y el dato está bloqueado por otra cosa.
+FALTA_LA_CURVA = (
+    "El motor de valuación EXISTE —costo de capital y Excess Return, con sus tests— y lo que "
+    "falta es su insumo: la tasa libre de riesgo larga en pesos. Sale del cuadro V.1 del "
+    "BCRD, «Valores subastados en moneda nacional», y ese archivo NO está habilitado para "
+    "escritura: sus 15 columnas producen 12 series porque los dos plazos largos no reciben "
+    "el super-encabezado que distingue TASA de MONTO, y 132 pares (serie, mes) quedan con dos "
+    "columnas detrás. Habilitarlo así publicaría una curva soberana con montos adentro.\n\n"
+    "O sea que no falta código: falta separar los dos bloques en el spec de extracción. Lo "
+    "vigila `shared/data/bcrd_excel/tests/test_ninguna_serie_apunta_al_vacio.py`, que exige "
+    "que ninguna serie nombrada en producción venga de un archivo apagado."
 )
+#: Nombre viejo, conservado porque el texto viaja a readiness y al registro por esta clave.
+SIN_MOTOR = FALTA_LA_CURVA
 
 
 def valuation_manifest() -> SectorProductManifest:
@@ -122,15 +136,26 @@ class ValuationProduct:
     # ── Readiness ──
 
     def data_signals(self) -> DataHealth:
-        """Los insumos EXISTEN —patrimonio y utilidad reconciliados en T-VL-1—; lo que falta
-        es el motor. Se reporta la cobertura del insumo, no la del producto: mezclarlas
-        haría parecer que falta dato cuando lo que falta es código."""
+        """Los insumos del BALANCE existen —patrimonio y utilidad reconciliados en T-VL-1—;
+        lo que falta es la curva en pesos que alimenta `Ke`.
+
+        La cobertura no se escribe a mano: se COMPUTA como la fracción de insumos presentes,
+        y hoy son dos de tres. Un 0,0 escrito a mano decía «no hay nada» cuando el balance
+        por entidad estaba completo, y eso manda a arreglar lo que no está roto."""
+        insumos = {
+            "patrimonio por entidad (SIB)": True,
+            "utilidad por entidad (SIB)": True,
+            # El único que falta, y por eso la cobertura no es 1,0.
+            "curva soberana en pesos (BCRD, cuadro V.1)": self.has_engine(),
+        }
+        presentes = sum(1 for ok in insumos.values() if ok)
         return DataHealth(
-            coverage=0.0, freshness_days=None, cadence="quarterly",
+            coverage=presentes / len(insumos), freshness_days=None, cadence="quarterly",
             sources=("SIB · estados de situación y resultados por entidad",
                      "SIMBAD · Superset público de la Superintendencia",
-                     "BCRD · insumos del costo de capital"),
-            detail=SIN_MOTOR)
+                     "BCRD · cuadro V.1, valores subastados en moneda nacional"),
+            detail=FALTA_LA_CURVA if not insumos[
+                "curva soberana en pesos (BCRD, cuadro V.1)"] else "")
 
     def has_engine(self) -> bool:
         """Ahora SÍ hay motor. Lo que decide es si hay con qué correrlo: la curva en pesos
@@ -147,7 +172,16 @@ class ValuationProduct:
             return False
 
     def validation_state(self) -> ValidationState:
-        return ValidationState(approved=False, score=0.0, notes=SIN_MOTOR)
+        """No aprobada, y el motivo NO es el mismo que el de los datos.
+
+        Son dos cosas distintas y decirlas con el mismo texto las confundía: el dato que
+        falta es la curva en pesos; la validación falta porque el panel de transacciones
+        —que llegó a ocho comparables— abre la vista de M&A y **no** contrasta el modelo.
+        Ese motivo lo computa el propio panel.
+        """
+        from modules.valuation.panel.transacciones import contraste_del_modelo
+        return ValidationState(approved=False, score=0.0,
+                               notes=contraste_del_modelo().motivo)
 
     def available_periods(self) -> List[str]:
         return []
