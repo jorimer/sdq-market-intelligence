@@ -731,8 +731,43 @@ para dar.
 
 ## T-VL-3 · Costo de capital — `engine/cost_of_capital.py` (NUEVO)
 
+> ## DECISIÓN DEL DUEÑO (2026-09-04): **se valúa en PESOS DOMINICANOS**
+>
+> Cierra el gate que el paso 5 marcaba como bloqueante. Y trae una consecuencia que **no es
+> una preferencia sino aritmética**, así que se declara acá y se implementa así:
+>
+> ### El CRP NO se suma sobre una Rf en pesos
+>
+> La fórmula escrita abajo —`Rf + β×ERP + CRP`— es la construcción en **USD**: Tesoro
+> americano + prima de mercado + prima de riesgo país. Una tasa libre de riesgo **en pesos
+> dominicanos ya lleva adentro** el riesgo país y la inflación esperada del peso; sumarle el
+> CRP encima lo cuenta **dos veces**, infla `Ke` en unos 200-400 pb y **subvalúa
+> sistemáticamente a todas las entidades**.
+>
+> Con la moneda fijada en RD$, la construcción consistente es:
+>
+> **`Ke(RD$) = Rf(RD$) + β × ERP`** — tres términos, no cuatro, y el motivo escrito.
+>
+> ### Lo que la medición destapó: NO tenemos una Rf larga en pesos
+>
+> | candidato en el corpus | valor | problema |
+> |---|---:|---|
+> | TPM (política monetaria) | **5,25 %** | es overnight — una valuación descuenta a diez años |
+> | Facilidad de depósito | 4,50 % | idem, y es el piso del corredor |
+> | Lombarda | 7,00 % | congelada desde 2013-01 |
+> | *inflación interanual, de referencia* | *5,47 %* | *la TPM está POR DEBAJO de la inflación* |
+>
+> Que la TPM esté debajo de la inflación vigente lo dice todo: usarla como libre de riesgo a
+> diez años daría una tasa real **negativa**, y con eso el modelo diría que casi cualquier
+> entidad crea valor.
+>
+> **Tampoco tenemos** el bono soberano dominicano en RD$ a 10 años, ni el Tesoro americano,
+> ni EMBI. O sea que ninguna de las dos construcciones tiene hoy su insumo principal
+> ingerido. **Es el bloqueante real de T-VL-3**, y no estaba en el plan.
+
 ### Pasos atómicos
-- [ ] **1.** `Ke = Rf + β × ERP + CRP`, con descomposición auditable de los cuatro términos.
+- [ ] **0. NUEVO — bloqueante.** Conseguir una tasa libre de riesgo **larga en pesos**: el bono soberano dominicano en RD$ (Ministerio de Hacienda / Crédito Público publica sus subastas) o, si no se puede ingerir, declararlo y usar un proxy con su error declarado. Sin esto el motor no tiene su primer término.
+- [ ] **1.** `Ke = Rf + β × ERP` **en RD$, sin CRP** (ver la decisión arriba), con descomposición auditable de los TRES términos.
 - [ ] **2.** **La beta NO se desapalanca.** Hamada supone que la deuda es financiamiento y que hay un apalancamiento óptimo separable de la operación; en un banco los depósitos son **materia prima** y esa premisa es falsa — contradiría el argumento de §2 del propio spec. Beta de equity de comparables LATAM, directa.
 - [ ] **3.** `β` y `ERP` viajan como `RUBRIC`, no como dato real.
 - [ ] **4.** `Ke` se reporta como **rango**, nunca como punto. Tabla de sensibilidad en pasos de 50 pb.
