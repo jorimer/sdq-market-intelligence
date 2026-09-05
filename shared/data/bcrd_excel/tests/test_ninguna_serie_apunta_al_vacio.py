@@ -37,32 +37,38 @@ _ARBOLES = ("modules", "shared", "app")
 #: Excepciones DECLARADAS: series nombradas en producción cuyo archivo no está habilitado, con
 #: el motivo y qué haría falta. Vacío es el estado sano. Una excepción sin motivo no entra.
 #:
-#: MEDIDO el 2026-09-05 sobre el archivo vigente, y por eso no se habilita:
+#: MEDIDO el 2026-09-05 sobre el archivo vigente (una sola hoja, «V.1Tasa intBC»), y por eso
+#: no se habilita. Dos defectos, ninguno de los cuales toca la serie de la curva:
 #:
-#: El cuadro V.1 tiene **15 columnas de datos** (tasa de política monetaria, tasa un día
-#: crédito y depósito, seis plazos de TASA y seis de MONTO) y el extractor produce **12
-#: series**: tres columnas colisionan en un código que ya existe. Se ve en el conteo —132
-#: pares (serie, período) traen DOS registros— y en el desacuerdo: 99 de esos 132 tienen
-#: valores distintos, casi siempre `None` contra `0.0`.
+#: 1. **Tres columnas se pierden en silencio.** El cuadro V.1 tiene 15 columnas de datos y el
+#:    spec produce 12 series: se caen las de MONTO de «1 a 30 días», «1 a 2 años» y «más de
+#:    dos años» (cols 11, 15 y 16). Es OMISIÓN, no colisión — cada serie del spec tiene una
+#:    sola `value_col`—, pero perder columnas sin aviso es exactamente lo que la lista de
+#:    verificados existe para no dejar pasar.
 #:
-#: La colisión es del super-encabezado: «Tasa de interés» y «Montos» abarcan seis columnas
-#: cada uno, y a los dos plazos largos no los alcanza — quedan como `de_1_a_2_anos` y
-#: `mas_de_dos_anos` sin decir de cuál de los dos bloques vienen. O sea que **la serie que el
-#: costo de capital usa como tasa libre de riesgo tendría, en 132 meses, dos columnas
-#: detrás**: una tasa y un monto en miles de millones.
+#: 2. **132 pares (serie, período) traen dos registros y 99 están en desacuerdo**, casi
+#:    siempre `None` contra `0.0`. Para la serie de la curva son exactamente los once meses
+#:    de enero a noviembre de 2004, donde las dos copias vienen vacías o en cero. La causa
+#:    todavía NO está identificada: el libro tiene una sola hoja y el motor hace una sola
+#:    pasada, así que sale de adentro de `extract_records`. Queda nombrado en vez de
+#:    supuesto.
 #:
-#: Qué haría falta para levantarla: que el spec de extracción distinga los dos bloques —por
-#: rango de columnas o por un `code_prefix` explícito— y que el archivo dé 0 duplicados con
-#: valores en conflicto, que es el criterio con el que entraron los otros 33.
-#: La clave es el prefijo del ARCHIVO, no de la serie: lo que no está verificado es el libro
-#: entero, y una excepción por serie haría falta repetirla cada vez que alguien nombre otra
-#: columna del mismo cuadro — que es como una lista blanca se vuelve un colador.
+#: **Lo que NO es** —y se corrige acá porque se afirmó mal antes—: la serie
+#: `mas_de_dos_anos` NO mezcla tasas con montos. Su columna es la 10, una sola, y sus valores
+#: van de 0 a 0,1875, o sea tasas en fracción. Lo que le falta es el prefijo «tasa de
+#: interés» en el NOMBRE, porque el super-encabezado no la alcanza — que es un problema de
+#: nombre, no de contenido.
+#:
+#: Qué haría falta para levantarla: que el spec recupere las tres columnas perdidas y que el
+#: archivo dé 0 duplicados con valores en conflicto, que es el criterio con el que entraron
+#: los otros 33.
 EXCEPCIONES: Dict[str, str] = {
     "bcrd.xls.valores_bc_mn": (
-        "El archivo NO está verificado: 15 columnas producen 12 series y 132 pares "
-        "(serie, período) tienen dos columnas detrás, 99 de ellos en desacuerdo. Esta serie "
-        "es una de las colisionadas. Mientras no se separen los bloques de TASA y MONTO en "
-        "el spec, habilitarlo publicaría una curva soberana con montos adentro."),
+        "El archivo NO está verificado: de sus 15 columnas de datos el spec produce 12 "
+        "series —tres de MONTO se pierden en silencio— y 132 pares (serie, período) traen "
+        "dos registros, 99 de ellos en desacuerdo. Habilitarlo así metería un archivo con "
+        "columnas perdidas y duplicados sin resolver. Para levantarla hay que recuperar las "
+        "tres columnas y llegar a 0 duplicados en conflicto."),
 }
 
 
