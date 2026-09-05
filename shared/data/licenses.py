@@ -523,6 +523,24 @@ LICENCIAS: Dict[str, Licencia] = {
               "los archivos y no el API. Pedir la licencia por escrito a "
               "secmca@secmca.org antes de una edición que se distribuya masivamente."),
     ),
+    ("SFC Colombia vía datos.gov.co — CC BY-SA 4.0 (Atribución + CompartirIgual): "
+     "exige citar a la Superintendencia Financiera de Colombia y la fecha de "
+     "actualización del dato."): Licencia(
+        terminos_url="http://creativecommons.org/licenses/by-sa/4.0/legalcode",
+        verificado_el="2026-09-04",
+        atribucion=("Fuente: Superintendencia Financiera de Colombia - SUPERFINANCIERA, "
+                    "Bogotá D.C., vía datos.gov.co."),
+        nota=("`sfc_client`. La licencia no se dedujo: la declara la propia API de Socrata "
+              "por dataset — `GET datos.gov.co/api/views/x586-r5d2.json` devuelve "
+              "`licenseId: CC_40_BY_SA` con su `termsLink`, y el texto de `attribution` "
+              "es el que viaja al campo de arriba, palabra por palabra del emisor. Igual "
+              "en `rvii-eis8` (cartera). El «-sa» lo detecta "
+              "`shared.data_api.manifest.license_restricts_redistribution` y es CORRECTO "
+              "que lo detecte: el share-alike retiene el activo VERBATIM. No alcanza a lo "
+              "que publica el boletín, que son agregados del sistema calculados por "
+              "nosotros sobre el dato por entidad — obra propia, no reventa del dato del "
+              "emisor. Se cita fuente Y fecha de actualización, como la licencia exige."),
+    ),
     "open-data": Licencia(
         terminos_url=None, verificado_el=None,
         nota=("Dos palabras sin emisor ni cláusula, en el conector de IED del BCRD. La "

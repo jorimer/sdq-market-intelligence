@@ -1,0 +1,67 @@
+{
+ "_meta": {
+  "note": "Agregados REALES del sistema bancario colombiano calculados sobre el dato por entidad de la SFC (datos.gov.co), capturados el 2026-09-04. Cuatro cortes trimestrales. La solvencia es Σ patrimonio técnico / Σ APNR, NO el promedio de las relaciones por entidad — que da 0,83 puntos menos.",
+  "source": "Superintendencia Financiera de Colombia, vía datos.gov.co",
+  "captured_at": "2026-09-04"
+ },
+ "2025-09-30T00:00:00.000": {
+  "solvencia": {
+   "solvencia_total_sistema_pct": 19.3866,
+   "patrimonio_tecnico_sistema": 109621708751127.14,
+   "activos_ponderados_riesgo_sistema": 565449664943710.4,
+   "entidades": 30
+  },
+  "cartera": {
+   "cartera_bruta_sistema": 708491688209500.4,
+   "cartera_vencida_sistema": 32277999253299.5,
+   "morosidad_sistema_pct": 4.5559,
+   "unidades_de_captura": 32,
+   "avisos": []
+  }
+ },
+ "2025-12-31T00:00:00.000": {
+  "solvencia": {
+   "solvencia_total_sistema_pct": 19.1289,
+   "patrimonio_tecnico_sistema": 110516164844217.17,
+   "activos_ponderados_riesgo_sistema": 577743388782103.9,
+   "entidades": 30
+  },
+  "cartera": {
+   "cartera_bruta_sistema": 729160784870633.5,
+   "cartera_vencida_sistema": 31090635600494.5,
+   "morosidad_sistema_pct": 4.2639,
+   "unidades_de_captura": 32,
+   "avisos": []
+  }
+ },
+ "2026-03-31T00:00:00.000": {
+  "solvencia": {
+   "solvencia_total_sistema_pct": 18.2553,
+   "patrimonio_tecnico_sistema": 106532532942868.55,
+   "activos_ponderados_riesgo_sistema": 583571677265867.6,
+   "entidades": 30
+  },
+  "cartera": {
+   "cartera_bruta_sistema": 746583778169680.9,
+   "cartera_vencida_sistema": 31516655525822.0,
+   "morosidad_sistema_pct": 4.2214,
+   "unidades_de_captura": 32,
+   "avisos": []
+  }
+ },
+ "2026-06-30T00:00:00.000": {
+  "solvencia": {
+   "solvencia_total_sistema_pct": 18.2564,
+   "patrimonio_tecnico_sistema": 108664180568474.98,
+   "activos_ponderados_riesgo_sistema": 595211023362259.5,
+   "entidades": 30
+  },
+  "cartera": {
+   "cartera_bruta_sistema": 757781509567550.8,
+   "cartera_vencida_sistema": 32487870843165.375,
+   "morosidad_sistema_pct": 4.2872,
+   "unidades_de_captura": 32,
+   "avisos": []
+  }
+ }
+}
