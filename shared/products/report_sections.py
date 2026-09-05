@@ -16,6 +16,11 @@ from datetime import timedelta
 from typing import Dict, Optional
 
 from shared.products.tiers import ProductTier
+from shared.registry.signals import (
+    COVERAGE_INDEX,
+    COVERAGE_INSTRUMENT,
+    COVERAGE_PROJECTION,
+)
 
 # Claves y títulos canónicos de las secciones estándar (se mergean en el render).
 METHODOLOGY_KEY = "std_methodology"
@@ -137,6 +142,34 @@ def _frescura_md(sig, as_of: Optional[str], hoy=None) -> str:
             f"({posterior} días después), que este informe no incorpora: el corte manda.")
 
 
+#: `coverage_kind` → la frase de COBERTURA de la sección de Metodología.
+#:
+#: Es la *afirmación de método*: dice de qué está hecho el producto y no enumera lo que falta.
+#: La frase de índice terminaba en «lo no cubierto se declara como rúbrica o brecha — nunca se
+#: fabrica», que es cierta y le anunciaba al comprador que tenemos huecos; un lector de un
+#: documento de calificación lee la primera mitad como rigor y la segunda como producto
+#: incompleto. Decisión del dueño (2026-08-31). Lo que se afirma sigue siendo verificable y
+#: sigue siendo lo mismo hacia adentro.
+#:
+#: Por qué es un MAPA y no un literal cableado: la frase de índice salía para TODOS los ejes.
+#: `provenance.coverage_sentence()` ya había aprendido a rutear por `coverage_kind` —porque
+#: decir «del peso de este índice» en el eje de evaluación de leyes es sencillamente falso— y
+#: esta superficie se quedó atrás, así que el eje de leyes siguió publicando en su metodología
+#: la frase exacta que el repositorio ya había declarado falsa para él. Un `coverage_kind` sin
+#: entrada acá no hereda: lo caza el test.
+FRASE_COBERTURA_METODOLOGIA = {
+    COVERAGE_INDEX: (
+        "{pct} del índice se construye sobre dato real medido en la fuente."),
+    COVERAGE_INSTRUMENT: (
+        "{pct} de los indicadores que el propio instrumento se fijó tienen hoy una fuente "
+        "verificada que los mide."),
+    COVERAGE_PROJECTION: (
+        "{pct} de lo que este eje publica está sostenido por un pronóstico admisible o por "
+        "una cifra determinada por identidad. Acá el índice ES la proyección: lo que se "
+        "mide es la admisibilidad del pronóstico, no peso anclado a dato medido."),
+}
+
+
 def _methodology_md(sig, val, as_of: Optional[str] = None) -> str:
     """Markdown de Metodología desde ``DataHealth`` (sig) + ``ValidationState`` (val).
 
@@ -160,14 +193,9 @@ def _methodology_md(sig, val, as_of: Optional[str] = None) -> str:
     lines.append(f"**Fuentes de dato:** {sources or '—'}.")
     lines.append(_frescura_md(sig, as_of))
     if sig and sig.coverage is not None:
-        # AFIRMACIÓN DE MÉTODO, no inventario de faltantes. La frase anterior terminaba en
-        # «lo no cubierto se declara como rúbrica o brecha — nunca se fabrica», que es cierta
-        # y le anunciaba al comprador que tenemos huecos. Un lector de un documento de
-        # calificación lee la primera mitad como rigor y la segunda como producto incompleto.
-        # Decisión del dueño (2026-08-31). Lo que se afirma sigue siendo verificable y sigue
-        # siendo lo mismo hacia adentro: solo dato real entra al índice.
-        lines.append(f"**Cobertura:** {_pct(sig.coverage)} del índice se construye sobre dato "
-                     "real medido en la fuente.")
+        kind = getattr(sig, "coverage_kind", "") or COVERAGE_INDEX
+        lines.append("**Cobertura:** " + FRASE_COBERTURA_METODOLOGIA.get(
+            kind, FRASE_COBERTURA_METODOLOGIA[COVERAGE_INDEX]).format(pct=_pct(sig.coverage)))
     detail = getattr(sig, "detail", None) if sig else None
     if detail and not _periodo_posterior(detail, as_of or ""):
         lines.append(f"**Lectura del dato:** {detail}")

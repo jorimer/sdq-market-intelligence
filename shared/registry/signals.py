@@ -51,7 +51,14 @@ NATIONAL = "national"         # dato real de alcance país → igual para todos 
 # NO se ocultan (eso los haría desaparecer sin aviso) — van aparte y marcados.
 COVERAGE_INDEX = "fraccion_real_del_indice"
 COVERAGE_INSTRUMENT = "indicadores_medidos_del_instrumento"
-COVERAGE_KINDS = (COVERAGE_INDEX, COVERAGE_INSTRUMENT)
+#: El eje PROSPECTIVO responde una tercera pregunta, y tampoco es más ni menos honesta
+#: que las otras dos: «¿qué fracción de lo que publico está sostenida por un pronóstico
+#: ADMISIBLE o por una cifra determinada?». Su índice no está hecho de dato medido —ES
+#: la proyección—, así que la frase de índice le hace decir algo falso: el informe del
+#: 2026-09-05 publicó «100% del índice se construye sobre dato real medido en la fuente»
+#: cuatro líneas antes de declarar, computado, que el 0% se sostiene en dato real.
+COVERAGE_PROJECTION = "fraccion_proyectada_admisible"
+COVERAGE_KINDS = (COVERAGE_INDEX, COVERAGE_INSTRUMENT, COVERAGE_PROJECTION)
 
 _STATE_ALIASES = {
     "live": REAL, "real": REAL,
@@ -199,6 +206,20 @@ class AxisRegistry:
             return round(got / wsum, 4)
         # sin pesos: promedio simple del crédito real por variable
         return round(sum(_real_credit(s) for s in self.signals) / len(self.signals), 4)
+
+    @property
+    def coverage_anclada(self) -> float:
+        """Real + proyectada: la fracción anclada de CUALQUIER manera. Solo tiene sentido
+        para un eje de semántica `COVERAGE_PROJECTION`.
+
+        Para un índice, sumarlas estaría mal y por eso `coverage_projected` se documenta como
+        HERMANA y no como sumando: una proyección no puede inflar la métrica con la que la
+        plataforma dice cuánto de un índice está sostenido por dato real. Pero un eje cuyo
+        índice ES la proyección responde otra pregunta —«¿qué fracción de lo que publico está
+        anclada?»— y ahí la suma es la respuesta correcta. Existe con nombre propio, y no
+        como una suma suelta en quien la necesite, para que la distinción quede a la vista.
+        """
+        return round(self.coverage_real + self.coverage_projected, 4)
 
     @property
     def coverage_projected(self) -> float:

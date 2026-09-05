@@ -144,6 +144,9 @@ def test_una_proyeccion_sin_backtest_sale_como_gap_con_su_motivo(monkeypatch):
         revision=0, point=3.0, intervals=((0.80, 2.0, 4.0),), backtest_id="b",
         oos_error=0.5, error_metric="rmse", n_oos=2, n_oos_overlapping=False)
     monkeypatch.setattr(pf, "_seguro", lambda db, fn, defecto: {"pib_real": flaca})
+    # Este test es sobre PROYECCIONES: la cifra determinada se fija en 0 a mano
+    # porque el monkeypatch en bloque de `_seguro` le contestaría a todo lo mismo.
+    monkeypatch.setattr(pf.MacroForecastProduct, "_determinadas", lambda self: 0)
 
     prod = pf.MacroForecastProduct(db=object())
     señales = prod.variable_signals()["signals"]
@@ -166,12 +169,89 @@ def test_la_cobertura_proyectada_de_este_eje_si_dice_algo(monkeypatch):
         oos_error=0.5, error_metric="rmse", n_oos=14, n_oos_overlapping=False,
         interval_coverage=((0.80, 0.79, 14),))
     monkeypatch.setattr(pf, "_seguro", lambda db, fn, defecto: {"pib_real": buena})
+    monkeypatch.setattr(pf.MacroForecastProduct, "_determinadas", lambda self: 0)
 
     señales = pf.MacroForecastProduct(db=object()).variable_signals()["signals"]
     eje = AxisRegistry(sector_key=SECTOR, display_name="x", source="y", implemented=True,
                        signals=tuple(señales))
     assert eje.coverage_projected == pytest.approx(1.0)
     assert eje.coverage_real == 0.0, "una proyección no es dato real, ni en este eje"
+
+
+def _meta(**kw):
+    from shared.registry.signals import ProjectionMeta
+
+    base = dict(model_id="m.v1", target_series="pib_real", horizon="2027-Q1",
+                as_of="2026-09-01", revision=0, point=3.0, intervals=((0.80, 2.0, 4.0),),
+                backtest_id="b", oos_error=0.5, error_metric="rmse", n_oos=14,
+                n_oos_overlapping=False, interval_coverage=((0.80, 0.79, 14),))
+    base.update(kw)
+    return ProjectionMeta(**base)
+
+
+def test_la_COBERTURA_del_eje_no_dice_ser_dato_real_medido(monkeypatch):
+    """`coverage=1.0 if vig else 0.0` contestaba «¿hay alguna proyección vigente?».
+
+    `DataHealth.coverage` declara contestar otra —«¿qué fracción del peso de mi índice está
+    anclada a dato real?»— y la prosa la publicaba así: el informe del 2026-09-05 dijo
+    «100% del índice se construye sobre dato real medido en la fuente» cuatro líneas antes
+    de declarar, computado, que el 0% se sostiene en dato real. Y la proyección que sostenía
+    ese 100% ni siquiera pasaba el gate: la tabla la publica con «¿ancla una afirmación? no».
+    """
+    import app.main  # noqa: F401
+    from modules.macro_monitor import products_forecast as pf
+    from shared.registry.signals import COVERAGE_PROJECTION
+
+    dh = pf.MacroForecastProduct(db=object()).data_signals()
+    assert dh.coverage_kind == COVERAGE_PROJECTION, (
+        "el eje declara la semántica de ÍNDICE y su índice ES la proyección")
+
+
+@pytest.mark.parametrize("n_oos, esperado, porque", [
+    (14, 1.0, "la proyección pasa el gate: sostiene lo que el eje publica"),
+    (2, 0.0, "no pasa el gate y el informe la rotula «¿ancla una afirmación? no»"),
+])
+def test_la_cobertura_MIDE_la_admisibilidad_del_pronostico(monkeypatch, n_oos, esperado,
+                                                           porque):
+    """El número tiene que medir lo que su frase afirma, o la frase vuelve a mentir."""
+    import app.main  # noqa: F401
+    from modules.macro_monitor import products_forecast as pf
+
+    monkeypatch.setattr(pf.MacroForecastProduct, "_vigentes",
+                        lambda self: [_meta(n_oos=n_oos)])
+    monkeypatch.setattr(pf.MacroForecastProduct, "_determinadas", lambda self: 0)
+    monkeypatch.setattr(pf.MacroForecastProduct, "_puntuados", lambda self: [])
+
+    dh = pf.MacroForecastProduct(db=object()).data_signals()
+    assert dh.coverage == pytest.approx(esperado), porque
+
+
+def test_una_cifra_DETERMINADA_sostiene_cobertura_aunque_el_pronostico_no(monkeypatch):
+    """La cifra determinada del nowcast es una identidad sobre dato publicado: eso SÍ ancla.
+
+    Sin contarla, un eje que publica un trimestre cerrado por identidad aritmética
+    declararía cobertura 0, que es tan falso como el 100 que declaraba antes.
+    """
+    import app.main  # noqa: F401
+    from modules.macro_monitor import products_forecast as pf
+
+    monkeypatch.setattr(pf.MacroForecastProduct, "_vigentes", lambda self: [_meta(n_oos=2)])
+    monkeypatch.setattr(pf.MacroForecastProduct, "_determinadas", lambda self: 1)
+    monkeypatch.setattr(pf.MacroForecastProduct, "_puntuados", lambda self: [])
+
+    dh = pf.MacroForecastProduct(db=object()).data_signals()
+    assert dh.coverage == pytest.approx(0.5), (
+        "una de dos cosas publicadas está anclada: la determinada sí, el pronóstico flaco no")
+
+
+def test_sin_nada_que_publicar_la_cobertura_es_CERO(monkeypatch):
+    import app.main  # noqa: F401
+    from modules.macro_monitor import products_forecast as pf
+
+    monkeypatch.setattr(pf.MacroForecastProduct, "_vigentes", lambda self: [])
+    monkeypatch.setattr(pf.MacroForecastProduct, "_determinadas", lambda self: 0)
+    monkeypatch.setattr(pf.MacroForecastProduct, "_puntuados", lambda self: [])
+    assert pf.MacroForecastProduct(db=object()).data_signals().coverage == 0.0
 
 
 # ── la vidriera ─────────────────────────────────────────────────────────────────────
