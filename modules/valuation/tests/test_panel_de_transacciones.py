@@ -1,17 +1,21 @@
-"""El panel de transacciones y su gate — y por qué está casi vacío.
+"""El panel de transacciones y su gate — y por qué sigue corto.
 
 **El relevamiento se hizo y midió algo.** Nueve fusiones y adquisiciones documentadas en la
-banca dominicana desde 1996, y **una sola divulga precio**. En el Caribe, la operación mejor
-documentada —Republic Financial por siete filiales de Scotiabank— publica el precio y la
-PRIMA sobre el valor neto, pero **no el valor neto**.
+banca dominicana desde 1996, y **una sola divulgó precio en su momento**. El panel no está
+corto por falta de trabajo: está corto porque **el mercado divulga el numerador y casi nunca
+el denominador**, y un múltiplo necesita las dos puntas.
 
-O sea que el panel no está corto por falta de trabajo: está corto porque **el mercado divulga
-el numerador y no el denominador**, y un múltiplo necesita las dos puntas.
+**Las que cierran, cierran porque el denominador es NUESTRO.** El patrimonio de un banco
+dominicano está en el histórico de la Superintendencia que esta plataforma ingiere y en
+SIMBAD, su Superset público, así que no depende de que el comprador lo publique. Pasó dos
+veces: el Progreso coincide al peso con los activos que la prensa reporta para el mismo mes,
+y Bellbank coincide con sus estados auditados con **44 pesos** de diferencia sobre 217
+millones.
 
-**La que sí cierra, cierra porque el denominador es NUESTRO.** El patrimonio del Progreso está
-en el histórico de la Superintendencia que esta plataforma ingiere, así que no depende de que
-el comprador lo publique. Y coincide al peso con los activos que el artículo de prensa
-reporta para el mismo mes — dos fuentes independientes sobre el mismo balance.
+**Y la distinción que gobierna el gate ya no se argumenta: se mide.** La NIIF 3 devuelve un
+denominador a VALOR RAZONABLE, no el libro del vendedor. Cuánto se separan las dos bases lo
+publica la tabla del 10-Q de OFG Bancorp, que trae las dos columnas sobre el mismo balance:
+el valor razonable está 15,0 % por encima del libro.
 """
 import pytest
 
@@ -21,7 +25,7 @@ from modules.valuation.panel import transacciones as tx
 def test_el_gate_esta_CERRADO_y_dice_por_que():
     e = tx.estado()
     assert not e.abierto
-    assert e.n_verificables < e.minimo
+    assert e.n_comparables < e.minimo
     assert "no es falta de relevamiento" in e.motivo.lower()
     assert "las dos puntas" in e.motivo
 
@@ -30,27 +34,106 @@ def test_el_minimo_son_OCHO_casos():
     assert tx.MINIMO_DE_CASOS == 8
 
 
-def test_hay_TRES_verificables_pero_una_sola_COMPARABLE():
+def test_hay_CINCO_verificables_y_solo_TRES_COMPARABLES():
     """La distinción que decide si la vista de M&A se abre.
 
-    Las tres tienen las dos puntas publicadas. Solo una está sobre patrimonio CONTABLE, que
-    es la base contra la que valúa el Excess Return. Las otras dos vienen de la NIIF 3, cuyo
-    denominador son activos netos a VALOR RAZONABLE — lo que el COMPRADOR reconoce, no lo que
-    el vendedor tenía en libros.
+    Las cinco tienen las dos puntas publicadas. Solo tres están sobre patrimonio CONTABLE,
+    que es la base contra la que valúa el Excess Return. Las otras dos vienen de la NIIF 3,
+    cuyo denominador son activos netos a VALOR RAZONABLE — lo que el COMPRADOR reconoce, no
+    lo que el vendedor tenía en libros.
     """
-    assert len([t for t in tx.PANEL if t.verificable]) == 3
+    assert len([t for t in tx.PANEL if t.verificable]) == 5
     comparables = [t for t in tx.PANEL if t.comparable]
-    assert len(comparables) == 1
-    assert comparables[0].adquirida == "Banco Dominicano del Progreso"
-    assert comparables[0].pb == pytest.approx(2.531, abs=0.001)
+    assert len(comparables) == 3
+    assert {t.pais for t in comparables} == {"DO", "PR"}
+    progreso = next(t for t in comparables if "Progreso" in t.adquirida)
+    assert progreso.pb == pytest.approx(2.531, abs=0.001)
 
 
 def test_el_gate_cuenta_COMPARABLES_y_no_verificables():
-    """Sumar los tres abriría antes una vista cuya tabla mezcla dos bases, que es peor que
+    """Sumar los cinco abriría antes una vista cuya tabla mezcla dos bases, que es peor que
     tenerla cerrada."""
     e = tx.estado()
-    assert e.n_verificables == 3 and e.n_comparables == 1
+    assert e.n_verificables == 5 and e.n_comparables == 3
     assert "valor razonable" in e.motivo.lower()
+
+
+def test_OFG_mide_la_cuna_entre_bases_y_NO_la_transcribe():
+    """El caso más valioso del panel, y no por su múltiplo.
+
+    Su tabla auditada publica los DOS denominadores sobre el mismo balance y a la misma
+    fecha, así que la distancia entre bases —el argumento entero del que depende el gate—
+    deja de argumentarse y se mide. Y se computa desde las dos cifras: una cuña escrita a
+    mano se desincroniza del dato en cuanto alguien corrija un denominador.
+    """
+    t = next(x for x in tx.PANEL if "OFG" in x.comprador)
+    assert t.base == tx.BASE_CONTABLE, "el múltiplo publicado es sobre LIBRO"
+    assert t.valor_razonable is not None
+    assert t.cuna_de_base_pct == pytest.approx(
+        (t.valor_razonable / t.valor_libro - 1.0) * 100.0)
+    assert t.cuna_de_base_pct == pytest.approx(15.0, abs=0.1)
+
+
+def test_sin_segundo_denominador_no_hay_cuna_INVENTADA():
+    """Los otros cuatro casos no publican las dos columnas. La cuña es `None`, no un 0,0 ni
+    el 15 % del caso que sí la tiene: rellenarla haría ver como medido lo que no se midió."""
+    for t in tx.PANEL:
+        if t.valor_razonable is None:
+            assert t.cuna_de_base_pct is None, f"{t.adquirida} inventa una cuña"
+
+
+def test_OFG_cruza_1_0x_segun_la_BASE_y_lo_declara():
+    """El mismo precio da 1,13x sobre libro y 0,98x sobre valor razonable. Cruzar el umbral
+    de 1,0x —«pagó más o menos que el patrimonio»— depende enteramente de la base, que es la
+    demostración más económica de por qué las dos no van en la misma tabla."""
+    t = next(x for x in tx.PANEL if "OFG" in x.comprador)
+    assert t.precio / t.valor_libro > 1.0
+    assert t.precio / t.valor_razonable < 1.0
+    assert "0,98x" in " ".join(t.caveats)
+
+
+def test_BELLBANK_reconcilia_contra_los_estados_AUDITADOS():
+    """El denominador es nuestro y se cruza contra una fuente independiente: los estados
+    auditados de la propia adquirida. La verificación viaja en la procedencia del libro."""
+    t = next(x for x in tx.PANEL if "Bellbank" in x.adquirida)
+    assert t.pais == "DO" and t.base == tx.BASE_CONTABLE
+    assert "SIMBAD" in t.fuente_libro
+    assert "44 pesos" in t.fuente_libro, "no declara la magnitud de la discrepancia"
+    assert t.periodo_libro == "2022-06", (
+        "el corte tiene que ser el mes de la autorización: precio, patrimonio y tipo de "
+        "cambio a la misma fecha")
+
+
+def test_BELLBANK_usa_el_tipo_de_cambio_del_CORTE_y_no_el_de_la_prensa():
+    """La prensa convirtió a un tipo implícito de RD$54,46 que no es el del mes del
+    patrimonio (RD$57,16 en diciembre 2021). Tomar la conversión publicada habría dado 1,80x
+    en vez de 1,89x, y el error habría entrado como si fuera dato."""
+    t = next(x for x in tx.PANEL if "Bellbank" in x.adquirida)
+    unidos = " ".join(t.caveats)
+    assert "57,16" in unidos and "54,46" in unidos
+    assert t.pb == pytest.approx(t.precio / (t.valor_libro / 54.9967), abs=0.002), (
+        "el múltiplo publicado no sale del patrimonio del corte con el tipo de cambio de "
+        "ese mismo mes")
+
+
+def test_las_VIAS_ABIERTAS_nombran_QUE_falta_en_cada_una():
+    """Un relevamiento accionable no dice «no se pudo»: dice qué falta exactamente. La de
+    Banco Río es el caso: el denominador YA está —la SB lo publica bajo el nombre posterior
+    de la entidad—, y lo que bloquea es la fecha."""
+    assert len(tx.VIAS_ABIERTAS) >= 3
+    for nombre, falta in tx.VIAS_ABIERTAS:
+        assert nombre and len(falta) > 60, f"«{nombre}» sin decir qué falta"
+    rio = next(f for n, f in tx.VIAS_ABIERTAS if "Río" in n)
+    assert "LA FECHA, no el denominador" in rio
+    assert "SIMBAD" in rio
+
+
+def test_una_operacion_que_NO_se_consumo_no_es_una_transaccion():
+    """Un precio anunciado que nunca se pagó no es un dato del panel: no hubo transferencia
+    de control que observar."""
+    motivo = next(m for n, m in tx.DESCARTADAS if "FirstCaribbean" in n)
+    assert "NO SE CONSUMÓ" in motivo
+    assert not any("FirstCaribbean" in t.adquirida for t in tx.PANEL)
 
 
 def _caso(i: int, base: str) -> tx.Transaccion:
@@ -145,7 +228,9 @@ def test_las_DESCARTADAS_se_listan_con_su_motivo():
         assert nombre and len(motivo) > 30, f"«{nombre}» descartada sin motivo suficiente"
     unidos = " ".join(m for _n, m in tx.DESCARTADAS).lower()
     assert "sin monto" in unidos
-    assert "no el valor neto" in unidos, "no está el caso caribeño y su motivo"
+    assert "falta el numerador" in unidos, (
+        "no está el descarte INVERSO —Clarien, con denominador público y sin precio—, que es "
+        "el que muestra que el relevamiento buscó las dos puntas y no solo una")
 
 
 def test_activos_consolidados_NO_se_confunden_con_un_precio():
