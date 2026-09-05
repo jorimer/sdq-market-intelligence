@@ -31,8 +31,10 @@ logger = logging.getLogger("sdq.settings.service")
 
 # Catalog of data sources discovered for each sector (2026-06). Pre-seeded into
 # the config so the operator only fills the bits that depend on them: API keys
-# and (for the SIB) the Cloudflare proxy. ``requires_key`` is informational for
-# the UI; ``needs_proxy`` flags sources behind a WAF (only the SIB today).
+# and (for the sources behind a WAF) the Cloudflare proxy. ``requires_key`` and
+# ``needs_proxy`` son informativos para la UI: el proxy es GLOBAL y lo resuelve
+# `get_proxy_config`, no esta bandera. Detrás de un WAF hay dos, medidos: el SIB
+# y la CMF de Chile.
 KNOWN_PROVIDERS = [
     {
         "provider": "sb_do",
@@ -94,6 +96,29 @@ KNOWN_PROVIDERS = [
                   "`Authorization: Bearer`. Desde 2026-08-19 el emisor tiene dominio propio "
                   "(`api.jurisai.do`); el anterior lo generaba Railway y no estaba bajo su "
                   "control. Sigue siendo editable y no está incrustada en el conector."),
+    },
+    {
+        # Chile para el boletín regional. Entra al catálogo por lo que DOCUMENTA: es la
+        # segunda fuente detrás de un WAF, y eso no se deduce de ninguna parte.
+        #
+        # Medido, no supuesto: desde una IP de escritorio el emisor responde con sus códigos
+        # propios (421 «API key no valida», 422 «no suministrada»); desde el datacenter
+        # devolvía 500 con una página «Web Page Blocked!» de 39 KB. Va por el mismo proxy
+        # Cloudflare que el SIB, que debe tener `api.cmfchile.cl` en su lista de destinos.
+        #
+        # La cuota es de 10.000 peticiones MENSUALES, así que la prueba de conexión consulta
+        # la UF de un mes ya cerrado: lo más barato que confirma la credencial.
+        "provider": "cmf_chile",
+        "providerName": "Comisión para el Mercado Financiero (CMF Chile)",
+        "apiName": "API de Información Financiera",
+        "country": "CL",
+        "sector": "banking",
+        "baseUrl": "https://api.cmfchile.cl",
+        "requires_key": True,
+        "needs_proxy": True,
+        "notes": ("Clave en el portal de la CMF (api.cmfchile.cl), cuota de 10.000 consultas "
+                  "al mes. Requiere el proxy Cloudflare (WAF). La atribución que exige el "
+                  "emisor incluye fuente Y enlace: no es CC BY 4.0."),
     },
     {
         "provider": "comtrade",
@@ -777,13 +802,19 @@ def test_connection(db: Session, payload: TestConnectionIn) -> TestConnectionOut
     secondary = payload.apiKeySecondary if payload.apiKeySecondary not in (None, MASK) else (
         decrypt(cfg.api_key_secondary_enc) if cfg and cfg.api_key_secondary_enc else ""
     )
-    # Proxy: explicit override → per-provider (legacy) → GLOBAL Cloudflare proxy.
+    # Proxy: override CON CONTENIDO → per-provider (legacy) → GLOBAL Cloudflare proxy.
+    #
+    # Una cadena VACÍA no es un override. `proxy_url` es NOT NULL DEFAULT '' y el editor por
+    # fuente ya no tiene campo de proxy —pasó a ser global—, pero el formulario igual arrastra
+    # el valor de la fila y lo manda en cada prueba. Leerlo como «probá sin proxy» dejaba el
+    # proxy global sin usar: la petición salía directa y el WAF de la CMF la cortaba con la
+    # credencial correcta, mostrando un bloqueo que no era culpa de la clave. Ninguna casilla
+    # de la interfaz significa «sin proxy», así que `""` solo puede querer decir «esta fila no
+    # tiene proxy propio». El SIB no lo destapó porque su fila conserva el proxy de antes de
+    # la migración a global, y ganaba por herencia.
     g_url, g_secret = get_proxy_config(db)
-    proxy_url = (
-        payload.proxyUrl if payload.proxyUrl is not None
-        else ((cfg.proxy_url if cfg else "") or g_url)
-    ) or ""
-    if payload.proxySecret not in (None, MASK):
+    proxy_url = payload.proxyUrl or (cfg.proxy_url if cfg else "") or g_url or ""
+    if payload.proxySecret and payload.proxySecret != MASK:
         proxy_secret = payload.proxySecret
     elif cfg and cfg.proxy_secret_enc:
         proxy_secret = decrypt(cfg.proxy_secret_enc)
