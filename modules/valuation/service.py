@@ -18,7 +18,9 @@ from sqlalchemy import text
 from sqlalchemy.orm import Session
 
 from modules.valuation.engine import cost_of_capital as cc
+from modules.valuation.engine import crecimiento as cr
 from modules.valuation.engine import excess_return as er
+from modules.valuation.engine import por_tipo as pt
 
 #: Horizonte explícito, en años. Cinco es lo que la historia disponible sostiene: el balance
 #: publicado por entidad arranca en 2020, así que proyectar diez sería extrapolar el doble de
@@ -102,6 +104,15 @@ class Lectura:
     fraccion_de_rubrica: float
     advertencias: Tuple[str, ...]
     serie_spread: Tuple[Tuple[str, float], ...] = ()
+    #: El tipo que la SIB le asigna. Decide beta y retención, así que viaja con el número:
+    #: dos valuaciones con distinto tipo no son comparables sin saberlo.
+    tipo_de_entidad: str = ""
+    #: La retención usada, MEDIDA por tipo. Antes era un 0,60 de rúbrica igual para todos.
+    retencion: float = RETENCION
+    #: El crecimiento terminal efectivo, ya con el techo aplicado si mordió.
+    g_terminal_pct: float = 0.0
+    #: Qué sostiene los parámetros de este tipo. Va al informe.
+    evidencia_del_tipo: str = ""
 
     @property
     def destruye_valor(self) -> bool:
@@ -110,28 +121,54 @@ class Lectura:
         return self.spread_alto_pp < 0
 
 
+def _tipo_de(db: Session, bank_id: str) -> Optional[str]:
+    """El tipo que la Superintendencia le asigna a la entidad. Decide beta y retención."""
+    from sqlalchemy import text as _sql
+    try:
+        fila = db.execute(_sql("SELECT bank_type FROM banks WHERE id = :b"),
+                          {"b": bank_id}).first()
+    except Exception:  # noqa: BLE001
+        return None
+    return str(fila[0]) if fila and fila[0] else None
+
+
 def valuar_entidad(db: Session, *, bank_id: str, nombre: str) -> Optional[Lectura]:
     """La valuación de una entidad, o ``None`` si no hay con qué.
 
     ``None`` y no un esqueleto con ceros: un motor sin su entrada no falla, DESAPARECE, y
     devolver ceros produciría una valuación de una entidad que nadie midió.
+
+    **Los parámetros dependen del TIPO de entidad.** La Superintendencia supervisa cuatro
+    clases y el modelo las trataba a las cuatro igual; la beta y la retención salen ahora de
+    `engine/por_tipo.py`, con lo que sostiene a cada una.
     """
     historia = historia_de(db, bank_id)
     roe = _roe_proyectado(historia)
     if roe is None or not historia.patrimonio:
         return None
-    ke = cc.calcular(db)
+    tipo = _tipo_de(db, bank_id)
+    ke = cc.calcular(db, beta=pt.beta_de(tipo))
     if ke.alto <= 0:
         return None
+    retencion = pt.retencion_de(tipo)
 
     bv0 = historia.patrimonio[-1]
+    # El techo del crecimiento terminal. Sin él, una entidad muy rentable hace explotar la
+    # perpetuidad: con el BHD daba un P/B de 12,23x contra un panel observado de 0,77x-2,73x.
+    techo = cr.techo_nominal(db)
+    g, aviso_g = cr.g_terminal(roe, retencion, techo)
+
     # Dos valuaciones, una por extremo de Ke. El extremo BAJO de Ke da el valor ALTO.
     valores: List[float] = []
     avisos: List[str] = list(ke.advertencias)
+    if aviso_g:
+        avisos.append(aviso_g)
+    if not techo.es_medido:
+        avisos.append(techo.evidencia)
     for k in (ke.bajo, ke.alto):
         try:
             v = er.valuar(bv_inicial=bv0, ke_pct=k, roe_por_periodo=[roe] * HORIZONTE,
-                          retencion=RETENCION)
+                          retencion=retencion, g_terminal_pct=g)
             valores.append(v.valor)
         except er.HorizonteInvalidoError as e:
             # `g >= Ke` en este extremo: se acorta el horizonte y se DECLARA, que es lo que
@@ -156,6 +193,10 @@ def valuar_entidad(db: Session, *, bank_id: str, nombre: str) -> Optional[Lectur
         fraccion_de_rubrica=ke.fraccion_de_rubrica,
         advertencias=tuple(avisos),
         serie_spread=serie,
+        tipo_de_entidad=tipo or "",
+        retencion=retencion,
+        g_terminal_pct=g,
+        evidencia_del_tipo=pt.evidencia_de(tipo),
     )
 
 
