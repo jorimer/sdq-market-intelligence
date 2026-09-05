@@ -75,14 +75,14 @@ def _narrativas(db, tier=ProductTier.deep_dive):
     return prod, snap, asyncio.run(prod.narratives(tier, snap))
 
 
-def test_el_deep_dive_trae_TODAS_las_secciones_de_un_informe_de_valuacion(db):
+def test_el_deep_dive_trae_TODAS_las_secciones_de_un_informe_de_valuacion(db) -> None:
     _prod, _snap, narr = _narrativas(db)
     for sec in (SECCION_RESUMEN, SECCION_PROPOSITO, SECCION_ANTECEDENTES, SECCION_FINANCIERO,
                 SECCION_METODOLOGIA, SECCION_LIMITACIONES, SECCION_FUENTES):
         assert sec in narr and len(narr[sec]) > 200, f"falta o está vacía: {sec}"
 
 
-def test_NINGUNA_seccion_de_un_informe_real_sale_de_la_MUESTRA(db):
+def test_NINGUNA_seccion_de_un_informe_real_sale_de_la_MUESTRA(db) -> None:
     """El defecto más caro de los cuatro: el informe de un banco real decía que sus cifras
     eran de una entidad ficticia, y publicaba una fórmula de Ke que el modelo no usa."""
     _prod, _snap, narr = _narrativas(db)
@@ -104,9 +104,10 @@ def test_NINGUNA_seccion_de_un_informe_real_sale_de_la_MUESTRA(db):
     assert "%" in lim and "costo de capital no se observa" in lim
 
 
-def test_el_TIPO_de_entidad_sobrevive_al_payload(db):
+def test_el_TIPO_de_entidad_sobrevive_al_payload(db) -> None:
     """Se perdía en la ida y vuelta, y con él la persistencia y su evidencia."""
     lec = valuar_entidad(db, bank_id="aap1", nombre="Asociación Grande")
+    assert lec is not None, "la fixture dejó de producir una valuación"
     payload = a_payload(lec)
     assert payload["tipo_de_entidad"] == "aap"
     assert payload["procedencia"]["persistencia"] == pytest.approx(0.358)
@@ -115,7 +116,7 @@ def test_el_TIPO_de_entidad_sobrevive_al_payload(db):
     assert "0.358" in narr[SECCION_METODOLOGIA]
 
 
-def test_la_concordancia_de_GENERO_es_correcta_en_los_cuatro_tipos():
+def test_la_concordancia_de_GENERO_es_correcta_en_los_cuatro_tipos() -> None:
     """«un asociación» y «asociación supervisado» son errores que ningún test numérico ve."""
     from modules.valuation import narrativa as n
     from modules.valuation.service import Lectura
@@ -132,7 +133,7 @@ def test_la_concordancia_de_GENERO_es_correcta_en_los_cuatro_tipos():
         assert esperado in n.antecedentes(lec), f"{tipo}: concordancia mal"
 
 
-def test_la_POSICION_en_su_tipo_se_COMPUTA_sobre_el_padron_completo(db):
+def test_la_POSICION_en_su_tipo_se_COMPUTA_sobre_el_padron_completo(db) -> None:
     """Una posición de mercado afirmada sin computarla es una opinión."""
     _prod, _snap, narr = _narrativas(db)
     ant = narr[SECCION_ANTECEDENTES]
@@ -140,7 +141,7 @@ def test_la_POSICION_en_su_tipo_se_COMPUTA_sobre_el_padron_completo(db):
     assert "75.0 %" in ant, "no computó la cuota del patrimonio del grupo"
 
 
-def test_el_analisis_financiero_NO_habla_de_EBITDA(db):
+def test_el_analisis_financiero_NO_habla_de_EBITDA(db) -> None:
     """El estándar genérico lo pide y en una entidad financiera no mide nada. Que el informe
     lo diga es parte del método, no una omisión."""
     _prod, _snap, narr = _narrativas(db)
@@ -150,7 +151,7 @@ def test_el_analisis_financiero_NO_habla_de_EBITDA(db):
     assert "| Cierre | ROE |" in fin, "falta la serie histórica de ROE"
 
 
-def test_el_render_pone_la_ENTIDAD_en_la_portada_y_arma_las_tablas(db, monkeypatch):
+def test_el_render_pone_la_ENTIDAD_en_la_portada_y_arma_las_tablas(db, monkeypatch) -> None:
     """El titular y las tablas leían claves PLANAS que el payload no tiene."""
     import asyncio
     prod, snap, narr = _narrativas(db)
@@ -167,7 +168,7 @@ def test_el_render_pone_la_ENTIDAD_en_la_portada_y_arma_las_tablas(db, monkeypat
     import modules.valuation.products as mod
     real = mod.render_product_pdf
 
-    def espia(**kw):
+    def espia(**kw: Any) -> str:
         capturado.update(kw)
         return real(**kw)
 

@@ -60,7 +60,7 @@ def db():
     s.close()
 
 
-def test_el_multiplo_de_una_entidad_MUY_rentable_queda_en_el_orden_del_panel(db):
+def test_el_multiplo_de_una_entidad_MUY_rentable_queda_en_el_orden_del_panel(db) -> None:
     lec = valuar_entidad(db, bank_id="bhd", nombre="Banco Múltiple BHD")
     assert lec is not None
     assert lec.roe_proyectado_pct > 20, "la fixture dejó de ser una entidad muy rentable"
@@ -72,24 +72,26 @@ def test_el_multiplo_de_una_entidad_MUY_rentable_queda_en_el_orden_del_panel(db)
         "todo el rango no puede valer menos que su libro")
 
 
-def test_el_techo_MORDIO_y_la_lectura_lo_declara(db):
+def test_el_techo_MORDIO_y_la_lectura_lo_declara(db) -> None:
     """El supuesto que cambia el valor de 12,23× a ~3× no puede viajar callado."""
     lec = valuar_entidad(db, bank_id="bhd", nombre="Banco Múltiple BHD")
+    assert lec is not None, "la fixture dejó de producir una valuación"
     assert lec.g_terminal_pct == pytest.approx(9.03, abs=0.01)
     unidos = " ".join(lec.advertencias)
     assert "supera el crecimiento nominal de la economía" in unidos
     assert "más grande que el país" in unidos
 
 
-def test_los_parametros_del_TIPO_viajan_con_la_lectura(db):
+def test_los_parametros_del_TIPO_viajan_con_la_lectura(db) -> None:
     """Dos valuaciones con distinto tipo de entidad no son comparables sin saberlo."""
     lec = valuar_entidad(db, bank_id="bhd", nombre="Banco Múltiple BHD")
+    assert lec is not None, "la fixture dejó de producir una valuación"
     assert lec.tipo_de_entidad == "banca_multiple"
     assert lec.retencion == pytest.approx(0.75), "no usó la retención MEDIDA de su tipo"
     assert "cotizados latinoamericanos" in lec.evidencia_del_tipo
 
 
-def test_lo_que_ACOTA_el_terminal_es_la_PERSISTENCIA(db):
+def test_lo_que_ACOTA_el_terminal_es_la_PERSISTENCIA(db) -> None:
     """Este test cambió de premisa, y el cambio es el hallazgo.
 
     Cuando se escribió, medía que el techo de crecimiento contuviera la explosión: sin él, el

@@ -19,20 +19,20 @@ import pytest
 from modules.valuation.engine import por_tipo as pt
 
 
-def test_las_ASOCIACIONES_tienen_la_beta_mas_baja():
+def test_las_ASOCIACIONES_tienen_la_beta_mas_baja() -> None:
     """Lo mejor sostenido de la tabla: las menos dispersas los seis de seis años."""
     aap = pt.beta_de("aap")
     for otro in ("banca_multiple", "banco_ahorro_credito", "corporacion_credito"):
         assert aap[1] < pt.beta_de(otro)[1], f"aap no queda por debajo de {otro}"
 
 
-def test_la_banca_multiple_conserva_la_banda_ORIGINAL():
+def test_la_banca_multiple_conserva_la_banda_ORIGINAL() -> None:
     """Es la clase que se parece a los comparables latinoamericanos de donde sale la beta.
     Moverla sería cambiar el ancla sin evidencia nueva."""
     assert pt.beta_de("banca_multiple") == (0.85, 1.15)
 
 
-def test_las_corporaciones_COMPARTEN_banda_y_el_motivo_es_falta_de_MUESTRA():
+def test_las_corporaciones_COMPARTEN_banda_y_el_motivo_es_falta_de_MUESTRA() -> None:
     """No se midió que se parezcan: son tres entidades y su dispersión es ruido. Que la
     razón sea la muestra y no una medición tiene que estar escrito, o en seis meses alguien
     lee la banda compartida como un hallazgo."""
@@ -41,14 +41,14 @@ def test_las_corporaciones_COMPARTEN_banda_y_el_motivo_es_falta_de_MUESTRA():
     assert "TRES entidades" in ev and "falta de muestra" in ev
 
 
-def test_la_retencion_de_las_ASOCIACIONES_es_casi_uno_y_dice_POR_QUE():
+def test_la_retencion_de_las_ASOCIACIONES_es_casi_uno_y_dice_POR_QUE() -> None:
     """0,99 no es un artefacto: son mutuales. Y el modelo les aplicaba 0,60."""
     assert pt.retencion_de("aap") == pytest.approx(0.99)
     ev = pt.RETENCION_EVIDENCIA_POR_TIPO["aap"]
     assert "MUTUALES" in ev and "dividendos" in ev
 
 
-def test_las_otras_tres_retenciones_son_PARECIDAS_entre_si():
+def test_las_otras_tres_retenciones_son_PARECIDAS_entre_si() -> None:
     """El contraejemplo de la afirmación de arriba: si las cuatro fueran distintas, el 0,99
     no sería un hallazgo sobre las mutuales sino ruido de medición."""
     otras = [pt.retencion_de(t) for t in
@@ -57,7 +57,7 @@ def test_las_otras_tres_retenciones_son_PARECIDAS_entre_si():
     assert pt.retencion_de("aap") - max(otras) > 0.20, "el salto de las mutuales se perdió"
 
 
-def test_un_tipo_DESCONOCIDO_cae_al_defecto_y_lo_DECLARA():
+def test_un_tipo_DESCONOCIDO_cae_al_defecto_y_lo_DECLARA() -> None:
     """Un tipo que no se reconoce no puede elegir parámetros en silencio: cambia el valor."""
     assert pt.beta_de("banco_de_marte") == pt.beta_de(pt.TIPO_POR_DEFECTO)
     assert pt.retencion_de(None) == pt.retencion_de(pt.TIPO_POR_DEFECTO)
@@ -65,7 +65,7 @@ def test_un_tipo_DESCONOCIDO_cae_al_defecto_y_lo_DECLARA():
     assert "NO RECONOCIDO" in ev and "banco_de_marte" in ev
 
 
-def test_TODO_tipo_conocido_trae_su_evidencia():
+def test_TODO_tipo_conocido_trae_su_evidencia() -> None:
     """Un parámetro que cambia el valor y no dice de dónde sale es un número inventado con
     buena presentación."""
     for t in pt.BETA_POR_TIPO:
@@ -74,7 +74,7 @@ def test_TODO_tipo_conocido_trae_su_evidencia():
         assert t in pt.RETENCION_POR_TIPO
 
 
-def test_las_bandas_son_TRES_y_no_cuatro():
+def test_las_bandas_son_TRES_y_no_cuatro() -> None:
     """La evidencia sostiene tres grupos. Abrir cuatro daría una precisión que la dispersión
     de tres entidades no puede respaldar."""
     assert len(set(pt.BETA_POR_TIPO.values())) == 3, (
@@ -82,7 +82,7 @@ def test_las_bandas_son_TRES_y_no_cuatro():
         "sostiene tres")
 
 
-def test_la_persistencia_ORDENA_igual_que_la_dispersion():
+def test_la_persistencia_ORDENA_igual_que_la_dispersion() -> None:
     """La segunda medición, y es corroboración: la clase cuyo ROE más se dispersa es también
     la que más conserva su ventaja de un año al otro.
 
@@ -98,7 +98,7 @@ def test_la_persistencia_ORDENA_igual_que_la_dispersion():
         "tabla, con 60 pares")
 
 
-def test_los_dos_grupos_del_MEDIO_coinciden_en_persistencia():
+def test_los_dos_grupos_del_MEDIO_coinciden_en_persistencia() -> None:
     """0,571 y 0,569. Es la evidencia independiente que respalda que compartan banda de beta:
     esa decisión se tomó por falta de muestra, y esta medición la confirma."""
     a = pt.persistencia_de("banco_ahorro_credito")
@@ -106,14 +106,14 @@ def test_los_dos_grupos_del_MEDIO_coinciden_en_persistencia():
     assert abs(a - b) < 0.02, f"{a} y {b}: dejaron de coincidir"
 
 
-def test_TODA_persistencia_esta_en_rango_y_trae_su_evidencia():
+def test_TODA_persistencia_esta_en_rango_y_trae_su_evidencia() -> None:
     """`ω = 1` devuelve la perpetuidad que el parámetro existe para cerrar."""
     for t, w in pt.PERSISTENCIA_POR_TIPO.items():
         assert 0.0 < w < 1.0, f"{t}: ω = {w} fuera de (0,1)"
         assert len(pt.PERSISTENCIA_EVIDENCIA_POR_TIPO[t]) > 30, f"{t}: ω sin evidencia"
 
 
-def test_la_evidencia_del_tipo_incluye_LAS_TRES_mediciones():
+def test_la_evidencia_del_tipo_incluye_LAS_TRES_mediciones() -> None:
     """Beta, retención y persistencia viajan juntas al informe: son las tres que cambian el
     valor según el tipo, y publicar una sin las otras deja el resultado a medio explicar."""
     ev = pt.evidencia_de("aap")

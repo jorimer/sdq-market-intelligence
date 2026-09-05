@@ -41,7 +41,7 @@ def _sembrar(db, corte: date) -> None:
     db.commit()
 
 
-def test_la_frescura_sale_del_ULTIMO_corte_con_patrimonio(db):
+def test_la_frescura_sale_del_ULTIMO_corte_con_patrimonio(db) -> None:
     hace_67 = date.today() - timedelta(days=67)
     _sembrar(db, hace_67)
     salud = ValuationProduct(db).data_signals()
@@ -49,14 +49,14 @@ def test_la_frescura_sale_del_ULTIMO_corte_con_patrimonio(db):
         f"la frescura dio {salud.freshness_days}: tiene que ser la edad del último cierre")
 
 
-def test_sin_ningun_corte_la_frescura_es_NONE_y_no_cero(db):
+def test_sin_ningun_corte_la_frescura_es_NONE_y_no_cero(db) -> None:
     """Cero días diría «se publicó hoy», que es lo contrario de no tener dato. La ausencia se
     declara como ausencia — es la misma regla que gobierna todo el resto del corpus."""
     salud = ValuationProduct(db).data_signals()
     assert salud.freshness_days is None
 
 
-def test_la_frescura_NO_se_queda_fija_en_None(db):
+def test_la_frescura_NO_se_queda_fija_en_None(db) -> None:
     """El contraejemplo del defecto que se arregla: si alguien vuelve a fijar `None`, este
     test cae aunque haya dato sembrado."""
     _sembrar(db, date.today() - timedelta(days=10))
@@ -67,7 +67,7 @@ def test_la_frescura_NO_se_queda_fija_en_None(db):
     assert salud.freshness_days == pytest.approx(10, abs=1)
 
 
-def test_la_cobertura_tambien_se_computa_y_declara_la_curva(db):
+def test_la_cobertura_tambien_se_computa_y_declara_la_curva(db) -> None:
     """Sin la curva son dos insumos de tres, no cero: el balance por entidad está completo, y
     un 0,0 mandaba a arreglar lo que no estaba roto."""
     _sembrar(db, date.today())
