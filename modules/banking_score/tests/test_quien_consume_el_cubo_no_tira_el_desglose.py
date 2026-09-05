@@ -23,7 +23,7 @@ import pytest
 
 _FUENTES = [
     pathlib.Path("modules/banking_score/sib_sync.py"),
-    pathlib.Path("modules/banking_score/external/sib_data_client.py"),
+    pathlib.Path("shared/data/sib_data_client.py"),
 ]
 
 
