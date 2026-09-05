@@ -48,8 +48,27 @@ class TierLevelSpec:
     watermark: Optional[str] = None        # p.ej. "Vista abierta · SDQMIP"
     base_report_type: Optional[str] = None  # pista opcional para el render del sector
     price_band: Optional[str] = None       # metadato comercial (NO lógica de billing)
+    #: El nivel produce su prosa **computándola**, no generándola con el motor de IA.
+    #:
+    #: G3 preguntaba «¿declara templates?», y la pregunta que quiere hacer es «¿este nivel
+    #: tiene con qué producir su prosa?». Para dieciséis ejes las dos coinciden. Para un
+    #: informe cuyo contenido son cifras de error, coberturas empíricas de intervalos y una
+    #: reconciliación exacta, NO: ahí la prosa se computa, y eso es una garantía más fuerte
+    #: que generarla —un modelo redactándola inventaría los números que el informe existe
+    #: para probar—. Sin este campo, elegir el camino más riguroso costaba el gate.
+    #:
+    #: Se DECLARA y no se infiere: un nivel que no declara templates ni prosa computada
+    #: sigue puntuando 0, que es el caso de «todavía no está hecho».
+    prosa_computada: bool = False
 
     def __post_init__(self) -> None:
+        # Un nivel tiene que poder producir su prosa de ALGUNA de las dos formas. Declarar
+        # las dos es contradictorio: o la escribe el motor o la computa el código.
+        if self.narrative_templates and self.prosa_computada:
+            raise ValueError(
+                "un nivel declara templates de narrativa Y prosa computada: son dos formas "
+                "excluyentes de producir el texto, y tener las dos deja sin definir cuál "
+                "manda.")
         # Doctrina no negociable: Pulse jamás nombra entidades.
         if self.tier == ProductTier.pulse and self.granularity != Granularity.system:
             raise ValueError(

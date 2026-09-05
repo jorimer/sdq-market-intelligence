@@ -111,10 +111,18 @@ def compute_readiness(product: SectorProduct, tier: ProductTier) -> Dict[str, An
     has_engine = bool(product.has_engine())
     g2 = 1.0 if has_engine else 0.0
 
-    # G3 · Narrativa — señal declarativa: templates del nivel presentes. El numeric_guard
-    # (0 violaciones) se ejerce al GENERAR la narrativa, no en el cálculo en reposo.
-    g3 = 1.0 if level.narrative_templates else 0.0
-    g3_detail = f"{len(level.narrative_templates)} templates declarados"
+    # G3 · Narrativa — señal declarativa: el nivel tiene CON QUÉ producir su prosa. Dos
+    # formas válidas y excluyentes: templates del motor de IA, o prosa computada por código.
+    # La segunda existe porque preguntar solo por templates penalizaba al eje que eligió el
+    # camino MÁS riguroso: un informe de errores, coberturas de intervalos y una
+    # reconciliación exacta no tiene nada que redactar, y un modelo redactándolo inventaría
+    # justo los números que el informe existe para probar. El numeric_guard (0 violaciones)
+    # se ejerce al GENERAR, no en el cálculo en reposo.
+    g3 = 1.0 if (level.narrative_templates or level.prosa_computada) else 0.0
+    g3_detail = (f"{len(level.narrative_templates)} templates declarados"
+                 if level.narrative_templates
+                 else ("prosa computada (sin motor de IA)" if level.prosa_computada
+                       else "0 templates declarados"))
 
     # G4 · Plantilla — señal declarativa: el nivel declara secciones para renderizar.
     # El contrato GARANTIZA render() (banking con su generador rico; otros con el
