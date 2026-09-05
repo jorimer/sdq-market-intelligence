@@ -1,0 +1,19 @@
+# ⚠️ `name` NO SE TOCA.
+#
+# Este Worker ya no sirve solo al SIB —también a la CMF de Chile— pero se sigue
+# llamando `sib-api-proxy` porque el nombre ES la dirección: la plataforma apunta a
+# https://sib-api-proxy.mercado-ricardo.workers.dev, guardado en Configuración →
+# Fuentes de Datos como proxy global.
+#
+# Renombrarlo acá no renombra nada en Cloudflare: crea un Worker NUEVO en otra URL y
+# deja el viejo corriendo. La plataforma seguiría hablándole al viejo, así que el
+# cambio que creíste desplegar no existiría, sin ningún error a la vista. Si algún día
+# hay que renombrarlo de verdad, primero se despliega el nuevo, después se cambia la
+# URL en Configuración, y recién entonces se borra el viejo.
+name = "sib-api-proxy"
+main = "worker.js"
+compatibility_date = "2024-01-01"
+
+# PROXY_SECRET se carga aparte y NUNCA vive en este archivo:
+#   wrangler secret put PROXY_SECRET
+# Queda guardado del lado de Cloudflare y sobrevive a los despliegues.
