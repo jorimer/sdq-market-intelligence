@@ -56,15 +56,21 @@ NARRATIVE_CACHE_VERSION = "2"
 def ruta_de_contexto(rel: str, modulo: str) -> pathlib.Path:
     """Dónde vive un archivo declarado en ``AI_CONTEXT_FILES``.
 
-    Una ruta que empieza en ``shared/`` se resuelve desde la RAÍZ del repo; cualquier otra,
-    desde la carpeta del módulo. La regla vive ACÁ y no repetida en cada consumidor porque ya
+    Una ruta que empieza en ``shared/`` o en ``modules/`` se resuelve desde la RAÍZ del
+    repo; cualquier otra, desde la carpeta del módulo.
+
+    ``modules/`` entró cuando el boletín regional necesitó declarar un constructor de
+    contexto que vive en OTRO módulo: el dato es de `regional_banking` y el informe lo emite
+    `banking_score`. Sin esto la ruta se resolvía como
+    `modules/banking_score/modules/regional_banking/...` y el archivo se declaraba
+    inexistente. La regla vive ACÁ y no repetida en cada consumidor porque ya
     tiene tres —el ensamblador que computa la huella y los dos tests estructurales que la
     vigilan— y dos copias de una resolución de rutas se desincronizan: la primera vez que se
     admitió `shared/` en el ensamblador, los dos guards siguieron buscando
     `modules/<mod>/shared/...` y declararon inexistente un archivo que sí estaba.
     """
     repo = pathlib.Path(__file__).resolve().parents[2]
-    if str(rel).startswith("shared/"):
+    if str(rel).startswith(("shared/", "modules/")):
         return repo / rel
     return repo / "modules" / modulo / rel
 

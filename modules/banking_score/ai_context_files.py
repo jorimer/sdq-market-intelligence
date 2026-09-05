@@ -41,4 +41,9 @@ AI_CONTEXT_FILES = (
     # ensamblador la resuelve desde la raíz del repo, para que un archivo transversal siga
     # entrando en la huella de caché de cada eje que lo consume.
     "shared/capacidad_de_pago.py",
+    # El contexto REGIONAL del boletín. Empieza fuera de `banking_score` porque el dato es
+    # de otro módulo, y el ensamblador resuelve la ruta desde la raíz del repo — igual que
+    # `shared/capacidad_de_pago.py`. Sin esta línea, un arreglo de lo que el modelo lee
+    # sobre la región no invalidaría ninguna narrativa ya generada.
+    "modules/regional_banking/ai_context.py",
 )

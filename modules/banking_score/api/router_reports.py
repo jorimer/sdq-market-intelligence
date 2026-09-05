@@ -178,10 +178,20 @@ async def _generate_system_report(
             from modules.banking_score.reports.criteria_doc import build_criteria_document
             narratives = build_criteria_document(db)
         else:
+            regional = None
+            if report_type == "boletin_regional":
+                # `contexto_o_nada` distingue los dos casos que NO son lo mismo: una mezcla
+                # de normas contables se propaga y mata el informe —es el guard fail-closed,
+                # y un boletín que compara lo incomparable es peor que uno que no sale—,
+                # mientras que la simple ausencia de dato regional devuelve None, omite esas
+                # secciones y deja salir el bloque dominicano, que sigue siendo válido.
+                from modules.regional_banking.ai_context import contexto_o_nada
+                regional = {s: c for s in ("boletin_sistemas", "boletin_armonizado")
+                            if (c := contexto_o_nada(db, s))}
             narratives = await generate_report_narratives(
                 report_type=report_type, bank_name=scope_name,
                 scoring_result=scoring_result, period=period, benchmarks=benchmarks,
-                anuario=anuario_datos,
+                anuario=anuario_datos, regional=regional,
             )
         if report_type == "boletin_regional":
             # §4 no se narra ni se escribe a mano: se GENERA del registro de procedencia.

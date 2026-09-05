@@ -705,6 +705,7 @@ async def generate_report_narratives(
     period: str,
     benchmarks: Optional[Dict] = None,
     anuario: Optional[Dict] = None,
+    regional: Optional[Dict] = None,
     revision: Optional[Dict] = None,
 ) -> Dict[str, str]:
     """Generate all narrative sections required for *report_type*.
@@ -752,7 +753,21 @@ async def generate_report_narratives(
             sections = [s for s in sections if s != clave]
 
     for section in sections:
-        if section == "anuario":
+        if section in ("boletin_sistemas", "boletin_armonizado"):
+            # Las dos secciones regionales traen su PROPIO contexto: el del boletín no es el
+            # de un corte dominicano. Registrar el tipo en sus superficies no alcanzaba —el
+            # informe se generaba igual y estas secciones salían narradas con las cifras de
+            # RD—, que es la distinción entre estar registrado y estar alimentado.
+            template = section
+            context = (regional or {}).get(section)
+            if not context:
+                continue          # sin dato no hay sección: no se narra un contexto vacío
+            context = dict(context, period=period)
+        elif section == "boletin_rd":
+            # §1 sí es el sistema dominicano: reusa el contexto de sistema que ya existe.
+            template = "boletin_rd"
+            context = _build_system_context(report_type, bank_name, period, benchmarks)
+        elif section == "anuario":
             # El anuario tiene su propio sujeto —el sistema en un AÑO— y su contexto son los
             # hechos ya computados. Va antes del caso general de sistema porque no es un
             # boletín de corte: su unidad es el año.
