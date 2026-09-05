@@ -250,27 +250,48 @@ class ValuationProduct:
         # El más viejo no se ofrece: contra él ninguna entidad tiene apertura.
         return cortes[:-1] if len(cortes) > 1 else []
 
+    #: Los tipos que este eje puede valuar: entidades de INTERMEDIACIÓN. El modelo de Excess
+    #: Return descuenta el exceso de ROE sobre el costo de capital de un negocio que toma
+    #: depósitos y presta, y el panel de múltiplos contra el que se contrastaría son bancos.
+    #:
+    #: Quedan FUERA las cambiarias —agentes de cambio y casas de remesas—, y no por falta de
+    #: dato: tienen patrimonio y utilidad, así que la aritmética corre y devuelve un número
+    #: de aspecto normal. Lo que no tienen es el negocio que el modelo supone. Ofrecerlas
+    #: sería ordenar lo que no es comparable, con el agravante de que el resultado no se ve
+    #: mal. Eran 41 de las 92 que el selector ofrecía.
+    #:
+    #: Las asociaciones de ahorros y préstamos SÍ entran: son entidades de intermediación
+    #: supervisadas. Que sean mutuales —sin acciones que comprar— es un caveat del informe,
+    #: no un motivo para no poder valuarlas.
+    TIPOS_VALUABLES = ("banca_multiple", "aap", "banco_ahorro_credito", "corporacion_credito")
+
     def scope_options(self) -> List[Dict[str, str]]:
         """Entidades que el eje puede valuar HOY, para el selector de los niveles nombrados.
 
-        Solo las que tienen al menos dos cierres con patrimonio: son las únicas donde
-        `valuar_entidad` produce algo. Ofrecer las demás daría una opción que falla al
-        elegirla, que es la forma más cara de listar un producto.
+        Dos condiciones, y las dos existen para no ofrecer algo que no se puede entregar:
+        al menos dos cierres con patrimonio —el ROE va sobre apertura— y un tipo de entidad
+        que el modelo sepa valuar. Una opción que falla al elegirla es peor que no ofrecerla;
+        una que NO falla y devuelve un número sin sentido es peor todavía.
         """
         from sqlalchemy import text as _sql
         if self._db is None:
             return []
+        marcadores = ", ".join(f":t{i}" for i in range(len(self.TIPOS_VALUABLES)))
+        params: Dict[str, object] = {"n": self.CIERRES_MINIMOS}
+        params.update({f"t{i}": t for i, t in enumerate(self.TIPOS_VALUABLES)})
         try:
             filas = self._db.execute(_sql(
-                "SELECT b.id, b.name, COUNT(d.period_end) AS n "
+                "SELECT b.id, b.name, b.bank_type, COUNT(d.period_end) AS n "
                 "FROM banks b JOIN banking_data d ON d.bank_id = b.id "
                 "WHERE d.patrimonio_tecnico IS NOT NULL "
-                "GROUP BY b.id, b.name HAVING COUNT(d.period_end) >= :n "
-                "ORDER BY b.name"), {"n": self.CIERRES_MINIMOS}).fetchall()
+                f"AND b.bank_type IN ({marcadores}) "
+                "GROUP BY b.id, b.name, b.bank_type HAVING COUNT(d.period_end) >= :n "
+                "ORDER BY b.name"), params).fetchall()
         except Exception as e:  # noqa: BLE001
             logger.warning("no se pudieron listar las entidades de valuación: %s", e)
             return []
-        return [{"value": str(f[0]), "label": str(f[1]), "group": ""} for f in filas]
+        return [{"value": str(f[0]), "label": str(f[1]), "group": str(f[2] or "")}
+                for f in filas]
 
     def scope_kind(self) -> str:
         return "entity"
