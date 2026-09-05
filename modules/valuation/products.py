@@ -93,17 +93,24 @@ class ValuationProduct:
 
     ESTADO_BACKTEST = EstadoBacktest(
         tiene_motor=False, obstaculo="dato_pendiente",
-        dato_que_falta=("transacciones bancarias RD/Caribe con precio sobre valor libro "
-                        "CONTABLE verificable — el panel de T-VL-7 exige N ≥ 8. El conteo "
-                        "vigente lo computa `panel.transacciones.estado()` y no se "
-                        "transcribe acá: una cifra escrita a mano se desincroniza"),
+        dato_que_falta=("la HISTORIA de ROE y patrimonio de las adquiridas, que es lo que "
+                        "el motor necesita para valuarlas a la fecha de su operación. El "
+                        "balance por entidad solo lo ingerimos de República Dominicana; los "
+                        "conteos vigentes los computan `panel.transacciones.estado()` y "
+                        "`contraste_del_modelo()` y no se transcriben acá"),
         desenlace="el precio efectivamente pagado en una transacción sobre la entidad",
-        motivo=("Una valuación se valida contra lo que alguien PAGÓ, y en el mercado "
-                "dominicano las operaciones bancarias son pocas y con divulgación irregular. "
-                "Mientras el panel de transacciones no llegue a ocho casos verificables, el "
-                "eje no puede afirmar que sus valores predicen precios: publica el modelo, "
-                "sus supuestos y su sensibilidad, y declara que el contraste no existe. La "
-                "vista de M&A queda cerrada tras ese mismo gate."))
+        motivo=("Una valuación se valida contra lo que alguien PAGÓ, y eso son DOS cosas que "
+                "no hay que confundir. La primera es tener múltiplos comparables: a cuánto "
+                "sobre libro se paga un banco del Caribe. La segunda es contrastar ESTE "
+                "modelo, que exige correr el Excess Return sobre cada adquirida a la fecha "
+                "de su operación y comparar su valor con el precio — y para eso hace falta "
+                "la historia de ROE y patrimonio de esa entidad, que solo tenemos donde "
+                "ingerimos el balance por entidad.\n\n"
+                "Un panel de comparables completo abre la vista de fusiones y adquisiciones "
+                "y NO valida el modelo. Mientras las adquiridas del panel estén mayormente "
+                "fuera de nuestra cobertura de balances, el eje publica el modelo, sus "
+                "supuestos y su sensibilidad, y declara que sus valores no están "
+                "contrastados contra precios pagados."))
     sector_key = SECTOR_KEY
 
     def __init__(self, db: Optional[Session] = None):
@@ -345,10 +352,12 @@ _SAMPLE_NARRATIVAS: Dict[str, str] = {
         "_Cifras ilustrativas de una entidad ficticia._"
     ),
     SECCION_LIMITACIONES: (
-        "Esta valuación **no está contrastada contra precios pagados**. En el mercado "
-        "dominicano las transacciones bancarias son pocas y con divulgación irregular; "
-        "mientras el panel no llegue a ocho casos con precio sobre valor libro verificable, "
-        "el eje no afirma que sus valores predicen precios.\n\n"
+        "Esta valuación **no está contrastada contra precios pagados**. El panel de "
+        "transacciones sí permite decir a cuánto sobre valor libro se ha pagado un banco del "
+        "Caribe, que es una referencia de mercado; contrastar este modelo es otra cosa y "
+        "exige valuar cada adquirida a la fecha de su operación, para lo que hace falta su "
+        "historia de balance. Mientras eso no exista, el eje no afirma que sus valores "
+        "predicen precios.\n\n"
         "Un score de solidez **no es un proxy de precio**: una entidad sólida puede estar "
         "destruyendo valor, y este informe responde cuánto vale, no qué tan sana está.\n\n"
         "Nada de lo anterior es una recomendación de comprar o vender."
