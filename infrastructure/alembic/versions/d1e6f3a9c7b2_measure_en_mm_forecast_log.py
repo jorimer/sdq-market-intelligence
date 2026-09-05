@@ -38,13 +38,20 @@ El `target_series` sí se normaliza en las dos: que `"pib_real"` no es un `serie
 depende de ninguna versión del código.
 
 Revision ID: d1e6f3a9c7b2
-Revises: c3f7a2d9e814
+Revises: 7babe43b4afd
+
+Re-apuntada al mergear main. Nació como hija de `c3f7a2d9e814`, y `7babe43b4afd` —que en el
+momento de escribir ésta colgaba de `b2e9f4a71c85`— fue re-apuntada al mismo padre en
+`3e295505`. Resultado: dos cabezas otra vez, que es lo que rompe el job de reversibilidad.
+Se linealiza en vez de crear una revisión de merge, igual que hizo aquel commit: las dos son
+independientes —aquélla crea `rb_country_aggregates`, ésta agrega una columna a
+`mm_forecast_log`— y el repo mantiene una cadena sin ramas.
 """
 import sqlalchemy as sa
 from alembic import op
 
 revision = "d1e6f3a9c7b2"
-down_revision = "c3f7a2d9e814"
+down_revision = "7babe43b4afd"
 branch_labels = None
 depends_on = None
 
