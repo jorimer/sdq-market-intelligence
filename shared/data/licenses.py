@@ -458,6 +458,89 @@ LICENCIAS: Dict[str, Licencia] = {
               "está el archivo y no un régimen de uso. Ahora dice cuál es. Misma base "
               "legal que los estados financieros auditados."),
     ),
+    ("SB — estadísticas del sistema financiero publicadas por la Superintendencia de "
+     "Bancos: portal institucional, series históricas y SIMBAD. Información pública "
+     "dominicana: reutilizable con atribución por Ley 200-04, Decreto 103-22, NORTIC A3 "
+     "y Ley 65-00 art. 41."): Licencia(
+        terminos_url="https://sb.gob.do/terminos-de-uso/",
+        verificado_el="2026-09-04",
+        atribucion=("Fuente: Superintendencia de Bancos de la República Dominicana (SB). "
+                    "Información pública de la República Dominicana."),
+        nota=("`sib_historical_client` (CSV de la Cronología SB en `sb.gob.do/media/`), "
+              "`simbad_client` (Superset público) y `fiduciaria_pdf_client` (PDF de "
+              "estados auditados del portal). Las tres superficies son públicas y sin "
+              "credencial, y SIMBAD enlaza al MISMO documento de términos del portal, no "
+              "tiene uno propio. Leído el 2026-09-04: ese documento es un descargo de "
+              "responsabilidad sobre exactitud y vigencia — NO prohíbe redistribuir, a "
+              "diferencia de Panamá o Uruguay. El pie dice «Todos los derechos "
+              "reservados», que es plantilla de OGTIC y no fija el régimen del dato "
+              "público (ver la regla del encabezado de este módulo). Corrobora la "
+              "apertura: la propia SB publica 10 datasets en datos.gob.do bajo ODbL "
+              "declarada — son administrativos (sanciones, reclamaciones, entidades "
+              "autorizadas), NO la estadística financiera que consumimos, así que valen "
+              "como postura del emisor y no como la licencia de esta superficie. "
+              "Advertencia que hereda quien publique estas cifras: los términos declaran "
+              "que el contenido se publica «de manera transitoria y puede presentar "
+              "discrepancias con las informaciones definitivas»."),
+    ),
+    ("SB — API pública de Estadísticas del Sistema Financiero v2, con credencial de "
+     "desarrollador. Información pública dominicana: reutilizable con atribución por "
+     "Ley 200-04, Decreto 103-22, NORTIC A3 y Ley 65-00 art. 41."): Licencia(
+        terminos_url="https://sb.gob.do/terminos-de-uso/",
+        verificado_el="2026-09-04",
+        atribucion=("Fuente: Superintendencia de Bancos de la República Dominicana (SB), "
+                    "API de Estadísticas del Sistema Financiero. Información pública de "
+                    "la República Dominicana."),
+        nota=("`sib_data_client` contra `apis.sb.gob.do/estadisticas/v2`. Entrada aparte "
+              "de las superficies abiertas porque ésta exige API key: había que descartar "
+              "que el portal que la emite impusiera un acuerdo propio. Abierto "
+              "`desarrollador.sb.gob.do` el 2026-09-04, incluida la pantalla de registro: "
+              "no publica términos, licencia ni condiciones — el único documento de "
+              "términos de la institución es el del portal. Lo que sí declara refuerza la "
+              "apertura: lo llama «nuestro primer API público para acceder a datos "
+              "públicos del Sistema Financiero» y promueve consumirlo desde herramientas "
+              "de ciencia de datos con códigos reproducibles. La credencial controla el "
+              "ACCESO (cuota, identificación del consumidor), no el régimen de uso del "
+              "dato."),
+    ),
+    ("SECMCA / CMCA — cuadros EMFA publicados para descarga en secmca.org. Sin "
+     "términos de uso localizados: deuda de verificación declarada, no permiso "
+     "presunto."): Licencia(
+        terminos_url=None,
+        verificado_el=None,
+        atribucion=("Fuente: Secretaría Ejecutiva del Consejo Monetario Centroamericano "
+                    "(SECMCA) — Estadísticas Monetarias y Financieras Armonizadas (EMFA)."),
+        nota=("`secmca_client`. Se buscaron términos el 2026-09-04 y NO existen: se "
+              "recorrió `www.secmca.org` en busca de aviso legal, términos, condiciones de "
+              "uso, política de privacidad y pie de copyright, y no hay ninguno; el sitio "
+              "tampoco declara licencia sobre los cuadros. Por eso entra como deuda "
+              "declarada y no como permiso presunto: la doctrina de emisores públicos "
+              "dominicanos NO aplica a un organismo regional. Lo que sí se sabe: los "
+              "cuadros EMFA son archivos publicados para descarga abierta en "
+              "`secmca.org/emfa`, sin credencial. Distinto es su API "
+              "(`secmca-api.secmca.org`), donde todo endpoint que devuelve VALORES "
+              "responde 401 y solo los catálogos son públicos — por eso este conector lee "
+              "los archivos y no el API. Pedir la licencia por escrito a "
+              "secmca@secmca.org antes de una edición que se distribuya masivamente."),
+    ),
+    ("SFC Colombia vía datos.gov.co — CC BY-SA 4.0 (Atribución + CompartirIgual): "
+     "exige citar a la Superintendencia Financiera de Colombia y la fecha de "
+     "actualización del dato."): Licencia(
+        terminos_url="http://creativecommons.org/licenses/by-sa/4.0/legalcode",
+        verificado_el="2026-09-04",
+        atribucion=("Fuente: Superintendencia Financiera de Colombia - SUPERFINANCIERA, "
+                    "Bogotá D.C., vía datos.gov.co."),
+        nota=("`sfc_client`. La licencia no se dedujo: la declara la propia API de Socrata "
+              "por dataset — `GET datos.gov.co/api/views/x586-r5d2.json` devuelve "
+              "`licenseId: CC_40_BY_SA` con su `termsLink`, y el texto de `attribution` "
+              "es el que viaja al campo de arriba, palabra por palabra del emisor. Igual "
+              "en `rvii-eis8` (cartera). El «-sa» lo detecta "
+              "`shared.data_api.manifest.license_restricts_redistribution` y es CORRECTO "
+              "que lo detecte: el share-alike retiene el activo VERBATIM. No alcanza a lo "
+              "que publica el boletín, que son agregados del sistema calculados por "
+              "nosotros sobre el dato por entidad — obra propia, no reventa del dato del "
+              "emisor. Se cita fuente Y fecha de actualización, como la licencia exige."),
+    ),
     "open-data": Licencia(
         terminos_url=None, verificado_el=None,
         nota=("Dos palabras sin emisor ni cláusula, en el conector de IED del BCRD. La "

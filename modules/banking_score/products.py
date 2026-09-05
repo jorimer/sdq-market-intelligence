@@ -940,6 +940,76 @@ class BankingProduct:
             detail=f"{n} entidades calificadas en {latest}.",
         )
 
+    def variable_signals(self) -> Dict[str, Any]:
+        """Procedencia POR INDICADOR del Banking Score, para el Data Registry.
+
+        **Lo que arregla.** Sin esto el eje caía a `_product_level_fallback`, que emite una
+        sola señal agregada con `real_fraction` = la cobertura a nivel FUENTE — 1.0 en
+        cuanto haya una entidad calificada. La nota metodológica que se genera de ahí decía
+        entonces «100% del peso de este índice se sostiene en dato real», sobre un eje donde
+        hay indicadores sin dato en todo el panel. No era una nota pobre: era una
+        sobreafirmación sobre nuestra propia cobertura, y el boletín la publica a una lista
+        de correo.
+
+        **Cómo se decide el estado.** El motor no tiene rúbrica: un indicador está
+        `available` o no lo está, y eso mapea a REAL / GAP sin inventar un matiz intermedio.
+        Una variable es REAL si tiene dato en al menos una entidad del panel, con
+        `real_fraction` = la fracción que lo tiene, que es lo que declara la parcialidad.
+
+        **Los pesos se DERIVAN, no se copian**: `peso_efectivo_por_indicador` los computa de
+        las mismas constantes que aplica el motor, familias de Solidez incluidas.
+        """
+        from modules.banking_score.scoring.indicator_detail import INDICATOR_META
+        from modules.banking_score.scoring.weights import peso_efectivo_por_indicador
+        from shared.registry.signals import GAP, REAL, VariableSignal
+
+        db = self._require_db()
+        latest = (db.query(func.max(RatingResult.period_end))
+                  .filter(RatingResult.model_type == ModelType.deterministic).scalar())
+        if latest is None:
+            return {"period": None, "signals": []}
+
+        # `cast` porque el modelo declara sus columnas al estilo clásico y mypy ve
+        # `Column[Any]`; el contenido es el dict que persiste `run_scoring`.
+        filas = (db.query(RatingResult)
+                   .filter(RatingResult.period_end == latest,
+                           RatingResult.model_type == ModelType.deterministic).all())
+        detalles: List[Dict[str, Any]] = [
+            cast(Dict[str, Any], r.indicator_details or {}) for r in filas]
+        if not detalles:
+            return {"period": None, "signals": []}
+
+        pesos = peso_efectivo_por_indicador()
+        salud = self.data_signals()
+        n = len(detalles)
+        señales = []
+        for clave, peso in sorted(pesos.items(), key=lambda kv: -kv[1]):
+            con_dato = sum(1 for d in detalles
+                           if (d.get(clave) or {}).get("available", False))
+            meta = INDICATOR_META.get(clave, {})
+            es_real = con_dato > 0
+            señales.append(VariableSignal(
+                key=clave,
+                label=meta.get("label", clave),
+                state=REAL if es_real else GAP,
+                dimension=meta.get("sub", ""),
+                weight=peso,
+                source=", ".join(salud.sources) if es_real else "",
+                cadence="quarterly",
+                value=None,                      # panel multi-sujeto: no hay un valor único
+                real_fraction=round(con_dato / n, 4) if n else 0.0,
+                # `per_subject` en todos: cada indicador de banca se mide POR ENTIDAD y
+                # diferencia entre ellas. Ninguno es un dato nacional que valga igual para
+                # todo el panel, así que declarar `national` en alguno sería decirle a una
+                # entidad que algo explica su posición cuando no la explica.
+                scope="per_subject",
+                note=("" if con_dato == n else
+                      f"cobertura parcial: dato real en {con_dato}/{n} entidades"
+                      if con_dato else
+                      "brecha: ninguna entidad del panel tiene los insumos de este indicador"),
+            ))
+        return {"period": str(latest), "signals": señales}
+
     def has_engine(self) -> bool:
         db = self._require_db()
         return (db.query(func.count(RatingResult.id)).scalar() or 0) > 0
@@ -963,7 +1033,7 @@ class BankingProduct:
         return cortes + anios
 
     def validation_state(self) -> ValidationState:
-        # Banca es el eje "Listo" (en producción, metodología de 19 indicadores
+        # Banca es el eje "Listo" (en producción, metodología de 20 indicadores
         # validada). Es el sector de referencia del framework.
         return ValidationState(approved=True, score=1.0,
                                notes="Eje 1 en producción; metodología determinista validada.")

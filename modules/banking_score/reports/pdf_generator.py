@@ -87,6 +87,7 @@ REPORT_TYPE_LABELS = {
     # encabezado de cada página: la confusión exacta que la separación vino a cerrar,
     # reintroducida por el rótulo.
     "anio_por_trimestres": "Año por Trimestres",
+    "boletin_regional": "Boletín trimestral · RD en contexto regional",
 }
 
 # Nivel comercial (metadato de portada/header) → etiqueta ES. Sin este mapeo, el valor
@@ -126,6 +127,10 @@ NARRATIVE_SECTION_TITLES = {
     # identificador. Un título de sección de un documento que se vende no se deriva de un
     # nombre de variable.
     "anio_por_trimestres": "El Año por Trimestres",
+    "boletin_rd": "República Dominicana en profundidad",
+    "boletin_sistemas": "Los sistemas de la región, uno por uno",
+    "boletin_armonizado": "Crédito y tasas comparables: la capa armonizada",
+    "nota_metodologica": "Nota metodológica",
     "contexto_de_mercado": "Contexto de Mercado",
     "system_overview": "Panorama del Sistema",
     "scenario_analysis": "Análisis de Escenarios",

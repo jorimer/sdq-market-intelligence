@@ -1082,7 +1082,8 @@
       "criteria": "Criteria",
       "sector_outlook": "Sector outlook",
       "anuario": "System yearbook",
-      "revision_anual": "Annual Review"
+      "revision_anual": "Annual Review",
+      "boletin_regional": "Quarterly bulletin · DR in regional context"
     },
     "mdlTitle": "ML model",
     "mdlSub": "Explainable complement to the deterministic core (per-variable contributions), not an oracle.",

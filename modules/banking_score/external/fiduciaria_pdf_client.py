@@ -24,9 +24,20 @@ from typing import Any, Dict, List, Optional, Tuple
 
 import httpx
 
+from shared.data.base_client import check_license_for
+
 logger = logging.getLogger(__name__)
 
 _HEADERS = {"User-Agent": "SDQ-MIP/1.0"}
+
+# Régimen de uso del dato, registrado en `shared/data/licenses.py`. Cubre los PDF de
+# estados auditados que el portal de la SB publica para las fiduciarias supervisadas.
+SOURCE = "SB"
+LICENSE = ("SB — estadísticas del sistema financiero publicadas por la Superintendencia de "
+           "Bancos: portal institucional, series históricas y SIMBAD. Información pública "
+           "dominicana: reutilizable con atribución por Ley 200-04, Decreto 103-22, NORTIC A3 "
+           "y Ley 65-00 art. 41.")
+LICENSE_OK = True
 
 PORTAL_BASE = "https://www.sb.gob.do"
 _FIDU_PATH = "/supervisados/fiduciarias"
@@ -104,6 +115,7 @@ def discover_pdfs(slug: str, timeout: int = 30) -> Dict[str, List[Tuple[Any, str
     Returns {"entity": [(year, abs_url), ...], "trusts": [(name, abs_url), ...]}.
     """
     url = f"{PORTAL_BASE}{_FIDU_PATH}/{slug}/"
+    check_license_for(SOURCE, LICENSE, LICENSE_OK)
     resp = httpx.get(url, timeout=timeout, headers=_HEADERS, follow_redirects=True)
     resp.raise_for_status()
     html = resp.text
@@ -139,6 +151,7 @@ def _trust_name(url: str) -> str:
 
 def download_pdf(url: str, timeout: int = 120) -> str:  # pragma: no cover - network
     """Download a PDF to a temp file; return its path (caller deletes it)."""
+    check_license_for(SOURCE, LICENSE, LICENSE_OK)
     fd, path = tempfile.mkstemp(suffix=".pdf")
     try:
         with httpx.stream("GET", url, timeout=timeout, headers=_HEADERS, follow_redirects=True) as resp:

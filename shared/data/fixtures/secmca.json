@@ -1,0 +1,958 @@
+{
+ "_meta": {
+  "note": "Recorte REAL de los cuadros EMFA del CMCA (secmca.org/emfa), capturado el 2026-09-04 y RE-CAPTURADO el 2026-09-05 con la escala de tasas ya normalizada a porcentaje. DOM es el caso completo, SLV no publica tasa activa y NIC trae el corte más viejo. Solo los dos últimos cortes de cada cuadro.",
+  "source": "SECMCA / CMCA — cuadros EMFA",
+  "captured_at": "2026-09-05"
+ },
+ "DOM": {
+  "url": "https://www.secmca.org/wp-content/uploads/2026/08/RD_CMCA_EMFA_2_DIV.xls",
+  "cuadros": {
+   "credito_osd_privado_mn": [
+    [
+     "2026-06-30",
+     "Agricultura, ganadería silvicultura y pesca",
+     45684.09660404597
+    ],
+    [
+     "2026-06-30",
+     "Explotación de minas y canteras",
+     2787.933146
+    ],
+    [
+     "2026-06-30",
+     "Industrias manufactureras",
+     112510.5543050526
+    ],
+    [
+     "2026-06-30",
+     "Construcción",
+     144109.821182
+    ],
+    [
+     "2026-06-30",
+     "Consumo · Tarjeta de Crédito",
+     99898.220971
+    ],
+    [
+     "2026-06-30",
+     "Consumo · Otros",
+     611683.7810073723
+    ],
+    [
+     "2026-06-30",
+     "Comercio /1 · Otros",
+     387477.64639170875
+    ],
+    [
+     "2026-06-30",
+     "Transporte, almacenamiento, información y comunicaciones · Otros",
+     25479.408293213273
+    ],
+    [
+     "2026-06-30",
+     "Actividades alojamiento y servicios comida · Otros",
+     11938.655782
+    ],
+    [
+     "2026-06-30",
+     "Actividades Inmobiliarias · Vivienda",
+     439073.3416413703
+    ],
+    [
+     "2026-06-30",
+     "Actividades Inmobiliarias · Otros",
+     60995.559921
+    ],
+    [
+     "2026-06-30",
+     "CUADRO IV.1 · Otros sectores · Otros",
+     104763.52032211673
+    ],
+    [
+     "2026-06-30",
+     "CUADRO IV.1 · Total · Otros · (13)=(1 al 12)",
+     2046402.53956688
+    ],
+    [
+     "2026-07-31",
+     "Agricultura, ganadería silvicultura y pesca",
+     46269.10843104596
+    ],
+    [
+     "2026-07-31",
+     "Explotación de minas y canteras",
+     3043.21493
+    ],
+    [
+     "2026-07-31",
+     "Industrias manufactureras",
+     112991.1631040526
+    ],
+    [
+     "2026-07-31",
+     "Construcción",
+     145832.077169
+    ],
+    [
+     "2026-07-31",
+     "Consumo · Tarjeta de Crédito",
+     99349.140925
+    ],
+    [
+     "2026-07-31",
+     "Consumo · Otros",
+     615293.7583023723
+    ],
+    [
+     "2026-07-31",
+     "Comercio /1 · Otros",
+     390493.57589670876
+    ],
+    [
+     "2026-07-31",
+     "Transporte, almacenamiento, información y comunicaciones · Otros",
+     24206.549434213273
+    ],
+    [
+     "2026-07-31",
+     "Actividades alojamiento y servicios comida · Otros",
+     12067.718903
+    ],
+    [
+     "2026-07-31",
+     "Actividades Inmobiliarias · Vivienda",
+     442324.8837613703
+    ],
+    [
+     "2026-07-31",
+     "Actividades Inmobiliarias · Otros",
+     60257.18849
+    ],
+    [
+     "2026-07-31",
+     "CUADRO IV.1 · Otros sectores · Otros",
+     101599.08934311672
+    ],
+    [
+     "2026-07-31",
+     "CUADRO IV.1 · Total · Otros · (13)=(1 al 12)",
+     2053727.4686898799
+    ]
+   ],
+   "tasa_activa_mn": [
+    [
+     "2026-06-30",
+     "Agricultura, ganadería silvicultura y pesca",
+     null
+    ],
+    [
+     "2026-06-30",
+     "Explotación de minas y canteras",
+     null
+    ],
+    [
+     "2026-06-30",
+     "Industrias manufactureras",
+     null
+    ],
+    [
+     "2026-06-30",
+     "Construcción",
+     null
+    ],
+    [
+     "2026-06-30",
+     "Consumo · Tarjeta de Crédito",
+     57.788
+    ],
+    [
+     "2026-06-30",
+     "Consumo · Otros",
+     18.5074
+    ],
+    [
+     "2026-06-30",
+     "Comercio · Otros",
+     12.5202
+    ],
+    [
+     "2026-06-30",
+     "Transporte, almacenamiento, información y comunicaciones · Otros",
+     null
+    ],
+    [
+     "2026-06-30",
+     "Actividades alojamiento y servicios comida · Otros",
+     null
+    ],
+    [
+     "2026-06-30",
+     "Actividades Inmobiliarias · Vivienda",
+     11.9003
+    ],
+    [
+     "2026-06-30",
+     "Actividades Inmobiliarias · Otros",
+     null
+    ],
+    [
+     "2026-06-30",
+     "Otros sectores · Otros",
+     null
+    ],
+    [
+     "2026-06-30",
+     "CUADRO V.4 · Interbancaria (ponderada) · Otros",
+     8.2146
+    ],
+    [
+     "2026-07-31",
+     "Agricultura, ganadería silvicultura y pesca",
+     null
+    ],
+    [
+     "2026-07-31",
+     "Explotación de minas y canteras",
+     null
+    ],
+    [
+     "2026-07-31",
+     "Industrias manufactureras",
+     null
+    ],
+    [
+     "2026-07-31",
+     "Construcción",
+     null
+    ],
+    [
+     "2026-07-31",
+     "Consumo · Tarjeta de Crédito",
+     58.0246
+    ],
+    [
+     "2026-07-31",
+     "Consumo · Otros",
+     18.6
+    ],
+    [
+     "2026-07-31",
+     "Comercio · Otros",
+     12.6495
+    ],
+    [
+     "2026-07-31",
+     "Transporte, almacenamiento, información y comunicaciones · Otros",
+     null
+    ],
+    [
+     "2026-07-31",
+     "Actividades alojamiento y servicios comida · Otros",
+     null
+    ],
+    [
+     "2026-07-31",
+     "Actividades Inmobiliarias · Vivienda",
+     11.7088
+    ],
+    [
+     "2026-07-31",
+     "Actividades Inmobiliarias · Otros",
+     null
+    ],
+    [
+     "2026-07-31",
+     "Otros sectores · Otros",
+     null
+    ],
+    [
+     "2026-07-31",
+     "CUADRO V.4 · Interbancaria (ponderada) · Otros",
+     7.6256
+    ]
+   ],
+   "tasa_pasiva_mn": [
+    [
+     "2026-06-30",
+     "Operaciones nuevas · Depósitos · Transferibles",
+     null
+    ],
+    [
+     "2026-06-30",
+     "Operaciones nuevas · Depósitos · Ahorro",
+     0.6306
+    ],
+    [
+     "2026-06-30",
+     "Operaciones nuevas · Depósitos · Plazo · Un mes",
+     7.4316
+    ],
+    [
+     "2026-06-30",
+     "Operaciones nuevas · Depósitos · Plazo · Seis meses",
+     7.2965
+    ],
+    [
+     "2026-06-30",
+     "Operaciones nuevas · Depósitos · Plazo · Un año",
+     6.742
+    ],
+    [
+     "2026-06-30",
+     "Operaciones nuevas · Depósitos · Plazo · Mas de un año",
+     5.6382
+    ],
+    [
+     "2026-06-30",
+     "Operaciones nuevas · Acuerdos de recompra 2/ · Plazo · Mas de un año",
+     null
+    ],
+    [
+     "2026-06-30",
+     "Saldos vivos (tasa promedio ponderada) · Depósitos · Transferibles · Mas de un año",
+     null
+    ],
+    [
+     "2026-06-30",
+     "Saldos vivos (tasa promedio ponderada) · Depósitos · Ahorro · Mas de un año",
+     null
+    ],
+    [
+     "2026-06-30",
+     "Saldos vivos (tasa promedio ponderada) · Depósitos · Plazo · Mas de un año",
+     null
+    ],
+    [
+     "2026-06-30",
+     "Saldos vivos (tasa promedio ponderada) · Acuerdos de recompra 2/ · Plazo · Mas de un año",
+     null
+    ],
+    [
+     "2026-07-31",
+     "Operaciones nuevas · Depósitos · Transferibles",
+     null
+    ],
+    [
+     "2026-07-31",
+     "Operaciones nuevas · Depósitos · Ahorro",
+     0.6247
+    ],
+    [
+     "2026-07-31",
+     "Operaciones nuevas · Depósitos · Plazo · Un mes",
+     7.6795
+    ],
+    [
+     "2026-07-31",
+     "Operaciones nuevas · Depósitos · Plazo · Seis meses",
+     7.6454
+    ],
+    [
+     "2026-07-31",
+     "Operaciones nuevas · Depósitos · Plazo · Un año",
+     6.7298
+    ],
+    [
+     "2026-07-31",
+     "Operaciones nuevas · Depósitos · Plazo · Mas de un año",
+     5.9005
+    ],
+    [
+     "2026-07-31",
+     "Operaciones nuevas · Acuerdos de recompra 2/ · Plazo · Mas de un año",
+     null
+    ],
+    [
+     "2026-07-31",
+     "Saldos vivos (tasa promedio ponderada) · Depósitos · Transferibles · Mas de un año",
+     null
+    ],
+    [
+     "2026-07-31",
+     "Saldos vivos (tasa promedio ponderada) · Depósitos · Ahorro · Mas de un año",
+     null
+    ],
+    [
+     "2026-07-31",
+     "Saldos vivos (tasa promedio ponderada) · Depósitos · Plazo · Mas de un año",
+     null
+    ],
+    [
+     "2026-07-31",
+     "Saldos vivos (tasa promedio ponderada) · Acuerdos de recompra 2/ · Plazo · Mas de un año",
+     null
+    ]
+   ]
+  }
+ },
+ "SLV": {
+  "url": "https://www.secmca.org/wp-content/uploads/2026/08/ES_CMCA_EMFA_2_DIV.xls",
+  "cuadros": {
+   "credito_osd_privado_mn": [
+    [
+     "2026-05-31",
+     "Consumo · Tarjetas de crédito",
+     1361.4212620800001
+    ],
+    [
+     "2026-05-31",
+     "Consumo · Otros",
+     5714.91287594
+    ],
+    [
+     "2026-05-31",
+     "Vivienda · Otros",
+     3262.16415383
+    ],
+    [
+     "2026-05-31",
+     "Agricultura, ganadería silvicultura, caza y pesca · Otros",
+     340.88645704000004
+    ],
+    [
+     "2026-05-31",
+     "Industria · Construcción",
+     1577.5262854499997
+    ],
+    [
+     "2026-05-31",
+     "Industria · Otra",
+     1900.3420478
+    ],
+    [
+     "2026-05-31",
+     "Comercio, restaurantes y hoteles · Otra",
+     3295.8474321299996
+    ],
+    [
+     "2026-05-31",
+     "Servicios · Transporte,  almacenamiento y comunicaciones",
+     327.64481509
+    ],
+    [
+     "2026-05-31",
+     "Servicios · Otros servicios",
+     2862.8142935599994
+    ],
+    [
+     "2026-05-31",
+     "CUADRO IV.1 · Otros préstamos no clasificados · Otros servicios",
+     982.4349015899999
+    ],
+    [
+     "2026-05-31",
+     "CUADRO IV.1 · Total · Otros servicios · (11)=(1 al 10)",
+     21625.99452451
+    ],
+    [
+     "2026-06-30",
+     "Consumo · Tarjetas de crédito",
+     1373.87385166
+    ],
+    [
+     "2026-06-30",
+     "Consumo · Otros",
+     5743.622379810001
+    ],
+    [
+     "2026-06-30",
+     "Vivienda · Otros",
+     3292.08783355
+    ],
+    [
+     "2026-06-30",
+     "Agricultura, ganadería silvicultura, caza y pesca · Otros",
+     353.89557129
+    ],
+    [
+     "2026-06-30",
+     "Industria · Construcción",
+     1579.30920399
+    ],
+    [
+     "2026-06-30",
+     "Industria · Otra",
+     1825.70560179
+    ],
+    [
+     "2026-06-30",
+     "Comercio, restaurantes y hoteles · Otra",
+     3360.19716289
+    ],
+    [
+     "2026-06-30",
+     "Servicios · Transporte,  almacenamiento y comunicaciones",
+     335.32216335999993
+    ],
+    [
+     "2026-06-30",
+     "Servicios · Otros servicios",
+     2930.74846065
+    ],
+    [
+     "2026-06-30",
+     "CUADRO IV.1 · Otros préstamos no clasificados · Otros servicios",
+     1009.60922072
+    ],
+    [
+     "2026-06-30",
+     "CUADRO IV.1 · Total · Otros servicios · (11)=(1 al 10)",
+     21804.371449710005
+    ]
+   ],
+   "tasa_pasiva_mn": [
+    [
+     "2021-11-30",
+     "Operaciones nuevas · Depósitos · Transferibles",
+     null
+    ],
+    [
+     "2021-11-30",
+     "Operaciones nuevas · Depósitos · Ahorro",
+     null
+    ],
+    [
+     "2021-11-30",
+     "Operaciones nuevas · Depósitos · Plazo · Un mes",
+     3.14
+    ],
+    [
+     "2021-11-30",
+     "Operaciones nuevas · Depósitos · Plazo · Seis meses",
+     4.07
+    ],
+    [
+     "2021-11-30",
+     "Operaciones nuevas · Depósitos · Plazo · Un año",
+     4.44
+    ],
+    [
+     "2021-11-30",
+     "Operaciones nuevas · Depósitos · Plazo · Mas de un año",
+     null
+    ],
+    [
+     "2021-11-30",
+     "Operaciones nuevas · Acuerdos de recompra 2/ · Plazo · Mas de un año",
+     4.93
+    ],
+    [
+     "2021-11-30",
+     "Saldos vivos (tasa promedio ponderada) · Depósitos · Transferibles · Mas de un año",
+     null
+    ],
+    [
+     "2021-11-30",
+     "Saldos vivos (tasa promedio ponderada) · Depósitos · Ahorro · Mas de un año",
+     null
+    ],
+    [
+     "2021-11-30",
+     "Saldos vivos (tasa promedio ponderada) · Depósitos · Plazo · Mas de un año",
+     null
+    ],
+    [
+     "2021-11-30",
+     "Saldos vivos (tasa promedio ponderada) · Acuerdos de recompra 2/ · Plazo · Mas de un año",
+     4.93
+    ],
+    [
+     "2021-12-31",
+     "Operaciones nuevas · Depósitos · Transferibles",
+     null
+    ],
+    [
+     "2021-12-31",
+     "Operaciones nuevas · Depósitos · Ahorro",
+     null
+    ],
+    [
+     "2021-12-31",
+     "Operaciones nuevas · Depósitos · Plazo · Un mes",
+     3.13
+    ],
+    [
+     "2021-12-31",
+     "Operaciones nuevas · Depósitos · Plazo · Seis meses",
+     4.24
+    ],
+    [
+     "2021-12-31",
+     "Operaciones nuevas · Depósitos · Plazo · Un año",
+     4.59
+    ],
+    [
+     "2021-12-31",
+     "Operaciones nuevas · Depósitos · Plazo · Mas de un año",
+     null
+    ],
+    [
+     "2021-12-31",
+     "Operaciones nuevas · Acuerdos de recompra 2/ · Plazo · Mas de un año",
+     5.01
+    ],
+    [
+     "2021-12-31",
+     "Saldos vivos (tasa promedio ponderada) · Depósitos · Transferibles · Mas de un año",
+     null
+    ],
+    [
+     "2021-12-31",
+     "Saldos vivos (tasa promedio ponderada) · Depósitos · Ahorro · Mas de un año",
+     null
+    ],
+    [
+     "2021-12-31",
+     "Saldos vivos (tasa promedio ponderada) · Depósitos · Plazo · Mas de un año",
+     null
+    ],
+    [
+     "2021-12-31",
+     "Saldos vivos (tasa promedio ponderada) · Acuerdos de recompra 2/ · Plazo · Mas de un año",
+     5.01
+    ]
+   ]
+  }
+ },
+ "NIC": {
+  "url": "https://www.secmca.org/wp-content/uploads/2025/09/NC_CMCA_EMFA_2_DIV.xls",
+  "cuadros": {
+   "credito_osd_privado_mn": [
+    [
+     "2025-05-31",
+     "Agricultura, ganadería silvicultura y pesca",
+     802.8667036999999
+    ],
+    [
+     "2025-05-31",
+     "Explotación de minas y canteras",
+     3.40923241
+    ],
+    [
+     "2025-05-31",
+     "Industrias manufactureras",
+     99.7156677
+    ],
+    [
+     "2025-05-31",
+     "Construcción",
+     4.35239728
+    ],
+    [
+     "2025-05-31",
+     "Consumo · Tarjeta de Crédito",
+     0.0
+    ],
+    [
+     "2025-05-31",
+     "Consumo · Otros 2/",
+     228.31882222000002
+    ],
+    [
+     "2025-05-31",
+     "Comercio · Otros 2/",
+     2379.035469409999
+    ],
+    [
+     "2025-05-31",
+     "Transporte, almacenamiento, información y comunicaciones · Otros 2/",
+     103.3120265
+    ],
+    [
+     "2025-05-31",
+     "Actividades alojamiento y servicios comida · Otros 2/",
+     0.0
+    ],
+    [
+     "2025-05-31",
+     "Actividades Inmobiliarias · Vivienda",
+     0.0
+    ],
+    [
+     "2025-05-31",
+     "Actividades Inmobiliarias · Otras 3/",
+     2031.2027264399999
+    ],
+    [
+     "2025-05-31",
+     "CUADRO IV.1 · Otros sectores 4/ · Otras 3/",
+     58.43811541
+    ],
+    [
+     "2025-05-31",
+     "CUADRO IV.1 · Total · Otras 3/ · (13)=(1 al 12)",
+     5710.651161069999
+    ],
+    [
+     "2025-06-30",
+     "Agricultura, ganadería silvicultura y pesca",
+     769.85334058
+    ],
+    [
+     "2025-06-30",
+     "Explotación de minas y canteras",
+     0.7499283
+    ],
+    [
+     "2025-06-30",
+     "Industrias manufactureras",
+     229.02875906
+    ],
+    [
+     "2025-06-30",
+     "Construcción",
+     7.61579782
+    ],
+    [
+     "2025-06-30",
+     "Consumo · Tarjeta de Crédito",
+     0.0
+    ],
+    [
+     "2025-06-30",
+     "Consumo · Otros 2/",
+     244.78887397
+    ],
+    [
+     "2025-06-30",
+     "Comercio · Otros 2/",
+     3475.9564502499993
+    ],
+    [
+     "2025-06-30",
+     "Transporte, almacenamiento, información y comunicaciones · Otros 2/",
+     117.48333133
+    ],
+    [
+     "2025-06-30",
+     "Actividades alojamiento y servicios comida · Otros 2/",
+     0.0
+    ],
+    [
+     "2025-06-30",
+     "Actividades Inmobiliarias · Vivienda",
+     0.0
+    ],
+    [
+     "2025-06-30",
+     "Actividades Inmobiliarias · Otras 3/",
+     1919.51689985
+    ],
+    [
+     "2025-06-30",
+     "CUADRO IV.1 · Otros sectores 4/ · Otras 3/",
+     58.51873081000001
+    ],
+    [
+     "2025-06-30",
+     "CUADRO IV.1 · Total · Otras 3/ · (13)=(1 al 12)",
+     6823.51211197
+    ]
+   ],
+   "tasa_activa_mn": [
+    [
+     "2025-05-31",
+     "Consumo · Tarjeta de crédito",
+     54.7754
+    ],
+    [
+     "2025-05-31",
+     "Consumo · Otros",
+     18.8102
+    ],
+    [
+     "2025-05-31",
+     "Vivienda · Otros",
+     null
+    ],
+    [
+     "2025-05-31",
+     "Agricultura, ganadería silvicultura, caza y pesca · Otros",
+     8.6914
+    ],
+    [
+     "2025-05-31",
+     "Industria · Construcción",
+     null
+    ],
+    [
+     "2025-05-31",
+     "Industria · Otra",
+     8.0523
+    ],
+    [
+     "2025-05-31",
+     "Comercio, restaurantes y hoteles · Otra",
+     8.9318
+    ],
+    [
+     "2025-05-31",
+     "Servicios · Transporte,  almacenamiento y comunicaciones",
+     null
+    ],
+    [
+     "2025-05-31",
+     "CUADRO V.4 · Servicios · Otros servicios",
+     null
+    ],
+    [
+     "2025-05-31",
+     "CUADRO V.4 · Interbancaria · Ponderada",
+     7.01
+    ],
+    [
+     "2025-06-30",
+     "Consumo · Tarjeta de crédito",
+     54.8461
+    ],
+    [
+     "2025-06-30",
+     "Consumo · Otros",
+     17.292
+    ],
+    [
+     "2025-06-30",
+     "Vivienda · Otros",
+     null
+    ],
+    [
+     "2025-06-30",
+     "Agricultura, ganadería silvicultura, caza y pesca · Otros",
+     8.9607
+    ],
+    [
+     "2025-06-30",
+     "Industria · Construcción",
+     null
+    ],
+    [
+     "2025-06-30",
+     "Industria · Otra",
+     8.1204
+    ],
+    [
+     "2025-06-30",
+     "Comercio, restaurantes y hoteles · Otra",
+     8.3937
+    ],
+    [
+     "2025-06-30",
+     "Servicios · Transporte,  almacenamiento y comunicaciones",
+     null
+    ],
+    [
+     "2025-06-30",
+     "CUADRO V.4 · Servicios · Otros servicios",
+     null
+    ],
+    [
+     "2025-06-30",
+     "CUADRO V.4 · Interbancaria · Ponderada",
+     7.01
+    ]
+   ],
+   "tasa_pasiva_mn": [
+    [
+     "2025-05-31",
+     "Operaciones nuevas · Depósitos · Transferibles2/",
+     null
+    ],
+    [
+     "2025-05-31",
+     "Operaciones nuevas · Depósitos · Ahorro",
+     1.0235
+    ],
+    [
+     "2025-05-31",
+     "Operaciones nuevas · Depósitos · Plazo · Un mes",
+     1.8105
+    ],
+    [
+     "2025-05-31",
+     "Operaciones nuevas · Depósitos · Plazo · Seis meses",
+     4.9363
+    ],
+    [
+     "2025-05-31",
+     "Operaciones nuevas · Depósitos · Plazo · Un año",
+     5.4819
+    ],
+    [
+     "2025-05-31",
+     "Operaciones nuevas · Depósitos · Plazo · Mas de un año",
+     6.3252
+    ],
+    [
+     "2025-05-31",
+     "Operaciones nuevas · Acuerdos de recompra · Plazo · Mas de un año",
+     null
+    ],
+    [
+     "2025-05-31",
+     "Saldos vivos (tasa promedio ponderada) · Depósitos · Transferibles · Mas de un año",
+     null
+    ],
+    [
+     "2025-05-31",
+     "Saldos vivos (tasa promedio ponderada) · Depósitos · Ahorro · Mas de un año",
+     1.0235
+    ],
+    [
+     "2025-05-31",
+     "Saldos vivos (tasa promedio ponderada) · Depósitos · Plazo · Mas de un año",
+     5.0533
+    ],
+    [
+     "2025-06-30",
+     "Operaciones nuevas · Depósitos · Transferibles2/",
+     null
+    ],
+    [
+     "2025-06-30",
+     "Operaciones nuevas · Depósitos · Ahorro",
+     0.9042
+    ],
+    [
+     "2025-06-30",
+     "Operaciones nuevas · Depósitos · Plazo · Un mes",
+     3.0363
+    ],
+    [
+     "2025-06-30",
+     "Operaciones nuevas · Depósitos · Plazo · Seis meses",
+     4.8839
+    ],
+    [
+     "2025-06-30",
+     "Operaciones nuevas · Depósitos · Plazo · Un año",
+     5.672
+    ],
+    [
+     "2025-06-30",
+     "Operaciones nuevas · Depósitos · Plazo · Mas de un año",
+     6.2321
+    ],
+    [
+     "2025-06-30",
+     "Operaciones nuevas · Acuerdos de recompra · Plazo · Mas de un año",
+     null
+    ],
+    [
+     "2025-06-30",
+     "Saldos vivos (tasa promedio ponderada) · Depósitos · Transferibles · Mas de un año",
+     null
+    ],
+    [
+     "2025-06-30",
+     "Saldos vivos (tasa promedio ponderada) · Depósitos · Ahorro · Mas de un año",
+     0.9042
+    ],
+    [
+     "2025-06-30",
+     "Saldos vivos (tasa promedio ponderada) · Depósitos · Plazo · Mas de un año",
+     5.0454
+    ]
+   ]
+  }
+ }
+}

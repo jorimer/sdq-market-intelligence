@@ -219,6 +219,7 @@ import modules.telecom_intel.operations  # noqa: F401 — registers indotel-tele
 import modules.tourism_intel.operations  # noqa: F401 — registers one-tourism-sync
 import modules.construction_intel.operations  # noqa: F401 — registers mivhed-construction-sync
 import modules.pension_intel.operations  # noqa: F401 — registers sipen-sync
+import modules.regional_banking.operations  # noqa: F401 — registers secmca-sync
 import modules.insurance_intel.operations  # noqa: F401 — registers insurance-sync
 import app.market_brief as _market_brief_ops  # noqa: F401 — registers market-brief (app-level)
 import shared.billing.operations  # noqa: F401 — registers fiscal-sequence-watch (NCF/e-NCF)

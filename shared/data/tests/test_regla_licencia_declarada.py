@@ -129,7 +129,7 @@ _DECLARADAS = sorted(set(_declaraciones()))
 #: propio documento— y su portal no declara terminos de reutilizacion. Publicacion obligatoria
 #: no es reutilizacion libre, y registrar la fuente como verificada por ser oficial habria
 #: sido exactamente la sobre-declaracion que esta regla persigue.
-DEUDA_AL_2026_08_23 = 23
+DEUDA_AL_2026_08_23 = 24
 
 
 def test_el_detector_encuentra_las_declaraciones():
@@ -184,6 +184,12 @@ def test_la_atribucion_exigida_nombra_al_emisor(cadena):
     assert texto.lower().startswith("fuente:") and len(texto) > 30, texto
 
 
+# Subido de 23 a 24 el 2026-09-04, a propósito y con motivo: SECMCA (cuadros EMFA) entra
+# sin términos que leer. Se recorrió su sitio buscando aviso legal, términos, condiciones,
+# privacidad y copyright y NO publica ninguno — la ausencia está verificada, lo que falta
+# es el permiso. Un organismo regional no queda cubierto por la doctrina de emisores
+# públicos dominicanos, así que la alternativa honesta era declarar la deuda o no traer el
+# dato. Se pide la licencia por escrito antes de una distribución masiva.
 def test_la_deuda_de_verificacion_no_crece():
     deuda = deuda_de_verificacion()
     assert len(deuda) <= DEUDA_AL_2026_08_23, (

@@ -19,6 +19,8 @@ import unicodedata
 from datetime import date, datetime
 from typing import Dict, Any, Optional, List, Tuple
 
+from shared.data.base_client import Record, SourceClient
+
 
 def _norm(s: str) -> str:
     """Uppercase + strip diacritics, so 'Índice de Crédito' matches 'INDICE DE
@@ -199,7 +201,7 @@ _CELDA_VACIA = {
 
 
 
-class SIBDataClient:
+class SIBDataClient(SourceClient):
     """
     Client for the Superintendencia de Bancos REST API v2.
 
@@ -223,6 +225,25 @@ class SIBDataClient:
     • On HTTP 5xx / timeout → retry up to 2 times with linear backoff
     • Provides an async-aware sleep mode for use inside asyncio tasks
     """
+
+    # Régimen de uso del dato, registrado en `shared/data/licenses.py`. Entrada propia
+    # (no la de las superficies abiertas) porque esta vía exige API key: se abrió
+    # `desarrollador.sb.gob.do` el 2026-09-04 para descartar un acuerdo propio del portal
+    # que la emite, y no publica términos — la credencial controla el acceso, no el
+    # régimen de uso.
+    source = "SB"
+    license = ("SB — API pública de Estadísticas del Sistema Financiero v2, con credencial de "
+               "desarrollador. Información pública dominicana: reutilizable con atribución por "
+               "Ley 200-04, Decreto 103-22, NORTIC A3 y Ley 65-00 art. 41.")
+    license_ok = True
+
+    def fetch(self, series: Optional[str] = None, period: Optional[str] = None) -> List[Record]:
+        # Este conector emite estados financieros por entidad y período, no series
+        # temporales normalizadas: usar `extract_banking_data()` / `extract_one_tipo()` /
+        # `extract_all_entities_bulk()`. Se implementa la firma del contrato para
+        # satisfacer el ABC, como hace `shared.data.dgii_rnc_client.DGIIRncClient`.
+        raise NotImplementedError(
+            "SIBDataClient emite estados por entidad: usar extract_banking_data()")
 
     # ── Configurable limits ────────────────────────────────────
     RATE_LIMIT_PER_MIN = 120        # SIB documented limit
@@ -251,6 +272,9 @@ class SIBDataClient:
         proxy_url: str = "",
         proxy_secret: str = "",
     ):
+        # El contrato define `mode`; sin esto el atributo no existiría en las instancias.
+        # Este conector siempre habla con la API real: no tiene camino de fixture.
+        super().__init__(mode="live")
         self.api_key = api_key
         self.base_url = base_url.rstrip("/")
         self.async_mode = async_mode  # Use asyncio.sleep instead of time.sleep
@@ -349,6 +373,7 @@ class SIBDataClient:
 
         If proxy is configured, tests via proxy. Otherwise tests direct.
         """
+        self.check_license()
         httpx = _get_httpx()
         test_url = f"{self.base_url}/indicadores/principales"
         test_params = {"periodoInicial": "2024-01", "registros": "1"}
@@ -520,6 +545,7 @@ class SIBDataClient:
         - HTTP 404 → return None immediately (endpoint doesn't exist)
         - HTTP 4xx (other) → return None immediately
         """
+        self.check_license()
         last_error = None
         retries_429 = 0
         retries_err = 0
@@ -682,6 +708,7 @@ class SIBDataClient:
 
         Returns list of working codes.
         """
+        self.check_license()
         httpx = _get_httpx()
         test_endpoint = "estados/resultados/eif"
         test_url = f"{self.base_url}/{test_endpoint}"

@@ -89,6 +89,7 @@ class ReportType(str, enum.Enum):
     sector_outlook = "sector_outlook"
     anuario = "anuario"
     revision_anual = "revision_anual"
+    boletin_regional = "boletin_regional"
 
 
 class ReportStatus(str, enum.Enum):
