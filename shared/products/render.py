@@ -100,6 +100,22 @@ def _italicize(text: str) -> str:
     return _ITALIC_RE.sub(r"\1<i>\2</i>", text)
 
 
+#: Un número y su unidad son UNA cosa: al saltar de línea no se separan. Salía «una variación
+#: de 0.38 \n% contra…», el número en una línea y su unidad en la siguiente, en el PDF que se
+#: vende. Es la misma familia que los glifos de subíndice: se ve en el entregable y en ningún
+#: test.
+#:
+#: Se usa la ENTIDAD `&nbsp;` y no el carácter U+00A0 porque es lo que este renderer ya tiene
+#: funcionando —las viñetas y la numeración de secciones se arman así— y meter un carácter sin
+#: probar es exactamente cómo llegaron los glifos que salían como cajas.
+_UNIDAD_PEGADA_RE = re.compile(r"(\d)\s+(%|pp\b|p\.p\.|RD\$|US\$)")
+
+
+def _pegar_unidad(text: str) -> str:
+    """Une el número con su unidad para que el salto de línea no los separe."""
+    return _UNIDAD_PEGADA_RE.sub(r"\1&nbsp;\2", text)
+
+
 def _inline(text: str) -> str:
     """Markdown en línea → marcado de ReportLab. Negrita, CURSIVA y cursiva ANIDADA.
 
@@ -109,6 +125,9 @@ def _inline(text: str) -> str:
     """
     text = _GLYPH_RE.sub("", text)
     text = text.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
+    # DESPUÉS del escape, nunca antes: insertada antes, la entidad quedaría `&amp;nbsp;` y el
+    # cliente leería «0.38&nbsp;%» literal, que es peor que el defecto que vino a arreglar.
+    text = _pegar_unidad(text)
     text = re.sub(r"\*\*(.+?)\*\*", lambda m: "<b>" + _italicize(m.group(1)) + "</b>", text)
     return _italicize(text).strip()
 

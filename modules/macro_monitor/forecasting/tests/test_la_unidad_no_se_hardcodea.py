@@ -113,9 +113,15 @@ def _porcentajes_pegados_al_punto(fuente: str):
     return culpables
 
 
-@pytest.mark.parametrize("funcion", ["_md_trayectoria", "_md_escenarios", "_titular_de"])
+@pytest.mark.parametrize("funcion", ["_md_trayectoria", "_md_escenarios", "_titular_de",
+                                     "_md_resumen_ejecutivo"])
 def test_ninguna_superficie_escribe_el_signo_de_porcentaje_del_PUNTO(funcion):
-    """El «%» del punto se computa de la medida y no se escribe. Un literal vuelve."""
+    """El «%» del punto se computa de la medida y no se escribe.
+
+    Un literal vuelve, y volvió: `_md_resumen_ejecutivo` entró por otra rama con
+    ``f"{d['punto']:.2f} %"`` mientras esta rama sacaba el mismo literal de las otras tres
+    superficies. Por eso el guard es una lista que se AMPLÍA, no una revisión que se hizo.
+    """
     import inspect
 
     culpables = _porcentajes_pegados_al_punto(inspect.getsource(getattr(pf, funcion)))
