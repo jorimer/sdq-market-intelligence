@@ -73,5 +73,9 @@ def test_la_prueba_de_la_CMF_no_gasta_la_cuota_en_un_reporte_pesado():
     fuente = inspect.getsource(service._test_cmf_connection)
     assert "recursos_api/uf" in fuente
     assert "adecuacion" not in fuente
+    # Y CON período: la ruta pelada devuelve 500 cuando la credencial es válida, porque el
+    # emisor no documenta ninguna forma de `/uf` sin fecha. El síntoma engaña — el 500
+    # aparece justo cuando la clave está bien.
+    assert "recursos_api/uf/2024/01" in fuente
     # Y la credencial viaja como parámetro, no como header de suscripción.
     assert '"apikey"' in fuente and "Ocp-Apim-Subscription-Key" not in fuente
