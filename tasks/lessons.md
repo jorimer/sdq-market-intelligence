@@ -625,6 +625,58 @@ contesta distinto — y si la respuesta es «cambia una clave publicada», conge
 
 ---
 
+## Dos capas que dicen «el crecimiento del PIB» y miden cosas distintas
+
+**Síntoma.** El informe de proyecciones del 2026-09-05 publicó una tabla sectorial con **8 de
+18 actividades contrayéndose**, y declaró honestamente un ajuste de reconciliación de
+−3,536 pp. Deshaciendo el ajuste, el modelo crudo proyectaba **las 18 positivas** (+1,24 % a
++7,24 %). Las ocho contracciones no eran una lectura: eran el residuo de la resta.
+
+**Causa raíz.** No era el reparto de la brecha, que estaba bien argumentado y bien
+implementado. Eran las UNIDADES. El panel sectorial mide interanual (`trimestres[i-4]`); el
+bloque del BVAR medía trimestral (`DLOG` entre trimestres consecutivos); `reconciliar`
+restaba el punto trimestral de una suma ponderada de interanuales. Sobre la serie real (77
+trimestres) el QoQ promedia +1,13 % y el YoY +4,54 %: 3,41 pp de diferencia sistemática
+contra una brecha publicada de −3,536 pp. **La «brecha contra el agregado» era la conversión
+de unidades**, con nombre de hallazgo.
+
+Encima, el QoQ se hacía sobre la serie ORIGINAL del BCRD, sin desestacionalizar: su QoQ medio
+va de −1,13 % (Q3) a +4,67 % (Q4), 5,80 pp de amplitud puramente de calendario. El titular del
+informe dependía de en qué trimestre caía el horizonte.
+
+**Lo que hizo que durara.** Tres cosas, y ninguna es un test que faltara por descuido:
+
+1. **Nada en el repositorio AFIRMABA que las dos series fueran comparables.** Cada capa tenía
+   su propia función de crecimiento, cada una correcta por separado, y el punto donde se
+   restaban no sabía nada de ninguna de las dos. Un guard sobre cada capa por su cuenta habría
+   pasado en verde.
+2. **La entrada canónica ya declaraba la regla.** `canonical.py`, `key="pib_real"`: «el
+   crecimiento (YoY del volumen) es invariante a la base». El panel sectorial obedecía el
+   registro; el bloque no, y nada cruzaba lo que el registro DECLARA contra lo que el motor
+   HACE.
+3. **La muestra curada estaba en la unidad correcta.** Publicaba `pib_real` = 3,41 % con una
+   brecha de −0,42 pp: coherente en anual, mientras producción emitía +0,74 % con −3,54 pp.
+   Escrita a mano, enseñaba el producto que uno querría, no el que la máquina produce. Es el
+   mismo defecto que ya habíamos pagado en el eje de valuación, donde la cura fue GENERAR la
+   muestra desde las mismas funciones que el informe real.
+
+**Regla futura.** **Una magnitud que se va a RESTAR de otra viaja con su medida.** Es el
+corolario de «el SUJETO viaja con el número» para las unidades: no alcanza con que cada capa
+calcule bien: el punto de la resta tiene que poder preguntar *«¿esto mide lo mismo que
+aquello?»* y negarse. Acá el parámetro `medida_del_agregado` es **obligatorio y sin default**,
+a propósito — un default habría dejado pasar exactamente el caso que existe para impedir.
+
+Y el test que lo cierra no vigila el mecanismo sino la PROPIEDAD: se siembra el mismo índice
+en las dos capas y se exige que produzcan el mismo número. Da igual por qué dejen de
+coincidir.
+
+**Disparador.** Dos módulos que nombran igual una magnitud («crecimiento», «variación»,
+«cuota», «margen») y la calculan cada uno por su lado, sobre todo si en algún punto se suman,
+se restan o se comparan. Preguntar de qué a qué mide cada uno, y sembrar el mismo dato en las
+dos para ver si sale el mismo número.
+
+---
+
 ## Una frase computada afirmaba «dato real medido» en un informe de PRONÓSTICO
 
 **Síntoma.** §8 del informe de proyecciones del 2026-09-05, con cuatro líneas entre las dos y
