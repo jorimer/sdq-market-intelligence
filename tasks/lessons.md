@@ -842,3 +842,34 @@ ocupada? Si la respuesta es no, el instrumento está mal elegido.
 - **Causa raíz**: `zip(serie, serie[1:])` sobre las claves ordenadas es la forma natural de escribirlo y esconde el supuesto de que no hay huecos.
 - **Regla**: una variación exige el período anterior **DE CALENDARIO** (`shared.data.periodos.periodo_anterior`); si falta, no hay valor y se declara el motivo. Y el test que lo protege usa una serie CON un hueco, no una completa — con una completa las dos implementaciones dan lo mismo y el test no distingue nada.
 - **Disparador**: cualquier cálculo de variación, delta o tasa de cambio sobre una serie temporal.
+
+
+---
+
+### 2026-09-05 — Un readiness RANCIO me hizo leer «no cambió nada» donde había cambiado todo
+
+- **Síntoma**: tras verificar que producción servía el commit del merge, `GET /api/v1/products/readiness` devolvió para `macro_forecast` **exactamente el mismo texto de `g1` que la línea base**. Iba a reportar «desplegado, sin cambio observable».
+- **Causa raíz**: el readiness está PERSISTIDO con su `computed_at`, y el endpoint lo sirve tal cual. El `computed_at` decía `20:40` y el deploy había sido a las `21:49`. Peor: el texto que veía ni siquiera correspondía al código anterior de mi rama, sino a uno más viejo todavía — otra rama ya había cambiado la forma de esa frase y el readiness tampoco la reflejaba. Recomputar lo movió de 0,85 a 0,70 y de una frase a otra completamente distinta.
+- **Regla**: cuando se verifica un cambio en prod contra un valor **almacenado**, comprobar el commit servido NO alcanza: hay que mirar el `computed_at` del valor y forzar el recómputo (`POST /api/v1/products/readiness/recompute`) ANTES de comparar. Y el chequeo que lo delata sin saber nada más: si el texto es idéntico byte a byte a la línea base cuando el código de por medio lo cambió, lo que estoy leyendo es caché.
+- **Disparador**: cualquier verificación post-deploy contra un endpoint que sirve un resultado computado y guardado — readiness, snapshots de producto, narrativas cacheadas.
+
+### 2026-09-05 — Lo que la fila no registra, la migración no lo puede afirmar
+
+- **Síntoma**: escribí un backfill que ponía `measure='dlog_pct'` a las filas de los dos motores, con el argumento de que eran de una sola versión del código. Al mergear `main` apareció que otra rama había cambiado ESE MISMO DÍA la transformación del PIB de trimestral a interanual, y que hubo diecinueve despliegues en el día.
+- **Causa raíz**: `as_of` es una fecha SIN HORA. La fila no registra con qué versión del código se produjo, y las dos medidas difieren en puntos porcentuales enteros (QoQ +1,13 % vs YoY +4,54 %) — o sea que el error resultante no habría sido absurdo, solo mal, que es peor porque nadie lo mira dos veces.
+- **Regla**: un backfill solo puede afirmar lo que la FILA registra o lo que es invariante a toda versión del código. Lo demás queda NULL y se LISTA. Acá: el nowcast sí (su medida nunca cambió), el BVAR no; y el `target_series` sí en las dos, porque que `"pib_real"` no sea un `series_code` no depende de ninguna versión. El argumento «es de una sola versión del código» hay que verificarlo contra el `git log` del día, no contra la fecha del primer commit.
+- **Disparador**: toda migración de datos que deduzca un valor a partir del `model_id`, del productor o de la fecha. Preguntarse: ¿cuántas veces se desplegó entre la primera fila y hoy, y el registro tiene la resolución para distinguirlas?
+
+### 2026-09-05 — Dos arreglos correctos se cruzan y el resultado DESAPARECE
+
+- **Síntoma**: al mergear `main`, todos los tests en verde. La sección sectorial del informe, en cambio, se había vuelto imposible: `_payload` llamaba a `bloque.medida_de(primera["serie"])`, que espera el NOMBRE DE LA VARIABLE, y mi rama había hecho que `serie` fuera el `series_code`. `KeyError`, tragado por un `except Exception` que solo escribe un warning.
+- **Causa raíz**: las dos ramas arreglaron bien lo suyo el mismo día. Una hizo que el identificador dejara de ser el nombre del modelo; la otra empezó a usar ese nombre como clave de un diccionario. Ninguna de las dos suites lo ve, porque cada una prueba su lado. Y el `except` genérico convierte el cruce en silencio: el informe promete diecisiete secciones y entrega dieciséis.
+- **Regla**: después de mergear `main`, no alcanza con que los tests pasen — hay que buscar a mano quién CONSUME lo que mi rama cambió de forma, y con qué llave. Y un `except Exception` alrededor de una sección entera necesita, al lado, un campo de MOTIVO que viaje en el payload: sin él, «no se pudo» y «no aplica» se leen igual y ninguno de los dos se investiga.
+- **Disparador**: mergear una rama que cambia el VALOR de un identificador (un código, una clave, un slug) contra un `main` que avanzó. Buscar el identificador viejo en todo el árbol, no solo en los archivos que toqué.
+
+### 2026-09-05 — El literal volvió mientras yo lo estaba sacando
+
+- **Síntoma**: saqué el `%` hardcodeado de tres superficies y escribí un guard estructural sobre esas tres. El siguiente merge trajo `_md_resumen_ejecutivo`, de otra rama, con `f"{d['punto']:.2f} %"` — el mismo literal, escrito de nuevo en las mismas horas.
+- **Causa raíz**: un guard con una lista explícita de funciones protege lo que había cuando se escribió. No es un defecto del guard: es su naturaleza, y por eso la lección escrita no alcanza.
+- **Regla**: cuando el guard es una lista de sujetos, la lista se AMPLÍA en cada merge y eso se dice en su docstring, con el caso que lo demuestra. Y el guard se escribe con `ast` sobre un hecho sintáctico preciso —una interpolación del punto seguida de un texto que arranca en «%»— y no con una regex por línea, que en este archivo marcaría «banda 80 %» y los pesos. Al lado van SUS DOS contra-pruebas: que ve el defecto en el código como estaba, y que no marca el porcentaje legítimo.
+- **Disparador**: todo guard parametrizado con una lista de funciones, archivos o módulos. Preguntarse qué queda afuera — y volver a preguntárselo después de cada merge.
