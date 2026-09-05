@@ -94,7 +94,9 @@ class ValuationProduct:
     ESTADO_BACKTEST = EstadoBacktest(
         tiene_motor=False, obstaculo="dato_pendiente",
         dato_que_falta=("transacciones bancarias RD/Caribe con precio sobre valor libro "
-                        "verificable — el panel de T-VL-7 exige N ≥ 8 y hoy está vacío"),
+                        "CONTABLE verificable — el panel de T-VL-7 exige N ≥ 8. El conteo "
+                        "vigente lo computa `panel.transacciones.estado()` y no se "
+                        "transcribe acá: una cifra escrita a mano se desincroniza"),
         desenlace="el precio efectivamente pagado en una transacción sobre la entidad",
         motivo=("Una valuación se valida contra lo que alguien PAGÓ, y en el mercado "
                 "dominicano las operaciones bancarias son pocas y con divulgación irregular. "

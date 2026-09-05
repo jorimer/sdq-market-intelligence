@@ -6,24 +6,27 @@ Con ocho casos verificables, la vista de M&A se abre y `ESTADO_BACKTEST` deja de
 `dato_pendiente`.
 
 **El relevamiento, y lo que midió.** La banca dominicana registra **nueve** fusiones y
-adquisiciones documentadas desde 1996, y **una sola divulga precio**: Scotiabank por Banco
-Dominicano del Progreso, US$330 millones (2018). Las otras ocho —BHD con León, Profesional
-con Bancrédito, Progreso con Metropolitano, Activo con Banaci, y las alianzas de BHD con
-Sabadell, Popular de Puerto Rico y Fiduciario— se anunciaron sin monto.
-
-En el Caribe la mejor documentada es Republic Financial Holdings por siete operaciones de
-Scotiabank (2019): divulga **US$123 millones**, de los cuales US$98 millones son *prima sobre
-el valor neto* de ocho países y US$25 millones el total por Scotiabank Anguilla. El precio
-está, **el valor neto no** — así que el múltiplo no se puede derivar sin inventar el
-denominador.
+adquisiciones documentadas desde 1996, y **una sola divulgó precio en su momento**: Scotiabank
+por Banco Dominicano del Progreso, US$330 millones (2018). Las otras ocho —BHD con León,
+Profesional con Bancrédito, Progreso con Metropolitano, Activo con Banaci, y las alianzas de
+BHD con Sabadell, Popular de Puerto Rico y Fiduciario— se anunciaron sin monto.
 
 **Ése es el hallazgo del relevamiento**: no es que las transacciones no existan, es que el
-mercado no divulga el denominador. Un múltiplo necesita las dos puntas.
+mercado casi nunca divulga el denominador. Un múltiplo necesita las dos puntas.
 
-**Y una que sí cierra, porque el denominador es NUESTRO.** El patrimonio del Progreso está en
-el histórico de la Superintendencia que esta plataforma ya ingiere (1984-12 → 2020-05), así
-que el valor libro no depende de que el comprador lo publique. Con el tipo de cambio del BCRD
-del mismo mes, el múltiplo sale auditable de punta a punta.
+**Y el camino que sí funciona: el denominador es NUESTRO.** El patrimonio de cualquier banco
+dominicano está en el histórico de la Superintendencia que esta plataforma ya ingiere, y en
+SIMBAD, su Superset público. No depende de que el comprador lo publique. Con el tipo de
+cambio del BCRD del mismo mes, el múltiplo sale auditable de punta a punta — así cerraron el
+Progreso (2018) y Bellbank (2022). Para una operación dominicana, **lo único que falta buscar
+es el precio**.
+
+**La NIIF 3 también devuelve un denominador, y no es el mismo.** Obliga al comprador a
+publicar los activos netos identificables a VALOR RAZONABLE, que es lo que él reconoce y no
+lo que el vendedor tenía en libros. Los dos casos de Republic Financial Holdings entran así.
+Cuánto se separan las dos bases dejó de ser un argumento: la tabla del 10-Q de OFG Bancorp
+publica las dos columnas sobre el mismo balance, y el valor razonable está **15,0 % por
+encima** del libro.
 """
 from __future__ import annotations
 
@@ -69,8 +72,57 @@ class Transaccion:
     fuente_libro: str
     #: Sobre qué base se computó el múltiplo. Ver `BASE_CONTABLE` / `BASE_VALOR_RAZONABLE`.
     base: str = BASE_CONTABLE
+    #: El SEGUNDO denominador, cuando la misma tabla auditada publica los dos. Es raro y es
+    #: lo más valioso que puede traer un caso: con las dos cifras del mismo balance, la
+    #: distancia entre bases se MIDE en vez de suponerse.
+    valor_razonable: Optional[float] = None
+    #: Qué fracción de la entidad compró el precio. NO es un detalle: un precio por el 90 %
+    #: contra un patrimonio del 100 % da un múltiplo 11 % bajo, y el error no se ve —el
+    #: número sale plausible—. Vive como campo y no como caveat para que el múltiplo se
+    #: pueda VERIFICAR contra sus insumos.
+    porcentaje: float = 1.0
+    #: RD$ (o moneda del libro) por unidad de la moneda del precio, del MES del corte. Vive
+    #: como campo por el mismo motivo: una conversión metida en la prosa no se puede
+    #: recomputar, y ya entró mal una vez —la de prensa, a un mes que no era el del corte—.
+    tipo_de_cambio: Optional[float] = None
     #: Lo que el caso NO permite afirmar. Se declara con el dato, no en un anexo.
     caveats: Tuple[str, ...] = ()
+
+    @property
+    def denominador_homogeneo(self) -> Optional[float]:
+        """El denominador en la MONEDA y la FRACCIÓN del precio.
+
+        Es lo que hace comparable un múltiplo con otro. Las dos correcciones que aplica ya
+        entraron mal alguna vez en este mismo relevamiento: una conversión hecha a un mes que
+        no era el del corte, y un precio por el 90 % puesto contra el patrimonio del 100 %.
+        """
+        if self.valor_libro is None:
+            return None
+        libro = self.valor_libro
+        if self.tipo_de_cambio is not None:
+            libro = libro / self.tipo_de_cambio
+        return libro * self.porcentaje
+
+    @property
+    def pb_recomputado(self) -> Optional[float]:
+        """El múltiplo derivado de sus insumos. Si no coincide con `pb`, uno de los dos
+        miente — y el test lo cruza para todo el panel."""
+        den = self.denominador_homogeneo
+        if self.precio is None or not den:
+            return None
+        return self.precio / den
+
+    @property
+    def cuna_de_base_pct(self) -> Optional[float]:
+        """Cuánto se separa el valor razonable del libro, EN ESTE caso, en porcentaje.
+
+        Se computa, no se transcribe. Es la magnitud que decide si mezclar las dos bases en
+        una tabla sería un matiz o un error: mientras solo se pueda argumentar, cualquiera
+        puede suponerla chica.
+        """
+        if self.valor_razonable is None or not self.valor_libro:
+            return None
+        return (self.valor_razonable / self.valor_libro - 1.0) * 100.0
 
     @property
     def verificable(self) -> bool:
@@ -96,7 +148,7 @@ PANEL: Tuple[Transaccion, ...] = (
         pais="DO",
         precio=330_000_000.0, moneda_precio="USD",
         valor_libro=6_482_978_970.0, moneda_libro="DOP", periodo_libro="2018-08",
-        pb=2.531,
+        pb=2.531, tipo_de_cambio=49.7276,
         fuente_precio=("Anuncio del acuerdo, agosto 2018 — US$330 millones. Reportado por "
                        "prensa dominicana (Hoy, El Dinero). Es el monto del ACUERDO: la "
                        "consideración final podría haber diferido."),
@@ -179,17 +231,166 @@ PANEL: Tuple[Transaccion, ...] = (
             "Es la única de las tres con el porcentaje de acciones CONFIRMADO (100 %).",
         ),
     ),
+
+    Transaccion(
+        anio=2019, comprador="OFG Bancorp (Oriental Bank)",
+        adquirida="Scotiabank de Puerto Rico (100 % de las acciones)",
+        pais="PR",
+        precio=430_437_000.0, moneda_precio="USD",
+        valor_libro=381_032_000.0, moneda_libro="USD", periodo_libro="2019-12",
+        pb=1.130, valor_razonable=438_100_000.0,
+        fuente_precio=("Form 10-Q de OFG Bancorp, 3T2020 (SEC), tabla de Business "
+                       "Combinations: consideración remedida US$430.437 miles. El precio de "
+                       "TITULAR fue US$550 millones (comunicado del 26-jun-2019 y Form 10-K "
+                       "2019, nota 2); la consideración registrada bajó tras el dividendo "
+                       "pre-cierre de US$500 millones que Scotiabank giró a su matriz. Se "
+                       "publica la registrada, que es la que se pagó por lo que quedó."),
+        fuente_libro=("Misma tabla del 10-Q, columna «Book Value»: activos identificables "
+                      "US$3.512.724 miles menos pasivos asumidos US$3.131.692 miles = "
+                      "US$381.032 miles de patrimonio contable.\n\n"
+                      "ES EL CASO MÁS VALIOSO DEL PANEL, y no por el múltiplo. La misma "
+                      "tabla auditada publica los DOS denominadores en columnas contiguas "
+                      "—«Book Value» y «Fair Value As Remeasured»— sobre el mismo balance y "
+                      "a la misma fecha. Es la única medición directa que tenemos de cuánto "
+                      "se separan las dos bases: el valor razonable está 15,0 % por encima "
+                      "del libro. Hasta acá la distancia se argumentaba; con este caso se "
+                      "mide.\n\n"
+                      "Las dos puntas salen de documentos SEC distintos: el precio del "
+                      "comunicado y el 10-K, el denominador de la tabla PPA del 10-Q."),
+        caveats=(
+            "US-GAAP (ASC 805), no NIIF: Puerto Rico es territorio de EE.UU. La lógica de la "
+            "asignación del precio de compra es equivalente y el marco NO lo es, así que al "
+            "lado de un caso dominicano bajo normas de la SB hay que decirlo.",
+            "Sobre valor razonable el múltiplo es 0,98x — una compra en condiciones "
+            "ventajosas, con una ganancia por compra ventajosa de US$7,65 millones "
+            "reconocida por OFG. El mismo precio da 1,13x sobre libro y 0,98x sobre valor "
+            "razonable: cruzar el umbral de 1,0x depende ENTERAMENTE de qué base se use.",
+            "El 1,15x que publicó la prensa es sobre valor tangible AJUSTADO, una tercera "
+            "base distinta de las dos de la tabla. No es la cifra que se publica acá.",
+            "La operación de las Islas Vírgenes de EE.UU. fue por separado (prima de "
+            "depósitos de US$10 millones) y no entra en estas cifras.",
+        ),
+    ),
+    Transaccion(
+        anio=2022, comprador="JMMB Holding Company Limited",
+        adquirida="Banco Múltiple Bellbank (100 % del capital suscrito y pagado)",
+        pais="DO",
+        precio=7_200_000.0, moneda_precio="USD",
+        valor_libro=217_851_372.0, moneda_libro="DOP", periodo_libro="2022-06",
+        pb=1.818, tipo_de_cambio=54.9967,
+        fuente_precio=("Estados financieros de JMMB Group Limited al 31-dic-2022, nota de "
+                       "combinación de negocios: la operación dominicana «was acquired at a "
+                       "cost of approximately US$7.2 million». El 100 % del capital suscrito "
+                       "y pagado, según la Tercera Resolución de la Junta Monetaria del "
+                       "23-jun-2022 que autorizó la venta y traspaso."),
+        fuente_libro=("Patrimonio publicado por la Superintendencia de Bancos vía SIMBAD, su "
+                      "Superset público, para BELLBANK a junio 2022: RD$217.851.372. "
+                      "Convertido con el tipo de cambio de venta promedio del BCRD del MISMO "
+                      "mes (RD$54,9967/US$), de la serie que esta plataforma ingiere.\n\n"
+                      "VERIFICACIÓN CRUZADA: los estados auditados de la propia adquirida "
+                      "dan RD$217.294.194 de patrimonio a diciembre 2021, y SIMBAD da "
+                      "RD$217.294.150 para ese mismo corte — 44 pesos de diferencia sobre "
+                      "217 millones, razón 1,0000002. Dos fuentes independientes sobre el "
+                      "mismo balance, y el denominador no depende de que el comprador lo "
+                      "publique.\n\n"
+                      "Se publica el corte de JUNIO 2022, el mes de la autorización, y no el "
+                      "de diciembre 2021 que reportó la prensa: el precio y el denominador "
+                      "quedan a la misma fecha, y el tipo de cambio también."),
+        caveats=(
+            "El precio es «aproximadamente» US$7,2 millones en la propia nota del comprador: "
+            "tiene dos cifras significativas y el múltiplo hereda esa precisión.",
+            "El múltiplo es sensible al corte: 1,89x con diciembre 2021, 1,84x con marzo "
+            "2022, 1,82x con junio 2022. Se publica el del mes de la autorización y se "
+            "muestra el rango.",
+            "La prensa convirtió el patrimonio de diciembre 2021 a US$3,99 millones, lo que "
+            "implica RD$54,46/US$. El tipo de cambio de venta del BCRD de ese mes fue "
+            "RD$57,16 — la conversión de prensa NO es la del corte, y sobre el dato del "
+            "BCRD el múltiplo de diciembre es 1,89x y no 1,80x.",
+            "El valor razonable de los activos netos identificables (PPA) todavía estaba «not "
+            "yet finalized» al trimestre de diciembre 2022, así que este caso NO aporta el "
+            "segundo denominador.",
+            "Bellbank era una entidad chica —RD$1.660 millones de activos—, y en una entidad "
+            "chica cualquier ajuste de valor razonable mueve mucho el múltiplo.",
+        ),
+    ),
+    Transaccion(
+        anio=2015, comprador="JMMB Holding Company Limited",
+        adquirida="Banco de Ahorro y Crédito Río (90 % de las acciones)",
+        pais="DO",
+        precio=2_150_000.0, moneda_precio="USD",
+        valor_libro=65_568_455.0, moneda_libro="DOP", periodo_libro="2015-06",
+        pb=1.636, porcentaje=0.90, tipo_de_cambio=44.914857142857144,
+        fuente_precio=("Estados financieros auditados de JMMB Group Limited al 31 de marzo "
+                       "de 2016, nota de adquisición: el 1 de julio de 2015 adquirió el 90 % "
+                       "del capital y el control de gestión de Banco Río de Ahorro y "
+                       "Crédito por US$2.150.000 (J$252,7 millones)."),
+        fuente_libro=("Patrimonio publicado por la Superintendencia de Bancos vía SIMBAD al "
+                      "30 de junio de 2015 —el último cierre mensual ANTES del 1 de julio—: "
+                      "RD$65.568.455. Convertido con el tipo de cambio de venta promedio del "
+                      "BCRD del mismo mes (RD$44,9149/US$) y tomado al 90 %, la fracción que "
+                      "compró el precio.\n\n"
+                      "LA ENTIDAD ESTÁ BAJO SU NOMBRE POSTERIOR: la SB la publica como "
+                      "«JMMB», banco de ahorro y crédito, hacia atrás hasta 2013 — es el "
+                      "balance del Río bajo el nombre que le puso el comprador. Una búsqueda "
+                      "por «Río» no la encuentra, y concluir que el dato no existe sería el "
+                      "error.\n\n"
+                      "LA SERIE MENSUAL CORROBORA LA FECHA, y es evidencia que ninguna de las "
+                      "dos fuentes de prensa aporta: el patrimonio cae sin interrupción de "
+                      "RD$87,2 M en enero 2014 a RD$60,2 M en noviembre 2015 —una entidad "
+                      "que se achicaba— y salta a RD$94,3 M en diciembre 2015. La "
+                      "capitalización llega DESPUÉS de julio de 2015, no de julio de 2014. "
+                      "Si la compra hubiera sido en 2014 el aporte se vería en 2014, y no "
+                      "hay ninguno."),
+        caveats=(
+            "Es el 90 %, no el 100 %. El múltiplo homogeneiza —precio del 90 % contra "
+            "patrimonio del 90 %—; contra el patrimonio entero habría dado 1,47x, un 10 % "
+            "bajo, y el número habría salido plausible.",
+            "LA FECHA ERA EL RIESGO, no el denominador. La prensa dominicana situaba la "
+            "operación en julio de 2014 y la jamaiquina en julio de 2015; los estados "
+            "auditados del comprador fijan el 1 de julio de 2015, y lo de 2014 es la "
+            "autorización de la Junta Monetaria (diciembre). Con el corte de junio 2014 el "
+            "múltiplo habría dado 1,25x en vez de 1,64x: un 31 % de diferencia por una fecha.",
+            "El 1,5x que publicó la prensa dominicana es una derivación de terceros, no la "
+            "fuente del denominador. Que quede cerca del 1,64x computado es corroboración, "
+            "no insumo.",
+            "El 10 % restante quedó en manos de un inversionista privado, así que no hay un "
+            "precio del 100 % con el que contrastar.",
+        ),
+    ),
 )
 
 #: Operaciones RELEVADAS y descartadas del panel, con el motivo. Se listan porque un panel
 #: chico sin explicación se lee como falta de trabajo, y esto es lo contrario: es el
 #: resultado del trabajo.
 DESCARTADAS: Tuple[Tuple[str, str], ...] = (
-    ("Republic Financial Holdings / siete operaciones de Scotiabank en el Caribe (2019)",
-     "Divulga US$123 M —US$98 M de PRIMA sobre el valor neto de ocho países más US$25 M por "
-     "el total de Scotiabank Anguilla— pero NO el valor neto. Sin denominador no hay "
-     "múltiplo, y estimarlo desde los US$1.500 M de activos que suma la operación sería "
-     "inventarlo."),
+    ("CIBC FirstCaribbean / GNB Financial, participación mayoritaria (anuncio nov-2019)",
+     "US$797 millones por el 66,73 %, y la operación NO SE CONSUMÓ: los reguladores no la "
+     "aprobaron. Un precio anunciado que nunca se pagó no es una transacción — no hubo "
+     "transferencia de control, así que no hay nada que el panel pueda observar."),
+    ("Sagicor Financial / Alignvest (2019)",
+     "US$536 millones a ~1,0x libro, con el patrimonio en el propio filing. Las dos puntas "
+     "están y el caso NO entra igual: Sagicor es aseguradora y conglomerado financiero, no "
+     "banco, y la operación fue una cotización por SPAC más que una compra de control "
+     "bancaria. Se anota su múltiplo como referencia regional y no como caso del panel."),
+    ("RBC / operaciones del Caribe Oriental a un consorcio regional (cierre abril 2021)",
+     "Once SUCURSALES vendidas a cinco bancos locales, y el comunicado dice «without "
+     "financial terms». Sin precio, y además el objeto no es una entidad con patrimonio "
+     "publicado por un regulador sino un conjunto de sucursales: aunque apareciera el monto, "
+     "no habría denominador que le corresponda. Es el descarte inverso al resto —acá falta "
+     "el numerador— y no se arregla encontrándolo."),
+    ("Banco Múltiple de Las Américas, Bancamérica (2022)",
+     "No fue una compra: la Junta Monetaria dispuso su DISOLUCIÓN (Segunda Resolución del "
+     "28-ene-2022) y la SB licitó activos y captaciones, adjudicados a Banreservas con "
+     "aporte del Fondo de Contingencia. En una disolución gana quien pide MENOS aporte, que "
+     "es lo contrario de un precio de control."),
+    ("Banco Caribe / BID Invest (2023)",
+     "Préstamo sénior de hasta US$25,15 millones. No hay inversión accionaria ni cambio de "
+     "control: financiar a una entidad no es comprarla."),
+    ("Banesco Banco Múltiple RD · Lafise · Ademi · Promérica RD y el resto del padrón",
+     "Barrido del padrón de la SB sin operación de control con monto. Lo que aparece son "
+     "cosas que NO son compras: entradas de novo (Lafise, autorizada en 2013), conversiones "
+     "de licencia (Ademi, de ahorro y crédito a banco múltiple) y aumentos de capital por "
+     "oferta pública (Promérica, 2023). Banesco sigue siendo subsidiaria de Banesco Panamá."),
     ("Centro Financiero BHD y Grupo Financiero León (diciembre 2014)",
      "Fusión ENTRE IGUALES, no una compra: no hay precio porque no hubo comprador. Aunque se "
      "hubiera publicado una relación de canje, un múltiplo de fusión no informa sobre lo que "
@@ -214,6 +415,55 @@ DESCARTADAS: Tuple[Tuple[str, str], ...] = (
      "Alianzas estratégicas y una fusión por absorción, todas anunciadas sin monto. Las "
      "alianzas además no son transacciones de control: una participación minoritaria se "
      "paga con otro múltiplo que una compra, y mezclarlas contaminaría el panel."),
+)
+
+
+#: Operaciones donde falta UNA cosa concreta y se sabe cuál. No son descartes —un descarte
+#: es una vía cerrada— y no son casos: entran al panel el día que se cierre lo que falta.
+#: Se listan porque nombrar el obstáculo exacto es lo que hace accionable un relevamiento.
+VIAS_ABIERTAS: Tuple[Tuple[str, str], ...] = (
+    ("JMMB / Intercommercial Bank Ltd (Trinidad y Tobago, 2013)",
+     "Precio verificado: US$8,75 millones (J$914,1 millones) por el 50 % RESTANTE, pasando "
+     "de 50 % a 100 %. Falta el patrimonio contable de la entidad al corte 2013, que "
+     "publicaría el Central Bank of Trinidad and Tobago. Además es una compra POR ETAPAS: el "
+     "precio es solo del segundo tramo y el múltiplo hay que homogeneizarlo al 50 %."),
+    ("First Citizens / Butterfield Bank (Barbados) (2012)",
+     "Precio verificado: US$45 millones por el 100 %. Falta el patrimonio contable de la "
+     "entidad al corte 2012, que publicaría el Central Bank of Barbados. Se conocen sus "
+     "activos (US$308 M) y depósitos (US$270 M), que NO son patrimonio. El vendedor reportó "
+     "una ganancia de ~US$7 M, de la que se podría despejar un valor en libros de ~US$38 M: "
+     "eso es el carrying value CONSOLIDADO del vendedor, no el patrimonio de la entidad, y "
+     "es una derivación, no un dato."),
+    ("NCB Financial Group / Clarien Group (Bermuda, 2017)",
+     "Falta aclarar QUÉ FUE la operación, antes que cualquier cifra. NCBFG SUSCRIBIÓ el "
+     "50,1 % —un aporte de capital que entra a la sociedad— y no está establecido que le "
+     "haya comprado las acciones a un accionista. Si fue suscripción, el monto NO es un "
+     "precio de control y el caso no pertenece a este panel por más que las dos cifras "
+     "existan. Lo que sí está, y vale aparte: la nota del comprador declara una GANANCIA POR "
+     "COMPRA VENTAJOSA final de J$4.392.149 miles, o sea que el valor razonable de los "
+     "activos netos SUPERÓ al monto pagado. Es el único caso relevado en esa dirección."),
+    ("Republic Financial Holdings / desglose por país del Caribe Oriental",
+     "La nota 34 agrega siete territorios en una sola cifra. Si algún estado local o el "
+     "regulador de un territorio publicara su parte, esa observación se desdoblaría en "
+     "varias. Hoy es una."),
+    ("JMMB / Bellbank — segundo denominador",
+     "El PPA estaba «not yet finalized» al trimestre de diciembre 2022. La memoria auditada "
+     "de JMMB Group del año fiscal a marzo 2023 debería traerlo, y con él este caso pasaría "
+     "a medir la cuña entre bases como hace el de OFG."),
+)
+
+#: Discrepancia RELEVADA y no resuelta, que se declara en vez de elegir un lado. El paquete
+#: original de Scotiabank en el Caribe se anunció en US$123 millones —US$98 millones de PRIMA
+#: sobre el valor neto de ocho países más US$25 millones por Scotiabank Anguilla—, pero los
+#: goodwill que publica la nota 34 de RFHL para las dos operaciones que sí cerraron no suman
+#: esa prima. Lo más probable es que el paquete se haya recortado entre el anuncio y el
+#: cierre —varios reguladores no aprobaron—, con lo cual el anuncio y la nota no describen el
+#: mismo perímetro. Mientras no se confirme, el panel usa SOLO las cifras de la nota
+#: auditada y no las del comunicado.
+DISCREPANCIA_RFHL = (
+    "El comunicado del paquete (US$123 M, US$98 M de prima) y la nota 34 auditada no "
+    "describen el mismo perímetro: el paquete original cubría nueve países y solo cerró "
+    "parte. No se mezclan las dos fuentes."
 )
 
 
@@ -250,9 +500,10 @@ def estado(panel: Sequence[Transaccion] = PANEL) -> EstadoDelPanel:
     return EstadoDelPanel(
         n_ver, n_comp, MINIMO_DE_CASOS, False,
         (f"El panel tiene {n_comp} transacción(es) con precio sobre valor libro CONTABLE y el "
-         f"gate exige {MINIMO_DE_CASOS}. No es falta de relevamiento: se revisaron nueve "
-         "operaciones de la banca dominicana desde 1996 y las notas de combinaciones de "
-         "negocios del mayor comprador del Caribe. El mercado divulga el precio y casi nunca "
-         "el denominador; cuando lo divulga, es sobre otra base. Un múltiplo necesita las dos "
-         f"puntas Y la misma base.{extra} La vista de M&A queda cerrada y el eje lo declara."),
+         f"gate exige {MINIMO_DE_CASOS}. No es falta de relevamiento: se revisaron las nueve "
+         "operaciones de la banca dominicana desde 1996, las notas de combinaciones de "
+         "negocios del mayor comprador del Caribe y los filings ante la SEC de los "
+         "compradores cotizados. El mercado divulga el precio y casi nunca el denominador; "
+         "cuando lo divulga, suele ser sobre otra base. Un múltiplo necesita las dos puntas Y "
+         f"la misma base.{extra} La vista de M&A queda cerrada y el eje lo declara."),
         len(DESCARTADAS))
