@@ -459,7 +459,7 @@ MSG_WAF_SIN_PROXY = "; configurá el proxy para esta fuente, como el SIB."
 
 
 def _test_cmf_connection(db, cfg, base: str, api_key: str,
-                         proxy_url: str = "", proxy_secret: str = "") -> TestConnectionOut:
+                         proxy_url: Any = "", proxy_secret: Any = "") -> TestConnectionOut:
     """Prueba contra la API de la CMF de Chile, que tiene un contrato propio.
 
     Nada del camino del SIB sirve acá: la CMF pide la credencial en la QUERY STRING
@@ -492,6 +492,9 @@ def _test_cmf_connection(db, cfg, base: str, api_key: str,
     # clave perfecta podría fallar un día 1.
     target = f"{base.rstrip('/')}/api-sbifv3/recursos_api/uf/2024/01"
     url = f"{target}?apikey={api_key}&formato=json"
+    # El proxy llega del resolvedor general, que lo arma de tres orígenes posibles (override
+    # del formulario, columna de la fila, proxy global), así que su tipo es laxo.
+    proxy_url, proxy_secret = str(proxy_url or ""), str(proxy_secret or "")
     use_proxy = bool(proxy_url and proxy_secret)
     try:
         if use_proxy:
