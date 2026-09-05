@@ -609,19 +609,44 @@ def _header_name(grid: Grid, value_col: int, data_row0: int,
     return " · ".join(parts[-3:]) or f"col{value_col}"
 
 
+#: Filas que se miran para decidir si una columna trae datos. Es una VENTANA, no el archivo:
+#: mirar solo el arranque descarta entera una columna que empieza rala y se llena después.
+_VENTANA_DE_DENSIDAD = 80
+_DENSIDAD_MINIMA = 0.4
+
+
+def _es_densa(grid: Grid, c: int, desde: int, hasta: int) -> bool:
+    span = max(1, hasta - desde)
+    numeric = sum(1 for r in range(desde, hasta)
+                  if isinstance(grid.cell(r, c), (int, float)))
+    return numeric / span >= _DENSIDAD_MINIMA
+
+
 def _value_columns(grid: Grid, month_col: int, data_row0: int) -> List[int]:
-    """Columns after the month column that are numeric-dense over the data rows."""
-    cols: List[int] = []
-    sample_end = min(data_row0 + 80, grid.nrows)
-    span = max(1, sample_end - data_row0)
-    for c in range(month_col + 1, grid.ncols):
-        numeric = sum(
-            1 for r in range(data_row0, sample_end)
-            if isinstance(grid.cell(r, c), (int, float))
-        )
-        if numeric / span >= 0.4:
-            cols.append(c)
-    return cols
+    """Columnas con datos: densas en el ARRANQUE **o** sobre el archivo entero.
+
+    Son dos preguntas distintas y hay que hacer las dos, porque una serie puede empezar
+    tarde y otra puede haberse descontinuado.
+
+    **Medido sobre los 33 archivos habilitados**, mirar solo una de las dos ventanas cuesta
+    una columna REAL en cada dirección, las dos en `Serie_TPM.xlsx`:
+
+    * solo el arranque —lo que hacía antes— pierde **«Préstamo»**, la facilidad de expansión
+      del BCRD: 164 valores, el techo del corredor de política. Arranca rala y se llena.
+    * solo el archivo entero pierde **«Lombarda»**: 109 valores, densa al principio y
+      descontinuada después.
+
+    Y en el cuadro V.1 de valores subastados, mirar solo el arranque descartaba **tres**
+    columnas de montos —una con 128 valores—, porque el BCRD casi no subastó esos plazos
+    entre 2002 y 2009.
+
+    Fuera de esas, ninguna columna del corpus cambia de estado: la unión no ensancha el
+    criterio, cubre el caso que una sola ventana no puede ver.
+    """
+    fin_ventana = min(data_row0 + _VENTANA_DE_DENSIDAD, grid.nrows)
+    return [c for c in range(month_col + 1, grid.ncols)
+            if _es_densa(grid, c, data_row0, fin_ventana)
+            or _es_densa(grid, c, data_row0, grid.nrows)]
 
 
 def _slug(s: str) -> str:
