@@ -121,7 +121,7 @@ async def simulate_scenario(
 @router.post(
     "/{bank_id}/run",
     summary="Ejecutar scoring para un banco",
-    description="Calcula 19 indicadores, sub-componentes y rating general para un banco/período.",
+    description="Calcula 20 indicadores, sub-componentes y rating general para un banco/período.",
 )
 async def run_bank_scoring(
     bank_id: str,

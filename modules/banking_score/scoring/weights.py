@@ -112,6 +112,49 @@ LIQUIDEZ_INDICATORS = ["liquidez_inmediata", "ltd", "liquidez_ajustada"]
 
 DIVERSIFICACION_INDICATORS = ["hhi_ingresos"]
 
+def peso_efectivo_por_indicador(entity_type=None) -> dict:
+    """Cuánto pesa CADA indicador en el score global, para un tipo de entidad.
+
+    Se DERIVA de las mismas constantes que aplica el motor —los pesos de sub-componente,
+    las listas por dimensión y las familias de Solidez— en vez de transcribirse. Una tabla
+    de pesos escrita a mano se desincroniza el día que alguien recalibre, y lo que publica
+    no es un número desactualizado cualquiera: es la cobertura del índice, o sea cuánto de
+    lo que afirmamos se sostiene en dato real.
+
+    Ojo con Solidez: NO es `0.40 / 5`. Sus cinco indicadores se promedian por FAMILIA (un
+    hecho, un voto), así que `solvencia` pesa `0.40 · ⅓ · ⅓` y `patrimonio_activos`, que es
+    familia de uno solo, pesa `0.40 · ⅓`.
+
+    `composite_calidad` NO aparece: es la media de los siete de Calidad y no vota. Quien lo
+    emita como señal debe darle peso 0, o el mismo hecho contaría dos veces.
+    """
+    pesos_dim = get_sub_component_weights(entity_type)
+    fuera = {}
+
+    # Solidez, por familias. Un indicador que no esté en ninguna es su propia familia, igual
+    # que en el motor: así, agregar uno nuevo no lo deja fuera del promedio en silencio.
+    en_familia = {i for _, miembros in SOLIDEZ_FAMILIAS for i in miembros}
+    familias = list(SOLIDEZ_FAMILIAS) + [
+        (i, (i,)) for i in SOLIDEZ_INDICATORS if i not in en_familia]
+    if familias:
+        peso_familia = pesos_dim.get("solidez", 0.0) / len(familias)
+        for _, miembros in familias:
+            if miembros:
+                for indicador in miembros:
+                    fuera[indicador] = peso_familia / len(miembros)
+
+    # El resto: media simple de sus indicadores, como hace el motor.
+    for dimension, indicadores in (("calidad", CALIDAD_INDICATORS),
+                                   ("eficiencia", EFICIENCIA_INDICATORS),
+                                   ("liquidez", LIQUIDEZ_INDICATORS),
+                                   ("diversificacion", DIVERSIFICACION_INDICATORS)):
+        if indicadores:
+            peso = pesos_dim.get(dimension, 0.0) / len(indicadores)
+            for indicador in indicadores:
+                fuera[indicador] = peso
+    return fuera
+
+
 # Ordered feature vector for ML model (21-dim)
 FEATURE_ORDER = [
     "solvencia", "tier1_ratio", "leverage", "cobertura_provisiones",

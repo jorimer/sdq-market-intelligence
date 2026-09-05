@@ -602,7 +602,7 @@ INDICADORES_ESTRATIFICADOS = frozenset({"hhi_sectorial"})
 
 
 def calculate_all_indicators(data, entity_type: Optional[str] = None) -> Dict[str, IndicatorResult]:
-    """Calculate all 19 indicators (+ composite) from raw banking data.
+    """Calculate all 20 indicators (+ composite) from raw banking data.
 
     Each result carries an ``available`` flag (False when its inputs are missing).
     *data* can be any object whose attributes match ``BankingDataInput``.
