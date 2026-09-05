@@ -568,6 +568,58 @@ THIN_TEMPLATES = {
         "No recalcules ninguna cifra: todas vienen resueltas. Si una relación no está servida, "
         "expresala en palabras sin número."
     ),
+    # ── Boletín trimestral · RD en contexto regional (divulgación, gratuito) ──────────
+    # Las tres viven acá y NO en la ruta legacy: registrarlas solo en `THIN_TEMPLATES` sin
+    # sumarlas a `_CEREBRO_TEMPLATES` fue lo que dejó al primer anuario con relleno estático.
+    "boletin_rd": (
+        "Escribí el bloque del sistema bancario DOMINICANO del boletín trimestral.\n"
+        "Contexto:\n{context}\n\n"
+        "Máximo 800 palabras. La audiencia es amplia —una lista de suscripción abierta, no "
+        "un comité de crédito—: explicá lo que un lector informado no tiene por qué saber, "
+        "sin condescender y sin jerga.\n\n"
+        "**NO PUBLIQUES LA BANDA DE NINGUNA ENTIDAD.** Podés NOMBRAR entidades al describir "
+        "movimientos del trimestre —quién creció, quién se contrajo, quién cambió de "
+        "posición— pero las bandas y las calificaciones son del SISTEMA y de sus agregados. "
+        "No es una omisión de contexto: distribuir juicios recurrentes sobre la solidez de "
+        "bancos con nombre propio, sin ser calificadora regulada, es precisamente lo que "
+        "este producto no hace.\n\n"
+        "Titulá con lo que cambió en el trimestre, no con el nivel. Declará el corte que "
+        "estás leyendo.\n\n"
+        "No recalcules ninguna cifra: todas vienen resueltas."
+    ),
+    "boletin_sistemas": (
+        "Escribí el recorrido por los sistemas bancarios de la región.\n"
+        "Contexto:\n{context}\n\n"
+        "Máximo 900 palabras. Un país por vez, cada uno DENTRO DE SU PROPIO SISTEMA: qué "
+        "hizo su crédito, su morosidad o su solvencia respecto de SU historia.\n\n"
+        "**PROHIBIDO COMPARAR NIVELES ENTRE PAÍSES EN ESTA SECCIÓN.** Nada de «Colombia "
+        "tiene más solvencia que X», ni rankings, ni «el más alto de la región». Cada "
+        "supervisor computa bajo su propia norma contable —la CUIF colombiana y la Res. CMN "
+        "4966 brasileña no miden lo mismo— y la propia SECMCA declara por escrito que los "
+        "indicadores bancarios de su región no están armonizados. Lo comparable va en la "
+        "sección siguiente y sale de otra fuente.\n\n"
+        "El campo 'norma_contable' de cada cifra dice bajo qué regla se computó: nombrala "
+        "cuando presentes a un país por primera vez.\n\n"
+        "**DECLARÁ EL CORTE DE CADA PAÍS.** No hay un corte único para la edición: las "
+        "plazas publican con rezagos muy distintos y una puede venir de un año atrás. Un "
+        "país cuya serie termina antes se dice, no se disimula acortando el gráfico.\n\n"
+        "No recalcules ninguna cifra: todas vienen resueltas."
+    ),
+    "boletin_armonizado": (
+        "Escribí la sección de crédito y tasas comparables entre países.\n"
+        "Contexto:\n{context}\n\n"
+        "Máximo 700 palabras. Es la ÚNICA sección del boletín donde se comparan niveles "
+        "entre países, y solo porque estas cifras vienen de EMFA, las estadísticas "
+        "armonizadas del CMCA — que es lo único que la propia SECMCA declara armonizado.\n\n"
+        "**Y solo las TASAS.** EMFA armoniza la metodología, no la unidad: los saldos de "
+        "crédito vienen en moneda local y el cuadro de origen deja la unidad literalmente "
+        "en blanco, así que del crédito se habla por su TRAYECTORIA y su variación dentro "
+        "de cada país, nunca poniendo un saldo al lado de otro. Cada cifra trae "
+        "'comparable_entre_paises': si dice falso, no la compares.\n\n"
+        "Decí de dónde sale la comparabilidad —una frase basta— para que el lector entienda "
+        "por qué acá sí y en la sección anterior no.\n\n"
+        "No recalcules ninguna cifra: todas vienen resueltas."
+    ),
     "anio_del_sistema": (
         "Escribí la lectura ABIERTA del año del sistema bancario dominicano.\n"
         "Contexto:\n{context}\n\n"

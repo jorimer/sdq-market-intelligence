@@ -59,6 +59,10 @@ REPORT_SECTIONS: Dict[str, list] = {
     # La Revisión Anual lleva el mapa al CIERRE del año: es la lectura que el comité no
     # puede reproducir, y salía solo en el trimestral.
     "revision_anual": ["revision_anual", "mapa_sectorial"],
+    # El boletín de divulgación. §4 (`nota_metodologica`) NO se narra: la inyecta el
+    # endpoint desde el registro de procedencia, y por eso no está en `_SECTION_TO_TEMPLATE`.
+    "boletin_regional": ["boletin_rd", "boletin_sistemas", "boletin_armonizado",
+                         "nota_metodologica"],
 }
 
 # Map each section to the NarrativeEngine template name
@@ -84,6 +88,9 @@ _SECTION_TO_TEMPLATE: Dict[str, str] = {
     "sector_outlook": "sector_outlook",
     "anuario": "anuario_sistema",
     "revision_anual": "revision_anual",
+    "boletin_rd": "boletin_rd",
+    "boletin_sistemas": "boletin_sistemas",
+    "boletin_armonizado": "boletin_armonizado",
 }
 
 # Plantillas de banking que van por la RUTA CEREBRO (axis="banking"): obtienen la Barra de
@@ -101,6 +108,9 @@ _CEREBRO_TEMPLATES = frozenset({
     "anuario_sistema",
     # Misma trampa, mismo remedio: sin esta línea la Revisión Anual saldría hueca.
     "revision_anual",
+    # Y las tres del boletín regional, por lo mismo: registradas en `THIN_TEMPLATES` pero
+    # ausentes de acá, el motor las mandaría por la ruta legacy y saldrían con relleno.
+    "boletin_rd", "boletin_sistemas", "boletin_armonizado",
 })
 
 # Profundidad POR SECCIÓN (alineada con shared.products.section_mode), para que el deep dive
@@ -113,7 +123,11 @@ _CEREBRO_TEMPLATES = frozenset({
 # pide hasta 800 palabras y corría con el presupuesto `standard` (1024 tokens), que en
 # español no alcanza (~1.120). `trend_analysis` ya estaba acá por lo mismo.
 _DEEP_SECTIONS = frozenset({"risk_assessment", "trend_analysis", "sector_outlook",
-                            "anuario", "revision_anual"})
+                            "anuario", "revision_anual",
+                            # Las tres secciones narradas del boletín piden 700-900
+                            # palabras cada una: con presupuesto `standard` saldrían
+                            # truncadas a mitad de oración, como pasó con sector_outlook.
+                            "boletin_rd", "boletin_sistemas", "boletin_armonizado"})
 
 
 def _section_mode(section: str, base_mode: str) -> str:

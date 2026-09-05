@@ -290,6 +290,9 @@ export const SYSTEM_REPORT_TYPES = [
   // sí, registro del frontend no— y el resultado fue un producto que no se podía pedir
   // desde la interfaz. Lo vigila `systemReportTypes.paridad.test.ts`.
   "anuario",
+  // El BOLETÍN regional: divulgación gratuita, no vendible. Se registra como tipo de
+  // informe y no como producto del catálogo, que alimenta los SKU de facturación.
+  "boletin_regional",
 ] as const;
 
 export type SystemReportType = (typeof SYSTEM_REPORT_TYPES)[number];
@@ -301,6 +304,7 @@ export const SYSTEM_REPORT_NEEDS_PERIOD: Record<SystemReportType, boolean> = {
   datawatch: true,
   sector_outlook: true,
   anuario: true,
+  boletin_regional: true,
 };
 
 const SYSTEM_REPORT_PATH: Record<SystemReportType, string> = {
@@ -309,6 +313,7 @@ const SYSTEM_REPORT_PATH: Record<SystemReportType, string> = {
   datawatch: "datawatch",
   sector_outlook: "sector-outlook",
   anuario: "anuario",
+  boletin_regional: "boletin-regional",
 };
 
 /**
@@ -318,8 +323,14 @@ const SYSTEM_REPORT_PATH: Record<SystemReportType, string> = {
  * de 2025 ENTERO, y con el período por defecto —el corte más reciente— se pediría el del año
  * en curso.
  */
-export const SYSTEM_REPORT_ES_ANUAL: Partial<Record<SystemReportType, boolean>> = {
+export const SYSTEM_REPORT_ES_ANUAL: Record<SystemReportType, boolean> = {
+  criteria: false,
+  wire: false,
+  datawatch: false,
+  sector_outlook: false,
   anuario: true,
+  // El boletín es TRIMESTRAL: resume un corte, no un año.
+  boletin_regional: false,
 };
 
 /** El año que un informe anual va a resumir, a partir del período del topbar. */

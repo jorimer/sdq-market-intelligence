@@ -24,10 +24,17 @@ import json
 import pathlib
 import re
 
+import pytest
+
 RAIZ = pathlib.Path(__file__).resolve().parents[3]
 ROUTER = RAIZ / "modules" / "banking_score" / "api" / "router_reports.py"
 API_TS = RAIZ / "frontend" / "src" / "modules" / "banking-score" / "api.ts"
-ES_JSON = RAIZ / "frontend" / "src" / "shared" / "i18n" / "es.json"
+I18N = RAIZ / "frontend" / "src" / "shared" / "i18n"
+#: Los TRES idiomas. El mensaje de error de este test ya decía «en los tres idiomas» pero
+#: la regla solo leía `es.json`: un tipo nuevo podía salir con su clave técnica en pantalla
+#: para cualquier usuario que no fuera hispanohablante, y ningún test lo veía.
+IDIOMAS = ("es.json", "en.json", "fr.json")
+PDF_GENERATOR = RAIZ / "modules" / "banking_score" / "reports" / "pdf_generator.py"
 
 #: `@router.post("/<algo>/generate")` — la forma de un informe de sistema.
 _RUTA = re.compile(r'@router\.post\(\s*\n?\s*"/([a-z-]+)/generate"')
@@ -76,13 +83,39 @@ def test_la_interfaz_no_ofrece_un_informe_sin_endpoint():
 
 def test_cada_tipo_declara_su_ruta_y_si_necesita_periodo():
     tipos = _lista_ts("SYSTEM_REPORT_TYPES")
-    for mapa in ("SYSTEM_REPORT_NEEDS_PERIOD", "SYSTEM_REPORT_PATH"):
+    # `SYSTEM_REPORT_ES_ANUAL` entra acá, y para eso dejó de ser un `Partial`: mientras lo
+    # era, «ausente» significaba a la vez «no es anual» y «alguien se olvidó», y un tipo
+    # anual sin su línea salía sin la advertencia de que resume el AÑO y no el corte.
+    for mapa in ("SYSTEM_REPORT_NEEDS_PERIOD", "SYSTEM_REPORT_PATH",
+                 "SYSTEM_REPORT_ES_ANUAL"):
         faltan = sorted(tipos - _mapa_ts(mapa))
         assert not faltan, f"{faltan} no están declarados en {mapa}"
 
 
-def test_cada_tipo_tiene_etiqueta_y_no_es_la_clave_cruda():
-    etiquetas = json.loads(ES_JSON.read_text())["banking"]["repType"]
+@pytest.mark.parametrize("idioma", IDIOMAS)
+def test_cada_tipo_tiene_etiqueta_y_no_es_la_clave_cruda(idioma):
+    etiquetas = json.loads((I18N / idioma).read_text())["banking"]["repType"]
     for tipo in sorted(_lista_ts("SYSTEM_REPORT_TYPES")):
-        assert etiquetas.get(tipo), f"{tipo} saldría con su clave técnica en pantalla"
-        assert etiquetas[tipo] != tipo, f"la etiqueta de {tipo} repite la clave técnica"
+        assert etiquetas.get(tipo), (
+            f"{tipo} saldría con su clave técnica en pantalla en {idioma}")
+        assert etiquetas[tipo] != tipo, (
+            f"la etiqueta de {tipo} repite la clave técnica en {idioma}")
+
+
+def test_cada_tipo_tiene_su_etiqueta_de_PORTADA_en_el_PDF():
+    """La etiqueta de portada fue UNA DE LAS CUATRO que le faltaron al anuario, y era la
+    única de las cuatro sin guard de paridad.
+
+    Sin ella el PDF sale rotulado con la clave técnica —o, peor, con el nombre de OTRO
+    producto— en la portada y en el encabezado de cada página. Ya pasó: un informe salió
+    como «Revisión Anual» siendo otra cosa.
+    """
+    fuente = PDF_GENERATOR.read_text()
+    bloque = re.search(r"REPORT_TYPE_LABELS = \{(.*?)\n\}", fuente, re.S)
+    assert bloque, "no se pudo leer REPORT_TYPE_LABELS de pdf_generator.py"
+    etiquetas = set(re.findall(r'^\s*"([a-z_]+)":', bloque.group(1), re.M))
+    faltan = sorted(tipos_del_backend() - etiquetas)
+    assert not faltan, (
+        f"{faltan} no declaran su etiqueta de portada en REPORT_TYPE_LABELS "
+        f"(modules/banking_score/reports/pdf_generator.py): el PDF saldría rotulado con la "
+        f"clave técnica.")

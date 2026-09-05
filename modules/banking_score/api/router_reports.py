@@ -50,14 +50,16 @@ router = APIRouter()
 #: gates de entrega—: se llamaba `_NO_SE_ENTREGAN_HUECOS` y ese nombre invitaba a leerla como
 #: comercial. El ANUARIO entra porque es el documento más público que la firma produce: uno
 #: hueco daña más que uno no entregado.
-_NO_SE_ENTREGAN_HUECOS = {"full_rating", "scorecard", "anuario"}
+_NO_SE_ENTREGAN_HUECOS = {"full_rating", "scorecard", "anuario", "boletin_regional"}
 # Informes de SISTEMA: no cuelgan de una entidad (``bank_id`` NULL). Describen la
 # metodología (criteria) o el sistema entero (wire/datawatch/sector_outlook).
-_SYSTEM_REPORT_TYPES = {"criteria", "wire", "datawatch", "sector_outlook", "anuario"}
+_SYSTEM_REPORT_TYPES = {"criteria", "wire", "datawatch", "sector_outlook", "anuario",
+                        "boletin_regional"}
 
 # Boletines de sistema que se NARRAN con IA y cuyo único insumo son las cifras del sector.
 # `criteria` no está: es determinista, se genera del motor y no consume benchmarks.
-_NARRATED_SYSTEM_TYPES = {"wire", "datawatch", "sector_outlook", "anuario"}
+_NARRATED_SYSTEM_TYPES = {"wire", "datawatch", "sector_outlook", "anuario",
+                          "boletin_regional"}
 
 
 def _attach_pdf(report: Report, file_path: str, narratives: dict,
@@ -181,6 +183,12 @@ async def _generate_system_report(
                 scoring_result=scoring_result, period=period, benchmarks=benchmarks,
                 anuario=anuario_datos,
             )
+        if report_type == "boletin_regional":
+            # §4 no se narra ni se escribe a mano: se GENERA del registro de procedencia.
+            # Una nota metodológica en prosa envejece con cada conector; la generada no
+            # puede divergir del estado real porque ES el estado real.
+            from modules.banking_score.reports.boletin_regional import nota_metodologica
+            narratives["nota_metodologica"] = nota_metodologica(db)
         file_path = await generate_pdf_report(
             report_type=report_type, bank_name=scope_name,
             scoring_result=scoring_result, period=period, narratives=narratives,
@@ -473,6 +481,34 @@ async def generate_anuario(
     return await _generate_system_report(
         report_type="anuario", scope_name="Sistema Bancario", period=period_end,
         db=db, current_user=current_user,
+    )
+
+
+# ─── Boletín regional ────────────────────────────────────────────
+
+@router.post(
+    "/boletin-regional/generate",
+    summary="Generar el Boletín trimestral · RD en contexto regional",
+    description=("Genera el boletín de divulgación: el sistema dominicano en profundidad, "
+                 "los sistemas nacionales de la región por trayectoria, y crédito y tasas "
+                 "armonizados vía EMFA. El corte se declara POR PAÍS, no uno solo para "
+                 "toda la edición."),
+)
+async def generate_boletin_regional(
+    period_end: str = Query(..., description="Corte del bloque dominicano (YYYY-MM-DD)"),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Producto de DIVULGACIÓN, gratuito y no vendible.
+
+    Se registra como tipo de informe y NO como producto del catálogo a propósito: el
+    catálogo alimenta los SKU de facturación, el manifiesto de la Data API y las
+    credenciales comerciales, así que dar de alta ahí un boletín gratuito obligaría a
+    apagar cada superficie comercial de a una — la clase de trabajo que produce huecos.
+    """
+    return await _generate_system_report(
+        report_type="boletin_regional", scope_name="RD en contexto regional",
+        period=period_end, db=db, current_user=current_user,
     )
 
 
