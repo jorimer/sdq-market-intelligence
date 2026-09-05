@@ -39,10 +39,17 @@ PIB = panel_mod.PIB_CODE
 #: que lo apuntan SÍ se escriben — `_es_hacia_adelante` descarta los vencidos.
 CORTE = date(2026, 8, 15)
 
-#: El índice de volumen del PIB de los dos trimestres que el observado va a traer. La
-#: variación entre ellos —lo que el punto pronostica— es (ln 133,5 − ln 133,0) × 100.
-INDICE_Q2, INDICE_Q3 = 133.0, 133.5
+#: El índice de volumen del PIB en los tres trimestres que el observado va a traer. Hacen
+#: falta TRES porque los dos motores miden distinto contra la misma serie, y ésa es
+#: justamente la razón por la que la medida tiene que viajar con el punto:
+#:
+#: * el **nowcast** emite la variación contra el trimestre ANTERIOR (`dlog_pct`);
+#: * el **BVAR** emite la variación contra el mismo trimestre del año anterior (`yoy_pct`),
+#:   porque el índice que publica el BCRD es la serie ORIGINAL y su variación trimestral
+#:   arrastra 5,80 pp de estacionalidad pura.
+INDICE_Q3_ANTERIOR, INDICE_Q2, INDICE_Q3 = 128.0, 133.0, 133.5
 DLOG_OBSERVADO = (np.log(INDICE_Q3) - np.log(INDICE_Q2)) * 100   # ≈ 0,3754 %
+YOY_OBSERVADO = (INDICE_Q3 / INDICE_Q3_ANTERIOR - 1) * 100       # ≈ 4,2969 %
 
 #: Lo que el nowcast dice. Se elige CERCA del observado para que el error correcto sea
 #: chico: si el arreglo funciona, `abs_error` es ~0,005; si el ledger sigue comparando la
@@ -82,7 +89,7 @@ def _bloque_sintetico() -> bloque.BloqueArmado:
         trimestres.append(f"{a}-Q{q + 1}")
         onda = np.sin(i / 3.0)
         filas.append((
-            1.00 + 0.30 * onda,           # pib_real       · Δlog ×100
+            4.30 + 0.30 * onda,           # pib_real       · variación interanual %
             4.00 + 0.50 * np.cos(i / 4.0),  # inflacion      · nivel %
             6.00 + 0.40 * onda,           # tpm            · nivel %
             1.00 + 0.20 * np.cos(i / 5.0),  # tipo_cambio    · Δlog ×100
@@ -103,6 +110,7 @@ def emitido(db, monkeypatch):
     Solo se sustituye el ARMADO del bloque —traer las cinco series del BCRD a una matriz—;
     el BVAR, la emisión y el ledger corren de verdad.
     """
+    _observar(db, "2025-Q3", INDICE_Q3_ANTERIOR)
     _observar(db, "2026-Q2", INDICE_Q2)
 
     def _estimar(_db, _corte, *, variante, **_kw):
@@ -166,16 +174,33 @@ def test_una_TASA_no_se_puntua_contra_un_NIVEL(db, emitido):
 
 def test_el_observado_que_se_guarda_esta_en_la_medida_DEL_PUNTO(db, emitido):
     """`realized` es lo que hace auditable el error. Si guarda el nivel mientras el punto es
-    una tasa, la fila miente por sí sola aunque nadie mire el RMSE."""
+    una tasa, la fila miente por sí sola aunque nadie mire el RMSE.
+
+    Y los DOS motores se realizan distinto sobre la MISMA serie y el MISMO trimestre: el
+    nowcast contra 2026-Q2 y el BVAR contra 2025-Q3. Si la medida no viajara con la fila, uno
+    de los dos tendría que estar mal — y el que se equivocara no lo diría.
+    """
     _observar(db, "2026-Q3", INDICE_Q3)
     ledger.puntuar_pendientes(db)
-    f = (db.query(ForecastLog)
-         .filter(ForecastLog.status == "scored", ForecastLog.horizon == "2026-Q3")
-         .first())
-    assert f is not None
-    assert float(f.realized) == pytest.approx(DLOG_OBSERVADO, abs=1e-6), (
-        f"`realized` guardó {f.realized}, y lo observado en la medida del punto es "
-        f"{DLOG_OBSERVADO:.4f} % — la variación del índice, no el índice")
+    puntuadas = {str(f.model_id).split(".")[0]: f
+                 for f in db.query(ForecastLog)
+                 .filter(ForecastLog.status == "scored",
+                         ForecastLog.horizon == "2026-Q3").all()}
+
+    nowcast_fila = puntuadas.get("bridge_imae_pib")
+    assert nowcast_fila is not None, "el nowcast de 2026-Q3 no se puntuó"
+    assert float(nowcast_fila.realized) == pytest.approx(DLOG_OBSERVADO, abs=1e-6), (
+        f"`realized` del nowcast guardó {nowcast_fila.realized}, y lo observado en su medida "
+        f"es {DLOG_OBSERVADO:.4f} % — la variación contra 2026-Q2, no el índice")
+
+    bvar_fila = puntuadas.get("bvar_minnesota")
+    assert bvar_fila is not None, "el pronóstico del BVAR a un trimestre vista no se puntuó"
+    assert float(bvar_fila.realized) == pytest.approx(YOY_OBSERVADO, abs=1e-6), (
+        f"`realized` del BVAR guardó {bvar_fila.realized}, y lo observado en su medida es "
+        f"{YOY_OBSERVADO:.4f} % — la variación contra 2025-Q3, no contra 2026-Q2")
+    assert float(nowcast_fila.realized) != pytest.approx(float(bvar_fila.realized)), (
+        "los dos motores se realizaron IGUAL sobre la misma serie y el mismo trimestre: la "
+        "medida de la fila no está decidiendo nada")
 
 
 # ── El instrumento no puede decir «todavía no» cuando la verdad es «nunca» ──────────

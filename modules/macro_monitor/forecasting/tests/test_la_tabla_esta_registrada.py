@@ -82,10 +82,14 @@ def test_el_backfill_de_la_migracion_es_TAN_ANGOSTO_como_dice():
         filas = {r[0]: (r[1], r[2]) for r in
                  cx.execute(text("select id, target_series, measure from mm_forecast_log"))}
 
-    assert filas["a"] == (mig.PIB_CODE, "dlog_pct"), (
-        "la fila del BVAR sigue apuntando al nombre de la variable del bloque: no se puede "
-        "puntuar contra nada")
-    assert filas["b"] == (mig.PIB_CODE, "dlog_pct")
+    assert filas["a"] == (mig.PIB_CODE, None), (
+        "la fila del BVAR: su `target_series` tenía que normalizarse —«pib_real» no es un "
+        "`series_code` con ninguna versión del código— y su MEDIDA tenía que quedar en NULL. "
+        "La transformación del PIB en el bloque cambió de trimestral a interanual el mismo "
+        "día en que se escribieron estas filas, y `as_of` no tiene hora: la fila no registra "
+        "con cuál se produjo, y las dos difieren en puntos porcentuales enteros")
+    assert filas["b"] == (mig.PIB_CODE, "dlog_pct"), (
+        "el nowcast SÍ se puede afirmar: `nowcast.estimar` nunca cambió de medida")
     assert filas["c"] == ("alguna.otra.serie", None), (
         "el backfill le inventó una medida a un motor que no conoce")
     assert filas["d"] == ("otra.serie", "level"), (

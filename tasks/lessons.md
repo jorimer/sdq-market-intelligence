@@ -623,6 +623,106 @@ la caché, correr sin acceso al modelo y comprobar que los identificadores salen
 clave: `series_code`, slugs, nombres de archivo, rutas de API. Preguntarse qué pasa si mañana
 contesta distinto — y si la respuesta es «cambia una clave publicada», congelarla.
 
+---
+
+## Dos capas que dicen «el crecimiento del PIB» y miden cosas distintas
+
+**Síntoma.** El informe de proyecciones del 2026-09-05 publicó una tabla sectorial con **8 de
+18 actividades contrayéndose**, y declaró honestamente un ajuste de reconciliación de
+−3,536 pp. Deshaciendo el ajuste, el modelo crudo proyectaba **las 18 positivas** (+1,24 % a
++7,24 %). Las ocho contracciones no eran una lectura: eran el residuo de la resta.
+
+**Causa raíz.** No era el reparto de la brecha, que estaba bien argumentado y bien
+implementado. Eran las UNIDADES. El panel sectorial mide interanual (`trimestres[i-4]`); el
+bloque del BVAR medía trimestral (`DLOG` entre trimestres consecutivos); `reconciliar`
+restaba el punto trimestral de una suma ponderada de interanuales. Sobre la serie real (77
+trimestres) el QoQ promedia +1,13 % y el YoY +4,54 %: 3,41 pp de diferencia sistemática
+contra una brecha publicada de −3,536 pp. **La «brecha contra el agregado» era la conversión
+de unidades**, con nombre de hallazgo.
+
+Encima, el QoQ se hacía sobre la serie ORIGINAL del BCRD, sin desestacionalizar: su QoQ medio
+va de −1,13 % (Q3) a +4,67 % (Q4), 5,80 pp de amplitud puramente de calendario. El titular del
+informe dependía de en qué trimestre caía el horizonte.
+
+**Lo que hizo que durara.** Tres cosas, y ninguna es un test que faltara por descuido:
+
+1. **Nada en el repositorio AFIRMABA que las dos series fueran comparables.** Cada capa tenía
+   su propia función de crecimiento, cada una correcta por separado, y el punto donde se
+   restaban no sabía nada de ninguna de las dos. Un guard sobre cada capa por su cuenta habría
+   pasado en verde.
+2. **La entrada canónica ya declaraba la regla.** `canonical.py`, `key="pib_real"`: «el
+   crecimiento (YoY del volumen) es invariante a la base». El panel sectorial obedecía el
+   registro; el bloque no, y nada cruzaba lo que el registro DECLARA contra lo que el motor
+   HACE.
+3. **La muestra curada estaba en la unidad correcta.** Publicaba `pib_real` = 3,41 % con una
+   brecha de −0,42 pp: coherente en anual, mientras producción emitía +0,74 % con −3,54 pp.
+   Escrita a mano, enseñaba el producto que uno querría, no el que la máquina produce. Es el
+   mismo defecto que ya habíamos pagado en el eje de valuación, donde la cura fue GENERAR la
+   muestra desde las mismas funciones que el informe real.
+
+**Regla futura.** **Una magnitud que se va a RESTAR de otra viaja con su medida.** Es el
+corolario de «el SUJETO viaja con el número» para las unidades: no alcanza con que cada capa
+calcule bien: el punto de la resta tiene que poder preguntar *«¿esto mide lo mismo que
+aquello?»* y negarse. Acá el parámetro `medida_del_agregado` es **obligatorio y sin default**,
+a propósito — un default habría dejado pasar exactamente el caso que existe para impedir.
+
+Y el test que lo cierra no vigila el mecanismo sino la PROPIEDAD: se siembra el mismo índice
+en las dos capas y se exige que produzcan el mismo número. Da igual por qué dejen de
+coincidir.
+
+**Disparador.** Dos módulos que nombran igual una magnitud («crecimiento», «variación»,
+«cuota», «margen») y la calculan cada uno por su lado, sobre todo si en algún punto se suman,
+se restan o se comparan. Preguntar de qué a qué mide cada uno, y sembrar el mismo dato en las
+dos para ver si sale el mismo número.
+
+---
+
+## Una frase computada afirmaba «dato real medido» en un informe de PRONÓSTICO
+
+**Síntoma.** §8 del informe de proyecciones del 2026-09-05, con cuatro líneas entre las dos y
+las dos COMPUTADAS:
+
+> **Cobertura:** 100% del índice se construye sobre dato real medido en la fuente.
+> **Procedencia por variable:** 0% del peso de este índice se sostiene en dato real…
+
+**Causa raíz: dos defectos, y el segundo es el interesante.**
+
+1. **El producto contestaba otra pregunta.** `coverage=1.0 if vig else 0.0` responde «¿hay
+   alguna proyección vigente?»; `DataHealth.coverage` declara responder «¿qué fracción del
+   peso de mi índice está anclada a dato real?». La única proyección vigente ni siquiera
+   pasaba el gate —el propio informe la rotula «¿ancla una afirmación? **no**»— y aun así el
+   eje puntuaba `cobertura=1.00`.
+
+2. **La superficie que se quedó atrás.** El mecanismo para esto YA EXISTÍA:
+   `provenance.coverage_sentence()` rutea por `coverage_kind`, y su comentario dice que la
+   frase de índice en el eje de leyes es «sencillamente falsa» y que «salía en la Metodología
+   del informe». El arreglo se hizo en `provenance.py` y **no** en
+   `report_sections._methodology_md`, que siguió con el literal cableado. Resultado: el eje de
+   leyes publicaba hoy, en su metodología, exactamente la frase que el repositorio ya había
+   declarado falsa para él. Nadie se enteró porque **arreglar una superficie hace desaparecer
+   el síntoma que uno estaba mirando**.
+
+**Y un tercero, que apareció al arreglar.** Cambiar solo la redacción dejaba el mismo defecto
+más chico: metodología 50% y procedencia 0%, dos números bajo la misma palabra en la misma
+página. La causa era que `coverage_real` es 0 por construcción en un eje de proyección. Hizo
+falta una cobertura con nombre propio (`coverage_anclada`) y que la cifra determinada del
+nowcast VIAJARA al registro.
+
+**Regla futura.** Cuando una prosa generada dependa de un discriminador (`coverage_kind`,
+`scope`, `nature`), **el discriminador se rutea con un MAPA, nunca con un `if` ni con un
+literal**, y hay un test que cruza el mapa contra el vocabulario entero. Un `.get()` con
+default sobre un vocabulario que crece convierte «me falta una frase» en «publico una frase
+falsa», en silencio. Y al arreglar una prosa que aparece en dos superficies, **buscar la otra
+antes de dar por cerrado**: `grep` de la frase, no del nombre de la función.
+
+**Lo que la prueba de rotura encontró y yo no.** Mi primer guard sobre la cobertura de
+procedencia **no falló** al romper el código: el caso que usaba tenía `coverage_real` y
+`coverage_anclada` iguales. Un test que no separa las dos ramas no prueba la rama. Faltaba el
+caso de una proyección ADMISIBLE, donde valen 0 y 1.
+
+**Disparador.** Cualquier frase de producto que se arme con un número más una plantilla. Dos
+preguntas: ¿el número contesta la pregunta que la plantilla hace?, y ¿esta plantilla vive en
+más de un lugar?
 
 ---
 

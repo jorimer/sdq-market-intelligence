@@ -71,7 +71,8 @@ def db():
 def test_la_reconciliacion_es_exacta():
     crudo = {"a": 5.0, "b": -2.0, "c": 11.0}
     pesos = {"a": 0.5, "b": 0.3, "c": 0.2}
-    ajustado, brecha = S.reconciliar(crudo, pesos, g_pib=3.0)
+    ajustado, brecha = S.reconciliar(crudo, pesos, g_pib=3.0,
+                                     medida_del_agregado=S.MEDIDA_DEL_PANEL)
     suma = sum(pesos[k] * ajustado[k] for k in ajustado)
     assert suma == pytest.approx(3.0, abs=1e-12)
     assert brecha == pytest.approx(3.0 - sum(pesos[k] * crudo[k] for k in crudo), abs=1e-12)
@@ -85,7 +86,8 @@ def test_el_reparto_es_por_peso_y_no_por_crecimiento():
     """
     crudo = {"a": 5.0, "b": -2.0, "c": 11.0}
     pesos = {"a": 0.5, "b": 0.3, "c": 0.2}
-    ajustado, _ = S.reconciliar(crudo, pesos, g_pib=3.0)
+    ajustado, _ = S.reconciliar(crudo, pesos, g_pib=3.0,
+                                medida_del_agregado=S.MEDIDA_DEL_PANEL)
     ajustes = {k: ajustado[k] - crudo[k] for k in crudo}
     assert len(set(round(v, 12) for v in ajustes.values())) == 1
     assert (sorted(crudo, key=lambda k: crudo[k])
@@ -96,7 +98,8 @@ def test_la_proyeccion_reconcilia_contra_el_agregado(db):
     _sembrar(db)
     pan = S.construir_panel(db)
     pr = S.proyectar(pan, g_pib=4.25, horizonte="2026-Q2",
-                     origen_del_agregado="bvar_minnesota.v1")
+                     origen_del_agregado="bvar_minnesota.v1",
+                     medida_del_agregado=S.MEDIDA_DEL_PANEL)
     assert pr.suma_de_incidencias == pytest.approx(4.25, abs=1e-12)
     assert len(pr.sectores) == len(S.COMPONENTES)
 
@@ -107,7 +110,8 @@ def test_el_desglose_de_un_escenario_es_un_escenario(db):
     _sembrar(db)
     pan = S.construir_panel(db)
     pr = S.proyectar(pan, g_pib=3.0, horizonte="2027-Q1",
-                     origen_del_agregado="bvar_minnesota.v1", es_escenario=True)
+                     origen_del_agregado="bvar_minnesota.v1", es_escenario=True,
+                     medida_del_agregado=S.MEDIDA_DEL_PANEL)
     assert pr.es_escenario is True
 
 
@@ -152,7 +156,8 @@ def test_las_brechas_viajan_en_la_proyeccion(db):
     """Declarar la brecha en el panel y perderla en la salida es no declararla."""
     _sembrar(db, huecos=("minas",))
     pan = S.construir_panel(db)
-    pr = S.proyectar(pan, g_pib=3.0, horizonte="2026-Q2", origen_del_agregado="x")
+    pr = S.proyectar(pan, g_pib=3.0, horizonte="2026-Q2", origen_del_agregado="x",
+                     medida_del_agregado=S.MEDIDA_DEL_PANEL)
     assert "minas" in pr.brechas
     assert all(s.clave != "minas" for s in pr.sectores)
     # y lo que queda sigue reconciliando exacto

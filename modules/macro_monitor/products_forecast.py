@@ -42,6 +42,7 @@ from shared.products import (
 from shared.data import medida_de_pronostico as med
 from shared.products.contract import EstadoBacktest
 from shared.products.render import render_product_pdf
+from shared.registry.signals import COVERAGE_PROJECTION
 
 logger = logging.getLogger("sdq.products.macro_forecast")
 
@@ -180,8 +181,37 @@ class MacroForecastProduct:
         from modules.macro_monitor.forecasting.ledger import no_puntuables
         return _seguro(self._db, lambda d: no_puntuables(d), [])
 
+    def _determinadas(self) -> int:
+        """Cuántas cifras determinadas hay hoy: 0 o 1.
+
+        No es un pronóstico. Con los tres meses del IMAE publicados, el promedio trimestral
+        del índice ES el índice de volumen del PIB por identidad de construcción del BCRD.
+        Cuenta como anclada porque lo está: es dato publicado, verificado en cada lectura.
+        """
+        from modules.macro_monitor.forecasting import nowcast
+        c = _seguro(self._db, lambda d: nowcast.cifra_determinada(d, date.today()), None)
+        return 1 if c is not None else 0
+
     def data_signals(self) -> DataHealth:
+        """La cobertura de este eje mide ADMISIBILIDAD, no dato medido.
+
+        Devolvía `1.0 if vig else 0.0`, que contesta «¿hay alguna proyección vigente?».
+        `DataHealth.coverage` declara contestar otra —«¿qué fracción del peso de mi índice
+        está anclada a dato real?»— y la prosa la publicaba con esa lectura: el informe del
+        2026-09-05 dijo «100% del índice se construye sobre dato real medido en la fuente»
+        cuatro líneas antes de declarar, computado, que el 0% se sostiene en dato real. Y la
+        única proyección que sostenía ese 100% ni siquiera pasaba el gate: la tabla del
+        propio informe la publica con «¿ancla una afirmación? no».
+
+        Acá el índice ES la proyección, así que la pregunta honesta es qué fracción de lo que
+        se publica está sostenida por un pronóstico ADMISIBLE o por una cifra determinada por
+        identidad. Va bajo `COVERAGE_PROJECTION` para que ninguna superficie la lea como peso
+        anclado a dato medido.
+        """
+        from modules.macro_monitor.forecasting.procedencia import es_publicable
+
         vig = self._vigentes()
+        determinadas = self._determinadas()
         frescura = None
         if vig:
             cortes = sorted(str(f.as_of) for f in vig)
@@ -189,14 +219,25 @@ class MacroForecastProduct:
                 frescura = (date.today() - date.fromisoformat(cortes[-1])).days
             except ValueError:
                 frescura = None
+        admisibles = sum(1 for m in vig if es_publicable(m)[0])
+        publicado = len(vig) + determinadas
+        cobertura = (admisibles + determinadas) / publicado if publicado else 0.0
+        if vig or determinadas:
+            detalle = (f"{admisibles} de {len(vig)} proyección(es) vigente(s) pasan el gate; "
+                       f"{determinadas} cifra(s) determinada(s) por identidad; "
+                       f"{len(self._puntuados())} conjunto(s) con backtest puntuado"
+                       # Lo que no va a cerrar NUNCA se cuenta acá también: es la superficie
+                       # que mira un operador sin generar un informe, y ahí un `pending`
+                       # roto y uno esperando el trimestre se ven igual.
+                       f"{_rotas_en_detalle(self._sin_poder_puntuarse())}")
+        else:
+            detalle = "sin proyecciones emitidas todavía"
         return DataHealth(
-            coverage=1.0 if vig else 0.0, freshness_days=frescura, cadence="quarterly",
+            coverage=cobertura, coverage_kind=COVERAGE_PROJECTION,
+            freshness_days=frescura, cadence="quarterly",
             sources=("BCRD — IMAE, PIB por sectores de origen, TPM, tipo de cambio, tasas",
                      "SDQ — ledger de pronósticos (mm_forecast_log)"),
-            detail=(f"{len(vig)} proyección(es) vigente(s); "
-                    f"{len(self._puntuados())} conjunto(s) con backtest puntuado"
-                    f"{_rotas_en_detalle(self._sin_poder_puntuarse())}"
-                    if vig else "sin proyecciones emitidas todavía"))
+            detail=detalle)
 
     def has_engine(self) -> bool:
         return bool(self._vigentes())
@@ -232,8 +273,10 @@ class MacroForecastProduct:
     # ── Snapshot ──
 
     def _payload(self, db: Session) -> Dict[str, Any]:
-        from modules.macro_monitor.forecasting import desempeno, nowcast, procedencia
-        from modules.macro_monitor.forecasting import sectoral
+        from modules.macro_monitor.forecasting import (
+            desempeno, nowcast, procedencia, sectoral,
+        )
+        from modules.macro_monitor.forecasting import panel as panel_mod
         from modules.macro_monitor.forecasting.desempeno import filas
 
         hoy = date.today()
@@ -261,28 +304,54 @@ class MacroForecastProduct:
         except Exception:  # noqa: BLE001
             cifra = None
         sect = None
+        sect_motivo = ""
         try:
             panel = sectoral.construir_panel(db)
-            if panel.trimestres and proyecciones:
+            if not (panel.trimestres and proyecciones):
+                sect_motivo = _SIN_AGREGADO_QUE_DESAGREGAR
+            else:
                 primera = proyecciones[0]
+                # La medida se le pregunta a la FILA, no a la variable del bloque. Dos
+                # motores emiten sobre la misma serie con medidas distintas —el nowcast una
+                # variación trimestral, el BVAR una interanual—, así que la clase depende de
+                # QUÉ FILA es la vigente. Y preguntarle al bloque por el `series_code`
+                # lanzaba `KeyError`: ese helper espera el nombre de la variable, y el
+                # `except` de abajo se lo tragaba haciendo desaparecer la sección entera.
+                clase = panel_mod.clase_de_crecimiento(primera.get("medida"))
+                if clase != sectoral.MEDIDA_DEL_PANEL:
+                    sect_motivo = _MEDIDAS_QUE_NO_SE_RESTAN.format(
+                        agregado=primera.get("medida") or "sin declarar",
+                        panel=sectoral.MEDIDA_DEL_PANEL,
+                        modelo=primera.get("modelo", "?"))
+                    raise _NoSeDesagrega(sect_motivo)
                 pr = sectoral.proyectar(
                     panel, g_pib=float(primera["punto"]),
                     horizonte=str(primera["horizonte"]),
-                    origen_del_agregado=str(primera["modelo"]))
+                    origen_del_agregado=str(primera["modelo"]),
+                    medida_del_agregado=clase)
                 sect = {
                     "horizonte": pr.horizonte, "brecha_pp": pr.brecha_pp,
                     "ajuste_pp": pr.ajuste_pp, "brechas": pr.brechas,
                     "sectores": [{"etiqueta": s.etiqueta, "crecimiento": s.crecimiento,
+                                  "crecimiento_sin_reconciliar":
+                                      s.crecimiento_sin_reconciliar,
                                   "peso": s.peso, "incidencia": s.incidencia}
                                  for s in pr.sectores],
                 }
+        except _NoSeDesagrega:
+            pass          # el motivo ya está escrito, y viaja en el payload
         except Exception as e:  # noqa: BLE001
             logger.warning("lectura sectorial no disponible: %s", e)
+            sect_motivo = f"{_FALLO_SECTORIAL} {e}"
         return {
             "proyecciones": proyecciones,
             "escenarios": _escenarios_vigentes(db),
             "cifra_determinada": cifra,
             "sectorial": sect,
+            # La sección se ENTERA de por qué no salió. Sin esto, una lectura sectorial
+            # ausente y una imposible se leen igual —«no está disponible»— y el informe
+            # promete diecisiete secciones y entrega dieciséis sin decir nada.
+            "sectorial_motivo": sect_motivo,
             "desempeno": [{"modelo": f.model_id, "serie": f.target_series,
                            "horizonte": f.horizonte, "n_oos": f.n_oos, "rmse": f.rmse,
                            "mae": f.mae,
@@ -340,17 +409,33 @@ class MacroForecastProduct:
         la cobertura real del índice—, acá el índice del eje **ES** la proyección. Por eso
         llevan peso, y por eso `coverage_projected` de este eje sí dice algo: mide cuánto del
         producto está sostenido por un pronóstico admisible.
+
+        Lleva además la cifra determinada del nowcast, que no es un pronóstico: con los
+        tres meses del IMAE publicados el promedio trimestral del índice ES el índice de
+        volumen del PIB, por identidad de construcción del BCRD. Es lo único real que
+        este eje sirve, y sin ella la procedencia publica un número distinto del de la
+        metodología.
         """
         from modules.macro_monitor.forecasting.procedencia import (
             es_publicable, proyeccion_por_serie,
         )
-        from shared.registry.signals import GAP, PROJECTED, VariableSignal
+        from shared.registry.signals import GAP, PROJECTED, REAL, VariableSignal
 
         db = self._db
         if db is None:
-            return {"period": None, "signals": []}
+            return {"period": None, "signals": [],
+                    "coverage_kind": COVERAGE_PROJECTION}
         metas = _seguro(db, lambda d: proyeccion_por_serie(d), {}) or {}
         señales = []
+        # La cifra determinada es lo ÚNICO de este eje que sí es dato real, y tiene que
+        # llegar al registro: si no, la procedencia la ignora y publica un número distinto
+        # del de la metodología. Es el defecto original en chico — dos cifras de cobertura
+        # en la misma página.
+        for _ in range(self._determinadas()):
+            señales.append(VariableSignal(
+                key="cifra_determinada_pib", label="PIB real · trimestre determinado",
+                state=REAL, weight=1.0, scope="national", cadence="quarterly",
+                source="BCRD — IMAE (identidad de construcción, verificada en cada lectura)"))
         for serie, meta in sorted(metas.items()):
             ok, motivo = es_publicable(meta)
             señales.append(VariableSignal(
@@ -367,7 +452,10 @@ class MacroForecastProduct:
                 projection=meta if ok else None,
                 note="" if ok else motivo,
             ))
-        return {"period": None, "signals": señales}
+        # La semántica viaja con las señales: sin ella el registro lee este eje como si
+        # armara un índice de dato real, que es exactamente lo que no hace.
+        return {"period": None, "signals": señales,
+                "coverage_kind": COVERAGE_PROJECTION}
 
     # ── Muestra curada ──
 
@@ -451,7 +539,7 @@ def _escenarios_vigentes(db: Session) -> List[Dict[str, Any]]:
         np.array([list(f) for f in armado.Y], dtype=float), armado.nombres,
         armado.trimestres[-1],
         serie_objetivo=bloque.codigo_de_variable(db, OBJETIVO_DEL_BLOQUE),
-        medida=bloque.medida_de_variable(OBJETIVO_DEL_BLOQUE))
+        medida=bloque.medida_del_punto(OBJETIVO_DEL_BLOQUE))
     if proy is None:
         return []
     return [{"horizonte": e.horizonte, "punto": e.punto, "medida": e.measure or "",
@@ -556,25 +644,35 @@ def _md_trayectoria(p: Dict[str, Any]) -> str:
 def _md_sectorial(p: Dict[str, Any]) -> str:
     sect = p.get("sectorial")
     if not sect or not sect.get("sectores"):
-        return ("La lectura sectorial no está disponible para este corte: sin una proyección "
-                "agregada vigente no hay nada que desagregar.")
+        # El MOTIVO, no «no está disponible». Una sección que desaparece sin decir por qué
+        # se lee como que el informe no la tiene.
+        return p.get("sectorial_motivo") or _SIN_AGREGADO_QUE_DESAGREGAR
     lineas = [
         f"Desagregación de la proyección agregada de **{sect['horizonte']}** en las "
         "actividades del PIB. La suma ponderada **reconcilia exactamente** con el agregado "
         "que publicamos.",
         "",
-        "| actividad | peso | crecimiento proyectado | incidencia |",
-        "|---|---:|---:|---:|",
+        "| actividad | peso | proyectado | reconciliado | incidencia |",
+        "|---|---:|---:|---:|---:|",
     ]
     for s in sect["sectores"]:
-        lineas.append(f"| {s['etiqueta']} | {s['peso'] * 100:.2f} % | "
+        crudo = s.get("crecimiento_sin_reconciliar")
+        col_crudo = f"{crudo:.2f} %" if crudo is not None else "—"
+        lineas.append(f"| {s['etiqueta']} | {s['peso'] * 100:.2f} % | {col_crudo} | "
                       f"{s['crecimiento']:.2f} % | {s['incidencia']:.3f} pp |")
     lineas.append("")
+    # Las DOS columnas, y no solo la reconciliada, porque el ajuste puede darle vuelta el
+    # signo a un sector y con una sola columna eso se lee como una contracción proyectada.
+    # Pasó: un informe publicó ocho actividades en rojo que el modelo daba todas en verde.
     lineas.append(
-        f"El ajuste de reconciliación fue de **{sect.get('ajuste_pp', 0.0):+.3f} pp** por "
-        "actividad, repartido proporcional al PESO y no al crecimiento: repartir por "
-        "crecimiento le pega más al que más se mueve y puede darle vuelta el signo a un "
-        "sector, que es justo la lectura que esta sección existe para dar.")
+        f"«Proyectado» es la lectura del modelo sectorial; «reconciliado» es esa lectura "
+        f"después de repartir la brecha contra el agregado, que fue de "
+        f"**{sect.get('ajuste_pp', 0.0):+.3f} pp** por actividad. El reparto es proporcional "
+        "al PESO y no al crecimiento: repartir por crecimiento le pega más al que más se "
+        "mueve y puede darle vuelta el signo a un sector, que es justo la lectura que esta "
+        "sección existe para dar. Las dos columnas van juntas para que un cambio de signo "
+        "entre una y otra se vea como lo que es —el ajuste— y no como una contracción "
+        "proyectada.")
     if sect.get("brechas"):
         faltan = ", ".join(sorted(sect["brechas"]))
         lineas.append(f"\n**No proyectadas:** {faltan}. Una actividad con huecos se declara, "
@@ -659,6 +757,29 @@ def _md_desempeno(p: Dict[str, Any]) -> str:
 # Cifras ilustrativas; el informe real las computa del ledger. Se elige a propósito un
 # cuadro con un resultado incómodo (un intervalo del 90 % que sobre-cubre) y una actividad
 # no proyectada: una muestra que solo enseña aciertos vende un producto que no existe.
+class _NoSeDesagrega(Exception):
+    """La lectura sectorial no procede, y el motivo ya está escrito. Excepción propia y no
+    `Exception` a secas: el `except` genérico de abajo existe para lo que falla, y confundir
+    «no procede» con «falló» es lo que hace que un motivo se pierda en un warning."""
+
+
+#: En CONSTANTES y no incrustadas: un literal se parte por ancho de línea y la frase deja de
+#: existir en el fuente aunque el valor sea correcto.
+_SIN_AGREGADO_QUE_DESAGREGAR = (
+    "La lectura sectorial no está disponible para este corte: sin una proyección agregada "
+    "vigente no hay nada que desagregar.")
+
+_MEDIDAS_QUE_NO_SE_RESTAN = (
+    "La lectura sectorial no se publica para este corte, y el motivo es de UNIDADES, no de "
+    "datos faltantes: la proyección agregada vigente ({modelo}) viene en «{agregado}» y el "
+    "panel sectorial proyecta en «{panel}». Restar una tasa trimestral de una suma de tasas "
+    "interanuales publicaría como «brecha contra el agregado» lo que es una diferencia de "
+    "medidas — pasó, y sacó ocho actividades contrayéndose en un informe donde el modelo "
+    "proyectaba las dieciocho positivas. La sección vuelve en cuanto la proyección vigente "
+    "sea la interanual del BVAR.")
+
+_FALLO_SECTORIAL = "La lectura sectorial no se pudo construir para este corte:"
+
 #: La serie REAL contra la que se puntúa. La muestra decía `"pib_real"` —el nombre de la
 #: variable en el bloque, que no existe como serie—, y una vidriera que enseña el
 #: identificador roto enseña a escribirlo.
@@ -684,16 +805,20 @@ _SAMPLE_PAYLOAD: Dict[str, Any] = {
     "sectorial": {
         "horizonte": "2026-Q3", "brecha_pp": -0.4178, "ajuste_pp": -0.4713,
         "brechas": {},
+        # Cada sector lleva su crudo Y su reconciliado, y el ajuste (-0,4713 pp) es la
+        # diferencia exacta entre las dos columnas. La muestra vieja traía solo el
+        # reconciliado, y por eso enseñaba una tabla que el pipeline no podía producir.
         "sectores": [
-            {"etiqueta": "Construcción", "crecimiento": 5.40, "peso": 0.1226,
-             "incidencia": 0.662},
-            {"etiqueta": "Comercio", "crecimiento": 2.04, "peso": 0.1173, "incidencia": 0.240},
-            {"etiqueta": "Hoteles, bares y restaurantes", "crecimiento": 6.77, "peso": 0.1000,
-             "incidencia": 0.677},
-            {"etiqueta": "Manufactura local", "crecimiento": 2.39, "peso": 0.0906,
-             "incidencia": 0.217},
+            {"etiqueta": "Construcción", "crecimiento": 5.40,
+             "crecimiento_sin_reconciliar": 5.87, "peso": 0.1226, "incidencia": 0.662},
+            {"etiqueta": "Comercio", "crecimiento": 2.04,
+             "crecimiento_sin_reconciliar": 2.51, "peso": 0.1173, "incidencia": 0.240},
+            {"etiqueta": "Hoteles, bares y restaurantes", "crecimiento": 6.77,
+             "crecimiento_sin_reconciliar": 7.24, "peso": 0.1000, "incidencia": 0.677},
+            {"etiqueta": "Manufactura local", "crecimiento": 2.39,
+             "crecimiento_sin_reconciliar": 2.86, "peso": 0.0906, "incidencia": 0.217},
             {"etiqueta": "Impuestos a la producción netos de subsidios", "crecimiento": 3.10,
-             "peso": 0.0687, "incidencia": 0.213},
+             "crecimiento_sin_reconciliar": 3.57, "peso": 0.0687, "incidencia": 0.213},
         ],
     },
     "escenarios": [

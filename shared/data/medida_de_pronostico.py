@@ -37,7 +37,7 @@ import math
 from dataclasses import dataclass
 from typing import Dict, Mapping, Optional, Tuple
 
-from shared.data.periodos import periodo_anterior
+from shared.data.periodos import mismo_periodo_ano_anterior, periodo_anterior
 
 #: El punto ES el valor de la serie en ese período. Se compara contra el observado tal cual.
 LEVEL = "level"
@@ -45,13 +45,19 @@ LEVEL = "level"
 #: (``(ln vₜ − ln vₜ₋₁) × 100``). Es lo que emiten los dos motores del bloque: `bloque`
 #: entrega el PIB así y el nowcast multiplica su Δlog por 100 antes de publicarlo.
 DLOG_PCT = "dlog_pct"
+#: El punto es la variación contra el MISMO período del año anterior, en por ciento
+#: (``(vₜ / vₜ₋₄ − 1) × 100`` para una serie trimestral). Es como entra el PIB al bloque del
+#: BVAR: el índice que publica el BCRD es la serie ORIGINAL, sin desestacionalizar, y su
+#: variación trimestre a trimestre va de −1,13 % a +4,67 % por puro calendario.
+YOY_PCT = "yoy_pct"
 
-MEDIDAS: Tuple[str, ...] = (LEVEL, DLOG_PCT)
+MEDIDAS: Tuple[str, ...] = (LEVEL, DLOG_PCT, YOY_PCT)
 
 #: Cómo se lee cada medida cuando hay que nombrarla en un texto.
 ETIQUETAS: Dict[str, str] = {
     LEVEL: "nivel de la serie",
     DLOG_PCT: "variación logarítmica contra el período anterior, en %",
+    YOY_PCT: "variación contra el mismo período del año anterior, en %",
 }
 
 #: La coletilla que va PEGADA a un número para que no se lea como otra cosa. Es distinta de
@@ -61,6 +67,7 @@ ETIQUETAS: Dict[str, str] = {
 COMO_SE_LEE: Dict[str, str] = {
     LEVEL: "en el nivel de la serie",
     DLOG_PCT: "en % de variación contra el período anterior",
+    YOY_PCT: "en % de variación interanual",
 }
 
 #: El sufijo corto para una celda de tabla, donde no entra una frase. Vacío para el nivel:
@@ -70,6 +77,7 @@ COMO_SE_LEE: Dict[str, str] = {
 SUFIJO: Dict[str, str] = {
     LEVEL: "",
     DLOG_PCT: "%",
+    YOY_PCT: "%",
 }
 
 
@@ -95,8 +103,19 @@ def periodos_necesarios(medida: str, period: str) -> Tuple[str, ...]:
     validar(medida)
     if medida == LEVEL:
         return (period,)
-    anterior = periodo_anterior(period)
-    return (period,) if anterior is None else (anterior, period)
+    base = _base_de(medida, period)
+    return (period,) if base is None else (base, period)
+
+
+def _base_de(medida: str, period: str) -> Optional[str]:
+    """El período CONTRA EL QUE se mide la variación. Es lo único que distingue a las dos
+    medidas de variación, y por eso está en una sola función: con la elección repartida por
+    el módulo, una rama toma el trimestre anterior y otra el del año pasado, las dos se
+    llaman «la variación del PIB», y restar una de la otra publica una brecha inventada.
+    Pasó — ocho actividades salieron contrayéndose en un informe donde el modelo proyectaba
+    las dieciocho positivas."""
+    return (mismo_periodo_ano_anterior(period) if medida == YOY_PCT
+            else periodo_anterior(period))
 
 
 @dataclass(frozen=True)
@@ -126,7 +145,7 @@ def realizar(medida: str, period: str,
     if medida == LEVEL:
         return Realizacion(float(actual))
 
-    anterior_periodo = periodo_anterior(period)
+    anterior_periodo = _base_de(medida, period)
     if anterior_periodo is None:
         return Realizacion(None, (
             f"«{period}» no resuelve a un período de calendario y una variación necesita "
@@ -141,8 +160,10 @@ def realizar(medida: str, period: str,
             "contra qué medirse"))
     if float(anterior) <= 0 or float(actual) <= 0:
         return Realizacion(None, (
-            f"un valor no positivo no admite logaritmo ({anterior_periodo}={anterior}, "
-            f"{period}={actual})"))
+            f"un valor no positivo no admite una variación proporcional "
+            f"({anterior_periodo}={anterior}, {period}={actual})"))
+    if medida == YOY_PCT:
+        return Realizacion((float(actual) / float(anterior) - 1.0) * 100.0)
     return Realizacion((math.log(float(actual)) - math.log(float(anterior))) * 100.0)
 
 

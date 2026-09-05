@@ -169,7 +169,7 @@ def emitir(db: Session, *, as_of: Optional[date] = None) -> Emision:
     # constante escrita acá al lado sería una segunda declaración del mismo hecho, y la que
     # queda vieja es la que puntúa.
     serie_bvar = bloque.codigo_de_variable(db, OBJETIVO)
-    medida_bvar = bloque.medida_de_variable(OBJETIVO)
+    medida_bvar = bloque.medida_del_punto(OBJETIVO)
     try:
         armado = bloque.armar(db)
         proy = bvar.proyectar_bloque(

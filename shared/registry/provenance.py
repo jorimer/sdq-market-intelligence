@@ -26,7 +26,9 @@ from typing import Iterable, List, Optional, Sequence
 
 from shared.data.medida_de_pronostico import COMO_SE_LEE
 from shared.registry.signals import (
+    COVERAGE_INDEX,
     COVERAGE_INSTRUMENT,
+    COVERAGE_PROJECTION,
     GAP,
     NATIONAL,
     PROJECTED,
@@ -71,6 +73,23 @@ FRASE_COBERTURA_INSTRUMENTO = (
     "completa con una serie parecida. Esta cobertura no es comparable con la de un índice "
     "de la plataforma: mide metas del instrumento, no peso anclado a dato real."
 )
+FRASE_COBERTURA_PROYECCION = (
+    "{pct} de lo que este eje publica está sostenido por un pronóstico que pasa el gate de "
+    "admisibilidad o por una cifra determinada por identidad; el resto se sirve rotulado "
+    "como escenario o como brecha, con su motivo. Esta cobertura no es comparable con la de "
+    "un índice de la plataforma: acá el índice ES la proyección, así que mide admisibilidad "
+    "del pronóstico, no peso anclado a dato medido."
+)
+
+#: `coverage_kind` → su frase de PROCEDENCIA. Es un mapa y no una cadena de `if` para que
+#: agregar una semántica sin su frase FALLE en vez de heredar la de índice en silencio. Lo
+#: vigila `shared/products/tests/test_la_frase_de_cobertura_dice_lo_que_el_eje_mide.py`, que
+#: cruza este mapa contra el de metodología y contra el vocabulario entero.
+FRASES_COBERTURA_PROCEDENCIA = {
+    COVERAGE_INDEX: FRASE_COBERTURA_INDICE,
+    COVERAGE_INSTRUMENT: FRASE_COBERTURA_INSTRUMENTO,
+    COVERAGE_PROJECTION: FRASE_COBERTURA_PROYECCION,
+}
 
 
 def coverage_sentence(axis: AxisRegistry) -> str:
@@ -80,9 +99,14 @@ def coverage_sentence(axis: AxisRegistry) -> str:
     «el 5,6% del peso de este índice se sostiene en dato real» cuando el producto evalúa el
     cumplimiento de una ley describe mal el producto que está comprando.
     """
-    plantilla = (FRASE_COBERTURA_INSTRUMENTO
-                 if axis.coverage_kind == COVERAGE_INSTRUMENT else FRASE_COBERTURA_INDICE)
-    return plantilla.format(pct=_pct(axis.coverage_real))
+    plantilla = FRASES_COBERTURA_PROCEDENCIA.get(axis.coverage_kind, FRASE_COBERTURA_INDICE)
+    # Cuál cobertura, no solo cuál frase. En un eje de proyección `coverage_real` es 0 por
+    # construcción —una proyección nunca es REAL— así que la frase saldría diciendo 0% junto
+    # a una metodología que dice otra cosa. Es el defecto original en chico: dos números bajo
+    # la misma palabra, en la misma página.
+    cobertura = (axis.coverage_anclada if axis.coverage_kind == COVERAGE_PROJECTION
+                 else axis.coverage_real)
+    return plantilla.format(pct=_pct(cobertura))
 
 
 def scope_sentence(axis: AxisRegistry) -> str:

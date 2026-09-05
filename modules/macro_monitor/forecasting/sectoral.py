@@ -186,19 +186,21 @@ class PanelSectorial:
         return tuple(c.clave for c in COMPONENTES if c.clave not in self.brechas)
 
 
+#: La medida en que este panel expresa TODO crecimiento: interanual. Viaja con el número
+#: hasta `reconciliar`, que se niega a restar un agregado que venga en otra.
+MEDIDA_DEL_PANEL = panel_mod.INTERANUAL
+
+
 def _interanual(serie: Dict[str, float], trimestres: Sequence[str]
                 ) -> Dict[str, float]:
-    """Variación interanual en %, que es invariante a la base del índice."""
-    idx = {t: i for i, t in enumerate(trimestres)}
-    out: Dict[str, float] = {}
-    for t, i in idx.items():
-        if i < 4:
-            continue
-        previo = serie.get(trimestres[i - 4])
-        actual = serie.get(t)
-        if previo and actual is not None and previo != 0:
-            out[t] = (actual / previo - 1) * 100
-    return out
+    """Variación interanual en %, que es invariante a la base del índice.
+
+    La implementación vive en `panel_mod` y no acá: el bloque del BVAR necesita producir el
+    MISMO número sobre el mismo índice, y mientras cada capa tuvo la suya una medía contra
+    `t-1` y la otra contra `t-4` sin que nada fallara.
+    """
+    return panel_mod.variacion_interanual_pct(serie, trimestres)
+
 
 
 def construir_panel(db: Session, *, hasta: Optional[str] = None) -> PanelSectorial:
@@ -266,8 +268,14 @@ def _persistencia_encogida(historia: Sequence[float], lam: float = LAMBDA) -> fl
 
 
 def reconciliar(crudo: Dict[str, float], pesos: Dict[str, float],
-                g_pib: float) -> Tuple[Dict[str, float], float]:
+                g_pib: float, *, medida_del_agregado: str
+                ) -> Tuple[Dict[str, float], float]:
     """Reparte la brecha contra el agregado, **proporcional al peso**.
+
+    `medida_del_agregado` es obligatorio y no tiene default a propósito: el defecto que este
+    parámetro existe para impedir es que alguien pase un agregado en otra unidad, y un
+    default lo habría dejado pasar exactamente igual. Quien llama tiene que ir a buscar en
+    qué medida está el número que trae — `bloque.medida_de(...)` la declara.
 
     Proporcional al peso y no al crecimiento proyectado: repartir proporcional al
     crecimiento le pega más al que más se mueve y puede darle vuelta el signo a un sector,
@@ -277,6 +285,13 @@ def reconciliar(crudo: Dict[str, float], pesos: Dict[str, float],
 
     Devuelve ``(ajustado, brecha)``. Tras el ajuste ``Σ wᵢ·gᵢ == g_pib`` por construcción.
     """
+    if medida_del_agregado != MEDIDA_DEL_PANEL:
+        raise ValueError(
+            f"el agregado viene en medida {medida_del_agregado!r} y este panel proyecta en "
+            f"{MEDIDA_DEL_PANEL!r}: restar una tasa trimestral de una suma de tasas "
+            "interanuales publica como «brecha contra el agregado» lo que es una diferencia "
+            "de unidades. Pasó: ocho actividades salieron contrayéndose en un informe donde "
+            "el modelo proyectaba las dieciocho positivas")
     suma_pesos = sum(pesos[k] for k in crudo)
     if suma_pesos <= 0:
         return dict(crudo), 0.0
@@ -323,13 +338,18 @@ class ProyeccionSectorial:
 
 
 def proyectar(panel: PanelSectorial, *, g_pib: float, horizonte: str,
-              origen_del_agregado: str, es_escenario: bool = False,
+              origen_del_agregado: str, medida_del_agregado: str,
+              es_escenario: bool = False,
               lam: float = LAMBDA) -> ProyeccionSectorial:
-    """Desagrega *g_pib* en los componentes proyectables del *panel*."""
+    """Desagrega *g_pib* en los componentes proyectables del *panel*.
+
+    `medida_del_agregado` viaja hasta `reconciliar` sin default: ver su docstring.
+    """
     claves = [c for c in panel.proyectables if c in panel.crecimiento]
     crudo = {k: _persistencia_encogida(panel.crecimiento[k], lam) for k in claves}
     pesos = {k: panel.pesos[k][-1] for k in claves}
-    ajustado, brecha = reconciliar(crudo, pesos, g_pib)
+    ajustado, brecha = reconciliar(crudo, pesos, g_pib,
+                                   medida_del_agregado=medida_del_agregado)
     suma_pesos = sum(pesos.values())
     etiquetas = {c.clave: c.etiqueta for c in COMPONENTES}
     sectores = tuple(

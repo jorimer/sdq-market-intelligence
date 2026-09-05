@@ -105,3 +105,38 @@ def periodo_anterior(period: Optional[str]) -> Optional[str]:
         anterior = d - timedelta(days=1)
         return anterior.isoformat()
     return None
+
+
+def mismo_periodo_ano_anterior(period: Optional[str]) -> Optional[str]:
+    """La etiqueta del MISMO período del año anterior, o ``None``.
+
+    Es lo que una variación interanual necesita nombrar. Se resuelve por CALENDARIO y no
+    contando cuatro posiciones hacia atrás en una lista: con un trimestre faltante, contar
+    posiciones toma el de hace cinco y lo rotula «interanual», que es el mismo error de
+    unidad —a menor escala— que restar una tasa trimestral de una anual.
+    """
+    if not period:
+        return None
+    p = str(period).strip().upper()
+    m = re.fullmatch(r"(\d{4})", p)
+    if m:
+        return str(int(m.group(1)) - 1)
+    m = re.fullmatch(r"(\d{4})-Q([1-4])", p)
+    if m:
+        return f"{int(m.group(1)) - 1}-Q{m.group(2)}"
+    m = re.fullmatch(r"(\d{4})-(\d{2})", p)
+    if m:
+        mo = int(m.group(2))
+        if 1 <= mo <= 12:
+            return f"{int(m.group(1)) - 1}-{mo:02d}"
+    m = re.fullmatch(r"(\d{4})-(\d{2})-(\d{2})", p)
+    if m:
+        try:
+            d = date(int(m.group(1)), int(m.group(2)), int(m.group(3)))
+        except ValueError:
+            return None
+        try:
+            return d.replace(year=d.year - 1).isoformat()
+        except ValueError:      # 29 de febrero
+            return None
+    return None

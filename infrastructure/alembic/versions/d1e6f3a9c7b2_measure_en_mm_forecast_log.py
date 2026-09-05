@@ -15,19 +15,27 @@ serie observable, y que `point` era directamente comparable con el valor de esa 
 Es la misma causa raíz que `shared/data/series_nature.py` cerró un nivel más arriba: la
 magnitud se DECLARA junto al dato en vez de adivinarse al leerlo.
 
-**El backfill, y por qué se puede afirmar lo que afirma.** Las filas que hay son de UNA sola
-versión del código: `emision.py` nació el 2026-09-04 (commit `4f7bc0f3`) y esta migración es
-del día siguiente. Ninguna está puntuada — verificado en el readiness de `macro_forecast`:
-«0 conjunto(s) con backtest puntuado» —, así que no hay ningún error ya calculado que
-corregir. Sus dos únicos productores emiten un Δlog en % sobre el índice del PIB:
-`bridge_imae_pib.*` (`nowcast.estimar`, que multiplica su Δlog por 100) y `bvar_minnesota.*`
-(vía `bloque._transformar`, que aplica ``(log b − log a) × 100``).
+**El backfill llega hasta donde se puede VERIFICAR, y ni un paso más.**
 
-No es fabricar track record: es corregir un rótulo cuyo contenido es verificable leyendo el
-único commit que lo escribió. Dejarlas inservibles tiraría historial REAL y ganado, en un
-ledger que necesita 12 observaciones para anclar y hoy tiene 1. El backfill es ACOTADO a esos
-dos prefijos de `model_id`; cualquier otra fila queda con `measure` NULL, no se puntúa, y
-`ledger.no_puntuables` la lista para que la ausencia se vea.
+Ninguna fila está puntuada —verificado en el readiness de `macro_forecast`: «0 conjunto(s)
+con backtest puntuado»—, así que no hay ningún error ya calculado que corregir.
+
+* **`bridge_imae_pib.*` (el nowcast) → `dlog_pct`.** Se puede afirmar: `nowcast.estimar`
+  regresa sobre `panel._dlog` y multiplica el resultado por 100, y ninguna de las dos cosas
+  cambió nunca. Es la variación contra el trimestre ANTERIOR, siempre lo fue.
+
+* **`bvar_minnesota.*` → se queda en NULL, a propósito.** El mismo día en que se escribieron
+  estas filas, otra rama cambió la transformación de `pib_real` en el bloque de `DLOG`
+  (variación trimestral) a `INTERANUAL` (contra el mismo trimestre del año anterior), y el
+  cambio se desplegó entre medias — hubo diecinueve despliegues ese día. `as_of` es una FECHA
+  sin hora, así que la fila **no registra** con cuál de las dos versiones se produjo, y las
+  dos difieren en puntos porcentuales enteros: el QoQ promedia +1,13 % y el YoY +4,54 %.
+  Declararle una medida que no se puede verificar sería fabricar exactamente lo que este
+  ledger existe para impedir. Queda NULL, no se puntúa, y `ledger.no_puntuables` la LISTA con
+  su causa para que la ausencia se vea en vez de leerse como paciencia.
+
+El `target_series` sí se normaliza en las dos: que `"pib_real"` no es un `series_code` no
+depende de ninguna versión del código.
 
 Revision ID: d1e6f3a9c7b2
 Revises: c3f7a2d9e814
@@ -51,8 +59,7 @@ PIB_CODE = "bcrd.xls.pib_2018.serie_original_indice"
 #: nadie corre antes de producción es una apuesta.
 BACKFILL_MEASURE = (
     "update mm_forecast_log set measure = 'dlog_pct' "
-    "where measure is null "
-    "  and (model_id like 'bridge_imae_pib.%' or model_id like 'bvar_minnesota.%')"
+    "where measure is null and model_id like 'bridge_imae_pib.%'"
 )
 BACKFILL_TARGET_SERIES = (
     "update mm_forecast_log set target_series = :pib "

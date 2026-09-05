@@ -240,6 +240,7 @@ def test_la_serie_y_la_medida_del_BVAR_salen_del_BLOQUE(db, monkeypatch):
 
     emision.emitir(db, as_of=date(2026, 8, 20))
     assert visto.get("serie_objetivo") == SERIE
-    assert visto.get("medida") == med.DLOG_PCT, (
-        "el bloque entrega el PIB en variación logarítmica ×100; si la emisión no lo declara, "
-        "el ledger puntúa esa tasa contra el índice de volumen")
+    assert visto.get("medida") == med.YOY_PCT, (
+        "el bloque entrega el PIB como variación INTERANUAL; si la emisión no lo declara, el "
+        "ledger puntúa esa tasa contra el índice de volumen — o, peor, contra la variación "
+        "trimestral, que en la serie original sin desestacionalizar difiere en pp enteros")
