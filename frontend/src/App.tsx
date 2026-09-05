@@ -57,6 +57,7 @@ const ComparadorPage = lazyPage(() => import("@/modules/platform/pages/Comparado
 const MarketBriefPage = lazyPage(() => import("@/modules/platform/pages/MarketBriefPage"), "MarketBriefPage");
 const ResearchPage = lazyPage(() => import("@/modules/platform/pages/ResearchPage"), "ResearchPage");
 const DealScoringPage = lazyPage(() => import("@/modules/platform/pages/DealScoringPage"), "DealScoringPage");
+const ProyeccionesPage = lazyPage(() => import("@/modules/platform/pages/ProyeccionesPage"), "ProyeccionesPage");
 const ConfiguracionPage = lazyPage(() => import("@/modules/platform/pages/ConfiguracionPage"), "ConfiguracionPage");
 const UsersAdminPage = lazyPage(() => import("@/modules/platform/pages/UsersAdminPage"), "UsersAdminPage");
 const TarifarioPage = lazyPage(() => import("@/modules/platform/pages/TarifarioPage"), "TarifarioPage");
@@ -128,6 +129,7 @@ export default function App() {
             <Route path="/tools/research" element={<ResearchPage />} />
             <Route path="/tools/deal-scoring" element={<DealScoringPage />} />
             <Route path="/tools/market-brief" element={<MarketBriefPage />} />
+            <Route path="/tools/proyecciones" element={<ProyeccionesPage />} />
 
             {/* Plataforma */}
             <Route path="/overview" element={<OverviewPage />} />

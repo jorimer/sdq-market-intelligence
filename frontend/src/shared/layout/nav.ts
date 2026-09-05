@@ -78,6 +78,7 @@ export const NAV: NavGroup[] = [
       { to: "/brand-intel", label: "Contexto de Marca", icon: Gauge, ready: true },
       { to: "/tools/deal-scoring", label: "Deal Scoring", icon: Target },
       { to: "/tools/market-brief", label: "Market Brief", icon: Sparkles },
+      { to: "/tools/proyecciones", label: "Proyecciones Macro", icon: LineChart, ready: true },
     ],
   },
   {
