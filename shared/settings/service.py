@@ -466,7 +466,16 @@ def _test_cmf_connection(db, cfg, base: str, api_key: str) -> TestConnectionOut:
     """
     import httpx
 
-    target = f"{base.rstrip('/')}/api-sbifv3/recursos_api/uf"
+    # Con PERÍODO explícito. La ruta pelada `/uf` existe lo suficiente para rechazar la
+    # falta de credencial con 422, pero con una clave VÁLIDA entra a la lógica y devuelve
+    # 500: la documentación del emisor no ofrece ninguna forma sin fecha —todas son
+    # `/uf/<año>`, `/uf/<año>/<mes>`, `/uf/<año>/<mes>/dias/<día>`—. El síntoma engaña,
+    # porque el 500 aparece justo cuando la credencial es correcta.
+    #
+    # El período es FIJO y pasado a propósito: un mes ya cerrado siempre tiene dato, así que
+    # la prueba mide la credencial y no la frescura de la fuente. Con el mes en curso, una
+    # clave perfecta podría fallar un día 1.
+    target = f"{base.rstrip('/')}/api-sbifv3/recursos_api/uf/2024/01"
     try:
         resp = httpx.get(target, params={"apikey": api_key, "formato": "json"},
                          timeout=25, follow_redirects=True)
@@ -480,8 +489,10 @@ def _test_cmf_connection(db, cfg, base: str, api_key: str) -> TestConnectionOut:
                              "La CMF rechazó la credencial (422). Revisá que la clave esté "
                              "cargada y vigente.", 422)
     if resp.status_code >= 400:
-        return _persist_test(db, cfg, "error",
-                             f"La CMF respondió HTTP {resp.status_code}.", resp.status_code)
+        return _persist_test(
+            db, cfg, "error",
+            f"La CMF respondió HTTP {resp.status_code}. Si es 500, la credencial pudo ser "
+            f"aceptada y el problema estar en la ruta consultada.", resp.status_code)
     try:
         cuerpo = resp.json()
     except ValueError:
