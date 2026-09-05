@@ -147,17 +147,52 @@ class ValuationProduct:
         insumos = {
             "patrimonio por entidad (SIB)": True,
             "utilidad por entidad (SIB)": True,
-            # El único que falta, y por eso la cobertura no es 1,0.
             "curva soberana en pesos (BCRD, cuadro V.1)": self.has_engine(),
         }
         presentes = sum(1 for ok in insumos.values() if ok)
         return DataHealth(
-            coverage=presentes / len(insumos), freshness_days=None, cadence="quarterly",
+            coverage=presentes / len(insumos), freshness_days=self._dias_del_ultimo_corte(),
+            cadence="quarterly",
             sources=("SIB · estados de situación y resultados por entidad",
                      "SIMBAD · Superset público de la Superintendencia",
                      "BCRD · cuadro V.1, valores subastados en moneda nacional"),
             detail=FALTA_LA_CURVA if not insumos[
                 "curva soberana en pesos (BCRD, cuadro V.1)"] else "")
+
+    def _dias_del_ultimo_corte(self) -> Optional[int]:
+        """Cuántos días tiene el último cierre con patrimonio publicado.
+
+        Se COMPUTA del dato, y antes iba en `None` escrito a mano. No era neutral: la
+        frescura sin fecha no vale como «al día» —«no sé de cuándo es» y «está fresco» son
+        cosas distintas— y el gate la penalizaba a la mitad. El eje quedaba castigado por no
+        declarar algo que sí podía medir.
+
+        Es el cierre del BALANCE y no el de la curva: la cadencia del producto es trimestral
+        porque la Superintendencia publica por trimestre, y la curva es mensual. Fresco es
+        que el último trimestre esté; que la curva del mes pasado no se haya subastado no
+        envejece la valuación.
+        """
+        from datetime import date as _date
+
+        from sqlalchemy import text as _sql
+        if self._db is None:
+            return None
+        try:
+            fila = self._db.execute(_sql(
+                "SELECT MAX(period_end) FROM banking_data "
+                "WHERE patrimonio_tecnico IS NOT NULL")).first()
+        except Exception as e:  # noqa: BLE001 — medir la frescura no puede costar el readiness
+            logger.warning("no se pudo medir la frescura de valuación: %s", e)
+            return None
+        if fila is None or fila[0] is None:
+            return None
+        corte = fila[0]
+        if isinstance(corte, str):
+            try:
+                corte = _date.fromisoformat(corte[:10])
+            except ValueError:
+                return None
+        return (_date.today() - corte).days
 
     def has_engine(self) -> bool:
         """Ahora SÍ hay motor. Lo que decide es si hay con qué correrlo: la curva en pesos
