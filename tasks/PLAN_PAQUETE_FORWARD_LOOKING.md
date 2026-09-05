@@ -625,11 +625,22 @@ Refactor puro, sin riesgo de negocio. Desbloquea todo el bloque.
 - [ ] `shared/data/sib_client.py:1-6` (el docstring que declara la regla) y el shim en `modules/banking_score/external/sib_client.py:1-18`.
 
 ### Pasos atómicos
-- [ ] **1.** Promover a `shared/data/` los tres clientes que traen balance completo y hoy viven en `modules/banking_score/external/`: `sib_data_client`, `sib_historical_client`, `simbad_client`. Dejar shims de compatibilidad, igual que se hizo con `sib_client`.
-- [ ] **2.** Regla dura: `valuation` importa de `shared.data`, **nunca** de `modules.banking_score.*`.
+- [x] **1.** Los tres promovidos con `git mv` (2.805 líneas, historia conservada) + shims de re-exportación en la ruta vieja. Los nombres re-exportados se **midieron con `ast`** —qué importa de verdad el repo— y no se listaron a ojo: hay tests que importan privados (`_norm`, `_celdas_serializadas`, `_post_chart_data`), y una lista a mano se queda corta justo en el que alguien agregó después.
+- [x] **2.** Regla dura, con guard estructural: **nadie fuera de `banking_score` llega a estos clientes por la ruta vieja**. Los dos scripts que lo hacían pasan a `shared.data`.
+
+### La decisión de diseño que hubo que medir
+
+El shim empezó siendo un **alias de módulo** (`sys.modules[__name__] = _canonico`), que es transparente en runtime: parchar el shim alcanza a la implementación y ningún test se toca. **Pero mypy no lo atraviesa** — ve un módulo que no define nada y marca `attr-defined` en cada import: **21 errores repartidos por ocho archivos ajenos**. La alternativa —re-exportar y repuntar los sitios que parchan— costaba **tres líneas**, medidas. Se eligió re-exportar.
+
+El precio del re-export es que copia REFERENCIAS: un `monkeypatch.setattr` sobre el shim toca la copia, la implementación sigue intacta y **el test pasa probando nada**. Por eso el guard incluye `test_nadie_PARCHA_el_shim`, que es lo que vuelve segura esa forma.
 
 ### Sensor T-VL-0
-- [ ] Tests de `banking_score` verdes **sin cambios**.
+- [x] Tests de `banking_score` verdes: **1.374 pasados**. Cambiaron **cuatro líneas** en tres tests, y ninguna es de comportamiento: tres barridos estructurales cuyo glob apuntaba al archivo movido —un lector de código tiene que apuntar a donde está el código— y un `monkeypatch` que ahora parcha el módulo canónico, que es donde vive la función.
+- [x] `mypy-baseline` sincronizado: **15 por 15, puras reubicaciones de ruta**; `unresolved` sigue en 1.303. Ni deuda nueva ni deuda escondida.
+
+### Lo que la medición destapó, y queda fuera de alcance
+
+Barriendo imports módulo→módulo aparecieron **cinco pares** que violan la doctrina de independencia. Tres son de tests, pero **dos son código de producción**: `insurance_intel → banking_score` (`scoring/perfil_sdq.py`) y `law_intel → social_dev` (`informe_abierto.py`). No se tocaron —no son parte de T-VL-0— pero están medidos y nombrados.
 
 ---
 

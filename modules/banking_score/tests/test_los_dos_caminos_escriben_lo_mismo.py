@@ -30,8 +30,11 @@ import pytest
 #: el comentario de `sib_data_client`: son ratios pre-computados por la SIB.
 PROHIBIDOS = {"cartera_vencida_90d", "cartera_categoria_a"}
 
+# Promovido a `shared/data` en T-VL-0. El shim que quedó en
+# `banking_score/external` es un ALIAS de módulo —sin código propio—, así que
+# barrerlo no encontraría nada: el barrido tiene que seguir al archivo.
 _FUENTES = {
-    "backfill": pathlib.Path("modules/banking_score/external/sib_data_client.py"),
+    "backfill": pathlib.Path("shared/data/sib_data_client.py"),
     "recompute": pathlib.Path("modules/banking_score/sib_sync.py"),
 }
 
@@ -113,7 +116,9 @@ def test_nadie_arma_celdas_a_mano_al_lado_del_serializador():
     import ast
     import inspect
 
-    from modules.banking_score.external import sib_data_client
+    # El canónico, no el shim: el shim no tiene código y `getsource` no encuentra
+    # nada que leer. Un lector de código tiene que apuntar a donde está el código.
+    from shared.data import sib_data_client
 
     # `ast.walk` y no `.body`: es un MÉTODO de una clase, y un barrido que solo mira el
     # nivel superior del módulo no lo encuentra — la primera versión de este test no

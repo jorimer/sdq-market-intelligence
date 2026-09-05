@@ -19,7 +19,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from sqlalchemy import text  # noqa: E402
 
-from modules.banking_score.external.simbad_client import _post_chart_data, DATASET_BALANCE  # noqa: E402
+from shared.data.simbad_client import _post_chart_data, DATASET_BALANCE  # noqa: E402
 from shared.database.session import engine  # noqa: E402
 
 # prod bank_type → (SIMBAD TIPO_DE_ENTIDAD, SISTEMA)
