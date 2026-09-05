@@ -44,6 +44,13 @@ AXIS_KEYWORDS: Dict[str, Tuple[str, ...]] = {
                        "track record de proyecciones"),
     "monetary_policy": ("politica monetaria", "tpm", "tasa de politica", "tasa de interes",
                         "bcrd tasa", "postura monetaria"),
+    # VALUACIÓN. Estrechas por la misma razón que las del eje prospectivo: si repitiera
+    # "banco" o "patrimonio" competiría con `banking` en toda pregunta sobre solidez, y son
+    # preguntas distintas — cuánto vale contra qué tan sana está. Cada término de acá pide un
+    # PRECIO o un múltiplo, no un estado.
+    "valuation": ("valuacion", "valuación", "cuanto vale", "cuánto vale", "valor de mercado",
+                  "multiplo", "múltiplo", "price to book", "p/b", "creacion de valor",
+                  "costo de capital", "roe menos ke"),
     "trade": ("comercio exterior", "exportacion", "importacion", "balanza", "arancel",
               "aduana", "socio comercial"),
     "tourism": ("turismo", "turistico", "hotel", "ocupacion", "llegada de turistas"),

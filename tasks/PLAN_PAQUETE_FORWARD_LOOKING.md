@@ -690,24 +690,84 @@ persona lo lea ahí y no lo descubra en un informe.
 - [ ] `shared/products/contract.py:300` (`Protocol SectorProduct`).
 - [ ] `modules/pension_intel/` como plantilla de estructura.
 
+> **`docs/SPEC_VALUADOR_ENTIDADES.md` NUNCA EXISTIÓ.** Está declarado como spec rectora en el
+> encabezado de este plan y no se escribió: `git log --diff-filter=A` no lo encuentra en
+> ninguna rama. Los pasos que lo referencian (§7 acá, §2/§4.1/§5.4/§6/§8.2 en T-VL-3 a T-VL-8)
+> apuntan a un documento ausente.
+>
+> No bloqueó el alta porque **este plan carga la sustancia del spec**: el método (Excess
+> Return), la fórmula de `Ke`, la beta sin desapalancar y por qué, el ROE sobre patrimonio de
+> apertura, el terminal como perpetuidad de residual income, `g < Ke`, los dos motores y el
+> gate de N ≥ 8. La estructura salió de `modules/pension_intel/`, que este mismo plan nombra
+> como plantilla.
+
 ### Pasos atómicos
-- [ ] **1.** `CatalogEntry("valuation", ...)` en `PRODUCT_CATALOG`.
-- [ ] **2.** Estructura de `modules/valuation/` según §7 del spec.
-- [ ] **3.** `register_product(SECTOR_KEY, ...)` al final de `products.py`.
-- [ ] **4.** Cuatro puntos de cableado en `app/main.py`: import del router (~`:110`), `include_router(prefix="/api/v1/valuation")` (~`:138`), `import modules.valuation.operations` (~`:222`), `import modules.valuation.products` (~`:249`).
-- [ ] **5.** `ESTADO_BACKTEST` de clase.
-- [ ] **6.** `AXIS_DOCTRINE["valuation"]` y `AUDIENCE_FRAMES["valuation"]` en `cerebro.py` (`:302`, `:572`). La primera audiencia declarada es el default.
-- [ ] **7.** Migración Alembic `{rev12hex}_add_valuation.py`.
+- [x] **1.** `CatalogEntry("valuation", …)` en `PRODUCT_CATALOG`.
+- [x] **2.** `modules/valuation/` con `api/`, `engine/`, `models/`, `panel/`, `tests/`.
+- [x] **3.** `register_product` al final de `products.py`.
+- [x] **4.** Cableado en `app/main.py`. **Dos puntos, no cuatro**: el router y `operations` no existen todavía —el eje no tiene qué exponer ni qué operar sin motor— y registrarlos vacíos sería cableado muerto.
+- [x] **5.** `ESTADO_BACKTEST` de clase, con `obstaculo="dato_pendiente"` y el dato nombrado: transacciones RD/Caribe con precio sobre valor libro verificable. Una valuación se valida contra lo que alguien PAGÓ.
+- [x] **6.** `AXIS_DOCTRINE["valuation"]` y `AUDIENCE_FRAMES["valuation"]` con tres audiencias; la primera —comité/inversionista— es el default.
+- [ ] **7.** Migración: **no procede todavía**. No hay modelos que crear; la tabla de corridas y supuestos se diseña con el motor (T-VL-3/T-VL-4). Una migración vacía es ceremonia.
+
+### El eje está de alta y NO puede entregar, a propósito
+
+`has_engine()` devuelve False hasta que existan el costo de capital y el Excess Return, así que
+ningún nivel alcanza su umbral y nada se activa. El alta y la capacidad de entregar son dos
+cosas, y confundirlas es cómo se publica una vidriera vacía.
+
+**La muestra curada usa una entidad explícitamente FICTICIA.** El framework exige que todo
+producto del catálogo se pueda mostrar, pero enseñar una valuación de un banco real que
+todavía no podemos computar sería fabricar una cifra financiera sobre una empresa que existe —
+y eso no se arregla con una marca de agua. La muestra enseña, además, el caso INCÓMODO: un
+spread que cruza el cero dentro del rango de `Ke`, porque ése es el hallazgo que el eje existe
+para dar.
 
 ### Sensor T-VL-2
-- [ ] Test de contrato de producto verde.
+- [x] Contrato de producto verde: **8.108 tests**, con las cinco superficies que el framework reclamó al registrar el eje —huella de contexto, etiqueta de archivo, resumidor de data-pull, keywords de ruteo y muestra curada— cerradas porque **sus tests las señalaron**, no porque yo recordara la lista.
+- [x] El eje **no invade**: las preguntas de solidez siguen ruteando a `banking`, y «cuánto vale» rutea a `valuation`. Con su contraejemplo.
 
 ---
 
 ## T-VL-3 · Costo de capital — `engine/cost_of_capital.py` (NUEVO)
 
+> ## DECISIÓN DEL DUEÑO (2026-09-04): **se valúa en PESOS DOMINICANOS**
+>
+> Cierra el gate que el paso 5 marcaba como bloqueante. Y trae una consecuencia que **no es
+> una preferencia sino aritmética**, así que se declara acá y se implementa así:
+>
+> ### El CRP NO se suma sobre una Rf en pesos
+>
+> La fórmula escrita abajo —`Rf + β×ERP + CRP`— es la construcción en **USD**: Tesoro
+> americano + prima de mercado + prima de riesgo país. Una tasa libre de riesgo **en pesos
+> dominicanos ya lleva adentro** el riesgo país y la inflación esperada del peso; sumarle el
+> CRP encima lo cuenta **dos veces**, infla `Ke` en unos 200-400 pb y **subvalúa
+> sistemáticamente a todas las entidades**.
+>
+> Con la moneda fijada en RD$, la construcción consistente es:
+>
+> **`Ke(RD$) = Rf(RD$) + β × ERP`** — tres términos, no cuatro, y el motivo escrito.
+>
+> ### Lo que la medición destapó: NO tenemos una Rf larga en pesos
+>
+> | candidato en el corpus | valor | problema |
+> |---|---:|---|
+> | TPM (política monetaria) | **5,25 %** | es overnight — una valuación descuenta a diez años |
+> | Facilidad de depósito | 4,50 % | idem, y es el piso del corredor |
+> | Lombarda | 7,00 % | congelada desde 2013-01 |
+> | *inflación interanual, de referencia* | *5,47 %* | *la TPM está POR DEBAJO de la inflación* |
+>
+> Que la TPM esté debajo de la inflación vigente lo dice todo: usarla como libre de riesgo a
+> diez años daría una tasa real **negativa**, y con eso el modelo diría que casi cualquier
+> entidad crea valor.
+>
+> **Tampoco tenemos** el bono soberano dominicano en RD$ a 10 años, ni el Tesoro americano,
+> ni EMBI. O sea que ninguna de las dos construcciones tiene hoy su insumo principal
+> ingerido. **Es el bloqueante real de T-VL-3**, y no estaba en el plan.
+
 ### Pasos atómicos
-- [ ] **1.** `Ke = Rf + β × ERP + CRP`, con descomposición auditable de los cuatro términos.
+- [ ] **0. NUEVO — bloqueante.** Conseguir una tasa libre de riesgo **larga en pesos**: el bono soberano dominicano en RD$ (Ministerio de Hacienda / Crédito Público publica sus subastas) o, si no se puede ingerir, declararlo y usar un proxy con su error declarado. Sin esto el motor no tiene su primer término.
+- [ ] **1.** `Ke = Rf + β × ERP` **en RD$, sin CRP** (ver la decisión arriba), con descomposición auditable de los TRES términos.
 - [ ] **2.** **La beta NO se desapalanca.** Hamada supone que la deuda es financiamiento y que hay un apalancamiento óptimo separable de la operación; en un banco los depósitos son **materia prima** y esa premisa es falsa — contradiría el argumento de §2 del propio spec. Beta de equity de comparables LATAM, directa.
 - [ ] **3.** `β` y `ERP` viajan como `RUBRIC`, no como dato real.
 - [ ] **4.** `Ke` se reporta como **rango**, nunca como punto. Tabla de sensibilidad en pasos de 50 pb.
