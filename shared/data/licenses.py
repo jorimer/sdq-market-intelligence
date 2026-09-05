@@ -503,6 +503,26 @@ LICENCIAS: Dict[str, Licencia] = {
               "ACCESO (cuota, identificación del consumidor), no el régimen de uso del "
               "dato."),
     ),
+    ("SECMCA / CMCA — cuadros EMFA publicados para descarga en secmca.org. Sin "
+     "términos de uso localizados: deuda de verificación declarada, no permiso "
+     "presunto."): Licencia(
+        terminos_url=None,
+        verificado_el=None,
+        atribucion=("Fuente: Secretaría Ejecutiva del Consejo Monetario Centroamericano "
+                    "(SECMCA) — Estadísticas Monetarias y Financieras Armonizadas (EMFA)."),
+        nota=("`secmca_client`. Se buscaron términos el 2026-09-04 y NO existen: se "
+              "recorrió `www.secmca.org` en busca de aviso legal, términos, condiciones de "
+              "uso, política de privacidad y pie de copyright, y no hay ninguno; el sitio "
+              "tampoco declara licencia sobre los cuadros. Por eso entra como deuda "
+              "declarada y no como permiso presunto: la doctrina de emisores públicos "
+              "dominicanos NO aplica a un organismo regional. Lo que sí se sabe: los "
+              "cuadros EMFA son archivos publicados para descarga abierta en "
+              "`secmca.org/emfa`, sin credencial. Distinto es su API "
+              "(`secmca-api.secmca.org`), donde todo endpoint que devuelve VALORES "
+              "responde 401 y solo los catálogos son públicos — por eso este conector lee "
+              "los archivos y no el API. Pedir la licencia por escrito a "
+              "secmca@secmca.org antes de una edición que se distribuya masivamente."),
+    ),
     "open-data": Licencia(
         terminos_url=None, verificado_el=None,
         nota=("Dos palabras sin emisor ni cláusula, en el conector de IED del BCRD. La "

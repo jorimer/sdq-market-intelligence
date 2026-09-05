@@ -8,7 +8,11 @@ literalmente intacto y el test de no-regresión es trivial, porque no hay nada q
 calibrado contra el panel dominicano de 46 entidades y no es transferible; el boletín
 tampoco lo necesita.
 """
-from sqlalchemy import Column, Date, Float, Index, String, UniqueConstraint
+import datetime as dt
+from typing import Any, Dict, Optional
+
+from sqlalchemy import Date, Float, Index, String, UniqueConstraint
+from sqlalchemy.orm import Mapped, mapped_column
 from sqlalchemy.types import JSON
 
 from shared.database.base import Base, UUIDMixin
@@ -19,26 +23,26 @@ class CountryBankingAggregate(UUIDMixin, Base):
 
     __tablename__ = "rb_country_aggregates"
 
-    iso_code = Column(String(3), nullable=False)      # ISO3: "DOM", "COL", "BRA", "CHL"
-    period_end = Column(Date, nullable=False)         # el CORTE, no una etiqueta de período
-    metric = Column(String(60), nullable=False)
-    value = Column(Float, nullable=True)              # None = ausente, jamás interpolado
+    iso_code: Mapped[str] = mapped_column(String(3))          # ISO3: "DOM", "COL", "CHL"
+    period_end: Mapped[dt.date] = mapped_column(Date)         # el CORTE, no una etiqueta
+    metric: Mapped[str] = mapped_column(String(60))
+    value: Mapped[Optional[float]] = mapped_column(Float)     # None = ausente, jamás interpolado
 
     # ── Procedencia. Viaja POR FILA y no en una tabla aparte porque el boletín atribuye
     # emisor por emisor: si la licencia no está en la fila, la atribución hay que
     # reconstruirla desde afuera del dato, que es como se desincroniza.
-    source = Column(String(30), nullable=False)
-    license = Column(String(255), nullable=False)     # sin licencia no se publica: fail-closed
-    fetched_at = Column(Date, nullable=True)
+    source: Mapped[str] = mapped_column(String(30))
+    license: Mapped[str] = mapped_column(String(255))         # sin licencia no se publica
+    fetched_at: Mapped[Optional[dt.date]] = mapped_column(Date)
 
     # ── Lo que impide un ranking por accidente tres ediciones después.
     # La norma bajo la que el país computó la métrica. Sin este campo el guard de
     # no-comparabilidad (T-BR-9) no tiene sobre qué operar: "solvencia" en Colombia (CUIF)
     # y en Brasil (Res. CMN 4966) NO son la misma medición, y la propia SECMCA declara por
     # escrito que los indicadores bancarios de su región "no están armonizados".
-    norma_contable = Column(String(80), nullable=False)
+    norma_contable: Mapped[str] = mapped_column(String(80))
 
-    meta = Column(JSON, nullable=True)
+    meta: Mapped[Optional[Dict[str, Any]]] = mapped_column(JSON)
 
     __table_args__ = (
         # `source` va en la clave a propósito. Sin él, la misma métrica traída de dos
