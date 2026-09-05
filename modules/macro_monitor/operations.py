@@ -6,7 +6,7 @@ operation console (Gate F).
 """
 import logging
 from datetime import datetime, timezone
-from typing import Dict
+from typing import Dict, Optional
 
 from shared.database.session import SessionLocal
 from shared.operations import Operation, register_operation
@@ -253,6 +253,66 @@ def _run_tpm_model_train(params, user_id, set_phase) -> Dict:
         db.close()
 
 
+def _periodo_de_proyecciones(db) -> Optional[str]:
+    """El trimestre más reciente para el que YA emitimos una proyección.
+
+    Es lo que le permite al scheduler distinguir «estamos al día» de «nos falta un trimestre
+    y hay que reintentar pronto». Sin esta pieza, una corrida que no encuentra el dato tiene
+    que esperar al período siguiente — que es exactamente como se perdió 2026-Q2 en el sync
+    de comercio.
+    """
+    from modules.macro_monitor.forecasting.models import ForecastLog
+    filas = db.query(ForecastLog.as_of).distinct().all()
+    cortes = sorted(str(f[0]) for f in filas if f[0])
+    if not cortes:
+        return None
+    from shared.operations.calendario import periodo_esperado
+    from datetime import datetime
+    return periodo_esperado("trimestral", datetime.fromisoformat(cortes[-1]))
+
+
+def _run_macro_forecast_emit(params, user_id, set_phase) -> Dict:
+    """Emite las proyecciones macro del corte actual al ledger.
+
+    **Por qué es una operación y no un cálculo al vuelo.** Un pronóstico que se computa cuando
+    alguien abre el informe no tiene corte point-in-time: se recalcularía con información
+    posterior cada vez que se mira, y el track record que saliera sería el de un examen con
+    las respuestas al lado. Emitir CONGELA el pronóstico con su `as_of`, y esa congelación es
+    la que hace que la puntuación posterior signifique algo.
+
+    **Anclada al calendario de la fuente, no al reloj.** El rezago que manda es el del IMAE
+    (45 días tras el cierre del trimestre), no el del PIB (60): el valor del nowcast es
+    justamente la ventana de ~15 días entre los dos, y disparar al rezago del PIB llegaría
+    cuando el BCRD ya publicó y no hay nada que anticipar. `anclaje="trimestral"` usa 45 días,
+    que es el número medido.
+
+    Idempotente por la clave de cinco campos del ledger: un rerun del mismo corte choca contra
+    el `UniqueConstraint` y se cuenta como omitido, no duplica el historial.
+    """
+    from modules.macro_monitor.forecasting.emision import emitir
+
+    db = SessionLocal()
+    try:
+        set_phase("emitiendo proyecciones macro al ledger")
+        em = emitir(db)
+        # Los tres contadores van juntos: uno solo no distingue «no había nada que emitir»
+        # de «falló», y un trimestre en blanco pasaría sin que nadie se entere.
+        resultado: Dict = {
+            "forecasts_written": em.escritos,
+            "skipped_duplicate": em.omitidos_por_duplicado,
+            "scenarios_not_logged": em.escenarios_no_registrados,
+            "reasons": list(em.motivos),
+        }
+        if not em.hubo_algo:
+            # No se lanza: una emisión vacía es un hecho legítimo (el trimestre todavía no
+            # tiene el IMAE publicado). Se REPORTA, que es distinto de fallar y de callarse.
+            resultado["note"] = ("no se emitió ninguna proyección en este corte; los motivos "
+                                 "van en `reasons`")
+        return resultado
+    finally:
+        db.close()
+
+
 def register() -> None:
     register_operation(Operation(
         "macro-live-sync", "Sincronizar macro en vivo (API BCRD)",
@@ -276,6 +336,22 @@ def register() -> None:
         "(upsert por serie·período). Mensual — la cadencia de publicación del BCRD; la "
         "aparición de datos nuevos la vigila la auditoría de frescura.",
         _run_canonical_ingest, default_interval_hours=720,
+        # El dato nuevo dispara la emisión: las proyecciones se rehacen con el corte recién
+        # ingerido, sin que nadie se acuerde. La puntuación ya va DENTRO de esta corrida, así
+        # que el orden queda: ingerir → puntuar lo vencido → emitir el corte nuevo.
+        triggers=["macro-forecast-emit"],
+    ))
+    register_operation(Operation(
+        "macro-forecast-emit", "Emitir proyecciones macro al ledger",
+        "Corre el nowcast (bridge IMAE→PIB, variantes m1 y m2) y el BVAR con prior Minnesota, "
+        "y CONGELA cada pronóstico en `mm_forecast_log` con su corte point-in-time. Solo los "
+        "horizontes con track record entran al ledger: los escenarios (3 trimestres en "
+        "adelante) se cuentan y no se registran, porque darles una fila de historial sería "
+        "fabricarles uno. Anclada al calendario TRIMESTRAL del BCRD y no al reloj, con el "
+        "rezago del IMAE (45 días) y no el del PIB (60): el valor del nowcast es la ventana "
+        "de ~15 días entre los dos. Idempotente por la clave de cinco campos del ledger.",
+        _run_macro_forecast_emit, default_interval_hours=2160,
+        anclaje="trimestral", periodo_actual=_periodo_de_proyecciones,
     ))
     register_operation(Operation(
         "fiscal-sync", "Sincronizar pulso fiscal (Hacienda + DGII)",

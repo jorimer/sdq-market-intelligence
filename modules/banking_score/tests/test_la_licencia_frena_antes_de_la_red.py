@@ -7,6 +7,11 @@ decorativa — el atributo existía para el gate estático y no tenía ningún e
 dato. Un boletín público que atribuye a la SB se apoya en que esa declaración signifique
 algo.
 
+**Dónde se parchea.** Tres de los cuatro conectores se promovieron a `shared/data` (T-VL-0)
+y en `modules/banking_score/external` quedó un shim que RE-EXPORTA. Parchear el shim no
+alcanza: la función real lee su propio módulo, así que el gate se ejerce donde vive la
+implementación — que es además lo que uno quiere probar.
+
 **Por qué el test mide lo que mide.** No alcanza con comprobar que se levanta
 `LicenseError`: hay que comprobar que se levanta ANTES del egress. Un gate que corre
 después de la descarga no protege de nada — el dato ya salió del emisor y ya está en
@@ -16,13 +21,8 @@ se pone verde, se pone rojo con otro error.
 """
 import pytest
 
-from modules.banking_score.external import (
-    fiduciaria_pdf_client,
-    sib_data_client,
-    sib_historical_client,
-    simbad_client,
-)
-from shared.data import LicenseError
+from modules.banking_score.external import fiduciaria_pdf_client
+from shared.data import LicenseError, sib_data_client, sib_historical_client, simbad_client
 
 
 class _LaRedNoDebioOcurrir(AssertionError):

@@ -22,7 +22,7 @@ from modules.banking_score.models.models import (  # noqa: E402
 from modules.banking_score.sib_sync import _match_or_create_bank  # noqa: E402
 from modules.banking_score.scoring.batch import _upsert_rating  # noqa: E402
 from modules.banking_score.scoring.engine import run_scoring  # noqa: E402
-from modules.banking_score.external.simbad_client import extract_cambiaria_bulk  # noqa: E402
+from shared.data.simbad_client import extract_cambiaria_bulk  # noqa: E402
 
 _FIELDS = ("activos_totales", "patrimonio_tecnico", "pasivos_exigibles",
            "activos_liquidos", "cartera_bruta", "utilidad_neta")

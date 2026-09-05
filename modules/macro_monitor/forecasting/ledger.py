@@ -21,14 +21,28 @@ ESTADOS = ("pending", "scored")
 _NIVELES = (0.80, 0.90)
 
 
-def backtest_id(model_id: str, target_series: str, horizon: Optional[str]) -> str:
-    """La clave del CONJUNTO de pronósticos ya puntuados de un modelo.
+def backtest_id(model_id: str, target_series: str, h: Optional[int]) -> str:
+    """La clave del CONJUNTO de pronósticos comparables de un modelo.
 
-    Identifica un conjunto, no una fila. Con *horizon* en ``None`` abarca todos los
-    horizontes de ese modelo y serie, que es lo que hace falta cuando el track record se
-    computa sobre la historia entera y no sobre un trimestre.
+    *h* es el horizonte **RELATIVO** en trimestres (1 = el próximo), no el trimestre
+    calendario. La diferencia decide si el producto funciona: con el calendario como clave,
+    cada conjunto tiene UNA sola observación —el trimestre 2025-Q4 se pronostica una vez a
+    cada distancia— y `n_oos` nunca alcanza el mínimo del gate. Medido: doce trimestres
+    emitidos a un trimestre vista y puntuados dan `n_oos = 1` con el calendario y **12** con
+    el relativo.
+
+    La pregunta que el track record responde es «¿qué tan bien pronosticamos a UN trimestre
+    vista?». Ésa se acumula a lo largo de los trimestres; «¿qué tan bien pronosticamos
+    2025-Q4?» es una muestra de uno.
+
+    Con *h* en ``None`` abarca TODOS los horizontes de ese modelo y serie, que mezcla
+    pronósticos de dificultad distinta: sirve para un total, no para juzgar calibración.
+
+    `h is not None`, no `if h`: el nowcast apunta al trimestre EN CURSO y su horizonte
+    relativo es CERO, que es falsy. Con `if h` habría caído al comodín y su track record se
+    habría mezclado con el de los horizontes largos.
     """
-    return f"{model_id}|{target_series}|{horizon or '*'}"
+    return f"{model_id}|{target_series}|{('+' + str(h) + 'T') if h is not None else '*'}"
 
 
 def _lado(intervals: Sequence, nivel: float):
@@ -39,14 +53,15 @@ def _lado(intervals: Sequence, nivel: float):
 
 
 def registrar(db: Session, *, model_id: str, target_series: str, horizon: str, as_of: str,
-              point: float, intervals: List[List[float]], revision: int = 0) -> ForecastLog:
+              point: float, intervals: List[List[float]], revision: int = 0,
+              h: Optional[int] = None) -> ForecastLog:
     """Escribe un pronóstico. Falla si ya existe esa clave de cinco campos — que es lo que
     impide que un rerun duplique el historial."""
     lo80, hi80 = _lado(intervals, 0.80)
     lo90, hi90 = _lado(intervals, 0.90)
     fila = ForecastLog(
         model_id=model_id, target_series=target_series, horizon=horizon, as_of=as_of,
-        revision=revision, point=float(point), intervals=intervals,
+        revision=revision, point=float(point), intervals=intervals, h=h,
         lo_80=lo80, hi_80=hi80, lo_90=lo90, hi_90=hi90, status="pending",
     )
     db.add(fila)
@@ -102,15 +117,26 @@ def puntuar_pendientes(db: Session) -> int:
 def _del_conjunto(db: Session, bt_id: str) -> List[ForecastLog]:
     """Las filas que sostienen un `backtest_id`: **revisión 0 y `scored`**, sin mirar
     `superseded_by`. El track record mide el pronóstico como se PUBLICÓ, no como se corrigió
-    después."""
-    model_id, target, horizon = bt_id.split("|", 2)
+    después.
+
+    El tercer campo del id es el horizonte RELATIVO (`+1T`). Una fila sin `h` —anterior a la
+    migración que lo introdujo— queda FUERA del conjunto: darle un horizonte inventado sería
+    fabricarle track record, que es lo único que este ledger existe para impedir.
+    """
+    model_id, target, rel = bt_id.split("|", 2)
     q = (db.query(ForecastLog)
          .filter(ForecastLog.model_id == model_id,
                  ForecastLog.target_series == target,
                  ForecastLog.revision == 0,
                  ForecastLog.status == "scored"))
-    if horizon != "*":
-        q = q.filter(ForecastLog.horizon == horizon)
+    if rel != "*":
+        try:
+            paso = int(rel.strip("+T"))
+        except ValueError:
+            return []
+        q = q.filter(ForecastLog.h == paso)
+    else:
+        q = q.filter(ForecastLog.h.isnot(None))
     return q.all()
 
 

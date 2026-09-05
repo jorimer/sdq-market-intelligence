@@ -6,7 +6,10 @@ made — we exercise the pure mapping and the factory with patched config.
 """
 import pytest
 
-from modules.banking_score.external import sib_data_client as etl
+# Se parcha el módulo CANÓNICO, que es donde vive la función. Parchar el shim
+# de `banking_score/external` tocaría su copia de la referencia y la
+# implementación seguiría intacta — el parche 'funciona' y no hace nada.
+from shared.data import sib_data_client as etl
 from modules.banking_score.external.sib_data_client import SIBDataClient
 from modules.banking_score.models.models import BankingData
 

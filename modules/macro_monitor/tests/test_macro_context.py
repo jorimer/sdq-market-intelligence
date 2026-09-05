@@ -11,8 +11,15 @@ from shared.doctrine import load_doctrine_raw
 # Synthetic latest reads close to the real prod values (2026-06).
 GROUPED = {
     "bcrd.inflacion.inflacion.interanual": [("2025-04", 5.35)],
-    "bcrd.xls.imae_2018.variacion_porcentual_interanual": [("2025-04", 5.4)],
-    "bcrd.xls.serie_tpm.tasa_de_politica_monetaria": [("2025-04", 0.0525)],  # ×100 → 5.25%
+    # OJO — el código va copiado de la doctrina y por eso este fixture NUNCA pudo cazar que
+    # la doctrina apuntara a una serie inexistente: los dos decían lo mismo y los dos estaban
+    # equivocados. Pasó, y el factor de actividad estuvo "sin dato" en producción sin que
+    # nada fallara. Quien lo delata hoy es el registro por-variable, que publica la brecha
+    # NOMBRANDO el código que no resolvió.
+    "bcrd.xls.imae_2018.serie_original_variacion_porcentual_interanual": [("2025-04", 5.4)],
+    # ×100 → 5,25 %, y la corrección la hace `canonical.escala_curada` (con tope), no un
+    # `scale` en la doctrina. Ver `test_una_sola_escala_por_serie.py`.
+    "bcrd.xls.serie_tpm.tasa_de_politica_monetaria": [("2025-04", 0.0525)],
     "bcrd.sector_externo.tasas_de_cambio.venta": [("2024-04", 54.0), ("2025-04", 59.3)],  # +9.8% YoY
     "bcrd.xls.reservas_internacionales.reservas_brutas": [("2024-04", 15000.0), ("2025-04", 15771.0)],  # +5.1%
     "public_debt_gdp": [("2025", 62.4)],

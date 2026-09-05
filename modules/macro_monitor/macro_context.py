@@ -15,6 +15,7 @@ from typing import Dict, List, Optional, Tuple
 
 from sqlalchemy.orm import Session
 
+from shared.data.bcrd_excel import canonical
 from shared.contracts.macro_sector import (
     ND,
     MacroFactor,
@@ -114,7 +115,16 @@ def _factor_from_doctrine(fdoc: dict, grouped: Dict[str, Obs], names: Dict[str, 
                                reading="sin variación interanual computable", trend=trend, **base)
         value = yoy
     else:
-        value = round(clean[-1][1] * float(fdoc.get("scale", 1.0)), 2)
+        # `escala_curada` primero, y el `scale` de la doctrina después SOLO si aquélla no
+        # tocó el valor. Las dos aplicadas en cadena es exactamente cómo la TPM se iba a
+        # publicar como «525 %»: dos correcciones para el mismo hecho se componen.
+        crudo = clean[-1][1]
+        # `escala_curada` devuelve None solo si entra None, y `clean` ya excluyó los nulos.
+        curado = canonical.escala_curada(base.get("series_code") or "", crudo)
+        if curado is not None and curado != crudo:
+            value = round(float(curado), 2)
+        else:
+            value = round(crudo * float(fdoc.get("scale") or 1.0), 2)
 
     reading = factor_reading(value, fdoc)
     direction, magnitude = _classify(value, fdoc)

@@ -506,36 +506,107 @@ T-VL-3. No bloquean T-PS.
 ## T-MP-4 · Sectorial — `forecasting/sectoral.py` (NUEVO)
 
 ### Pasos atómicos
-- [ ] **1.** Proyección de los 17 sectores con **restricción de agregación**: la suma ponderada reconcilia con el PIB agregado proyectado.
-- [ ] **2.** Método (proporciones con corrección de tendencia, o factor model) se decide **con la data en mano** y se documenta la elección con su evidencia.
-- [ ] **3.** Un sector con huecos o cambio de base **no se proyecta**: se declara brecha. 15 sectores honestos valen más que 17 con dos inventados.
+- [x] **1.** Proyección de los 17 sectores con **restricción de agregación**: la suma ponderada reconcilia con el PIB agregado proyectado. El sustrato NO es el cuadro de incidencias —que no cierra en el archivo del BCRD: `VA+impuestos−PIB` nunca da cero, |d| medio 0,22 pp y máximo 1,29, y `Σ(3 grupos)−VA` da −1,945 en 2021-Q4— sino el **cuadro nominal**, donde `17 actividades + impuestos = PIB` da error **0,000000000** en los 33 trimestres.
+- [x] **2.** Método elegido **con la data en mano**: persistencia encogida (λ=0,7, re-elegida en cada ventana) más reconciliación proporcional al peso. RMSE **3,07 pp** contra **4,45** de la proporción pura, **+31,2 %**. La regresión sobre el agregado —el «factor model» con factor observado— NO le gana a la proporción pura ni con el agregado realizado a la vista.
+- [x] **3.** Un sector con huecos **no se proyecta**: se declara brecha, y la brecha viaja hasta la salida.
 
 ### Sensor T-MP-4
-- [ ] Reconciliación exacta; sectores no proyectables declarados.
+- [x] Reconciliación exacta (`Σ wᵢ·gᵢ == g_PIB`, test con `abs=1e-12`); sectores no proyectables declarados.
+- [x] La partición 17+impuestos=PIB se **comprueba en el dato en cada llamada**, no se supone.
+- [x] `verificar_componentes` delata un código movido: ocho de las 18×2 series dependen de una partición del spec interpretado y su pérdida sería silenciosa.
+
+> **Límite declarado, no escondido.** Con índices encadenados la agregación exacta contra el
+> PIB *publicado* es imposible: reconstruirlo desde las 17 actividades con pesos nominales
+> deja 0,149 pp de error medio (máx 0,63) — **más ajustado que el propio cuadro de
+> incidencias del BCRD** (0,22 / 1,29). La reconciliación es exacta contra el agregado que
+> publicamos, y esa distancia va a la metodología.
 
 ---
 
 ## T-MP-5 · Procedencia y reporte — `products.py`, `variable_signals()` (EDIT)
 
+> **Corrección al plan.** Decía «`products.py`, `variable_signals()` (EDIT)». No existe un
+> `modules/macro_monitor/products.py`: el producto del eje es `MacroProduct` y vive en
+> **`app/products_macro.py`**; y `variable_signals()` **no existía** —había que crearlo, no
+> editarlo—. El eje caía al fallback a-nivel-producto.
+
 ### Pasos atómicos
-- [ ] **1.** `variable_signals()` emite `state=PROJECTED` con `ProjectionMeta` completo.
-- [ ] **2.** **El ledger es la fuente de verdad**; la meta se construye leyendo de él, nunca al revés. Mapeo campo a campo en §3.6.2.
-- [ ] **3.** `coverage_real` del eje macro **no cambia**.
-- [ ] **4.** Secciones de reporte de §5, con **"Desempeño de nuestras proyecciones anteriores" en el CUERPO**, no en anexo. Es el argumento de venta, no la letra chica.
-- [ ] **5.** SKU y tarifa vía `shared/billing/skus.py:45-53` y `tariffs.py:81`. **No hardcodear precio.**
+- [x] **1.** `variable_signals()` NUEVO en `app/products_macro.py`, con `state=PROJECTED` y `ProjectionMeta` completo para lo proyectado.
+- [x] **2.** **El ledger es la fuente de verdad**: `forecasting/procedencia.py` DERIVA la meta en cada lectura y no la guarda en ningún lado. `track_record()` es el único que computa `n_oos`, error, calibración y solapamiento.
+- [x] **3.** `coverage_real` no se infla: las señales proyectadas entran con **peso 0**, porque las dos coberturas son ponderadas y una proyectada con peso > 0 entraría al denominador y la BAJARÍA. Hay test que compara con y sin. Corolario: `coverage_projected` del eje da 0,0 y **no es un bug** — mide sustitución del índice, y el índice macro es real.
+- [x] **4.** Sección «Desempeño de nuestras proyecciones anteriores» **en el cuerpo** de los dos niveles nombrados, con su texto **computado** del ledger (`forecasting/desempeno.py`), nunca redactado por un modelo. Aparece con o sin resultados.
+- [x] **4b.** `forecasting/emision.py`: sin emisión el cableado nunca lleva corriente y no se puede verificar. Nowcast m1/m2 + los horizontes con track record del BVAR; los escenarios se CUENTAN y no se escriben.
+- [ ] **5.** SKU y tarifa. **Bloqueado por una decisión del dueño**, no por trabajo: los SKU derivan del `sector_key` (`insight:macro`, `deep_dive:macro`) y el precio ya es una fila de base (`create_tariff`), así que «no hardcodear precio» ya se cumple. Lo que falta decidir es si la proyección se vende **dentro** del eje macro o como SKU aparte — y que §5 pide «suscripción trimestral» cuando `VALID_INTERVALS` solo tiene `once | monthly | annual`.
 
 ### Sensor T-MP-5
-- [ ] Gate de honestidad deja pasar una pregunta prospectiva real.
-- [ ] `ESTADO_BACKTEST` de clase presente (lo exige `shared/products/tests/test_estado_de_validacion.py`).
+- [x] Una proyección **sin backtest en el ledger no ancla**: sale con `n_oos = 0` y el gate la rechaza con su motivo, en vez de silenciarse.
+- [x] `coverage_real` idéntico con y sin las señales proyectadas.
+- [x] `ESTADO_BACKTEST` de clase ya presente en `MacroProduct`.
+- [ ] Corrida end-to-end de una pregunta prospectiva contra datos reales — va con T-MP-6, que es quien programa la emisión.
+
+### Lo que la medición destapó (dos defectos VIVOS, ajenos al plan)
+
+Al medir la cobertura por variable en vez de suponerla:
+
+1. **El factor de ACTIVIDAD estaba sin dato en producción.** La doctrina apuntaba a
+   `bcrd.xls.imae_2018.variacion_porcentual_interanual`, que la API de prod devuelve **vacía**.
+   El código real es `…imae_2018.serie_original_variacion_porcentual_interanual`: **223 obs
+   hasta 2026-07**. El comentario del YAML decía que ese código ya se había arreglado una vez
+   en 2026 — se rompió de nuevo y nada falló, porque el fixture del test se escribió COPIANDO
+   la doctrina.
+2. **Una mina de doble escalado en la TPM, que puse yo.** La ingesta canónica ya corrige la
+   fracción a por-ciento (`escala_curada`, con tope), y la doctrina seguía declarando
+   `scale: 100.0`. Producción todavía sirve los valores viejos, así que no falló; **en cuanto
+   la sincronización corriera, la TPM se publicaba como «525 %»** en el contrato que
+   `banking_score` consume. Cura: un solo dueño de la escala + guard estructural.
 
 ---
 
 ## T-MP-6 · Operación y calendario — `operations.py` (EDIT)
 
 ### Pasos atómicos
-- [ ] **1.** Operación programada registrada con cascada verificada.
-- [ ] **2.** **Consultar el calendario de publicación con el dueño antes de fijarlo.**
-- [ ] **3.** Corrida end-to-end de un trimestre completo.
+- [x] **1.** `macro-forecast-emit` registrada, **anclada al calendario TRIMESTRAL de la fuente y no al reloj** (un intervalo relativo se desfasa solo: así se sirvió Q1 en informes de agosto en el sync de comercio), con `periodo_actual` para que el scheduler distinga «al día» de «falta un trimestre». Cascada `macro-canonical-sync → macro-forecast-emit` verificada por test.
+- [x] **2.** El rezago que manda es el del **IMAE (45 días)**, no el del PIB (60): el valor del nowcast es justamente la ventana de ~15 días entre los dos, y disparar al rezago del PIB llegaría cuando el BCRD ya publicó. `anclaje="trimestral"` usa 45 días, que es el número medido. **El calendario COMERCIAL (cuándo recibe el suscriptor) sigue siendo decisión del dueño** — ver el bloque de decisiones abiertas.
+- [x] **3.** Corrida end-to-end contra el corpus real, y **encontró un defecto que ningún test unitario tenía**: `emitir` escribía pronósticos de horizontes **ya cerrados** al corte. El gate los rechaza al publicar, pero eso llega tarde — la fila quedaba en el ledger y `puntuar_pendientes` **no consulta el gate**: los habría puntuado contra un observado que ya existía cuando se escribieron, inflando el track record con retrospectiva. La regla ahora se aplica al ESCRIBIR.
+
+### Sensor T-MP-6
+- [x] Cadena completa verificada: emisión → ledger congelado con su `as_of` → meta derivada → veredicto del gate. En el corte válido: 2 pronósticos escritos, 6 escenarios contados y no escritos, 0 vencidos; segunda corrida 0 escritos / 2 duplicados. El gate dice **NO ancla** con `n_oos = 0`, que es el estado honesto del día uno.
+- [x] Una emisión vacía **se explica y no falla**: en la ventana entre los dos rezagos la cifra está DETERMINADA por identidad, y decir «sin estimación» haría parecer que falló un modelo que está de más.
+
+---
+
+## T-MP-7 · El producto de proyecciones como eje propio — `products_forecast.py` (NUEVO)
+
+> Nació de una decisión del dueño («se vende aparte») y de una medición que la primera forma
+> de cumplirla NO soportaba.
+
+### Lo que se midió antes de construir
+
+| `special:macro-forecast` | |
+|---|---|
+| ¿es suscripción? | **no** — `is_subscription_sku` solo admite insight/all_access/enterprise |
+| intervalos | **solo `once`** — incompatible con el cobro anual decidido |
+| acceso que concede | **ninguno** — `sku_grants` devuelve `[]` |
+
+Un `special:` es, por diseño, una compra puntual cotizada a medida cuya entrega media un
+analista. Segunda decisión: **eje propio del catálogo**, que gana `insight:macro_forecast`
+con intervalos mensual/anual y grants reales **sin tocar `shared/billing`** — código de cobro
+en vivo. Comprobado: `allowed_intervals` → `['monthly','annual']`, `sku_grants` →
+`[('macro_forecast','insight')]`.
+
+### Pasos atómicos
+- [x] **1.** `CatalogEntry` + `MacroForecastProduct` en `modules/macro_monitor/`, con su motor y no en `app/`.
+- [x] **2.** Tres niveles. El tercero **no es relleno para cumplir el contrato**: es donde viven los ESCENARIOS a 3-8 trimestres, que deliberadamente no llevan track record.
+- [x] **3.** Toda la prosa se **COMPUTA**. No pasa por el motor de IA, y no es una omisión: un informe de errores, coberturas empíricas y una reconciliación exacta no tiene nada que redactar. Un modelo escribiéndola inventaría los números que el producto existe para probar.
+- [x] **4.** `variable_signals()` con peso REAL —acá el índice ES la proyección, así que `coverage_projected` sí dice algo, a diferencia del eje macro—. Una proyección que no pasa el gate sale como **GAP con su motivo**, no como `PROJECTED` degradada.
+- [x] **5.** Las **cuatro superficies** que el framework exigía, encontradas corriendo sus tests en vez de recordándolas: etiqueta de archivo, resumidor de data-pull, keywords de ruteo y el tercer nivel. Es el patrón del anuario —cuatro registros de a uno, ninguno falla— pero esta vez los guards los cazaron todos.
+- [x] **6.** Muestra curada que se renderiza en los tres niveles, y que enseña a propósito **un resultado incómodo**: una proyección que no alcanza a anclar y un intervalo del 90 % que sobre-cubre.
+- [ ] **7.** **Tarifa: falta que el dueño fije el precio.** No se hardcodea; se publica con `create_tariff` y hasta entonces el nivel queda inactivo, que es el comportamiento correcto.
+
+### Sensor T-MP-7
+- [x] El eje **no invade** a los productos en producción: las seis preguntas típicas de los otros ejes rutean igual que antes. Con keywords amplias el test falla; con keywords vacías falla el contraejemplo. Los dos lados.
+- [x] `insight:macro_forecast` admite `annual` y concede grant — comprobado, no supuesto.
+- [x] El catálogo del frontend se arma del API: no hay lista hardcodeada que actualizar (verificado).
 
 ---
 
@@ -554,23 +625,61 @@ Refactor puro, sin riesgo de negocio. Desbloquea todo el bloque.
 - [ ] `shared/data/sib_client.py:1-6` (el docstring que declara la regla) y el shim en `modules/banking_score/external/sib_client.py:1-18`.
 
 ### Pasos atómicos
-- [ ] **1.** Promover a `shared/data/` los tres clientes que traen balance completo y hoy viven en `modules/banking_score/external/`: `sib_data_client`, `sib_historical_client`, `simbad_client`. Dejar shims de compatibilidad, igual que se hizo con `sib_client`.
-- [ ] **2.** Regla dura: `valuation` importa de `shared.data`, **nunca** de `modules.banking_score.*`.
+- [x] **1.** Los tres promovidos con `git mv` (2.805 líneas, historia conservada) + shims de re-exportación en la ruta vieja. Los nombres re-exportados se **midieron con `ast`** —qué importa de verdad el repo— y no se listaron a ojo: hay tests que importan privados (`_norm`, `_celdas_serializadas`, `_post_chart_data`), y una lista a mano se queda corta justo en el que alguien agregó después.
+- [x] **2.** Regla dura, con guard estructural: **nadie fuera de `banking_score` llega a estos clientes por la ruta vieja**. Los dos scripts que lo hacían pasan a `shared.data`.
+
+### La decisión de diseño que hubo que medir
+
+El shim empezó siendo un **alias de módulo** (`sys.modules[__name__] = _canonico`), que es transparente en runtime: parchar el shim alcanza a la implementación y ningún test se toca. **Pero mypy no lo atraviesa** — ve un módulo que no define nada y marca `attr-defined` en cada import: **21 errores repartidos por ocho archivos ajenos**. La alternativa —re-exportar y repuntar los sitios que parchan— costaba **tres líneas**, medidas. Se eligió re-exportar.
+
+El precio del re-export es que copia REFERENCIAS: un `monkeypatch.setattr` sobre el shim toca la copia, la implementación sigue intacta y **el test pasa probando nada**. Por eso el guard incluye `test_nadie_PARCHA_el_shim`, que es lo que vuelve segura esa forma.
 
 ### Sensor T-VL-0
-- [ ] Tests de `banking_score` verdes **sin cambios**.
+- [x] Tests de `banking_score` verdes: **1.374 pasados**. Cambiaron **cuatro líneas** en tres tests, y ninguna es de comportamiento: tres barridos estructurales cuyo glob apuntaba al archivo movido —un lector de código tiene que apuntar a donde está el código— y un `monkeypatch` que ahora parcha el módulo canónico, que es donde vive la función.
+- [x] `mypy-baseline` sincronizado: **15 por 15, puras reubicaciones de ruta**; `unresolved` sigue en 1.303. Ni deuda nueva ni deuda escondida.
+
+### Lo que la medición destapó, y queda fuera de alcance
+
+Barriendo imports módulo→módulo aparecieron **cinco pares** que violan la doctrina de independencia. Tres son de tests, pero **dos son código de producción**: `insurance_intel → banking_score` (`scoring/perfil_sdq.py`) y `law_intel → social_dev` (`informe_abierto.py`). No se tocaron —no son parte de T-VL-0— pero están medidos y nombrados.
 
 ---
 
 ## T-VL-1 · Datos reales — BLOQUEANTE
 
+> **La premisa estaba vieja, y se midió antes de construir.** El plan decía «700 filas con
+> `source='manual'`, residuo sintético». En producción, hoy:
+>
+> | | |
+> |---|---|
+> | registros | **1.865** |
+> | por fuente | `sib_api` 1.778 · `sib_pdf` 24 · `sib_simbad` 63 |
+> | **sintéticos** | **0** |
+> | rango | 2020-12-31 → 2026-06-30 |
+> | entidades | 92 |
+>
+> La sincronización SIB corrió el 2026-09-02 con `backfill_done: true`. El paso 1 estaba
+> hecho, y el guard contra `source='manual'` **también ya existía** (`test_seal_synthetic.py`:
+> el seed no fabrica financieros, el scoring excluye manual, y la purga los limpia).
+
 ### Pasos atómicos
-- [ ] **1.** Ingesta real de balance y resultados por entidad y período. `banking_data` tiene 700 filas con `source='manual'` — residuo sintético; el seed ya no fabrica financieros, solo el catálogo de 35 entidades.
-- [ ] **2.** El valuador **no se construye sobre eso**: datos sintéticos producen valuaciones sintéticas.
+- [x] **1.** Ingesta real: ya estaba, y se verificó en producción en vez de suponerlo.
+- [x] **2.** Cero filas sintéticas, medido.
 
 ### Sensor T-VL-1
-- [ ] Patrimonio y utilidad reconciliados contra el estado publicado de **al menos 3 entidades**.
-- [ ] Test que rechaza `source='manual'`.
+- [x] Test que rechaza `source='manual'` — **ya existía**.
+- [x] **Reconciliación de patrimonio y utilidad contra el estado publicado**, que era lo único que faltaba de verdad: `scripts/qa_reconciliacion_patrimonio.py`, cinco entidades contra SIMBAD —el Superset PÚBLICO de la Superintendencia— con tolerancia del 1 % y código de salida como sensor. Por ENTIDAD y no por total: un total puede cerrar con dos entidades cruzadas entre sí, y la valuación es por entidad.
+
+### La trampa que la reconciliación destapó
+
+**`patrimonio_tecnico` NO contiene patrimonio técnico**: contiene el patrimonio CONTABLE del
+balance. La ETL lo hace a propósito y con el motivo escrito —la métrica que lo consume es
+patrimonio/activos, que necesita el contable— y las cifras de Basilea de verdad viven aparte
+(`capital_primario`, `capital_tier1`, `apr`). O sea que el dato que el valuador necesita **ya
+está**, bajo un nombre que engaña.
+
+Para el valuador es buena noticia; para quien lea el campo esperando capital regulatorio, no:
+computaría un índice de solvencia que no lo es. Queda fijado por test para que la próxima
+persona lo lea ahí y no lo descubra en un informe.
 
 ---
 
@@ -581,24 +690,84 @@ Refactor puro, sin riesgo de negocio. Desbloquea todo el bloque.
 - [ ] `shared/products/contract.py:300` (`Protocol SectorProduct`).
 - [ ] `modules/pension_intel/` como plantilla de estructura.
 
+> **`docs/SPEC_VALUADOR_ENTIDADES.md` NUNCA EXISTIÓ.** Está declarado como spec rectora en el
+> encabezado de este plan y no se escribió: `git log --diff-filter=A` no lo encuentra en
+> ninguna rama. Los pasos que lo referencian (§7 acá, §2/§4.1/§5.4/§6/§8.2 en T-VL-3 a T-VL-8)
+> apuntan a un documento ausente.
+>
+> No bloqueó el alta porque **este plan carga la sustancia del spec**: el método (Excess
+> Return), la fórmula de `Ke`, la beta sin desapalancar y por qué, el ROE sobre patrimonio de
+> apertura, el terminal como perpetuidad de residual income, `g < Ke`, los dos motores y el
+> gate de N ≥ 8. La estructura salió de `modules/pension_intel/`, que este mismo plan nombra
+> como plantilla.
+
 ### Pasos atómicos
-- [ ] **1.** `CatalogEntry("valuation", ...)` en `PRODUCT_CATALOG`.
-- [ ] **2.** Estructura de `modules/valuation/` según §7 del spec.
-- [ ] **3.** `register_product(SECTOR_KEY, ...)` al final de `products.py`.
-- [ ] **4.** Cuatro puntos de cableado en `app/main.py`: import del router (~`:110`), `include_router(prefix="/api/v1/valuation")` (~`:138`), `import modules.valuation.operations` (~`:222`), `import modules.valuation.products` (~`:249`).
-- [ ] **5.** `ESTADO_BACKTEST` de clase.
-- [ ] **6.** `AXIS_DOCTRINE["valuation"]` y `AUDIENCE_FRAMES["valuation"]` en `cerebro.py` (`:302`, `:572`). La primera audiencia declarada es el default.
-- [ ] **7.** Migración Alembic `{rev12hex}_add_valuation.py`.
+- [x] **1.** `CatalogEntry("valuation", …)` en `PRODUCT_CATALOG`.
+- [x] **2.** `modules/valuation/` con `api/`, `engine/`, `models/`, `panel/`, `tests/`.
+- [x] **3.** `register_product` al final de `products.py`.
+- [x] **4.** Cableado en `app/main.py`. **Dos puntos, no cuatro**: el router y `operations` no existen todavía —el eje no tiene qué exponer ni qué operar sin motor— y registrarlos vacíos sería cableado muerto.
+- [x] **5.** `ESTADO_BACKTEST` de clase, con `obstaculo="dato_pendiente"` y el dato nombrado: transacciones RD/Caribe con precio sobre valor libro verificable. Una valuación se valida contra lo que alguien PAGÓ.
+- [x] **6.** `AXIS_DOCTRINE["valuation"]` y `AUDIENCE_FRAMES["valuation"]` con tres audiencias; la primera —comité/inversionista— es el default.
+- [ ] **7.** Migración: **no procede todavía**. No hay modelos que crear; la tabla de corridas y supuestos se diseña con el motor (T-VL-3/T-VL-4). Una migración vacía es ceremonia.
+
+### El eje está de alta y NO puede entregar, a propósito
+
+`has_engine()` devuelve False hasta que existan el costo de capital y el Excess Return, así que
+ningún nivel alcanza su umbral y nada se activa. El alta y la capacidad de entregar son dos
+cosas, y confundirlas es cómo se publica una vidriera vacía.
+
+**La muestra curada usa una entidad explícitamente FICTICIA.** El framework exige que todo
+producto del catálogo se pueda mostrar, pero enseñar una valuación de un banco real que
+todavía no podemos computar sería fabricar una cifra financiera sobre una empresa que existe —
+y eso no se arregla con una marca de agua. La muestra enseña, además, el caso INCÓMODO: un
+spread que cruza el cero dentro del rango de `Ke`, porque ése es el hallazgo que el eje existe
+para dar.
 
 ### Sensor T-VL-2
-- [ ] Test de contrato de producto verde.
+- [x] Contrato de producto verde: **8.108 tests**, con las cinco superficies que el framework reclamó al registrar el eje —huella de contexto, etiqueta de archivo, resumidor de data-pull, keywords de ruteo y muestra curada— cerradas porque **sus tests las señalaron**, no porque yo recordara la lista.
+- [x] El eje **no invade**: las preguntas de solidez siguen ruteando a `banking`, y «cuánto vale» rutea a `valuation`. Con su contraejemplo.
 
 ---
 
 ## T-VL-3 · Costo de capital — `engine/cost_of_capital.py` (NUEVO)
 
+> ## DECISIÓN DEL DUEÑO (2026-09-04): **se valúa en PESOS DOMINICANOS**
+>
+> Cierra el gate que el paso 5 marcaba como bloqueante. Y trae una consecuencia que **no es
+> una preferencia sino aritmética**, así que se declara acá y se implementa así:
+>
+> ### El CRP NO se suma sobre una Rf en pesos
+>
+> La fórmula escrita abajo —`Rf + β×ERP + CRP`— es la construcción en **USD**: Tesoro
+> americano + prima de mercado + prima de riesgo país. Una tasa libre de riesgo **en pesos
+> dominicanos ya lleva adentro** el riesgo país y la inflación esperada del peso; sumarle el
+> CRP encima lo cuenta **dos veces**, infla `Ke` en unos 200-400 pb y **subvalúa
+> sistemáticamente a todas las entidades**.
+>
+> Con la moneda fijada en RD$, la construcción consistente es:
+>
+> **`Ke(RD$) = Rf(RD$) + β × ERP`** — tres términos, no cuatro, y el motivo escrito.
+>
+> ### Lo que la medición destapó: NO tenemos una Rf larga en pesos
+>
+> | candidato en el corpus | valor | problema |
+> |---|---:|---|
+> | TPM (política monetaria) | **5,25 %** | es overnight — una valuación descuenta a diez años |
+> | Facilidad de depósito | 4,50 % | idem, y es el piso del corredor |
+> | Lombarda | 7,00 % | congelada desde 2013-01 |
+> | *inflación interanual, de referencia* | *5,47 %* | *la TPM está POR DEBAJO de la inflación* |
+>
+> Que la TPM esté debajo de la inflación vigente lo dice todo: usarla como libre de riesgo a
+> diez años daría una tasa real **negativa**, y con eso el modelo diría que casi cualquier
+> entidad crea valor.
+>
+> **Tampoco tenemos** el bono soberano dominicano en RD$ a 10 años, ni el Tesoro americano,
+> ni EMBI. O sea que ninguna de las dos construcciones tiene hoy su insumo principal
+> ingerido. **Es el bloqueante real de T-VL-3**, y no estaba en el plan.
+
 ### Pasos atómicos
-- [ ] **1.** `Ke = Rf + β × ERP + CRP`, con descomposición auditable de los cuatro términos.
+- [ ] **0. NUEVO — bloqueante.** Conseguir una tasa libre de riesgo **larga en pesos**: el bono soberano dominicano en RD$ (Ministerio de Hacienda / Crédito Público publica sus subastas) o, si no se puede ingerir, declararlo y usar un proxy con su error declarado. Sin esto el motor no tiene su primer término.
+- [ ] **1.** `Ke = Rf + β × ERP` **en RD$, sin CRP** (ver la decisión arriba), con descomposición auditable de los TRES términos.
 - [ ] **2.** **La beta NO se desapalanca.** Hamada supone que la deuda es financiamiento y que hay un apalancamiento óptimo separable de la operación; en un banco los depósitos son **materia prima** y esa premisa es falsa — contradiría el argumento de §2 del propio spec. Beta de equity de comparables LATAM, directa.
 - [ ] **3.** `β` y `ERP` viajan como `RUBRIC`, no como dato real.
 - [ ] **4.** `Ke` se reporta como **rango**, nunca como punto. Tabla de sensibilidad en pasos de 50 pb.

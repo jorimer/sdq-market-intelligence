@@ -214,3 +214,130 @@ _Z = {0.80: 1.2815515655446004, 0.90: 1.6448536269514722}
 def intervalos(centro: float, desvio: float) -> List[List[float]]:
     return [[niv, round(centro - z * desvio, 6), round(centro + z * desvio, 6)]
             for niv, z in _Z.items()]
+
+
+# ── Uso sobre el bloque real ────────────────────────────────────────────────────────
+
+#: Hasta qué horizonte el BVAR se publica como PRONÓSTICO, con track record. Más allá es
+#: escenario. No es una preferencia: el backtest sobre la muestra completa le gana al random
+#: walk en los ocho horizontes (+18% a +37%), pero recortando la pandemia queda
+#: h=1 +66,3% · h=2 +1,4% · h=3 +60,5% · h=4 −43,5% — a cuatro trimestres el random walk
+#: GANA, y esa alternancia con n≈20 es ruido, no estructura. Lo único que sobrevive a las dos
+#: muestras es el horizonte corto. Publicar «le gana en los 8» sería cierto y engañoso.
+HORIZONTES_CON_TRACK_RECORD = 2
+
+_ADVERTENCIA_ESCENARIO = (
+    "Escenario, no pronóstico: más allá de dos trimestres la ventaja de este modelo sobre un "
+    "random walk no sobrevive a excluir la pandemia de la muestra, así que no se le publica "
+    "track record. Se muestra por su forma y su banda, no por su historial de acierto."
+)
+
+
+@dataclass(frozen=True)
+class Pronostico:
+    """Un horizonte con track record: entra al ledger y puede anclar una pregunta."""
+
+    h: int
+    horizonte: str
+    punto: float
+    intervalos: List[List[float]]
+    model_id: str
+    target_series: str
+    backtest_id: str
+
+
+@dataclass(frozen=True)
+class Escenario:
+    """Un horizonte SIN track record. No tiene `backtest_id`, y esa ausencia es el corte:
+    sin él no se puede armar un `ProjectionMeta`, y sin `ProjectionMeta` el gate de admisión
+    lo rechaza. Un escenario no puede anclar nada aunque alguien lo intente."""
+
+    h: int
+    horizonte: str
+    punto: float
+    intervalos: List[List[float]]
+    model_id: str
+    target_series: str
+    es_escenario: bool = True
+    advertencia: str = _ADVERTENCIA_ESCENARIO
+
+
+def a_ledger(p) -> dict:
+    """Los campos con que un PRONÓSTICO se registra. Un escenario no pasa por acá."""
+    if not isinstance(p, Pronostico):
+        raise TypeError(
+            "solo un `Pronostico` se registra en el ledger. Lo que se recibió es un "
+            "escenario: no tiene backtest que lo sostenga, y darle una fila de track record "
+            "sería fabricarle uno.")
+    return {"model_id": p.model_id, "target_series": p.target_series,
+            "horizon": p.horizonte, "point": p.punto, "intervals": p.intervalos}
+
+
+@dataclass(frozen=True)
+class ProyeccionBVAR:
+    model_id: str
+    target: str
+    horizontes: Tuple[str, ...]
+    puntos: Tuple[float, ...]
+    intervalos: Tuple[List[List[float]], ...]
+    lambda1: float
+    n_train: int
+    variables: Tuple[str, ...]
+
+    def _backtest_id(self) -> str:
+        return f"{self.model_id}|{self.target}"
+
+    def pronosticos(self) -> List[Pronostico]:
+        """Los horizontes que se publican CON track record."""
+        return [
+            Pronostico(h=k + 1, horizonte=self.horizontes[k], punto=self.puntos[k],
+                       intervalos=self.intervalos[k], model_id=self.model_id,
+                       target_series=self.target,
+                       # RELATIVO (`+1T`), no el trimestre calendario: el conjunto que
+                       # sostiene el error son los pronósticos a la misma distancia, no los
+                       # de un trimestre concreto — que serían uno solo.
+                       backtest_id=f"{self._backtest_id()}|+{k + 1}T")
+            for k in range(min(HORIZONTES_CON_TRACK_RECORD, len(self.horizontes)))
+        ]
+
+    def escenarios(self) -> List[Escenario]:
+        """Los horizontes largos: se muestran, no se puntúan."""
+        return [
+            Escenario(h=k + 1, horizonte=self.horizontes[k], punto=self.puntos[k],
+                      intervalos=self.intervalos[k], model_id=self.model_id,
+                      target_series=self.target)
+            for k in range(HORIZONTES_CON_TRACK_RECORD, len(self.horizontes))
+        ]
+
+
+def _siguiente_trimestre(t: str) -> str:
+    a, q = int(t[:4]), int(t[-1])
+    return f"{a + 1}-Q1" if q == 4 else f"{a}-Q{q + 1}"
+
+
+def proyectar_bloque(Y: np.ndarray, nombres: Sequence[str], ultimo_trimestre: str, *,
+                     objetivo: str = "pib_real", pasos: int = 8, p: int = 2,
+                     version: str = "v1") -> Optional["ProyeccionBVAR"]:
+    """Ajusta el BVAR sobre *Y* y proyecta *objetivo* a *pasos* trimestres.
+
+    λ₁ se elige por verosimilitud marginal SOBRE ESTA MISMA ventana — nunca mirando el error
+    de lo que viene después, que es la forma más fácil de contaminar un backtest.
+    """
+    if len(Y) < 4 * p + 10 or objetivo not in nombres:
+        return None
+    i = list(nombres).index(objetivo)
+    lam = elegir_lambda1(Y, p)
+    aj = ajustar(Y, p, lam)
+    centro, desvios = proyectar(aj, Y, pasos)
+    horizontes, puntos, ints = [], [], []
+    t = ultimo_trimestre
+    for k in range(pasos):
+        t = _siguiente_trimestre(t)
+        horizontes.append(t)
+        puntos.append(round(float(centro[k, i]), 4))
+        ints.append(intervalos(float(centro[k, i]), float(desvios[k, i])))
+    return ProyeccionBVAR(
+        model_id=f"bvar_minnesota.{len(nombres)}v.{version}", target=objetivo,
+        horizontes=tuple(horizontes), puntos=tuple(puntos), intervalos=tuple(ints),
+        lambda1=lam, n_train=len(Y), variables=tuple(nombres),
+    )

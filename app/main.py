@@ -250,6 +250,11 @@ import modules.pension_intel.products  # noqa: F401 — registers pension Sector
 import modules.insurance_intel.products  # noqa: F401 — registers insurance SectorProduct
 import modules.social_dev.products  # noqa: F401 — registers social_dev (panel SUB-NACIONAL)
 import modules.law_intel.products  # noqa: F401 — registers law (sujeto = instrumento normativo)
+# El eje PROSPECTIVO vive con su motor, no en `app/`: a diferencia de `macro`, no abarca
+# dos módulos — todo su insumo sale de `macro_monitor.forecasting`.
+import modules.macro_monitor.products_forecast  # noqa: F401 — registers macro_forecast
+# El eje de VALUACIÓN: dado de alta, y declaradamente sin motor todavía (T-VL-2).
+import modules.valuation.products  # noqa: F401 — registers valuation
 
 # Macro abarca 2 módulos → su producto se ensambla a nivel app vía getters públicos.
 # (forma `from app import` para NO rebindear el nombre `app` = la instancia FastAPI.)

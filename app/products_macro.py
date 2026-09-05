@@ -84,8 +84,34 @@ _SECTION_TITLES = {
     "peer_position": "Posición en el Panel Regional",
     "governance": "Gobernanza Institucional (WGI 2025)",
     "recommendation": "Lectura para Decisión",
+    # Va en el CUERPO, no en anexo: el track record es el argumento de venta, no la letra
+    # chica (§5 del spec del motor de proyección). Su texto se COMPUTA del ledger — ver
+    # `modules/macro_monitor/forecasting/desempeno.py`—, nunca lo redacta un modelo: un
+    # modelo redactándola inventaría el número que la sección existe para probar.
+    "forecast_track_record": "Desempeño de nuestras proyecciones anteriores",
     "limitations": "Limitaciones",
 }
+# Muestra CURADA de la sección de desempeño. Es una muestra y lo dice: las cifras son
+# ilustrativas y el informe real las COMPUTA del ledger. Se escribe con un resultado
+# incómodo a propósito —el intervalo del 90 % sobre-cubre— porque una muestra que solo
+# enseña aciertos vende una sección que no existe.
+_SAMPLE_TRACK_RECORD = (
+    "Cada proyección que publicamos queda registrada antes de conocerse el resultado, y se "
+    "puntúa sola cuando el dato llega. Esto es lo que acumulamos hasta hoy:\n\n"
+    "| modelo | serie | horizonte | n | RMSE | MAE | calibración del intervalo |\n"
+    "|---|---|---|---:|---:|---:|---|\n"
+    "| bridge_imae_pib.m2.v1 | pib_real | +1T | 14 | 1.405 | 1.062 | el del 80 % acertó el "
+    "79 % de las veces (n=14) |\n"
+    "| bvar_minnesota.v1 | pib_real | +2T | 13 | 4.640 | 3.518 | el del 80 % acertó el 85 % "
+    "de las veces (n=13); el del 90 % acertó el 100 % (n=13) |\n\n"
+    "El error medio y la calibración van juntos y no por separado: un modelo cuyo intervalo "
+    "del 80 % acierta el 45 % de las veces está mal calibrado aunque su error medio sea "
+    "bajo, y quien dimensione riesgo con ese intervalo se va a equivocar. En el segundo "
+    "conjunto el intervalo del 90 % SOBRE-cubre: es más ancho de lo necesario, que es el "
+    "lado seguro del error y se informa igual.\n\n"
+    "Cifras ILUSTRATIVAS de la muestra. En el informe se computan del registro de "
+    "pronósticos, nunca se escriben a mano."
+)
 _LIMITATIONS = (
     "La lectura de riesgo-país se basa en el Índice de Riesgo Macro-Político (IRMP, fuentes "
     "WGI/WDI/IMF) del país a la fecha de corte; la coyuntura macroeconómica del Pulse usa "
@@ -181,13 +207,14 @@ def macro_manifest() -> SectorProductManifest:
                 watermark="Vista abierta · SDQMIP", price_band="abierto"),
             ProductTier.insight: TierLevelSpec(
                 tier=ProductTier.insight, granularity=Granularity.named_entity,
-                sections=("risk_assessment", "peer_position", "governance"),
+                sections=("risk_assessment", "peer_position", "governance",
+                          "forecast_track_record"),
                 narrative_templates=("risk_assessment",),
                 audience="cliente / comité", cadence="recurring", price_band="suscripción"),
             ProductTier.deep_dive: TierLevelSpec(
                 tier=ProductTier.deep_dive, granularity=Granularity.named_entity,
                 sections=("risk_assessment", "peer_position", "governance",
-                          "recommendation", "limitations"),
+                          "recommendation", "forecast_track_record", "limitations"),
                 narrative_templates=("risk_assessment",),
                 audience="comité / contraparte", cadence="on_demand", price_band="on-demand"),
         })
@@ -211,6 +238,40 @@ def _macro_factors(db: Session) -> List[Dict]:
                     for f in (ctx.factors or []) if f.value is not None]
     except Exception as e:  # noqa: BLE001
         logger.warning("macro factors no disponibles: %s", e)
+        return []
+
+
+def _track_record_md(db: Optional[Session]) -> str:
+    """La sección de desempeño, computada del ledger. Sin DB, silencio honesto."""
+    if db is None:
+        return ""
+    try:
+        from modules.macro_monitor.forecasting.desempeno import seccion
+        with db.begin_nested():
+            return seccion(db)
+    except Exception as e:  # noqa: BLE001
+        logger.warning("desempeño de proyecciones no disponible: %s", e)
+        return ""
+
+
+def _todos_los_factores(db: Session) -> List[Dict]:
+    """Los factores del contrato macro **incluidos los que no tienen lectura**.
+
+    Gemelo deliberado de `_macro_factors`, que sí filtra los nulos. Las dos vistas existen
+    porque responden preguntas distintas: readiness pregunta «¿hay con qué?» y el registro
+    pregunta «¿qué declaramos y qué nos falta?». Colapsarlas en una haría que una ausencia
+    se publique como si no existiera.
+    """
+    try:
+        with db.begin_nested():
+            from modules.macro_monitor.macro_context import build_macro_context
+            ctx = build_macro_context(db)
+            return [{"key": f.key, "label": f.label, "value": f.value, "unit": f.unit,
+                     "direction": f.direction, "reading": f.reading,
+                     "series_code": getattr(f, "series_code", None)}
+                    for f in (ctx.factors or [])]
+    except Exception as e:  # noqa: BLE001
+        logger.warning("factores macro (vista completa) no disponibles: %s", e)
         return []
 
 
@@ -275,6 +336,74 @@ class MacroProduct:
 
     def product_manifest(self) -> SectorProductManifest:
         return macro_manifest()
+
+    # ── Procedencia POR VARIABLE, y la proyección que viaja con ella ──
+    def variable_signals(self) -> Dict[str, Any]:
+        """Los factores macro con su procedencia, y las proyecciones vigentes del ledger.
+
+        **Los factores SIN dato se declaran, no desaparecen.** `_macro_factors` filtra los
+        nulos porque alimenta readiness, donde un factor vacío no aporta. Acá no se puede
+        filtrar: el registro es la superficie donde se lee cuánto del eje está sostenido por
+        dato real, y un factor que desaparece se lleva su propia ausencia. Antes de esto el
+        eje reportaba cobertura 1,0 por el fallback a-nivel-producto aunque le faltaran
+        factores; ahora la cobertura dice la verdad, y puede ser MENOR.
+
+        **Las proyecciones entran con peso 0, y eso es la mitad del diseño.** `coverage_real`
+        y `coverage_projected` son ambas ponderadas: una señal proyectada con peso > 0 entra
+        al denominador de las dos y **baja la cobertura real**, que es exactamente lo que el
+        `[Lock]` de §4 prohíbe. Con peso 0 no mueve ni numerador ni denominador —el mismo
+        recurso que usa `social_dev` para lo que ingiere y no indexa— y la señal igual llega
+        al pipeline de investigación, que recorre TODAS las señales sin mirar el peso.
+
+        Corolario que hay que saber leer: `coverage_projected` del eje macro da **0,0**, y no
+        es un bug. Esa métrica mide cuánto del ÍNDICE está sostenido por proyección en vez de
+        por dato real; el índice macro es real completo y las proyecciones son producto
+        aparte, no un relleno del índice.
+        """
+        from modules.macro_monitor.forecasting.procedencia import proyeccion_por_serie
+        from shared.registry.signals import GAP, PROJECTED, REAL, VariableSignal
+
+        db = self._db
+        if db is None:
+            return {"period": None, "signals": []}
+
+        factores = _todos_los_factores(db)
+        if not factores:
+            return {"period": None, "signals": []}
+
+        dh = self.data_signals()
+        fuente = ", ".join(dh.sources)
+        señales = [
+            VariableSignal(
+                key=f["key"], label=f["label"],
+                state=REAL if f.get("value") is not None else GAP,
+                weight=1.0, source=fuente, value=f.get("value"),
+                note=("" if f.get("value") is not None
+                      else f"Sin lectura en la serie declarada ({f.get('series_code') or 'n/d'})."),
+                scope="national",
+            )
+            for f in factores
+        ]
+
+        try:
+            with db.begin_nested():
+                proyecciones = proyeccion_por_serie(db)
+        except Exception as e:  # noqa: BLE001
+            # Un ledger ausente o ilegible degrada SOLO las proyecciones: los factores
+            # reales del eje no dependen de él y no tienen por qué caerse con él.
+            logger.warning("proyecciones macro no disponibles: %s", e)
+            proyecciones = {}
+        for serie, meta in sorted(proyecciones.items()):
+            señales.append(VariableSignal(
+                key=f"proyeccion_{serie}", label=f"{serie} · proyección {meta.horizon}",
+                state=PROJECTED,
+                # Peso 0 — ver el docstring. NO es un descuido.
+                weight=0.0,
+                source=f"{meta.model_id} · ledger mm_forecast_log",
+                value=meta.point, period=meta.horizon, scope="national",
+                projection=meta,
+            ))
+        return {"period": None, "signals": señales}
 
     # ── Señales de readiness ──
     def data_signals(self) -> DataHealth:
@@ -583,8 +712,9 @@ class MacroProduct:
     def sample_narratives(self, tier: ProductTier) -> Dict[str, str]:
         """Narrativa CURADA tier-1 de la muestra (exemplar). NO usa el motor IA."""
         sections = self.product_manifest().require_level(tier).sections
-        return {sec: (_LIMITATIONS if sec == "limitations" else _SAMPLE_NARRATIVES[sec])
-                for sec in sections}
+        fijas = {"limitations": _LIMITATIONS,
+                 "forecast_track_record": _SAMPLE_TRACK_RECORD}
+        return {sec: fijas.get(sec) or _SAMPLE_NARRATIVES[sec] for sec in sections}
 
     # ── Narrativas (sin DB) ──
     async def narratives(self, tier: ProductTier, snapshot: ProductSnapshot,
@@ -623,6 +753,9 @@ class MacroProduct:
         for section in sections:
             if section == "limitations":
                 out["limitations"] = _LIMITATIONS
+                continue
+            if section == "forecast_track_record":
+                out[section] = _track_record_md(self._db)
                 continue
             ctx = dict(base_ctx)
             if section == "risk_assessment" and trajectory:

@@ -243,12 +243,25 @@
       "/datos/gobernanza": "Governance · WGI",
       "/tools/deal-scoring": "Deal Scoring",
       "/tools/market-brief": "Market Brief",
+      "/tools/proyecciones": "Macro Forecasts",
       "/overview": "Executive summary",
       "/compare": "Comparator",
       "/methodology": "Methodology",
       "/settings": "Settings",
       "/source-intel": "Source Intelligence",
-      "/admin/users": "Users"
+      "/admin/users": "Users",
+      "/pension-intel": "Pensions",
+      "/insurance-intel": "Insurance",
+      "/datos/pensiones": "Pensions · SIPEN",
+      "/tools/research": "Custom Research",
+      "/brand-intel": "Brand Context",
+      "/catalog": "Product catalogue",
+      "/mi-plan": "My plan",
+      "/mis-vigilancias": "My watchlists",
+      "/products": "Product monitor",
+      "/admin/tarifario": "Pricing",
+      "/admin/pagos": "Payments · PayPal",
+      "/admin/comprobantes": "Tax receipts · NCF"
     }
   },
   "sourceIntel": {

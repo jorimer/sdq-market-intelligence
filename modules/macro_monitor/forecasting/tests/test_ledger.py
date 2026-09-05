@@ -43,8 +43,11 @@ def db():
 
 
 def _registrar(db, **cambios):
+    # `h` = horizonte RELATIVO, y sin él la fila queda fuera de todo conjunto de track
+    # record a propósito: ver `test_horizonte_relativo.py`. Que el fixture lo pase es parte
+    # del contrato, no un detalle — una fila sin `h` no se puntúa contra nada.
     base = dict(model_id=MODELO, target_series=SERIE, horizon="2026-Q1",
-                as_of="2025-11-15", revision=0, point=100.0,
+                as_of="2025-11-15", revision=0, point=100.0, h=1,
                 intervals=[[0.80, 98.0, 102.0], [0.90, 97.0, 103.0]])
     base.update(cambios)
     return ledger.registrar(db, **base)
@@ -71,7 +74,7 @@ def test_la_revision_0_sigue_contando_en_el_track_record(db):
     _registrar(db, revision=1, point=101.0)
     _observado(db, "2026-Q1", 99.0)
     ledger.puntuar_pendientes(db)
-    tr = ledger.track_record(db, ledger.backtest_id(MODELO, SERIE, "2026-Q1"))
+    tr = ledger.track_record(db, ledger.backtest_id(MODELO, SERIE, 1))
     assert tr["n_oos"] == 1, (
         "la revisión 0 desapareció del track record al aparecer una corrección")
 
@@ -161,7 +164,7 @@ def test_el_track_record_ignora_las_correcciones(db):
     _registrar(db, revision=1, point=99.0)
     _observado(db, "2026-Q1", 99.0)
     ledger.puntuar_pendientes(db)
-    tr = ledger.track_record(db, ledger.backtest_id(MODELO, SERIE, "2026-Q1"))
+    tr = ledger.track_record(db, ledger.backtest_id(MODELO, SERIE, 1))
     assert tr["n_oos"] == 1, "una corrección infló el track record"
     assert tr["rmse"] == pytest.approx(1.0), (
         "el track record usó la corrección: mide el pronóstico como se PUBLICÓ")
