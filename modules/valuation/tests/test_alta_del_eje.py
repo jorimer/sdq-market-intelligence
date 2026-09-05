@@ -72,9 +72,13 @@ def test_la_muestra_ensena_el_caso_INCOMODO():
     muestra que solo enseña casos limpios vende un producto que no existe."""
     from modules.valuation.products import _SAMPLE_PAYLOAD
 
-    alto, bajo = _SAMPLE_PAYLOAD["spread_pp"][0], _SAMPLE_PAYLOAD["spread_pp"][-1]
+    # La muestra pasó a tener la MISMA forma anidada que el payload real: eran dos formas
+    # del mismo dato, y de esa diferencia salía que el titular y las tablas se renderizaran
+    # en la muestra y nunca en un informe real.
+    sp = _SAMPLE_PAYLOAD["spread"]
+    alto, bajo = sp["spread_pp"][0], sp["spread_pp"][-1]
     assert alto * bajo < 0, "la muestra no enseña un spread que cruce el cero"
-    assert _SAMPLE_PAYLOAD["cambia_de_signo"] is True
+    assert sp["cambia_de_signo"] is True
 
 
 def test_la_muestra_NO_entra_como_evidencia():

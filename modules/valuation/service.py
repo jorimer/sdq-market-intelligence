@@ -221,10 +221,18 @@ def a_payload(lec: Lectura) -> Dict[str, Any]:
             "rango": [lec.valor_bajo, lec.valor_alto],
             "pb_implicito": [lec.pb_bajo, lec.pb_alto],
         },
+        # Los parámetros del TIPO viajan en el payload. Sin esto se pierden al reconstruir
+        # la lectura, y el informe salía diciendo «entidad de intermediación» genérica, con
+        # una persistencia de 0,0 en la sección de metodología. Es el mismo desync que ya
+        # había entre las claves planas y las anidadas: dos lecturas del mismo hecho.
+        "tipo_de_entidad": lec.tipo_de_entidad,
         "procedencia": {
             "fraccion_de_rubrica": lec.fraccion_de_rubrica,
-            "retencion_supuesta": RETENCION,
+            "retencion_supuesta": lec.retencion,
             "retencion_evidencia": RETENCION_EVIDENCIA,
+            "persistencia": lec.persistencia,
+            "g_terminal_pct": lec.g_terminal_pct,
+            "evidencia_del_tipo": lec.evidencia_del_tipo,
             "horizonte_anios": HORIZONTE,
         },
         "serie_spread": [{"periodo": p, "roe_pct": r} for p, r in lec.serie_spread],
