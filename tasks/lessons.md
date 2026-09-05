@@ -723,3 +723,95 @@ caso de una proyección ADMISIBLE, donde valen 0 y 1.
 **Disparador.** Cualquier frase de producto que se arme con un número más una plantilla. Dos
 preguntas: ¿el número contesta la pregunta que la plantilla hace?, y ¿esta plantilla vive en
 más de un lugar?
+
+---
+
+## Arreglar una repetición puede borrar el dato: la regla no es «nunca», es «acá no»
+
+**Síntoma.** El informe listaba las fuentes dos veces: inline en «Metodología y fuentes» y en
+viñetas en «Fuentes y referencias», cuatro líneas después, las dos desde `sig.sources`. No era
+de un producto: alcanzaba a **todo producto de deep dive que declare fuentes**, por
+construcción del framework.
+
+**La trampa.** La cura obvia —borrar la lista inline— rompía otra cosa. La sección de fuentes
+es solo de **deep dive** (`_TIERS_WITH_SOURCES`) mientras la metodología se sirve también en
+**insight**: borrarla dejaba a insight sin fuentes en ninguna parte. Eso no es arreglar una
+repetición, es borrar el dato, y no habría fallado ningún test porque nadie afirmaba que
+insight tuviera fuentes. El test que lo impide se escribió ANTES del arreglo, mirando el otro
+nivel — el que no exhibía el síntoma.
+
+**La segunda trampa, encima.** Con la lista fuera, la sección seguía titulada «Metodología y
+fuentes» y ya no traía ninguna: se cambiaba una repetición por una promesa incumplida. Y
+renombrar el título tampoco era la salida: vive en **siete** superficies —el framework, el
+motor de research, tres archivos i18n y dos pantallas— **sin ningún guard de paridad**.
+Renombrar habría dejado alguna atrás, que es el modo de falla ya documentado. La salida fue un
+PUNTERO de una línea, con la cuenta concordada («La fuente que respalda…» / «Las 2 fuentes
+que respaldan…»), que cumple el título sin repetir un solo nombre.
+
+**Regla futura.** Antes de borrar algo que sale dos veces, preguntar **en qué configuración
+sale UNA sola vez** — casi siempre existe, y ahí el borrado es una pérdida silenciosa. La
+condición no va sobre el contenido («¿está repetido?») sino sobre el CONTEXTO («¿va a salir la
+otra superficie?»), así que la función que decide necesita saber su contexto: acá, que
+`_methodology_md` recibiera su nivel, que hasta entonces no recibía.
+
+**Corolario sobre los títulos.** Un título que promete contenido es un contrato. Si el arreglo
+lo deja sin cumplir hay dos salidas —cambiar el título o cumplirlo— y la elección la decide
+**en cuántas superficies vive el título**. Con siete y sin paridad, cumplirlo sale más barato
+que renombrarlo.
+
+---
+
+## El número y su unidad son UNA cosa, y el mecanismo lo dicta el FORMATO
+
+**Síntoma.** «una variación de 0.38 \n% contra…»: el número en una línea y su unidad en la
+siguiente, en el PDF que se vende. Misma familia que los glifos de subíndice que salían como
+cajas — se ve en el entregable y en ningún test.
+
+**Lo que casi hago mal.** Iba a meter el carácter U+00A0 sin verificar que el renderer lo
+dibujara. Es exactamente cómo llegaron los glifos que salen como cajas: un carácter que el
+código acepta y la fuente no tiene. **El repositorio ya tenía la respuesta**: las viñetas y la
+numeración de secciones se arman con la ENTIDAD `&nbsp;` de ReportLab, que funciona hace rato.
+
+**Y el mecanismo no es el mismo en los dos formatos.** En el Word la entidad se dibujaría
+literal; ahí va el carácter. La REGLA (qué unidades, qué patrón) vive en una sola constante
+que los dos importan; lo que cambia por formato es cómo se escribe el espacio. Dos copias de
+la lista de unidades habrían divergido en la primera que alguien ampliara.
+
+**El detalle de orden, que tiene su test.** `_inline` escapa `&` → `&amp;`. Insertar la
+entidad ANTES de ese escape la vuelve `&amp;nbsp;` y el cliente lee «0.38&nbsp;%» literal —
+peor que el defecto original. Un arreglo de forma puede empeorar la forma.
+
+**Regla futura.** Antes de meter un carácter no-ASCII en un entregable, **buscar cómo lo
+resuelve el repo hoy** y verificarlo EN EL PDF, no en la cadena de Python. La verificación que
+sirve es negativa y sobre el artefacto: «ninguna línea empieza con `%`» y «la cadena `nbsp` no
+aparece ni una vez».
+
+---
+
+## Una aserción de RELOJ no distingue «lento» de «roto»
+
+**Síntoma.** CI puso en rojo un PR que no tocaba el módulo del fallo:
+`test_las_tres_secciones_corren_A_LA_VEZ`, de `banking_score`, con
+`assert tardanza < motor.demora * 2` → 0,60 s contra un tope de 0,30 s. En local pasaba 10 de
+10 en 0,18 s.
+
+**Lo que el propio fallo probaba.** La aserción que reventó era la TERCERA. La segunda —
+`motor.max_en_vuelo == 3`— **había pasado en esa misma corrida**: las tres secciones sí se
+generaron solapadas. Lo lento era el runner, no el código.
+
+**Y no se arregla subiendo el umbral.** Una corrida secuencial de tres tramos de 0,15 s daría
+>= 0,45 s, y lo observado fue 0,60 s: **no existe un umbral que separe «runner cargado» de
+«se volvió secuencial»**. La aserción no tenía poder discriminante en el entorno donde corre.
+
+**Regla futura.** Para una propiedad de CONCURRENCIA, el instrumento es un **contador de
+solapamiento**, no el reloj: tres corrutinas simultáneamente dentro de la función solo pueden
+estar ahí si se agendaron a la vez, y en serie el máximo sería 1. Es una prueba directa; el
+tiempo total es un indicio, y encima uno que mide la máquina.
+
+Antes de borrar la aserción hay que comprobar que la que queda tiene dientes: se rompió el
+`asyncio.gather` a un bucle secuencial y el test falló con «solo 1 sección(es) a la vez». Sin
+esa comprobación, «saqué la aserción flaky» y «dejé el test ciego» se ven igual.
+
+**Disparador.** Cualquier `assert` sobre `time.monotonic()`, `elapsed`, `duration` o un
+`timeout` en un test. Preguntar: si esto falla, ¿puedo distinguir un bug de una máquina
+ocupada? Si la respuesta es no, el instrumento está mal elegido.

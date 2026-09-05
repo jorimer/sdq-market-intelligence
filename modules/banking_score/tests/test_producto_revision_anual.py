@@ -224,9 +224,20 @@ def _producto_con_tres_secciones():
 
 
 def test_las_tres_secciones_corren_A_LA_VEZ(monkeypatch):
-    """La consecuencia medible: tres secciones de 0,15 s tardan ~0,15 s, no ~0,45 s."""
+    """Tres secciones se generan SOLAPADAS, así que el informe tarda la más lenta y no la suma.
+
+    La propiedad se mide con el CONTADOR DE SOLAPAMIENTO, no con el reloj de pared. Tres
+    corrutinas simultáneamente dentro de `generate` solo pueden estar ahí si se agendaron a
+    la vez; en serie el máximo sería 1. Es una prueba directa, no un indicio.
+
+    **Acá hubo un `assert tardanza < motor.demora * 2` y se sacó, medido.** Falló en CI con
+    0,60 s mientras `max_en_vuelo == 3` pasaba en la misma corrida: las secciones SÍ habían
+    corrido en paralelo y lo lento era el runner. Y no se puede reparar subiendo el umbral:
+    una corrida secuencial daría >= 0,45 s, o sea que con 0,60 s observados **no existe un
+    umbral que separe «lento» de «secuencial»**. Esa aserción no medía el código, medía la
+    máquina, y su único efecto era volver rojo un PR que no había tocado nada de esto.
+    """
     import asyncio
-    import time
 
     from shared.narrative import claude_engine
 
@@ -234,16 +245,13 @@ def test_las_tres_secciones_corren_A_LA_VEZ(monkeypatch):
     monkeypatch.setattr(claude_engine, "narrative_engine", motor)
     p, snap = _producto_con_tres_secciones()
 
-    t0 = time.monotonic()
     out = asyncio.run(p.narratives(ProductTier.deep_dive, snap))
-    tardanza = time.monotonic() - t0
 
     assert len(out) == 3, f"se esperaban tres secciones, llegaron {sorted(out)}"
     assert motor.max_en_vuelo == 3, (
         f"solo {motor.max_en_vuelo} sección(es) a la vez: se volvieron a generar de a una, y "
         "el tiempo del informe vuelve a ser la SUMA en vez de la más lenta")
-    assert tardanza < motor.demora * 2, (
-        f"tardó {tardanza:.2f}s con secciones de {motor.demora}s: no corrieron en paralelo")
+    assert motor.en_vuelo == 0, "quedó una generación colgada"
 
 
 def test_el_ORDEN_de_las_secciones_se_conserva(monkeypatch):
