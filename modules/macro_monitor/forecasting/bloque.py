@@ -28,8 +28,21 @@ from modules.macro_monitor.forecasting import panel as panel_mod
 from shared.data.bcrd_excel import canonical
 from shared.data.periodos import fin_del_periodo
 
-#: Cómo entra cada variable. `dlog` = variación logarítmica ×100; `nivel` = tal cual.
-NIVEL, DLOG = "nivel", "dlog"
+#: Cómo entra cada variable. `dlog` = variación logarítmica ×100 contra el período
+#: ANTERIOR; `interanual` = variación contra el mismo período del año anterior, en %;
+#: `nivel` = tal cual.
+NIVEL, DLOG, INTERANUAL = "nivel", "dlog", "interanual"
+
+#: Qué MIDE la serie que produce cada transformación, una vez transformada. Es lo que
+#: viaja con el número hasta la reconciliación sectorial, que no puede restar una tasa
+#: anual de una trimestral y hasta ahora lo hacía sin que nada fallara.
+MEDIDA_POR_TRANSFORMACION: Dict[str, str] = {
+    NIVEL: panel_mod.INTERANUAL,   # las dos series a NIVEL del bloque (inflación y tasa
+                                   # activa) ya vienen expresadas como variación
+                                   # interanual del emisor; ver sus `porque_este_codigo`.
+    DLOG: panel_mod.TRIMESTRAL,
+    INTERANUAL: panel_mod.INTERANUAL,
+}
 
 
 @dataclass(frozen=True)
@@ -48,7 +61,27 @@ class Variable:
 
 
 BLOQUE: Tuple[Variable, ...] = (
-    Variable("pib_real", ("pib_real",), DLOG, mensual=False),
+    Variable(
+        "pib_real", ("pib_real",), INTERANUAL, mensual=False,
+        porque_este_codigo=(
+            "CORREGIDO. Entraba como DLOG entre trimestres CONSECUTIVOS, o sea una tasa "
+            "TRIMESTRAL, mientras el panel sectorial mide interanual. `reconciliar` restaba "
+            "una de la otra y publicaba la diferencia como «brecha contra el agregado».\n\n"
+            "El costo, medido en el informe del 2026-09-05: la tabla sectorial mostró 8 de 18 "
+            "actividades contrayéndose cuando el modelo crudo proyectaba las 18 positivas. "
+            "Sobre la serie real (77 trimestres) el QoQ promedia +1,13 % y el YoY +4,54 %; la "
+            "brecha publicada fue -3,536 pp. No era desacuerdo entre modelos: era la "
+            "diferencia entre una tasa anual y una trimestral.\n\n"
+            "Y el DLOG traía un segundo defecto encima. El indice del PIB que publica el BCRD "
+            "es la serie ORIGINAL, sin desestacionalizar: su QoQ medio va de -1,13 % (Q3) a "
+            "+4,67 % (Q4), 5,80 pp de amplitud puramente de calendario, asi que el titular "
+            "dependia de en que trimestre caia el horizonte. El interanual no arrastra "
+            "estacionalidad y es, ademas, la medida que la entrada canonica de `pib_real` "
+            "declara citable: «el crecimiento (YoY del volumen) es invariante a la base».\n\n"
+            "Costo medido del cambio: 3 observaciones de arranque (el bloque pasa de 76 a 73 "
+            "trimestres, 2008-Q1 en vez de 2007-Q2). El bloque lo sigue anclando `pib_real` "
+            "en los dos casos."),
+    ),
     Variable(
         "inflacion", (), NIVEL,
         codigo="bcrd.xls.ipc_base_2019_2020.variacion_porcentual_12_meses",
@@ -123,11 +156,27 @@ def _transformar(serie: Dict[str, float], como: str) -> Dict[str, float]:
     if como == NIVEL:
         return dict(serie)
     ks = sorted(serie, key=lambda t: (fin_del_periodo(t) or date.min, t))
+    if como == INTERANUAL:
+        # La MISMA función que usa el panel sectorial, a proposito: cuando cada capa tenia la
+        # suya, una media contra `t-1` y la otra contra `t-4`, las dos se llamaban «el
+        # crecimiento del PIB», y la reconciliacion restaba una de la otra.
+        return panel_mod.variacion_interanual_pct(serie, ks)
     out: Dict[str, float] = {}
     for a, b in zip(ks, ks[1:]):
         if serie[a] > 0 and serie[b] > 0:
             out[b] = (math.log(serie[b]) - math.log(serie[a])) * 100
     return out
+
+
+def medida_de(nombre: str) -> str:
+    """En qué MEDIDA queda la serie de una variable del bloque, ya transformada.
+
+    Es lo que la reconciliacion sectorial necesita saber y no tenia como preguntar.
+    """
+    var = next((v for v in BLOQUE if v.nombre == nombre), None)
+    if var is None:
+        raise KeyError(f"{nombre!r} no es una variable del bloque")
+    return MEDIDA_POR_TRANSFORMACION[var.transformacion]
 
 
 @dataclass(frozen=True)
