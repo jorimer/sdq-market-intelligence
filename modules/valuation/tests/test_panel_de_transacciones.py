@@ -34,27 +34,27 @@ def test_el_minimo_son_OCHO_casos():
     assert tx.MINIMO_DE_CASOS == 8
 
 
-def test_hay_SEIS_verificables_y_solo_CUATRO_COMPARABLES():
+def test_hay_NUEVE_verificables_y_solo_SEIS_COMPARABLES():
     """La distinción que decide si la vista de M&A se abre.
 
-    Las seis tienen las dos puntas publicadas. Solo cuatro están sobre patrimonio CONTABLE,
+    Las nueve tienen las dos puntas publicadas. Solo seis están sobre patrimonio CONTABLE,
     que es la base contra la que valúa el Excess Return. Las otras dos vienen de la NIIF 3,
     cuyo denominador son activos netos a VALOR RAZONABLE — lo que el COMPRADOR reconoce, no
     lo que el vendedor tenía en libros.
     """
-    assert len([t for t in tx.PANEL if t.verificable]) == 6
+    assert len([t for t in tx.PANEL if t.verificable]) == 9
     comparables = [t for t in tx.PANEL if t.comparable]
-    assert len(comparables) == 4
-    assert {t.pais for t in comparables} == {"DO", "PR"}
+    assert len(comparables) == 6
+    assert {t.pais for t in comparables} == {"DO", "PR", "KY"}
     progreso = next(t for t in comparables if "Progreso" in t.adquirida)
     assert progreso.pb == pytest.approx(2.531, abs=0.001)
 
 
 def test_el_gate_cuenta_COMPARABLES_y_no_verificables():
-    """Sumar los seis abriría antes una vista cuya tabla mezcla dos bases, que es peor que
+    """Sumar los nueve abriría antes una vista cuya tabla mezcla dos bases, que es peor que
     tenerla cerrada."""
     e = tx.estado()
-    assert e.n_verificables == 6 and e.n_comparables == 4
+    assert e.n_verificables == 9 and e.n_comparables == 6
     assert "valor razonable" in e.motivo.lower()
 
 
@@ -170,7 +170,7 @@ def test_OCHO_comparables_SI_abren_el_gate():
 def test_las_de_NIIF_3_declaran_su_base_y_su_aritmetica_CIERRA():
     """La validación interna del dato: precio = activos netos + goodwill, exacto."""
     niif = [t for t in tx.PANEL if t.base == tx.BASE_VALOR_RAZONABLE]
-    assert len(niif) == 2
+    assert len(niif) == 3
     for t in niif:
         assert "valor razonable" in " ".join(t.caveats).lower()
         assert "cierra" in t.fuente_libro.lower() or "aritmética" in t.fuente_libro.lower()
@@ -303,3 +303,55 @@ def test_la_serie_MENSUAL_es_la_que_corrobora_la_fecha_de_Banco_Rio():
     assert "1 de julio de 2015" in t.fuente_precio
     assert "CORROBORA LA FECHA" in t.fuente_libro
     assert "1,25x" in " ".join(t.caveats), "no declara lo que costaba equivocarse de fecha"
+
+
+def test_la_CUNA_entre_bases_va_en_LAS_DOS_DIRECCIONES():
+    """El hallazgo que sostiene toda la regla del panel, y que ya no es un argumento.
+
+    La misma compradora —OFG—, en el mismo mercado, publicó las dos columnas dos veces con
+    siete años de diferencia. En BBVA (2012) el valor razonable queda MUY POR DEBAJO del
+    libro: se marcó la cartera y desapareció el goodwill heredado. En Scotiabank (2019) queda
+    POR ENCIMA: se reconoció un intangible de depósitos que el vendedor no tenía.
+
+    Mientras las dos cuñas tuvieran el mismo signo, alguien podía proponer un ajuste fijo que
+    convirtiera una base en la otra. Con signos opuestos y casi cincuenta puntos de amplitud,
+    ese ajuste no existe — y por eso las dos bases no van en la misma tabla.
+    """
+    con_las_dos = [t for t in tx.PANEL if t.valor_razonable is not None]
+    assert len(con_las_dos) >= 2
+    cunas = [t.cuna_de_base_pct for t in con_las_dos]
+    assert min(cunas) < 0 < max(cunas), (
+        "todas las cuñas tienen el mismo signo: con una sola dirección, un ajuste fijo entre "
+        "bases sería defendible y la regla del panel perdería su fundamento")
+    assert max(cunas) - min(cunas) > 40, f"amplitud de solo {max(cunas)-min(cunas):.1f} pp"
+    assert len({t.comprador for t in con_las_dos}) == 1, (
+        "las dos mediciones ya no son del mismo comprador: el argumento es más fuerte "
+        "cuando el criterio contable es el mismo y aun así el signo cambia")
+
+
+def test_BBVA_es_una_compra_POR_DEBAJO_del_libro():
+    """El panel no puede ser solo de primas. Un múltiplo por debajo de 1,0x existe y este es
+    el caso: si todos los observados estuvieran por encima, el panel estaría sesgado por
+    selección y el modelo se validaría contra una muestra que solo mira hacia arriba."""
+    t = next(x for x in tx.PANEL if "BBVA" in x.adquirida)
+    assert t.pb < 1.0 and t.base == tx.BASE_CONTABLE
+    assert min(x.pb for x in tx.PANEL if x.comparable) < 1.0
+
+
+def test_CAYMAN_toma_el_denominador_de_la_ADQUIRIDA_y_no_del_comprador():
+    """La estructura ideal de un caso: la adquirida cotizaba y publicaba sus estados
+    auditados, así que el denominador no depende de lo que el comprador decida contar."""
+    t = next(x for x in tx.PANEL if "Cayman" in x.adquirida)
+    assert t.moneda_libro == "KYD" and t.porcentaje == 0.7499
+    assert "AUDITADOS de Cayman National" in t.fuente_libro
+    assert "peg FIJO" in t.fuente_libro, "no declara que la conversión es una paridad fija"
+
+
+def test_SANTANDER_no_cruza_el_ALCANCE_del_precio_con_el_del_regulador():
+    """El error que produce un número plausible: el Call Report cubre el BANCO y el precio
+    compró la TENEDORA. Cruzarlos daría 1,26x y parecería un P/B."""
+    t = next(x for x in tx.PANEL if "Santander" in x.adquirida)
+    assert t.base == tx.BASE_VALOR_RAZONABLE, (
+        "el caso quedó sobre base contable usando el patrimonio del banco contra el precio "
+        "de la tenedora")
+    assert "error de ALCANCE" in " ".join(t.caveats)
