@@ -122,6 +122,8 @@ O sea: no es una licencia CC, no dice nada sobre uso comercial, y el permiso es 
 
 **RD (por entidad) + Colombia, Brasil, Chile (por sistema) + SECMCA/EMFA como capa de crédito, depósitos y tasas armonizadas para 8 países.**
 
+⚠️ **Lo que la edición 1 cubre realmente (2026-09-05).** RD por entidad + **SECMCA/EMFA para siete plazas** (Belice no publica cuadro) + **Colombia** por sistema. **Brasil y Chile se difieren a la edición 2**, y por causas de la fuente, no de diseño: la API de valores del BCB devuelve 500 en todas las combinaciones probadas (aunque su catálogo y su `$metadata` respondan), y la de la CMF exige una API key que hay que solicitar. La cadena de este relevamiento resultó menos disponible de lo que la verificación original sugería: de las cuatro fuentes del alcance, **una entregó por un canal distinto del previsto (SECMCA, por archivos publicados en vez de su API) y dos no entregaron**. Detalle y evidencia en `tasks/PLAN_BOLETIN_REGIONAL.md`, §FASE 1 — CERRADA.
+
 Justificación: los tres países son los únicos con licencia abierta *y* acceso programático *y* rezago compatible con cadencia trimestral. SECMCA agrega ocho plazas de contexto monetario armonizado con un solo conector y sin autenticación, cubriendo Centroamérica sin necesidad de tocar supervisores bloqueados. RD aporta el diferenciador: nadie más lo mira con esta profundidad.
 
 Expansión posterior por costo marginal creciente: El Salvador y Perú (Excel determinístico, sin bot-block en la ruta correcta) → Bolivia y Nicaragua → Paraguay (exige navegador headless, pero es la mejor cobertura analítica) → Costa Rica y Argentina.

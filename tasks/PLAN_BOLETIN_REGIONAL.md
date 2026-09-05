@@ -276,6 +276,42 @@ se concatenan.
 
 ---
 
+## FASE 1 — CERRADA el 2026-09-05, con nueve países y dos diferidos
+
+Decisión del dueño: se cierra con lo que hay y se pasa a la Fase 2. **La edición 1 cubre
+RD por entidad + las siete plazas de SECMCA/EMFA + Colombia por sistema.** Nueve países ya
+son un boletín; esperar a once con dos fuentes que no dependen de nosotros no lo era.
+
+| Tarea | Estado |
+|---|---|
+| T-BR-4 · almacén `rb_country_aggregates` | hecha (`69bda04a`) |
+| T-BR-5 · SECMCA/EMFA, 7 plazas | hecha (`0f3fe306`) — 46.649 observaciones |
+| T-BR-6 · Colombia (SFC) | hecha (`c731ddc6`) — solvencia y morosidad del sistema |
+| T-BR-7 · Brasil y Chile | **diferida a la edición 2**, ver abajo |
+
+**Brasil — la API de valores del BCB está caída (2026-09-05).** Su OData responde 200 en la
+raíz, en `$metadata` y en `ListaDeRelatorio()`, pero **`IfDataValores(...)` devuelve 500
+«Erro desconhecido»** en todas las combinaciones probadas: cuatro años (2021, 2023, 2024,
+2025), dos tipos de institución, cuatro relatórios, JSON y CSV, y las dos sintaxis de
+parámetros. `IfDataCadastro` también. NO es un cambio de contrato — el `$metadata` declara
+la firma exacta que usábamos—, así que muy probablemente sea transitorio: **reintentar antes
+de la edición 2**.
+
+Lo que sí quedó confirmado es la ruptura de la Res. CMN 4966, y está en el catálogo oficial
+del propio BCB: **R8** «Carteira de crédito ativa - por nível de risco da operação» y
+**R16** «Carteira de crédito ativa - por carteiras de instrumentos financeiros» son dos
+relatórios DISTINTOS con nombre distinto, no dos versiones del mismo. El conector rechaza la
+concatenación, no la resuelve.
+
+**Chile — falta la credencial.** `api.cmfchile.cl` responde HTTP 422 «API key no ha sido
+suministrada»; no hay vía sin registro. El catálogo CSV público (10,9 MB, 34.051 series,
+latin-1) sí baja pero es solo un DICCIONARIO, sin datos. Aprovechado igual: **26.201 series
+son de entidades bancarias y 1.319 traen vocabulario prudencial** —cartera deteriorada,
+morosidad de 90 días o más, provisiones por riesgo de crédito—, así que el día que llegue la
+credencial no hay que investigar qué pedir. **Acción del dueño: solicitar la API key.**
+
+---
+
 ## FASE 2 — Generador del boletín
 
 ### T-BR-8 · Plantilla de edición
