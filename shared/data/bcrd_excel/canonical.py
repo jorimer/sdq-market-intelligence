@@ -698,6 +698,38 @@ UNIDADES_CURADAS: Dict[str, tuple] = {
 #:
 #: Clave: prefijo del código. Valor: (factor, tope, evidencia).
 ESCALAS_CURADAS: Dict[str, tuple] = {
+    # Las TASAS del cuadro de valores subastados vienen en fracción, igual que el archivo de
+    # la TPM. El tope de 1.5 es lo que hace la corrección idempotente: una tasa ya en
+    # por-ciento (7,00) queda intacta, y una en fracción (0,07) se multiplica. Sin él, una
+    # republicación del BCRD en por-ciento se multiplicaría dos veces.
+    #
+    # OJO — el prefijo apunta a `tasa`, NO al archivo entero: el mismo cuadro trae los MONTOS
+    # subastados, que son miles de millones de pesos. Multiplicarlos por cien los convertiría
+    # en una cifra absurda sin que nada falle, porque el tope solo mira si el valor es chico.
+    # Los DOS plazos largos pierden el prefijo «tasa de interés» al extraerse —el
+    # super-encabezado del cuadro no los alcanza— y quedan como `de_1_a_2_anos` y
+    # `mas_de_dos_anos`. Se nombran uno por uno en vez de ensanchar el prefijo al archivo:
+    # ensancharlo pondría los MONTOS bajo la misma regla, y aunque el tope de 1.5 los
+    # protege hoy, protege por el TAMAÑO del valor y no por lo que la serie ES — un monto
+    # subastado de cero o de un peso caería adentro. Y son justo los dos plazos que el
+    # costo de capital necesita: sin ellos la corrección falla en silencio donde más duele.
+    "bcrd.xls.valores_bc_mn.de_1_a_2_anos": (
+        100.0, 1.5, "Plazo de 1 a 2 años del cuadro V.1; misma escala fraccionaria que el "
+                    "resto de las tasas del archivo.",
+    ),
+    "bcrd.xls.valores_bc_mn.mas_de_dos_anos": (
+        100.0, 1.5, "Plazo de más de dos años del cuadro V.1 — el término largo de la curva "
+                    "en pesos, y el insumo del costo de capital. Misma escala fraccionaria.",
+    ),
+    "bcrd.xls.valores_bc_mn.tasa": (
+        100.0, 1.5,
+        "El cuadro V.1 «Valores subastados del Banco Central» guarda fracciones: en 2026-07 "
+        "el plazo de más de dos años venía como 0,0978. Verificado contra el propio archivo, "
+        "que trae la TPM en la misma escala (0,0525) y que a ×100 reproduce el 5,25% "
+        "publicado; y contra el sentido de la curva, que a ×100 queda creciente y coherente "
+        "—7,00% a 30 días, 9,78% a más de dos años— mientras que en fracción daría una curva "
+        "de 0,07% a 0,10%, que no existe en ningún mercado.",
+    ),
     "bcrd.xls.serie_tpm.": (
         100.0, 1.5,
         "El archivo se titula «En % anual» y guarda fracciones. Verificado por tres caminos: "
