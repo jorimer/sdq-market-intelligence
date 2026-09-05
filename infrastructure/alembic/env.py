@@ -76,6 +76,10 @@ from modules.pension_intel.models.models import (  # noqa: F401
 from modules.insurance_intel.models.models import (  # noqa: F401
     InsuranceEntity, InsuranceRating, InsuranceSeries, InsuranceSnapshot,
 )
+# `regional_banking` no tiene `api/` todavía —su almacén se llena en la Fase 1 del boletín
+# regional— así que NADA lo importa de paso: sin esta línea la tabla no existiría para
+# `autogenerate`, que la vería solo en la base y propondría borrarla.
+from modules.regional_banking.models.models import CountryBankingAggregate  # noqa: F401
 from modules.brand_intel.models.models import (  # noqa: F401
     BrandDecision, BrandEngagement, BrandEntity, BrandExtraction, BrandExtractionCell,
     BrandForecast, BrandObservation, BrandWave,
