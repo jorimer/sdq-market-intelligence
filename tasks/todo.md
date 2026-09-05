@@ -1,99 +1,93 @@
-# La frase de cobertura dice algo falso, y se contradice cuatro líneas después
+# La estructura del informe de proyecciones
 
-## Lo que el informe publica hoy
+## Lo que publica hoy, medido sobre el PDF del 2026-09-05
 
-`SDQ_Proyecciones_Deep-Dive_Sistema_2026-09-05.pdf`, §8 Metodología y fuentes, con cuatro
-líneas de distancia entre las dos:
+Nueve secciones numeradas, más dos tablas de portada:
 
-> **Cobertura:** 100% del índice se construye sobre dato real medido en la fuente.
+```
+(portada) Proyecciones vigentes                    ← tabla, SIN encabezado
+(portada) Incidencia sectorial proyectada · 2026-Q3 ← tabla, SIN encabezado, 18 filas
+1. Nowcast del trimestre en curso
+2. Trayectoria proyectada          ← vuelve a publicar la 1ª tabla, CON encabezado
+3. Escenarios a 3-8 trimestres (sin track record)
+4. Lectura sectorial               ← vuelve a publicar la 2ª tabla, CON encabezado
+5. Desempeño de nuestras proyecciones anteriores
+6. Metodología y límites           ← del producto
+7. Glosario
+8. Metodología y fuentes           ← del framework; lista las fuentes inline
+9. Fuentes y referencias           ← del framework; LAS MISMAS fuentes, en viñetas
+```
 
-> **Procedencia por variable:** 0% del peso de este índice se sostiene en dato real con
-> fuente citable; … `pib_real · 2026-Q3` no tiene dato en este período y se reporta como
-> brecha, no como cero.
+### A · Las tablas de portada son duplicados EMPEOBRECIDOS
 
-Las dos se COMPUTAN, de dos sitios distintos, y se contradicen. En un informe de PRONÓSTICO
-la primera además es falsa por construcción: el docstring del propio producto lo dice —*«acá
-el índice del eje **ES** la proyección»*—. Una proyección no es «dato real medido en la
-fuente».
+`render()` arma `tables` con las mismas filas que la prosa de §2 y §4 ya renderiza en
+Markdown, y las de portada **pierden el encabezado**: la lista por comprensión emite solo
+filas de dato. Después del arreglo de la lectura sectorial la de portada es además un
+SUBCONJUNTO — 4 columnas contra 5, sin la de «proyectado».
 
-## Dos defectos, no uno
+Y el dueño ya decidió sobre este patrón, para otro producto. El docstring de
+`render_product_pdf` lo tiene escrito:
 
-### A · El producto contesta otra pregunta
+> *«`tables_last` mueve el bloque de tablas DESPUÉS de las secciones narrativas: un informe
+> que abre con páginas de tablas antes de una sola frase se lee como un anexo, no como un
+> informe (pedido del dueño sobre el de brand_intel). Opt-in por producto.»*
 
-`products_forecast.data_signals()`:
+Este informe abre con dos páginas de tablas antes de una sola frase. Pero acá `tables_last`
+no es la cura: **la cura es no publicarlas dos veces.**
+
+*(Corrijo una lectura mía anterior: el encabezado que se repite dentro de §4 NO es una tabla
+duplicada, es el encabezado que se repite al saltar de página. La duplicación real es
+portada ↔ sección.)*
+
+### B · Hay una trayectoria de SIETE puntos y no se dibuja ningún gráfico
 
 ```python
-coverage=1.0 if vig else 0.0
+items = [(d["horizonte"], d["punto"]) for d in proys]
+if len(items) >= 2:
+    graficos.append({...})
 ```
 
-Eso responde *«¿hay alguna proyección vigente?»*. Pero `DataHealth.coverage` declara en su
-contrato (`contract.py:42-54`) responder otra: *«¿qué fracción del PESO de mi índice está
-anclada a dato real?»* — y lo declara con `coverage_kind = "fraccion_real_del_indice"`.
+`proys` son las proyecciones VIGENTES: hoy hay **una**, así que no se dibuja nada. Pero el
+informe publica además **seis escenarios** (2026-Q4 → 2028-Q1) que son puntos de la misma
+trayectoria y viven en §3. Siete puntos disponibles, cero dibujados.
 
-Estado real medido en producción: **una** proyección vigente, `pib_real · 2026-Q3`, que **no
-pasa el gate** de admisibilidad (la tabla del informe la publica con «¿ancla una afirmación?
-**no**»), más **una** cifra determinada (2026-Q2, identidad aritmética sobre IMAE publicado —
-ésa sí es dato real). Y aun así `g1 = 1.00`, `cobertura=1.00`.
+Al graficarlos hay que conservar la distinción que §3 existe para sostener: un escenario no
+es un pronóstico. Van en la misma serie con marca distinta, nunca fundidos.
 
-### B · La frase de metodología IGNORA `coverage_kind` — y ya hay otro eje publicando falso
+### C · Dos secciones se llaman «Metodología» y las fuentes salen dos veces
 
-El mecanismo para esto ya existe y ya se usó: `provenance.coverage_sentence()` elige entre
-`FRASE_COBERTURA_INDICE` y `FRASE_COBERTURA_INSTRUMENTO` según `coverage_kind`. Su comentario
-dice por qué:
+- §6 «Metodología y límites» es del PRODUCTO y es contenido real: cómo funcionan el nowcast,
+  el BVAR y la desagregación sectorial. Se queda.
+- §8 «Metodología y fuentes» es del FRAMEWORK: corte, frescura, cobertura, validación,
+  procedencia. También se queda.
+- Los dos títulos empiezan igual, y §8 lista las fuentes inline mientras §9 las repite en
+  viñetas — las mismas dos, a cuatro líneas.
 
-> *«la frase de índice afirmaba "del peso de este índice" para todos los ejes, y en el de
-> evaluación de leyes eso es sencillamente falso … La frase salía en la Metodología del
-> informe y en el payload de calidad de la API paga.»*
+Lo local: renombrar la del producto por lo que de verdad es. Lo compartido —que §8 y §9
+publiquen la misma lista— toca a TODOS los productos y va aparte, medido, no de arrastre.
 
-**El arreglo se hizo en `provenance.py` y NO en `report_sections._methodology_md`**, que
-sigue con la frase de índice cableada. Verificado ejecutando las dos:
+### D · Falta lo que el dueño pidió como estándar
 
-```
-EJE DE LEYES (coverage_kind = instrumento)
-  → **Cobertura:** 47% del índice se construye sobre dato real medido en la fuente.
-EJE DE PROYECCIONES
-  → **Cobertura:** 100% del índice se construye sobre dato real medido en la fuente.
-```
-
-O sea que el eje de leyes publica HOY, en la metodología de su informe, exactamente la frase
-que el repositorio ya declaró falsa para él. Familia «un guard existe en un motor y falta en
-el otro».
+El estándar de nueve secciones (portada, resumen ejecutivo, propósito y alcance,
+antecedentes, análisis, metodología, conclusión de valor, supuestos y limitaciones, anexos)
+se aplicó al eje de VALUACIÓN y este eje nunca lo recibió. Le faltan **resumen ejecutivo** y
+**propósito y alcance**, que son las dos que un lector usa para decidir si sigue leyendo.
 
 ---
 
 ## Plan
 
-### 1 · Una tercera semántica de cobertura: `COVERAGE_PROJECTION`
-
-Ni «fracción real del índice» ni «metas del instrumento». La pregunta de este eje es *«¿qué
-fracción de lo que publico está sostenida por un pronóstico ADMISIBLE o por una cifra
-determinada?»*, que es la que su propio `variable_signals` ya computa.
-
-### 2 · `_methodology_md` rutea por `coverage_kind`, y las frases viven en UN solo mapa
-
-Las dos superficies —metodología y procedencia— toman su frase del mismo mapa
-`coverage_kind → frase`. No pueden volver a divergir porque no hay dos listas.
-
-Las redacciones siguen siendo distintas a propósito: la de metodología es la *afirmación de
-método* (decisión del dueño del 2026-08-31: sin el inventario de faltantes, que desvaloriza),
-la de procedencia es la completa. Lo que se unifica es el RUTEO, no el texto.
-
-### 3 · El guard: ningún `coverage_kind` puede caer al default en silencio
-
-Test estructural: todo valor del vocabulario tiene frase en las DOS superficies. Agregar un
-cuarto `coverage_kind` sin su frase falla, en vez de heredar la de índice.
-
-### 4 · El número
-
-`coverage` del eje de proyecciones pasa a medir lo que su frase afirma.
-
-**Consecuencia que hay que MEDIR y declarar, no esconder:** hoy `g1 = 1.00` y el eje publica
-con readiness 0,85. Con el número honesto g1 baja. Si eso lo saca del umbral de publicación,
-es una decisión del dueño y se le dice — pero la salida no puede ser dejar publicada una
-frase falsa para sostener un gate.
+1. **Sacar las tablas duplicadas de la portada.** La prosa ya las publica, con encabezado y
+   con más columnas. Deja el titular y el gráfico.
+2. **Dibujar la trayectoria completa**: vigentes + escenarios, con los escenarios marcados
+   como lo que son.
+3. **Renombrar §6** para que dos secciones no digan «Metodología».
+4. **Resumen ejecutivo y propósito y alcance**, computados de la misma prosa que el resto —
+   nunca escritos a mano, nunca desde la muestra.
+5. Declarar §8↔§9 como deuda COMPARTIDA, con la cuenta de cuántos productos afecta.
 
 ## Verificación
-- [ ] Correr los tests nuevos contra el código VIEJO y ver que FALLAN
-- [ ] Medir el readiness ANTES y DESPUÉS, por nivel
-- [ ] Comprobar que el eje de LEYES deja de publicar la frase de índice
+- [ ] Los tests nuevos, contra el código VIEJO, tienen que FALLAR
+- [ ] Contar las tablas del PDF antes y después
+- [ ] Comprobar que el gráfico sale con UNA sola proyección vigente
 - [ ] Los tres gates
