@@ -1,58 +1,66 @@
-# T-MP-7 · El producto de proyecciones como eje propio del catálogo
+# Modelo de valuación por TIPO de entidad — plan
 
-## De dónde salió
+## Lo que se encontró pidiendo el informe de punta a punta
 
-Decisión del dueño: la proyección se vende **aparte**, no dentro del eje macro. Medido antes
-de construir, un `special:` **no sirve** para eso:
+BHD, cierre 2025, datos reales: **P/B implícito 1,40× a 12,23×**. El panel de ocho
+transacciones dice que lo que se paga es **0,77×–2,73×**. El 12,23× no es un valor, es un
+modelo roto.
 
-| `special:macro-forecast` | |
-|---|---|
-| ¿es suscripción? | **no** — `is_subscription_sku` solo admite insight/all_access/enterprise |
-| intervalos | **solo `once`** — no admite el cobro anual que se decidió |
-| acceso que concede | **ninguno** — `sku_grants` devuelve `[]` |
+Causa: `g = b × ROE = 0,60 × 22,57 % = 13,54 %` contra `Ke = 14,28 %` — el denominador de la
+perpetuidad queda en 0,74 pp. El guard existente solo atrapa `g ≥ Ke`, o sea el caso que **no
+converge**; no atrapa el que converge y es imposible. El PIB nominal dominicano crece 9,03 %
+de largo plazo: una entidad que crece 13,54 % para siempre termina siendo más grande que la
+economía.
 
-Un `special:` es, por diseño, una compra puntual cotizada a medida cuya entrega media un
-analista (así lo usa `special:research-custom`). Segunda decisión del dueño: **producto propio
-en el catálogo**, que gana `insight:<key>` con intervalos mensual/anual y grants reales **sin
-tocar `shared/billing`** — que es código de cobro en vivo.
+## Lo que se midió (SIMBAD, cierres 2019-2025, 145 entidad-año)
 
-## Las decisiones ya tomadas que esto materializa
+### Dispersión de ROE (p75 − p25, pp) — la evidencia del riesgo relativo
 
-* Se vende **aparte** del eje macro.
-* **Trimestral es la PUBLICACIÓN; el cobro es anual** con los intervalos que ya existen.
-* El suscriptor lo recibe **al emitirse, ~45 días tras cerrar el trimestre** — el rezago del
-  IMAE, que es cuando el nowcast tiene algo que decir y ~15 días antes de que el BCRD
-  publique el PIB. Eso ya está implementado como el ancla de `macro-forecast-emit`.
+| año | banca múltiple | ahorro y crédito | asociaciones | corp. crédito |
+|---|---:|---:|---:|---:|
+| 2020 | 15,3 | 8,4 | 2,0 | 8,6 |
+| 2021 | 23,6 | 7,3 | 2,0 | 3,9 |
+| 2022 | 12,7 | 13,8 | 4,0 | 7,6 |
+| 2023 | 21,2 | 6,2 | 3,5 | 6,5 |
+| 2024 | 17,6 | 11,8 | 3,4 | 0,7 |
+| 2025 | 19,3 | 6,3 | 2,4 | 5,2 |
 
-## El riesgo conocido, y quién lo vigila
+**Lo que la evidencia SÍ sostiene:** las asociaciones son las menos dispersas los **seis de
+seis** años, y la banca múltiple la más dispersa **cinco de seis**.
 
-«Un tipo NUEVO se registra en TODAS sus superficies, o DESAPARECE». Al anuario le faltaron
-cuatro registros de a uno y **ninguno falló**: cada uno lo hacía desaparecer en un lugar
-distinto. No voy a adivinar la lista — voy a crear el eje y **correr los diez tests del
-framework que barren el catálogo**, que son los que conocen el contrato completo. Es la
-diferencia entre una lista de memoria y una medición.
+**Lo que NO sostiene:** un orden fino de cuatro. Los dos del medio se cruzan, y las
+corporaciones de crédito son **tres entidades** — su dispersión es ruido, no medición.
 
-## Pasos
+→ La beta se abre en **TRES** grupos, no cuatro, y las corporaciones comparten el de ahorro
+y crédito **por falta de muestra**, declarado.
 
-- [ ] **1.** `CatalogEntry` del eje nuevo en `shared/products/registry.py`.
-- [ ] **2.** El producto en `modules/macro_monitor/products_forecast.py` — con su módulo, no
-      en `app/`: el eje macro terminó ahí por historia, no por diseño.
-- [ ] **3.** Niveles: `pulse` abierto (titular del nowcast) e `insight` por suscripción, que
-      es el que da intervalos mensual/anual. Secciones de §5, con **desempeño en el cuerpo**.
-- [ ] **4.** `variable_signals()` propio: las proyecciones vigentes del ledger. Acá **sí**
-      llevan peso, porque el índice de ESTE eje ES la proyección — y por eso su
-      `coverage_projected` sí dice algo, a diferencia del eje macro.
-- [ ] **5.** `ESTADO_BACKTEST` de clase, cruzado contra `shared.validation.frescura.MOTORES`:
-      un producto no puede reclamar un motor que nadie registró.
-- [ ] **6.** Muestra curada de los dos niveles (el framework la exige; un producto listado
-      que no se puede mostrar es una vidriera rota).
-- [ ] **7.** Correr los tests que barren el catálogo y cerrar lo que señalen, incluidas las
-      **DOS listas del frontend**.
-- [ ] **8.** Tarifa: **no se hardcodea**. Se publica con `create_tariff` cuando el dueño fije
-      el precio; sin tarifa vigente el nivel queda inactivo, que es el comportamiento correcto.
+### Retención implícita `b = ΔPatrimonio / Utilidad`
 
-## Sensor
-- [ ] Los diez tests del catálogo en verde **sin excepciones declaradas para este eje**.
-- [ ] `insight:<key>` admite `annual` y concede grant — comprobado, no supuesto.
-- [ ] El eje nuevo **no invade** a los productos en producción (el ruteo de research no lo
-      activa en preguntas que no son prospectivas).
+| tipo | n | b mediano |
+|---|---:|---:|
+| banca múltiple | 54 | **0,75** |
+| bancos de ahorro y crédito | 51 | **0,74** |
+| asociaciones de ahorros y préstamos | 25 | **0,99** |
+| corporaciones de crédito | 15 | **0,76** |
+
+El 0,99 de las asociaciones no es un artefacto: **son mutuales, no tienen accionistas a
+quienes pagar dividendos**, así que retienen todo. Es la diferencia por tipo mejor sostenida
+de todas, y hoy el modelo usa un 0,60 igual para las cuatro — una rúbrica que el dato
+desmiente.
+
+## Qué se cambia
+
+1. **Tope de crecimiento terminal.** `g = min(b × ROE, crecimiento nominal de largo plazo)`,
+   con el tope COMPUTADO de nuestra propia serie de PIB nominal, no escrito a mano. Cuando el
+   tope muerde, se declara — es un supuesto que cambia el valor y no puede viajar callado.
+2. **Retención por tipo**, medida. Reemplaza el 0,60 de rúbrica.
+3. **Beta por tipo**, en tres grupos. El ORDEN está medido; la MAGNITUD del salto es rúbrica
+   y se declara como tal.
+
+## Qué NO se cambia, y por qué
+
+* **Las asociaciones se valúan sin trato especial** (decisión del dueño). Que sean mutuales
+  entra por la retención medida, que es dato, y no por un caveat aparte.
+* **La beta no se desapalanca.** Sigue valiendo el motivo original: en un banco los depósitos
+  son materia prima.
+* **`Ke` sigue siendo un rango.** Abrir la beta por tipo no lo vuelve un punto.
