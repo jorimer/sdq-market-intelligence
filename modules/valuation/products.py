@@ -124,7 +124,18 @@ class ValuationProduct:
             detail=SIN_MOTOR)
 
     def has_engine(self) -> bool:
-        return False
+        """Ahora SÍ hay motor. Lo que decide es si hay con qué correrlo: la curva en pesos
+        para `Ke` y al menos una entidad con patrimonio publicado."""
+        if self._db is None:
+            return False
+        try:
+            with self._db.begin_nested():
+                from modules.macro_monitor.forecasting.panel import observaciones
+                from modules.valuation.engine.cost_of_capital import SERIE_RF
+                return bool([v for _p, v in observaciones(self._db, SERIE_RF) if v])
+        except Exception as e:  # noqa: BLE001
+            logger.warning("no se pudo verificar el motor de valuación: %s", e)
+            return False
 
     def validation_state(self) -> ValidationState:
         return ValidationState(approved=False, score=0.0, notes=SIN_MOTOR)
@@ -139,11 +150,48 @@ class ValuationProduct:
 
     def snapshot(self, tier: ProductTier, period: str,
                  scope: Optional[str] = None) -> ProductSnapshot:
-        raise ValueError(SIN_MOTOR)
+        """La valuación de una entidad. `scope` la nombra en los niveles nombrados."""
+        from sqlalchemy import text as _sql
+
+        from modules.valuation.service import a_payload, valuar_entidad
+
+        db = self._db
+        if db is None:
+            raise ValueError(SIN_MOTOR)
+        if tier != ProductTier.pulse and not scope:
+            raise ValueError(
+                "Este nivel valúa una entidad concreta: falta indicar cuál.")
+        fila = db.execute(_sql(
+            "SELECT id, name FROM banks WHERE id = :s OR name = :s LIMIT 1"),
+            {"s": scope}).first() if scope else None
+        if fila is None:
+            raise ValueError(f"No se encontró la entidad «{scope}».")
+        lec = valuar_entidad(db, bank_id=str(fila[0]), nombre=str(fila[1]))
+        if lec is None:
+            # Se DECLARA por qué, en vez de devolver ceros: un motor sin su entrada no
+            # falla, desaparece.
+            raise ValueError(
+                f"No hay con qué valuar «{fila[1]}»: hacen falta al menos dos cierres con "
+                "patrimonio publicado para computar un ROE sobre patrimonio de apertura.")
+        return ProductSnapshot(tier=tier, period=lec.periodo, payload=a_payload(lec),
+                               entity_name=str(fila[1]))
 
     async def narratives(self, tier: ProductTier, snapshot: ProductSnapshot,
                          lang: str = "es") -> Dict[str, str]:
-        raise ValueError(SIN_MOTOR)
+        """Prosa COMPUTADA. No pasa por el motor de IA — ver el docstring del módulo."""
+        from modules.valuation import narrativa
+        from modules.valuation.service import Lectura
+
+        lec = _lectura_desde_payload(snapshot)
+        secciones = self.product_manifest().require_level(tier).sections
+        fijas = {
+            SECCION_SPREAD: narrativa.resumen_del_spread(lec),
+            SECCION_VALOR: narrativa.resumen_del_valor(lec),
+            SECCION_DESCOMPOSICION: narrativa.resumen_de_descomposicion(lec),
+            SECCION_SUPUESTOS: _SAMPLE_NARRATIVAS[SECCION_SUPUESTOS],
+            SECCION_LIMITACIONES: _SAMPLE_NARRATIVAS[SECCION_LIMITACIONES],
+        }
+        return {sec: fijas[sec] for sec in secciones if sec in fijas}
 
     async def render(self, tier: ProductTier, snapshot: ProductSnapshot,
                      narratives: Dict[str, str], *, sample: bool = False,
@@ -207,6 +255,37 @@ class ValuationProduct:
         """Vacío mientras no haya motor. Devolver señales inventadas para que el eje
         "aparezca" en el registro sería exactamente lo que el registro existe para impedir."""
         return {"period": None, "signals": []}
+
+
+def _lectura_desde_payload(snapshot: ProductSnapshot):
+    """Reconstruye la `Lectura` desde el payload, para que la prosa no recompute nada.
+
+    Recomputar acá sería una SEGUNDA valuación al lado de la que el snapshot ya trae, y dos
+    cálculos del mismo hecho se desincronizan: la prosa terminaría citando cifras que la
+    tabla no muestra.
+    """
+    from modules.valuation.service import Lectura
+
+    p = snapshot.payload
+    sp, va, pr = p.get("spread", {}), p.get("valor", {}), p.get("procedencia", {})
+    return Lectura(
+        entidad=str(p.get("entidad") or snapshot.entity_name or ""),
+        periodo=str(p.get("periodo") or snapshot.period),
+        moneda=str(p.get("moneda") or "DOP"),
+        roe_proyectado_pct=float(sp.get("roe_proyectado_pct") or 0.0),
+        ke_bajo_pct=float((sp.get("ke_rango_pct") or [0, 0])[0]),
+        ke_alto_pct=float((sp.get("ke_rango_pct") or [0, 0])[1]),
+        spread_alto_pp=float((sp.get("spread_pp") or [0, 0])[0]),
+        spread_bajo_pp=float((sp.get("spread_pp") or [0, 0])[1]),
+        cambia_de_signo=bool(sp.get("cambia_de_signo")),
+        patrimonio_libro=float(va.get("patrimonio_libro") or 0.0),
+        valor_bajo=float((va.get("rango") or [0, 0])[0]),
+        valor_alto=float((va.get("rango") or [0, 0])[1]),
+        pb_bajo=float((va.get("pb_implicito") or [0, 0])[0]),
+        pb_alto=float((va.get("pb_implicito") or [0, 0])[1]),
+        fraccion_de_rubrica=float(pr.get("fraccion_de_rubrica") or 0.0),
+        advertencias=tuple(p.get("advertencias") or ()),
+    )
 
 
 #: Ficticia y que lo diga en el nombre. No es un banco real con los datos cambiados: es un

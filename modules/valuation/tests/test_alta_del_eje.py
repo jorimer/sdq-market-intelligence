@@ -34,15 +34,19 @@ def test_el_eje_esta_en_el_catalogo():
     assert is_implemented(SECTOR)
 
 
-def test_NO_tiene_motor_y_lo_declara():
-    """Sin esto, un eje vacío se vería igual que uno operativo con datos faltantes."""
+def test_sin_BASE_no_hay_motor_y_lo_declara():
+    """El eje ya TIENE motor (T-VL-3 y T-VL-4). Lo que decide es si hay con qué correrlo.
+
+    Antes este test afirmaba que el eje no tenía motor; desde que existe, seguía pasando
+    porque `get_product` no trae sesión — o sea que pasaba por el motivo equivocado. Ahora
+    dice lo que de verdad quiere decir: sin base no se puede valuar, y se declara.
+    """
     p = get_product(SECTOR)
-    assert p.has_engine() is False
-    assert p.validation_state().approved is False
+    assert p.has_engine() is False, "sin sesión de DB no hay con qué correr el motor"
     assert "motor" in p.data_signals().detail.lower()
 
 
-def test_pedirle_un_snapshot_falla_con_el_motivo_escrito():
+def test_pedirle_un_snapshot_sin_base_falla_con_el_motivo_escrito():
     """No devuelve un esqueleto con ceros: un motor sin su entrada no falla, DESAPARECE, y
     evaluar contra un diccionario vacío produce prosa sobre una entidad que nadie midió."""
     with pytest.raises(ValueError, match="motor de valuación"):
