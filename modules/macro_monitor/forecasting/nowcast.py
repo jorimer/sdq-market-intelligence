@@ -42,8 +42,8 @@ from typing import Dict, List, Optional, Sequence, Tuple
 import numpy as np
 from sqlalchemy.orm import Session
 
-from modules.macro_monitor.forecasting import medida as med
 from modules.macro_monitor.forecasting import panel as panel_mod
+from shared.data import medida_de_pronostico as med
 
 #: Cuántos trimestres de entrenamiento antes de que el bridge diga algo. Con menos, el
 #: coeficiente lo fija el ruido.

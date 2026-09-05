@@ -10,7 +10,7 @@ canónico. Este archivo cruza las dos.
 from shared.data.bcrd_excel import canonical
 
 from modules.macro_monitor.forecasting import bloque
-from modules.macro_monitor.forecasting import medida as med
+from shared.data import medida_de_pronostico as med
 from modules.macro_monitor.forecasting import panel as panel_mod
 
 

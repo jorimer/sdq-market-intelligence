@@ -22,12 +22,18 @@ from shared.registry.signals import (
     ProjectionMeta,
     VariableSignal,
 )
+from shared.data.medida_de_pronostico import DLOG_PCT
+
+#: El `series_code` OBSERVABLE del PIB. Antes decía `"pib_real"`, que es el nombre de la
+#: variable en el bloque del BVAR y no existe como serie.
+_SERIE = "bcrd.xls.pib_2018.serie_original_indice"
 
 
 def _meta(**cambios):
     base = dict(
-        model_id="bridge_imae_pib.m2.v1", target_series="pib_real", horizon="2026-Q4",
+        model_id="bridge_imae_pib.m2.v1", target_series=_SERIE, horizon="2026-Q4",
         as_of="2026-09-30", revision=0, point=3.9,
+        measure=DLOG_PCT,
         intervals=((0.80, 3.1, 4.7),), backtest_id="b", oos_error=0.6, error_metric="rmse",
         n_oos=34, n_oos_overlapping=True,
         interval_coverage=((0.80, 0.76, 34),))

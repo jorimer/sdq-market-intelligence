@@ -26,7 +26,7 @@ from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
 
 from modules.macro_monitor.forecasting import ledger as led
-from modules.macro_monitor.forecasting import medida as med
+from shared.data import medida_de_pronostico as med
 from modules.macro_monitor.forecasting import procedencia as proc
 from modules.macro_monitor.models.models import MacroSeries
 from shared.database.base import Base

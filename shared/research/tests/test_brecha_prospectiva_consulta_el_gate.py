@@ -12,6 +12,7 @@ from shared.registry.projection import MIN_OOS
 from shared.registry.signals import PROJECTED, ProjectionMeta
 from shared.research.models import SubQuestion
 from shared.research.orchestrator import _forward_gaps
+from shared.data.medida_de_pronostico import DLOG_PCT
 
 # Tiene que ser una pregunta que `is_forward_looking` reconozca de verdad: con una que no
 # reconoce, los cuatro tests pasarían sin ejercitar nada — la aserción de ausencia que se
@@ -22,7 +23,8 @@ PREGUNTA = "¿Cuál es la proyección del PIB para 2026?"
 def _meta(**cambios):
     base = dict(
         model_id="bridge.m2.v1", target_series="s", horizon="2026-Q4", as_of="2026-08-31",
-        revision=0, point=3.9, intervals=((0.80, 3.1, 4.7),), backtest_id="bridge.m2.v1|s|2026-Q4",
+        revision=0, point=3.9, measure=DLOG_PCT, intervals=((0.80, 3.1, 4.7),),
+        backtest_id="bridge.m2.v1|s|2026-Q4",
         oos_error=0.6, error_metric="rmse", n_oos=16, n_oos_overlapping=False,
         interval_coverage=((0.80, 0.78, 16),))
     base.update(cambios)

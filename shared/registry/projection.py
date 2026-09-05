@@ -18,6 +18,7 @@ import re
 from datetime import date
 from typing import Optional, Tuple
 
+from shared.data.medida_de_pronostico import MEDIDAS
 from shared.data.periodos import fin_del_periodo
 from shared.registry.signals import ProjectionMeta
 
@@ -41,8 +42,9 @@ def _fecha(iso: str) -> Optional[date]:
 def projection_is_admissible(meta: Optional[ProjectionMeta]) -> Tuple[bool, str]:
     """``(admisible, motivo)``. El motivo va vacío solo cuando admite.
 
-    Rechaza cuando falta lo que haría juzgable el pronóstico, cuando los intervalos se
-    contradicen entre sí o con el punto, cuando el backtest no alcanza para sostener el error
+    Rechaza cuando falta lo que haría juzgable el pronóstico —la MEDIDA del punto incluida:
+    una cifra sin unidad se lee como la unidad que el lector suponga—, cuando los intervalos
+    se contradicen entre sí o con el punto, cuando el backtest no alcanza para sostener el error
     que declara, o cuando el corte de información es posterior al período proyectado —que no
     es un pronóstico sino un ajuste con información que entonces no se tenía—.
     """
@@ -52,6 +54,17 @@ def projection_is_admissible(meta: Optional[ProjectionMeta]) -> Tuple[bool, str]
     for campo in ("model_id", "target_series", "backtest_id"):
         if not str(getattr(meta, campo, "") or "").strip():
             return False, f"falta {campo}: sin él la proyección no se puede rastrear"
+
+    # La unidad se DECLARA, no se supone — igual que el solapamiento. Un punto cuya medida
+    # nadie declaró no puede sostener una afirmación: quien lo lea va a suponer una, y el
+    # ledger ya midió lo que cuesta suponer mal (una tasa contra un índice, error 132,75).
+    medida = str(getattr(meta, "measure", "") or "").strip()
+    if not medida:
+        return False, ("no declara en qué medida está el punto: la unidad se declara, no se "
+                       "supone, y sin ella la cifra se lee como lo que no es")
+    if medida not in MEDIDAS:
+        return False, (f"medida desconocida «{medida}»: las declaradas son "
+                       f"{', '.join(MEDIDAS)}")
 
     if not meta.intervals:
         return False, "sin intervalos: un punto sin incertidumbre no se publica"

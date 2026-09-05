@@ -202,6 +202,6 @@ def _medida_si_existe() -> dict:
     probaría nada."""
     import inspect
     if "measure" in inspect.signature(ledger.registrar).parameters:
-        from modules.macro_monitor.forecasting import medida
+        from shared.data import medida_de_pronostico as medida
         return {"measure": medida.DLOG_PCT}
     return {}

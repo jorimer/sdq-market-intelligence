@@ -18,9 +18,9 @@ from typing import Dict, List, Optional
 
 from sqlalchemy.orm import Session
 
-from modules.macro_monitor.forecasting import medida as med
 from modules.macro_monitor.forecasting import nowcast as nowcast_mod
 from modules.macro_monitor.forecasting import panel as panel_mod
+from shared.data import medida_de_pronostico as med
 from shared.data.periodos import fin_del_periodo
 
 

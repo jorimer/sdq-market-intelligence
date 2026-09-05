@@ -20,7 +20,7 @@ from sqlalchemy.pool import StaticPool
 
 from modules.macro_monitor import products_forecast
 from modules.macro_monitor.forecasting import desempeno, ledger
-from modules.macro_monitor.forecasting import medida as med
+from shared.data import medida_de_pronostico as med
 from modules.macro_monitor.models.models import MacroSeries
 from shared.database.base import Base
 

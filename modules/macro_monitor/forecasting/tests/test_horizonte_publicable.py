@@ -20,7 +20,7 @@ import numpy as np
 import pytest
 
 from modules.macro_monitor.forecasting import bvar
-from modules.macro_monitor.forecasting import medida as med
+from shared.data import medida_de_pronostico as med
 
 
 def _Y(n=90, k=3, semilla=5):

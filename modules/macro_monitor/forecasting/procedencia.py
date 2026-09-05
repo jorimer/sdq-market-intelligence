@@ -12,6 +12,11 @@ intervalos y el solapamiento salen de `ledger.track_record()`, que ya los devuel
 Recalcularlos acá sería la copia a mano de un serializador, que en este repo ya borró la tasa
 de 38 entidades por tener el productor dos bocas.
 
+**La medida viaja.** `point` es un número sin unidad hasta que alguien la declara, y el
+ledger ya la declara: se copia. Sin eso, el registro publicaba la señal proyectada del PIB
+como «bcrd.xls.pib_2018.serie_original_indice = 0,38» — una TASA rotulada con el nombre de
+una serie que es un ÍNDICE DE VOLUMEN (~133).
+
 **Una proyección sin filas puntuadas NO se filtra acá.** Sale con `n_oos = 0` y el gate de
 admisión la rechaza con su motivo, que es el que termina en la nota de la brecha. Silenciarla
 en este módulo la haría desaparecer sin que nadie sepa por qué: «no hay proyección» y «hay
@@ -64,6 +69,11 @@ def meta_de(db: Session, fila: ForecastLog) -> ProjectionMeta:
         as_of=str(fila.as_of),
         revision=int(fila.revision or 0),
         point=float(fila.point),
+        # La medida se COPIA del ledger, no se supone acá. Es la mitad de lo que hace
+        # interpretable al punto: `target_series` dice contra qué se puntúa y `measure` en
+        # qué unidad está. Una fila anterior a la migración la trae vacía, y el gate la
+        # rechaza con ese motivo en vez de dejar que el lector suponga la unidad.
+        measure=str(fila.measure or ""),
         intervals=_intervalos(fila.intervals),
         backtest_id=bt,
         # Sin filas puntuadas no hay error que declarar. Va NaN y no 0.0 a propósito: un 0,0

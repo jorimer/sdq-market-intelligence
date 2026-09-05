@@ -1,159 +1,96 @@
-# El ledger de pronósticos no sabía contra QUÉ puntuar — plan
+# Que la medida viaje con la proyección, y desplegar — plan
 
-Dos defectos verificados en `modules/macro_monitor/forecasting/ledger.py`. Comparten una
-causa: **`puntuar_pendientes` supone que `target_series` nombra una serie observable y que
-`point` es directamente comparable con el valor de esa serie.** Ninguna de las dos
-suposiciones se cumple.
+Dos trabajos, en este orden: primero el código, después UN despliegue con las dos cosas.
 
-## A · Las proyecciones del BVAR no se pueden puntuar NUNCA
+---
 
-`emision.OBJETIVO = "pib_real"` es el nombre de la variable DENTRO del bloque
-(`bloque.BLOQUE[0].nombre`), no un `series_code`. Viaja al ledger como `target_series` y
-`puntuar_pendientes` lo busca en `mm_series`, donde no existe.
+## 1 · La medida se pierde al salir del ledger
 
-Verificado en prod: `GET /api/v1/macro-monitor/series/pib_real` → `observations: []`.
-Verificado en prod hoy (readiness de `macro_forecast`): «1 proyección(es) vigente(s);
-**0 conjunto(s) con backtest puntuado**».
+`ForecastLog.measure` ya existe (commit `7e9f7328`), pero **muere en la puerta del ledger**.
+`procedencia.meta_de` no la copia y `ProjectionMeta` no tiene dónde ponerla, así que todo lo
+que lee una proyección vuelve a adivinar la unidad. Es el mismo defecto que acabo de cerrar,
+un salto más adelante en la cadena.
 
-Consecuencia: toda fila del BVAR queda `pending` para siempre y `desempeno.seccion()`
-publica «ninguna de las proyecciones emitidas alcanzó su período de cierre» — que se lee
-como «los trimestres no cerraron» cuando la verdad es que **no pueden cerrar**. El
-instrumento no distingue «todavía no» de «nunca».
+### Lo que está publicando hoy
 
-## B · El ledger puntúa una TASA contra un NIVEL
+Medido leyendo cada superficie, no supuesto:
 
-`nowcast.estimar` devuelve `point = round(punto * 100, 4)`, o sea el Δlog del PIB **en %**
-(~0,4), con `target_series = panel.PIB_CODE`. Esa serie es el **índice de volumen** (~133).
-`abs_error` daría ≈ 132,75 y `desempeno.seccion()` lo publicaría como RMSE.
+| dónde | qué publica | por qué está mal |
+|---|---|---|
+| `app/products_macro.variable_signals` | `«bcrd.xls.pib_2018.serie_original_indice · proyección 2026-Q3» = 0,38` | el valor es una TASA y la etiqueta nombra una serie que es un ÍNDICE (~133) |
+| `shared/registry/provenance.projection_sentence` | «…con intervalo de 80 % entre 3.1 y 4.7» | dos números sin unidad, y el punto ni aparece |
+| `products_forecast._md_trayectoria` | `f"{d['punto']:.2f} %"` | el «%» está **hardcodeado**: acierta por casualidad, es la misma suposición |
+| `products_forecast._md_escenarios` | ídem | ídem |
+| `_SAMPLE_PAYLOAD` (muestra curada) | `"serie": "pib_real"` | la vidriera del producto enseña el identificador ROTO |
 
-El BVAR tiene la misma forma: `bloque._transformar` aplica `(log b − log a) × 100`, así que
-`Pronostico.punto` también es un Δlog en %.
+### Dónde tiene que vivir el vocabulario
 
-B no explotó porque **nada está puntuado en prod todavía**. Arreglar A sin B publica un RMSE
-de ~130 en la primera corrida.
+**En `shared/`, no en el módulo.** La prosa (`shared/registry/provenance.py`) y el gate
+(`shared/registry/projection.py`) tienen que interpretarlo, y `shared/` no puede importar de
+un módulo sin invertir la dependencia que el repo declara. Se mueve
+`modules/macro_monitor/forecasting/medida.py` → `shared/data/medida_de_pronostico.py`, al
+lado de `series_nature.py`, que es el mismo concepto un nivel más arriba (la naturaleza de la
+SERIE) y ya justificó vivir ahí.
 
-## La causa raíz, y dónde ya está resuelta un nivel más arriba
+Sin alias de compatibilidad en la ubicación vieja: dos nombres para una cosa es cómo
+empiezan las dos definiciones que se contradicen.
 
-`shared/data/series_nature.py` cerró exactamente esta clase de defecto para las SERIES: «el
-emisor siempre declara qué mide, nosotros lo tirábamos, y cada consumidor tenía que ADIVINAR
-qué transformación aplica». La corrección fue capturar la naturaleza, persistirla junto al
-dato y que cada consumidor la LEA.
+### El arreglo
 
-El ledger repite el defecto un nivel abajo: guarda un número sin declarar en qué medida está.
-La cura es la misma — **la medida del punto se DECLARA al escribir y se lee al puntuar**.
+1. **Mover el módulo** y actualizar los cinco importadores.
+2. **`ProjectionMeta.measure`, REQUERIDO**, justo después de `point` — es lo que califica a
+   ese número. Sin default, por la misma razón que en `ledger.registrar`: un default
+   reintroduce la suposición. Rompe los constructores de los tests, y eso es la presión
+   correcta.
+3. **El gate lo exige.** Igual que `n_oos_overlapping is None` es rechazo porque «el
+   solapamiento se declara, no se supone», una proyección cuya unidad no se declaró no puede
+   anclar una afirmación. Rechaza también un valor fuera del vocabulario.
+4. **`procedencia.meta_de` la copia** de `fila.measure`.
+5. **Las cinco superficies**, todas, o el documento se contradice según por dónde salga:
+   la prosa compartida, la etiqueta del registro, las dos tablas del producto (que dejan de
+   hardcodear «%») y el titular. Y la muestra curada deja de enseñar `pib_real`.
 
-Y la transformación en sí ya tiene tres copias: `panel._dlog` (sin ×100),
-`bloque._transformar` (×100) y `backtest.correr:66-72` (×100, la que lo hace bien). El
-ledger sería la cuarta.
+### Tests, contra el código viejo primero
 
-## El arreglo
+- La etiqueta del registro y la frase de procedencia NOMBRAN la unidad (fallan hoy).
+- El gate rechaza una proyección sin medida y una con medida inventada (falla hoy: admite).
+- **Paridad de unidad**: ninguna superficie escribe `%` por su cuenta — se computa de la
+  medida. Estructural, con `getsource`, porque es un literal y un literal vuelve.
+- El `_SAMPLE_PAYLOAD` declara la medida y una serie que EXISTE, verificado contra el mismo
+  código que resuelve la del bloque.
 
-### 1 · `shared/data/periodos.py` gana `periodo_anterior`
+---
 
-Una tasa necesita contra qué medirse. No hay helper de «período anterior» por etiqueta:
-`shared/operations/calendario._anterior` trabaja sobre tuplas `(año, q)` y es privado. El
-archivo ya declara que es el hogar de esta pregunta y que hay copias sueltas; se agrega ahí
-en vez de escribir la cuarta.
+## 2 · Desplegar y verificar en prod
 
-**Calendario, no «la observación anterior disponible».** Con un hueco en la serie, «la
-anterior disponible» computa un cambio de dos trimestres y lo rotula de uno. Si el período
-anterior de calendario falta, no se puntúa.
+Va DESPUÉS del punto 1: dos despliegues para el mismo arreglo es un despliegue de más, y
+cada uno dispara ~30 syncs.
 
-### 2 · `modules/macro_monitor/forecasting/medida.py` — módulo nuevo
-
-Vocabulario + realización, puro (sin DB):
-
-* `LEVEL = "level"` · `DLOG_PCT = "dlog_pct"` · `MEDIDAS`
-* `periodos_necesarios(medida, period) -> Tuple[str, ...]` — qué hay que leer del observado
-* `realizar(medida, period, observado) -> Realizacion(valor, motivo)` — `valor=None` con el
-  MOTIVO nombrado, jamás 0,0
-
-### 3 · `bloque.BloqueArmado` declara de dónde salió cada variable
-
-`codigo_por_variable` y `medida_por_variable`. La medida del ledger sale de la MISMA
-declaración que produjo el número (`Variable.transformacion`), no de una constante paralela
-que se desincroniza. `MEDIDA_DE_TRANSFORMACION = {NIVEL: LEVEL, DLOG: DLOG_PCT}`.
-
-### 4 · `bvar` transporta serie y medida
-
-`proyectar_bloque(..., serie_objetivo=None, medida=None)` → `ProyeccionBVAR` →
-`Pronostico`/`Escenario`. Opcionales porque `backtest_bvar` es numérico puro y no tiene por
-qué conocerlas; la exigencia vive en la puerta del ledger (§5), que es donde importa.
-`objetivo`/`target` sigue siendo el nombre de la variable del bloque — es lo que indexa la
-matriz — y se conserva en `ProyeccionBVAR.target`.
-
-### 5 · `ForecastLog.measure` + `ledger.registrar` lo EXIGE
-
-Columna `measure` (String(16), nullable). Migración Alembic sobre el head `c3f7a2d9e814`.
-
-`registrar(..., measure)` sin default: toda fila nueva declara su medida o lanza. Valida
-también `target_series` no vacío.
-
-`puntuar_pendientes` lee la medida y realiza el observado con `medida.realizar`. Una fila sin
-medida declarada NO se puntúa (no se le supone «nivel»: eso es justo el defecto B).
-
-`realized` pasa a guardarse **en la medida del punto** — que es lo que lo hace comparable.
-
-### 6 · Lo vetado se LISTA: `ledger.no_puntuables(db)`
-
-Un `pending` que no puede cerrar nunca. Dos motivos: medida no declarada, y serie sin una
-sola observación en `mm_series` (que es la forma exacta del defecto A).
-
-`desempeno.seccion()` deja de decir «todavía no cerraron» cuando la causa es otra: nombra la
-causa y dice qué sí se puede esperar. Un veto silencioso se lee como que el eje no tiene
-validación.
-
-### 7 · `emision` no escribe lo que no se va a poder puntuar
-
-`_escribir` comprueba que la serie destino tenga al menos una observación; si no, no escribe
-y suma un `motivo`. Con el defecto A esto dispara con nombre y apellido en vez de callarse.
-`emision` pasa `serie` y `medida` desde `armado.codigo_por_variable` /
-`medida_por_variable`, y desde el nowcast (`PIB_CODE` / `DLOG_PCT`).
-
-### 8 · `backtest.correr` usa el helper compartido
-
-Deja de recomputar el dlog a mano (66-72). Era la tercera copia y la única correcta; ahora
-es la misma que puntúa el ledger, que es el punto: si divergen, el backtest y el track
-record miden cosas distintas y nadie se entera.
-
-### 9 · Migración de datos, acotada y verificable
-
-Las filas ya escritas en prod son de UNA sola versión del código (`emision.py` nació el
-2026-09-04, commit `4f7bc0f3`; hoy es 2026-09-05) y ninguna está puntuada. Sus dos
-productores conocidos —`bridge_imae_pib.*` y `bvar_minnesota.*`— emiten Δlog en % sobre
-`PIB_CODE`. La migración pone `measure='dlog_pct'` y normaliza
-`target_series 'pib_real' → PIB_CODE` **solo para esos `model_id`**. Cualquier otra fila
-queda con `measure` NULL y la lista de §6 la muestra.
-
-No es fabricar track record: es corregir un rótulo cuyo contenido es verificable leyendo el
-único commit que lo escribió. Lo contrario —dejarlas inservibles— tira historial REAL y
-ganado, en un ledger que necesita 12 observaciones para anclar y tiene 1.
-
-## Tests — primero contra el código VIEJO
-
-Regla de la casa que ya me falló: escribo la fixture que hace PASAR, no la que hace FALLAR.
-Cada test se corre contra el código actual y se muestra el fallo ANTES de escribir el
-arreglo.
-
-1. `test_medida.py` — realización de cada medida y **cada motivo de negativa**, incluyendo
-   el hueco de calendario (que es donde «la anterior disponible» mentiría).
-2. `test_ledger.py` — puntuar una fila `dlog_pct` da la TASA observada, no el nivel
-   (**falla hoy: 132,75**); una fila sin medida no se puntúa; `no_puntuables` reporta la
-   serie inexistente.
-3. `test_emision_se_puede_puntuar.py` (nuevo) — el que caza los DOS a la vez: emitir con el
-   bloque real de juguete → llega el observado → puntuar → el error es del orden del modelo,
-   no del nivel del índice. **Falla hoy por A (0 puntuados) y por B (error ~130).**
-4. `test_desempeno.py` (nuevo) — la sección no dice «todavía no cerraron» cuando la causa es
-   que no pueden cerrar.
-5. Un test de que `bloque` resuelve `pib_real` al MISMO código que usa el nowcast: si
-   divergen, el ledger puntúa contra otra serie.
+1. `git push -u origin claude/heuristic-payne-083d13` + `gh pr create --base main`.
+2. Esperar los TRES checks (`backend-test`, `frontend-build`, `docker-build`) y
+   `gh pr merge <n> --merge`. Si falla con «3 of 3 required status checks are expected»
+   estando en verde, la rama quedó atrás de main → actualizar y reintentar.
+3. **Comprobar QUÉ COMMIT sirve antes de verificar nada**, y por CONTENENCIA, no por
+   igualdad — otra sesión puede mergear en paralelo y ganar el deploy:
+   ```
+   c=$(curl -s $PROD/api/v1/health | jq -r .deployment.commit)
+   git merge-base --is-ancestor <mi-sha> "$c"
+   ```
+   Tres estados, no dos: clave `deployment` ausente = código viejo; presente con `null` =
+   nuevo sin sello; con SHA = cotejable.
+4. La migración `d1e6f3a9c7b2` corre en el arranque del contenedor y aplica el backfill.
+   **Ojo**: un deploy atascado YA migró la base aunque no sirva tráfico.
+5. Verificar el CAMBIO DE ESTADO, no la ausencia de error. Línea base de HOY, tomada antes
+   de tocar nada, en `GET /api/v1/products/readiness` → `macro_forecast` → `pulse` → `g1`:
+   **«1 proyección(es) vigente(s); 0 conjunto(s) con backtest puntuado»**. Después del
+   despliegue, la fila del BVAR tiene que dejar de ser huérfana: se comprueba pidiendo la
+   serie a la que apunta y viendo que existe.
+6. Correr `macro-canonical-sync` (que encadena la puntuación) y leer `forecasts_scored`.
+   **No va a subir de 0 hasta que el BCRD publique 2026-Q3** —el trimestre cierra el 30 de
+   septiembre y el PIB tiene 60 días de rezago—, así que lo que se verifica hoy es que las
+   filas dejaron de ser IMPUNTUABLES, no que se puntuaron. Decirlo así y no confundir las dos.
 
 ## Los tres gates
 
 `pytest modules/ shared/ -q` · `ruff check modules/ shared/ app/` ·
 `mypy shared/ modules/ app/ --no-incremental | mypy-baseline filter` (exit code del FILTRO).
-
-## Fuera de alcance
-
-La discrepancia de unidades de la lectura sectorial (`_payload` pasa `punto` como `g_pib`) va
-por otra rama y no se toca acá.

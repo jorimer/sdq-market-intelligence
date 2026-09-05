@@ -28,9 +28,9 @@ from typing import Any, Dict, List, Optional, Sequence
 
 from sqlalchemy.orm import Session
 
-from modules.macro_monitor.forecasting import medida as med
 from modules.macro_monitor.forecasting.models import ForecastLog
 from modules.macro_monitor.models.models import MacroSeries
+from shared.data import medida_de_pronostico as med
 
 #: Los dos únicos valores de `status`. El linaje NO es un estado — ver el docstring de
 #: `models.py`.

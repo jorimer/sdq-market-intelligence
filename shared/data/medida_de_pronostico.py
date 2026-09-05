@@ -1,4 +1,4 @@
-"""En qué MEDIDA está el número que el ledger guarda, y cómo se realiza contra el observado.
+"""En qué MEDIDA está un número PRONOSTICADO, y cómo se realiza el observado contra él.
 
 **Esta es la misma causa raíz que `shared/data/series_nature.py` cerró un nivel más arriba.**
 Allá el defecto era que el emisor declaraba qué mide cada SERIE ("MILLONES DE US$", "%",
@@ -23,6 +23,13 @@ no hay forma de saber qué restarle a qué.
 `backtest.correr` (×100, la única que lo hacía bien)— y el ledger iba a ser la cuarta. Si el
 backtest y el track record no realizan el observado igual, miden cosas distintas y nadie se
 entera.
+
+**Y vive en `shared/`, no dentro del módulo de macro.** El vocabulario no lo consume solo
+quien puntúa: lo necesitan el gate de admisión (`shared/registry/projection.py`) y la prosa
+de procedencia (`shared/registry/provenance.py`), que publican el número y su banda. Si la
+declaración se quedara en `modules/macro_monitor`, `shared/` tendría que importar de un
+módulo —al revés de como este repo declara la dependencia— o cada consumidor volvería a
+adivinar la unidad, que es el defecto entero.
 """
 from __future__ import annotations
 
@@ -45,6 +52,24 @@ MEDIDAS: Tuple[str, ...] = (LEVEL, DLOG_PCT)
 ETIQUETAS: Dict[str, str] = {
     LEVEL: "nivel de la serie",
     DLOG_PCT: "variación logarítmica contra el período anterior, en %",
+}
+
+#: La coletilla que va PEGADA a un número para que no se lea como otra cosa. Es distinta de
+#: `ETIQUETAS` a propósito: una define la medida, la otra acompaña a la cifra, y meterlas en
+#: la misma constante obliga a elegir entre una frase que no cierra y una definición que no
+#: se puede leer sola.
+COMO_SE_LEE: Dict[str, str] = {
+    LEVEL: "en el nivel de la serie",
+    DLOG_PCT: "en % de variación contra el período anterior",
+}
+
+#: El sufijo corto para una celda de tabla, donde no entra una frase. Vacío para el nivel:
+#: la unidad de un nivel es la de SU serie —un índice, millones de RD$— y este módulo no la
+#: conoce. Inventarle un «%» es exactamente el defecto que cerró; la columna lo declara con
+#: `COMO_SE_LEE` en su encabezado.
+SUFIJO: Dict[str, str] = {
+    LEVEL: "",
+    DLOG_PCT: "%",
 }
 
 

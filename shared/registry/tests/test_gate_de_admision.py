@@ -13,6 +13,7 @@ import pytest
 
 from shared.registry.projection import MIN_OOS, projection_is_admissible
 from shared.registry.signals import ProjectionMeta
+from shared.data.medida_de_pronostico import DLOG_PCT
 
 
 def _meta(**cambios):
@@ -24,6 +25,7 @@ def _meta(**cambios):
         revision=0,
         point=3.9,
         intervals=((0.80, 3.1, 4.7), (0.90, 2.6, 5.2)),
+        measure=DLOG_PCT,
         backtest_id="bridge_imae_pib.m2.v1|bcrd.xls.pib_2018.serie_original_indice|2026-Q4",
         oos_error=0.62,
         error_metric="rmse",
