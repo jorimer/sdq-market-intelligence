@@ -122,3 +122,55 @@ class TestElDiagnosticoDiceLoQueElEmisorDijo:
 
         fuente = inspect.getsource(service._test_cmf_connection)
         assert "use_proxy" in fuente and "X-Proxy-Secret" in fuente
+
+
+class TestLaCredencialNoSeFiltraNiSeEsconde:
+    def test_la_apikey_se_redacta_antes_de_mostrarse(self):
+        """Los cuerpos de error repiten la URL consultada, y esa URL lleva la clave."""
+        from shared.settings.service import _redactar
+
+        salido = _redactar("URL: api.cmfchile.cl/x?apikey=abc123secreto&formato=json")
+        assert "abc123secreto" not in salido
+        assert "REDACTADA" in salido
+
+    def test_un_error_sin_JSON_muestra_el_cuerpo_igual(self):
+        """Tres vueltas se perdieron mostrando solo el número de HTTP mientras la respuesta
+        traía la explicación. Un diagnóstico que descarta la evidencia no es diagnóstico."""
+        import inspect
+
+        from shared.settings import service
+
+        fuente = inspect.getsource(service._test_cmf_connection)
+        assert "_redactar(cuerpo_txt)" in fuente
+
+    def test_distingue_al_proxy_que_NO_reenvio(self):
+        """El Worker marca lo que reenvía con `X-Proxy-Status`: sin esa marca, un error es
+        del proxy y la petición nunca llegó al emisor."""
+        import inspect
+
+        from shared.settings import service
+
+        fuente = inspect.getsource(service._test_cmf_connection)
+        assert "_has_proxy_relay" in fuente
+        assert "api.cmfchile.cl" in service.MSG_PROXY_NO_REENVIO
+
+
+def test_el_marcador_del_WAF_se_busca_en_el_CUERPO_ENTERO():
+    """Recortar antes de analizar perdió el diagnóstico durante cinco intentos.
+
+    La página de bloqueo de la CMF mide 39.142 caracteres y su marca —«Web Page Blocked»,
+    junto a la IP que el WAF vio— está en la posición 38.821. Buscarla en los primeros 500
+    la perdía siempre: lo único visible era el DOCTYPE, y el mensaje decía «la CMF respondió
+    500» sobre una petición que nunca llegó a la CMF.
+
+    El extracto que se MUESTRA sigue recortado —nadie quiere 39 KB en un cartel— pero lo que
+    se ANALIZA es el cuerpo completo. Son dos cosas distintas y confundirlas costó caro.
+    """
+    import inspect
+
+    from shared.settings import service
+
+    fuente = inspect.getsource(service._test_cmf_connection)
+    assert '"Web Page Blocked" in cuerpo_completo' in fuente, (
+        "el marcador se busca en el recorte y no en el cuerpo entero")
+    assert 'cuerpo_completo = resp.text' in fuente

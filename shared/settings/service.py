@@ -456,6 +456,20 @@ def _provider(db: Session, provider: str) -> Optional[SectorApiConfig]:
 MSG_WAF_BLOQUEO = ("Un WAF bloqueó la petición antes de llegar a la CMF{ip}. "
                    "La credencial no se llegó a evaluar{consejo}")
 MSG_WAF_SIN_PROXY = "; configurá el proxy para esta fuente, como el SIB."
+#: Cuando el 500 lo devuelve el WORKER y no el emisor. El Worker marca todo lo que REENVÍA
+#: con `X-Proxy-Status`; su ausencia en un error significa que nunca llegó a la CMF.
+MSG_PROXY_NO_REENVIO = ("El proxy no reenvió la petición a la CMF (respondió {codigo} sin "
+                        "marca de reenvío). Suele ser que el Worker solo permite el dominio "
+                        "del SIB: hay que habilitar api.cmfchile.cl en su lista.")
+
+
+def _redactar(texto: str) -> str:
+    """Saca la credencial de cualquier texto que vaya a mostrarse.
+
+    Los cuerpos de error repiten la URL consultada, y esa URL lleva la `apikey` en la query
+    string. Un diagnóstico que ayuda no puede filtrar la clave a la pantalla.
+    """
+    return re.sub(r"(apikey=)[^&\s\"'<]+", r"\1«REDACTADA»", texto or "")
 
 
 def _test_cmf_connection(db, cfg, base: str, api_key: str,
@@ -508,11 +522,23 @@ def _test_cmf_connection(db, cfg, base: str, api_key: str,
     except httpx.HTTPError as e:
         return _persist_test(db, cfg, "error",
                              f"No se pudo alcanzar {base} ({type(e).__name__}).", None)
-    cuerpo_txt = (resp.text or "")[:500]
-    if "Web Page Blocked" in cuerpo_txt or "has been blocked" in cuerpo_txt:
+    # Se BUSCA en el cuerpo entero y se MUESTRA un extracto. Recortar antes de analizar fue
+    # el defecto: la página del WAF mide 39.142 caracteres y su marca —«Web Page Blocked»,
+    # con la IP que vio— está en la posición 38.821, así que buscarla en los primeros 500
+    # la perdía siempre. Lo único que quedaba a la vista era el DOCTYPE, y el diagnóstico
+    # decía «la CMF respondió 500» sobre una petición que nunca llegó a la CMF.
+    cuerpo_completo = resp.text or ""
+    cuerpo_txt = cuerpo_completo[:500]
+    if use_proxy and resp.status_code >= 400 and not _has_proxy_relay(resp):
+        # El Worker rechazó: la petición nunca salió hacia la CMF, así que ni la credencial
+        # ni el WAF del emisor tuvieron nada que ver.
+        return _persist_test(db, cfg, "error",
+                             MSG_PROXY_NO_REENVIO.format(codigo=resp.status_code),
+                             resp.status_code)
+    if "Web Page Blocked" in cuerpo_completo or "has been blocked" in cuerpo_completo:
         # El WAF, no la CMF. Distinguirlo importa: un «500» pelado manda a revisar la
         # credencial, y acá la credencial ni siquiera llegó a evaluarse.
-        m = re.search(r"Client IP:\s*([0-9.]+)", cuerpo_txt)
+        m = re.search(r"Client IP:\s*([0-9.]+)", cuerpo_completo)
         ip = f" (IP vista por el WAF: {m.group(1)})" if m else ""
         return _persist_test(
             db, cfg, "error",
@@ -534,6 +560,12 @@ def _test_cmf_connection(db, cfg, base: str, api_key: str,
                 detalle = f' — la CMF dice: "{str(j["Mensaje"])[:120]}"'
         except ValueError:
             pass
+        if not detalle and cuerpo_txt.strip():
+            # Sin cuerpo interpretable, se muestra un extracto CRUDO. Tres vueltas se
+            # perdieron mostrando solo el número de HTTP mientras la respuesta traía la
+            # explicación: un diagnóstico que descarta la evidencia no es un diagnóstico.
+            extracto = " ".join(_redactar(cuerpo_txt).split())[:160]
+            detalle = f" — respondió: {extracto}"
         return _persist_test(db, cfg, "error",
                              f"La CMF respondió HTTP {resp.status_code}{detalle}.",
                              resp.status_code)
