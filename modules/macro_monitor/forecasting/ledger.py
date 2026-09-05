@@ -2,15 +2,33 @@
 
 `ProjectionMeta` se construye LEYENDO de acá, nunca al revés: el ledger es lo que ocurrió, y
 la meta es cómo se cuenta.
+
+**Una fila declara contra QUÉ se la va a puntuar, y no se supone.** Son dos declaraciones y
+hacen falta las dos: `target_series` es un `series_code` OBSERVABLE —el que existe en
+`mm_series`— y `measure` dice en qué medida está `point`. Faltando cualquiera de las dos, la
+puntuación adivina, y las dos veces que adivinó se equivocó:
+
+* el BVAR registraba ``target_series="pib_real"``, que es el nombre de su variable dentro del
+  bloque y no una serie: la fila quedaba `pending` **para siempre**, y la sección de
+  desempeño lo publicaba como «ninguna alcanzó su período de cierre» — que se lee como que
+  los trimestres no cerraron cuando la verdad es que no PUEDEN cerrar;
+* el punto de los dos motores es un Δlog en % (~0,4) y se comparaba contra el índice de
+  volumen del PIB (~133), o sea una tasa contra un nivel: `abs_error ≈ 132,75`, publicado
+  como RMSE.
+
+Lo vetado se LISTA (`no_puntuables`): un `pending` que no puede cerrar nunca y un `pending`
+que espera el trimestre son cosas distintas, y confundirlos es mentir con el instrumento.
 """
 from __future__ import annotations
 
 import math
+from dataclasses import dataclass
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional, Sequence
 
 from sqlalchemy.orm import Session
 
+from modules.macro_monitor.forecasting import medida as med
 from modules.macro_monitor.forecasting.models import ForecastLog
 from modules.macro_monitor.models.models import MacroSeries
 
@@ -53,15 +71,27 @@ def _lado(intervals: Sequence, nivel: float):
 
 
 def registrar(db: Session, *, model_id: str, target_series: str, horizon: str, as_of: str,
-              point: float, intervals: List[List[float]], revision: int = 0,
+              point: float, intervals: List[List[float]], measure: str, revision: int = 0,
               h: Optional[int] = None) -> ForecastLog:
     """Escribe un pronóstico. Falla si ya existe esa clave de cinco campos — que es lo que
-    impide que un rerun duplique el historial."""
+    impide que un rerun duplique el historial.
+
+    *measure* no tiene valor por defecto, y ésa es la mitad del arreglo: la puerta del ledger
+    es donde la declaración se puede EXIGIR. Un default —cualquiera— reintroduce la
+    suposición, porque el que se equivoca nunca es el que la escribe a mano.
+    """
+    med.validar(measure)
+    if not str(target_series).strip():
+        raise ValueError(
+            "un pronóstico sin serie objetivo no se puede puntuar contra nada. "
+            "`target_series` es el `series_code` OBSERVABLE, no el nombre que el modelo le "
+            "da a su variable.")
     lo80, hi80 = _lado(intervals, 0.80)
     lo90, hi90 = _lado(intervals, 0.90)
     fila = ForecastLog(
         model_id=model_id, target_series=target_series, horizon=horizon, as_of=as_of,
         revision=revision, point=float(point), intervals=intervals, h=h,
+        measure=str(measure),
         lo_80=lo80, hi_80=hi80, lo_90=lo90, hi_90=hi90, status="pending",
     )
     db.add(fila)
@@ -87,18 +117,27 @@ def puntuar_pendientes(db: Session) -> int:
         return 0
     puntuados = 0
     for f in pendientes:
-        fila = (db.query(MacroSeries)
-                .filter_by(series_code=f.target_series, period=f.horizon)
-                .first())
-        # «El período existe con valor nulo» no es «llegó el dato».
-        if fila is None or fila.value is None:
+        # Sin medida declarada NO se puntúa. Suponerle «nivel» es justo el defecto: el punto
+        # de los dos motores es una tasa, y contra el índice da un error del tamaño del
+        # índice. `no_puntuables` las lista para que la ausencia se vea.
+        if str(f.measure or "") not in med.MEDIDAS:
             continue
-        obs = float(fila.value)
+        medida = str(f.measure)
+        observado = _observado(db, str(f.target_series),
+                               med.periodos_necesarios(medida, str(f.horizon)))
+        # «El período existe con valor nulo» no es «llegó el dato»; y a una TASA le falta el
+        # dato mientras no esté el período anterior, aunque el suyo ya haya llegado.
+        realizacion = med.realizar(medida, str(f.horizon), observado)
+        if realizacion.valor is None:
+            continue
+        obs = realizacion.valor
         punto = float(f.point)
         # Se escribe con `setattr` y se lee a variables locales a propósito: las columnas
         # declarativas están tipadas como `Column[...]`, así que asignarles el valor Python
         # que corresponde es lo que el ORM espera y lo que el verificador de tipos no puede
         # ver. Es el mismo patrón que el resto del repositorio.
+        # `realized` va EN LA MEDIDA DEL PUNTO, que es lo que hace auditable el error: si
+        # guardara el nivel mientras el punto es una tasa, la fila mentiría por sí sola.
         setattr(f, "realized", obs)
         setattr(f, "realized_period_end", str(f.horizon))
         setattr(f, "abs_error", abs(obs - punto))
@@ -112,6 +151,77 @@ def puntuar_pendientes(db: Session) -> int:
         puntuados += 1
     db.commit()
     return puntuados
+
+
+def _observado(db: Session, series_code: str,
+               periodos: Sequence[str]) -> Dict[str, Optional[float]]:
+    """Los valores de esa serie en esos períodos, en UNA consulta.
+
+    Una tasa necesita dos períodos y una vuelta por período los pediría de a uno; peor, el
+    que falta se descubriría recién al calcular. `medida.periodos_necesarios` los declara
+    antes y esto los trae juntos.
+    """
+    filas = (db.query(MacroSeries)
+             .filter(MacroSeries.series_code == series_code,
+                     MacroSeries.period.in_(list(periodos)))
+             .all())
+    return {str(r.period): (None if r.value is None else float(r.value)) for r in filas}
+
+
+#: Motivos por los que un `pending` no puede cerrar NUNCA. No son «todavía no».
+SIN_MEDIDA = "medida_no_declarada"
+SERIE_DESCONOCIDA = "serie_desconocida"
+
+_EXPLICACION = {
+    SIN_MEDIDA: ("la fila no declara en qué medida está su punto, así que no hay contra qué "
+                 "compararlo"),
+    SERIE_DESCONOCIDA: ("la serie objetivo no tiene una sola observación en el registro: no "
+                        "es un período que falta, es una serie que no existe"),
+}
+
+
+@dataclass(frozen=True)
+class NoPuntuable:
+    """Un pronóstico pendiente que no va a cerrar nunca, y por qué.
+
+    Se LISTA en vez de saltearse en silencio. Un veto que no deja marca se lee como que el
+    eje todavía no tiene track record, y es otra cosa: tiene filas rotas.
+    """
+
+    fila_id: str
+    model_id: str
+    target_series: str
+    horizon: str
+    motivo: str
+
+    @property
+    def explicacion(self) -> str:
+        return _EXPLICACION.get(self.motivo, self.motivo)
+
+
+def no_puntuables(db: Session) -> List[NoPuntuable]:
+    """Los `pending` que `puntuar_pendientes` no va a poder cerrar por más que pase el
+    tiempo. Vacío es la respuesta sana."""
+    pendientes = db.query(ForecastLog).filter(ForecastLog.status == "pending").all()
+    if not pendientes:
+        return []
+    conocidas: Dict[str, bool] = {}
+    salida: List[NoPuntuable] = []
+    for f in pendientes:
+        serie = str(f.target_series)
+        if str(f.measure or "") not in med.MEDIDAS:
+            motivo = SIN_MEDIDA
+        else:
+            if serie not in conocidas:
+                conocidas[serie] = bool(
+                    db.query(MacroSeries.id).filter_by(series_code=serie).first())
+            if conocidas[serie]:
+                continue
+            motivo = SERIE_DESCONOCIDA
+        salida.append(NoPuntuable(fila_id=str(f.id), model_id=str(f.model_id),
+                                  target_series=serie, horizon=str(f.horizon),
+                                  motivo=motivo))
+    return salida
 
 
 def _del_conjunto(db: Session, bt_id: str) -> List[ForecastLog]:

@@ -13,7 +13,7 @@ from __future__ import annotations
 
 import re
 from calendar import monthrange
-from datetime import date
+from datetime import date, timedelta
 from typing import Optional
 
 _Q_FIN = {1: (3, 31), 2: (6, 30), 3: (9, 30), 4: (12, 31)}
@@ -62,4 +62,46 @@ def _resolver(period: Optional[str], *, dia_final: bool) -> Optional[date]:
         y, mo = int(m.group(1)), int(m.group(2))
         if 1 <= mo <= 12:
             return date(y, mo, monthrange(y, mo)[1] if dia_final else 1)
+    return None
+
+
+def periodo_anterior(period: Optional[str]) -> Optional[str]:
+    """La etiqueta del período INMEDIATAMENTE anterior en el calendario, o ``None``.
+
+    Existe porque una TASA necesita contra qué medirse: para realizar la variación de
+    ``2026-Q3`` hay que leer también ``2026-Q2``, y quien puntúa un pronóstico tiene que
+    poder nombrar ese período sin adivinarlo.
+
+    **Calendario, no «la observación anterior disponible».** Es la distinción que importa:
+    con un hueco en la serie, «la anterior que haya» computa un cambio de dos períodos y lo
+    rotula de uno. Acá la respuesta es una etiqueta —exista o no el dato—, y que falte el
+    dato lo resuelve quien lee, declarando la brecha en vez de saltearla.
+
+    ``None`` cuando la etiqueta no resuelve a un período de calendario (un horizonte
+    relativo como ``+4T``), igual que `fin_del_periodo`: «no sé» y «el anterior es X» son
+    cosas distintas.
+    """
+    if not period:
+        return None
+    p = str(period).strip().upper()
+    m = re.fullmatch(r"(\d{4})", p)
+    if m:
+        return str(int(m.group(1)) - 1)
+    m = re.fullmatch(r"(\d{4})-Q([1-4])", p)
+    if m:
+        y, q = int(m.group(1)), int(m.group(2))
+        return f"{y - 1}-Q4" if q == 1 else f"{y}-Q{q - 1}"
+    m = re.fullmatch(r"(\d{4})-(\d{2})", p)
+    if m:
+        y, mo = int(m.group(1)), int(m.group(2))
+        if 1 <= mo <= 12:
+            return f"{y - 1}-12" if mo == 1 else f"{y}-{mo - 1:02d}"
+    m = re.fullmatch(r"(\d{4})-(\d{2})-(\d{2})", p)
+    if m:
+        try:
+            d = date(int(m.group(1)), int(m.group(2)), int(m.group(3)))
+        except ValueError:
+            return None
+        anterior = d - timedelta(days=1)
+        return anterior.isoformat()
     return None

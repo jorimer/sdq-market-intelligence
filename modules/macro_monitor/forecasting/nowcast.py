@@ -42,6 +42,7 @@ from typing import Dict, List, Optional, Sequence, Tuple
 import numpy as np
 from sqlalchemy.orm import Session
 
+from modules.macro_monitor.forecasting import medida as med
 from modules.macro_monitor.forecasting import panel as panel_mod
 
 #: Cuántos trimestres de entrenamiento antes de que el bridge diga algo. Con menos, el
@@ -176,12 +177,18 @@ class Nowcast:
     """La estimación de un trimestre, lista para entrar al ledger."""
 
     model_id: str
+    #: El `series_code` observable contra el que se va a puntuar: el ÍNDICE de volumen del
+    #: PIB. El punto no está en esa unidad — ver `measure`.
     target_series: str
     horizon: str
     as_of: str
     point: float                       # Δlog del PIB del trimestre, en %
     intervals: List[List[float]]
     n_train: int
+    #: En qué medida está `point`. Es una TASA, y la serie contra la que se puntúa es un
+    #: NIVEL (~133): sin declararlo, el ledger restaba una de la otra y el error salía del
+    #: tamaño del índice.
+    measure: str = med.DLOG_PCT
 
 
 def _diseño(p: panel_mod.PanelTrimestral) -> Tuple[np.ndarray, np.ndarray, List[str]]:

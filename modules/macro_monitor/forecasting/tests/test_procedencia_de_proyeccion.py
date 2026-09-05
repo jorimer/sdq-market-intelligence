@@ -26,6 +26,7 @@ from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
 
 from modules.macro_monitor.forecasting import ledger as led
+from modules.macro_monitor.forecasting import medida as med
 from modules.macro_monitor.forecasting import procedencia as proc
 from modules.macro_monitor.models.models import MacroSeries
 from shared.database.base import Base
@@ -33,7 +34,9 @@ from shared.registry.projection import MIN_OOS
 from shared.registry.signals import PROJECTED, REAL, AxisRegistry, VariableSignal
 
 MODELO = "bvar_minnesota.v1"
-SERIE = "pib_real"
+# El `series_code` OBSERVABLE. Decía `"pib_real"` —el nombre de la variable en el bloque—,
+# que no es ninguna serie: esas filas quedaban `pending` para siempre.
+SERIE = "bcrd.xls.pib_2018.serie_original_indice"
 INTERVALOS = [[0.80, 2.1, 4.1], [0.90, 1.6, 4.6]]
 
 
@@ -50,7 +53,7 @@ def db():
 def _emitir(db, horizonte="2027-Q1", as_of="2026-09-01", revision=0, punto=3.1, h=1):
     return led.registrar(db, model_id=MODELO, target_series=SERIE, horizon=horizonte,
                          as_of=as_of, point=punto, intervals=INTERVALOS, revision=revision,
-                         h=h)
+                         h=h, measure=med.DLOG_PCT)
 
 
 def _puntuar(db, n, horizonte=None):
@@ -64,7 +67,7 @@ def _puntuar(db, n, horizonte=None):
         objetivo = horizonte or f"{2020 + i // 4}-Q{(i % 4) + 1}"
         f = led.registrar(db, model_id=MODELO, target_series=SERIE, horizon=objetivo,
                           as_of=f"2020-{(i % 12) + 1:02d}-01", point=3.0,
-                          intervals=INTERVALOS, h=1)
+                          intervals=INTERVALOS, h=1, measure=med.DLOG_PCT)
         f.status, f.realized, f.abs_error, f.sq_error = "scored", 3.2, 0.2, 0.04
         f.interval_hit_80, f.interval_hit_90 = True, True
         f.realized_period_end = date(2026, 3, 31)

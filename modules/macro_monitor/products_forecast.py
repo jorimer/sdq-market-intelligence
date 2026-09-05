@@ -220,7 +220,8 @@ class MacroForecastProduct:
     # ── Snapshot ──
 
     def _payload(self, db: Session) -> Dict[str, Any]:
-        from modules.macro_monitor.forecasting import nowcast, procedencia, sectoral
+        from modules.macro_monitor.forecasting import desempeno, nowcast, procedencia
+        from modules.macro_monitor.forecasting import sectoral
         from modules.macro_monitor.forecasting.desempeno import filas
 
         hoy = date.today()
@@ -272,6 +273,11 @@ class MacroForecastProduct:
                            "interval_coverage": [list(t) for t in f.interval_coverage],
                            "solapan": f.solapan}
                           for f in filas(db)],
+            # Lo que NO va a cerrar nunca. Viaja en el snapshot porque esta superficie
+            # renderiza sin base: si tuviera que consultarla, o se enteraría de otra cosa o
+            # —lo que pasó— escribiría su propia copia del texto y el arreglo del otro lado
+            # no la tocaría. La superficie no re-juzga: se entera.
+            "no_puntuables": desempeno.no_puntuables(db),
         }
 
     def snapshot(self, tier: ProductTier, period: str,
@@ -538,13 +544,19 @@ def _md_escenarios(p: Dict[str, Any]) -> str:
 
 
 def _md_desempeno(p: Dict[str, Any]) -> str:
+    """La sección desde el SNAPSHOT. La prosa sale de las constantes de `desempeno`, no de
+    literales de acá: la frase de «todavía no hay puntuados» estaba duplicada palabra por
+    palabra, y cuando se corrigió del otro lado —porque decía que los trimestres no habían
+    cerrado cuando en realidad no PODÍAN cerrar— esta copia siguió mintiendo."""
+    from modules.macro_monitor.forecasting import desempeno as desemp
+
     fs = p.get("desempeno") or []
+    rotas = p.get("no_puntuables") or []
     if not fs:
-        return ("Todavía no hay pronósticos puntuados: ninguna de las proyecciones emitidas "
-                "alcanzó su período de cierre con el dato observado publicado. Esta sección "
-                "se llena sola a medida que los trimestres cierran, y aparece con o sin "
-                "resultados — un desempeño que solo se publica cuando conviene no es un "
-                "track record.")
+        bloque = desemp.renglones_no_puntuables(rotas)
+        if bloque:
+            return "\n".join(bloque + ["", desemp.QUE_SI_SE_PUEDE_ESPERAR])
+        return desemp.SIN_HISTORIAL
     lineas = ["Cada proyección queda registrada antes de conocerse el resultado, y se puntúa "
               "sola cuando el dato llega.", "",
               "| modelo | serie | horizonte | n | RMSE | MAE | calibración del intervalo |",
@@ -567,6 +579,10 @@ def _md_desempeno(p: Dict[str, Any]) -> str:
             "información, así que el `n` es mayor que el número de observaciones "
             "independientes que lo sostienen. Se declara, no se corrige con una fórmula "
             "inventada.")
+    bloque = desemp.renglones_no_puntuables(rotas)
+    if bloque:
+        lineas.append("")
+        lineas.extend(bloque)
     return "\n".join(lineas)
 
 

@@ -15,11 +15,25 @@ probar.
 trimestre en que el resultado es malo es la misma tentación que la puntuación manual, y una
 sección que aparece y desaparece se lee como que el producto no tiene track record en vez de
 que todavía no lo tiene.
+
+**Y «todavía no» no es lo mismo que «nunca».** El texto de sección vacía decía que ninguna
+proyección había alcanzado su período de cierre — o sea, que los trimestres no habían
+cerrado. Durante meses la verdad fue otra: las filas del BVAR apuntaban a `"pib_real"`, que
+es el nombre de la variable en el bloque y no una serie, así que **no podían** cerrar. El
+instrumento reportaba paciencia donde había una rotura. Lo que no puede puntuarse se LISTA
+(`ledger.no_puntuables`): un veto silencioso se lee como que el eje no tiene track record.
+
+**Hay DOS superficies que publican esta sección**, y arreglar una sola deja el documento
+contradiciéndose: el eje macro la pide acá (`app/products_macro._track_record_md`) y el
+producto de proyecciones la arma del snapshot (`products_forecast._md_desempeno`), que es
+otro proceso y no ve la base. Por eso la prosa vive en CONSTANTES y los renglones los arma
+`renglones_no_puntuables()` a partir de dicts: la segunda superficie no re-computa nada, se
+ENTERA — el payload le lleva la lista ya resuelta.
 """
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Mapping, Optional, Sequence, Tuple
 
 from sqlalchemy.orm import Session
 
@@ -28,11 +42,26 @@ from modules.macro_monitor.forecasting.models import ForecastLog
 
 TITULO = "Desempeño de nuestras proyecciones anteriores"
 
-_SIN_HISTORIAL = (
+SIN_HISTORIAL = (
     "Todavía no hay pronósticos puntuados: ninguna de las proyecciones emitidas alcanzó su "
     "período de cierre con el dato observado publicado. Esta sección se llena sola a medida "
     "que los trimestres cierran, y aparece con o sin resultados — un desempeño que solo se "
     "publica cuando conviene no es un track record."
+)
+
+#: El encabezado de la lista de lo que NO va a cerrar. En constante y no incrustado: un
+#: literal partido por ancho de línea deja de existir en el fuente aunque el valor sea
+#: correcto, y un test que lo busque ahí falla sin motivo.
+HAY_ROTAS = (
+    "**Hay proyecciones emitidas que no van a cerrar solas.** No están esperando el "
+    "trimestre: les falta algo que la puntuación necesita, y por eso se listan en vez de "
+    "quedarse calladas. Mientras estén así no suman al track record, y el track record que "
+    "esta sección muestra no las cuenta."
+)
+
+QUE_SI_SE_PUEDE_ESPERAR = (
+    "El resto de las proyecciones sí se puntúa sola cuando el BCRD publica el trimestre; "
+    "esta sección aparece igual, con o sin resultados."
 )
 
 
@@ -82,11 +111,51 @@ def _calibracion(fila: FilaDeDesempeno) -> str:
     return "; ".join(partes)
 
 
+def como_dict(r: led.NoPuntuable) -> Dict[str, str]:
+    """Lo que el snapshot transporta a la otra superficie. Incluye la EXPLICACIÓN ya
+    resuelta: el que renderiza no tiene que saber traducir un código de motivo, y si tuviera
+    que hacerlo aparecería una segunda tabla de motivos que se desincroniza con ésta."""
+    return {"model_id": r.model_id, "target_series": r.target_series,
+            "horizon": r.horizon, "motivo": r.motivo, "explicacion": r.explicacion}
+
+
+def no_puntuables(db: Session) -> List[Dict[str, str]]:
+    """Lo que no va a cerrar nunca, listo para viajar en el snapshot."""
+    return [como_dict(r) for r in sorted(led.no_puntuables(db),
+                                         key=lambda x: (x.model_id, x.target_series,
+                                                        x.horizon))]
+
+
+def renglones_no_puntuables(rotas: Sequence[Mapping[str, Any]]) -> List[str]:
+    """El bloque en Markdown. Una sola implementación para las dos superficies."""
+    if not rotas:
+        return []
+    return [HAY_ROTAS, ""] + [
+        f"- `{r.get('model_id')}` → `{r.get('target_series')}` ({r.get('horizon')}): "
+        f"{r.get('explicacion')}."
+        for r in rotas
+    ]
+
+
 def seccion(db: Session) -> str:
     """El texto de la sección, en Markdown, computado."""
-    fs = filas(db)
+    return texto(filas(db), no_puntuables(db))
+
+
+def texto(fs: Sequence[FilaDeDesempeno], rotas: Sequence[Mapping[str, Any]]) -> str:
+    """El renderizador, sin base de datos: las dos superficies lo comparten.
+
+    Que no tome `Session` es a propósito — el producto de proyecciones lo arma desde un
+    snapshot ya congelado, y si esta función pidiera la base ese camino habría escrito su
+    propia copia del texto. Ya lo hizo una vez: la frase «ninguna alcanzó su período de
+    cierre» estaba duplicada literal en `products_forecast`, y el arreglo de acá no la
+    tocaba.
+    """
     if not fs:
-        return _SIN_HISTORIAL
+        bloque = renglones_no_puntuables(rotas)
+        if bloque:
+            return "\n".join(bloque + ["", QUE_SI_SE_PUEDE_ESPERAR])
+        return SIN_HISTORIAL
 
     lineas = [
         "Cada proyección que publicamos queda registrada antes de conocerse el resultado, y "
@@ -115,4 +184,12 @@ def seccion(db: Session) -> str:
             "En los conjuntos marcados, las ventanas de evaluación **se solapan**: los "
             "pronósticos comparten información entre sí, así que el `n` de la tabla es "
             "mayor que el número de observaciones independientes que lo sostienen.")
+
+    # Lo roto va DEBAJO de la tabla y no en lugar de ella: con track record acumulándose,
+    # una fila que no puede cerrar desaparecería del todo si solo se contara cuando la tabla
+    # está vacía, y el `n` de arriba se leería como si fuera todo lo emitido.
+    bloque = renglones_no_puntuables(rotas)
+    if bloque:
+        lineas.append("")
+        lineas.extend(bloque)
     return "\n".join(lineas)

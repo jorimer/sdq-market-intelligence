@@ -32,12 +32,15 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from modules.macro_monitor.forecasting import bloque, bvar, ledger, nowcast
+from modules.macro_monitor.models.models import MacroSeries
 from shared.data.periodos import fin_del_periodo
 
 logger = logging.getLogger("sdq.macro.forecasting.emision")
 
-#: Serie objetivo del bloque. Es el nombre con que el BVAR la conoce, y el que viaja al
-#: ledger como `target_series`.
+#: La variable objetivo DENTRO del bloque. Es el nombre con que el BVAR la conoce — y **no**
+#: es un `series_code`: viajaba al ledger como `target_series` y ninguna de esas filas se
+#: podía puntuar, porque `mm_series` no tiene ninguna serie que se llame así. La serie
+#: observable y la medida las resuelve `bloque`, por el mismo camino que trajo el dato.
 OBJETIVO = "pib_real"
 #: Las variantes de nowcast que se publican. `3` está deliberadamente fuera — ver el
 #: docstring del módulo.
@@ -84,18 +87,35 @@ def _es_hacia_adelante(horizonte: str, corte: date) -> bool:
     return cierre is None or cierre > corte
 
 
+def _serie_observable(db: Session, series_code: Optional[str]) -> bool:
+    """¿La serie destino tiene al menos una observación en el registro?
+
+    Un pronóstico contra una serie que no existe no falla al escribirse: falla en SILENCIO
+    tres meses después, quedándose `pending` para siempre mientras la sección de desempeño
+    dice que el trimestre no cerró. Se comprueba al ESCRIBIR, que es donde todavía se puede
+    decir por qué — la misma razón por la que `_es_hacia_adelante` corre acá y no al publicar.
+    """
+    if not series_code:
+        return False
+    return bool(db.query(MacroSeries.id).filter_by(series_code=series_code).first())
+
+
 def _escribir(db: Session, *, model_id: str, horizonte: str, as_of: str, punto: float,
-              intervalos: List[List[float]], objetivo: str = OBJETIVO,
+              intervalos: List[List[float]], serie: str, medida: str,
               h: Optional[int] = None) -> Optional[bool]:
     """``True`` escrito · ``False`` duplicado · ``None`` no se pudo.
 
     *h* es el horizonte RELATIVO, y es lo que hace comparable a esta fila con las de otros
     trimestres. Sin él la fila queda fuera de todo conjunto de track record — a propósito:
     inventarle un horizonte sería fabricarle historial.
+
+    *serie* es el `series_code` observable y *medida* en qué unidad está *punto*: sin las dos
+    la fila no se puede puntuar, y el ledger las exige.
     """
     try:
-        ledger.registrar(db, model_id=model_id, target_series=objetivo, horizon=horizonte,
-                         as_of=as_of, point=punto, intervals=intervalos, h=h)
+        ledger.registrar(db, model_id=model_id, target_series=serie, measure=medida,
+                         horizon=horizonte, as_of=as_of, point=punto, intervals=intervalos,
+                         h=h)
         return True
     except IntegrityError:
         db.rollback()
@@ -128,29 +148,47 @@ def emitir(db: Session, *, as_of: Optional[date] = None) -> Emision:
             motivos.append(f"nowcast m{variante} {est.horizon}: el período ya había cerrado "
                            f"al corte {iso}; no se registra")
             continue
+        if not _serie_observable(db, est.target_series):
+            motivos.append(f"nowcast m{variante}: la serie objetivo «{est.target_series}» no "
+                           "tiene una sola observación en el registro; la fila quedaría "
+                           "`pending` para siempre y no se escribe")
+            continue
         # El nowcast apunta al trimestre EN CURSO: su horizonte relativo es 0, y la variante
         # (cuántos meses de IMAE vio) ya viaja en `model_id`, así que m1 y m2 no se mezclan.
         r = _escribir(db, model_id=est.model_id, horizonte=est.horizon, as_of=iso,
                       punto=est.point, intervalos=[list(t) for t in est.intervals],
-                      objetivo=est.target_series, h=0)
+                      serie=est.target_series, medida=est.measure, h=0)
         escritos += 1 if r is True else 0
         omitidos += 1 if r is False else 0
         if r is None:
             motivos.append(f"nowcast m{variante}: la escritura falló")
 
     # ── Trayectoria del BVAR ────────────────────────────────────────────────────────
+    # La serie observable y la medida salen del MISMO lugar del que salió el número: el
+    # bloque sabe de qué `series_code` trajo cada variable y en qué forma la transformó. Una
+    # constante escrita acá al lado sería una segunda declaración del mismo hecho, y la que
+    # queda vieja es la que puntúa.
+    serie_bvar = bloque.codigo_de_variable(db, OBJETIVO)
+    medida_bvar = bloque.medida_de_variable(OBJETIVO)
     try:
         armado = bloque.armar(db)
         proy = bvar.proyectar_bloque(
             np.array([list(f) for f in armado.Y], dtype=float), armado.nombres,
             armado.trimestres[-1] if armado.trimestres else "",
-            objetivo=OBJETIVO) if armado.trimestres else None
+            objetivo=OBJETIVO, serie_objetivo=serie_bvar,
+            medida=medida_bvar) if armado.trimestres else None
     except Exception as e:  # noqa: BLE001
         motivos.append(f"bvar: {e}")
         proy = None
 
     if proy is None:
         motivos.append("bvar: el bloque no alcanzó para proyectar")
+    elif not _serie_observable(db, serie_bvar):
+        motivos.append(
+            f"bvar: «{OBJETIVO}» es el nombre de la variable en el bloque y no resolvió a "
+            f"una serie observable (dio {serie_bvar!r}); sus pronósticos quedarían `pending` "
+            "para siempre y no se escriben")
+        escenarios = len(proy.escenarios())
     else:
         for p in proy.pronosticos():
             if not _es_hacia_adelante(p.horizonte, corte):
@@ -161,7 +199,7 @@ def emitir(db: Session, *, as_of: Optional[date] = None) -> Emision:
                 continue
             r = _escribir(db, model_id=p.model_id, horizonte=p.horizonte, as_of=iso,
                           punto=p.punto, intervalos=[list(t) for t in p.intervalos],
-                          objetivo=p.target_series, h=p.h)
+                          serie=p.target_series, medida=p.measure, h=p.h)
             escritos += 1 if r is True else 0
             omitidos += 1 if r is False else 0
             if r is None:

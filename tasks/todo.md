@@ -1,110 +1,159 @@
-# Modelo de valuación por TIPO de entidad — plan
+# El ledger de pronósticos no sabía contra QUÉ puntuar — plan
 
-## Lo que se encontró pidiendo el informe de punta a punta
+Dos defectos verificados en `modules/macro_monitor/forecasting/ledger.py`. Comparten una
+causa: **`puntuar_pendientes` supone que `target_series` nombra una serie observable y que
+`point` es directamente comparable con el valor de esa serie.** Ninguna de las dos
+suposiciones se cumple.
 
-BHD, cierre 2025, datos reales: **P/B implícito 1,40× a 12,23×**. El panel de ocho
-transacciones dice que lo que se paga es **0,77×–2,73×**. El 12,23× no es un valor, es un
-modelo roto.
+## A · Las proyecciones del BVAR no se pueden puntuar NUNCA
 
-Causa: `g = b × ROE = 0,60 × 22,57 % = 13,54 %` contra `Ke = 14,28 %` — el denominador de la
-perpetuidad queda en 0,74 pp. El guard existente solo atrapa `g ≥ Ke`, o sea el caso que **no
-converge**; no atrapa el que converge y es imposible. El PIB nominal dominicano crece 9,03 %
-de largo plazo: una entidad que crece 13,54 % para siempre termina siendo más grande que la
-economía.
+`emision.OBJETIVO = "pib_real"` es el nombre de la variable DENTRO del bloque
+(`bloque.BLOQUE[0].nombre`), no un `series_code`. Viaja al ledger como `target_series` y
+`puntuar_pendientes` lo busca en `mm_series`, donde no existe.
 
-## Lo que se midió (SIMBAD, cierres 2019-2025, 145 entidad-año)
+Verificado en prod: `GET /api/v1/macro-monitor/series/pib_real` → `observations: []`.
+Verificado en prod hoy (readiness de `macro_forecast`): «1 proyección(es) vigente(s);
+**0 conjunto(s) con backtest puntuado**».
 
-### Dispersión de ROE (p75 − p25, pp) — la evidencia del riesgo relativo
+Consecuencia: toda fila del BVAR queda `pending` para siempre y `desempeno.seccion()`
+publica «ninguna de las proyecciones emitidas alcanzó su período de cierre» — que se lee
+como «los trimestres no cerraron» cuando la verdad es que **no pueden cerrar**. El
+instrumento no distingue «todavía no» de «nunca».
 
-| año | banca múltiple | ahorro y crédito | asociaciones | corp. crédito |
-|---|---:|---:|---:|---:|
-| 2020 | 15,3 | 8,4 | 2,0 | 8,6 |
-| 2021 | 23,6 | 7,3 | 2,0 | 3,9 |
-| 2022 | 12,7 | 13,8 | 4,0 | 7,6 |
-| 2023 | 21,2 | 6,2 | 3,5 | 6,5 |
-| 2024 | 17,6 | 11,8 | 3,4 | 0,7 |
-| 2025 | 19,3 | 6,3 | 2,4 | 5,2 |
+## B · El ledger puntúa una TASA contra un NIVEL
 
-**Lo que la evidencia SÍ sostiene:** las asociaciones son las menos dispersas los **seis de
-seis** años, y la banca múltiple la más dispersa **cinco de seis**.
+`nowcast.estimar` devuelve `point = round(punto * 100, 4)`, o sea el Δlog del PIB **en %**
+(~0,4), con `target_series = panel.PIB_CODE`. Esa serie es el **índice de volumen** (~133).
+`abs_error` daría ≈ 132,75 y `desempeno.seccion()` lo publicaría como RMSE.
 
-**Lo que NO sostiene:** un orden fino de cuatro. Los dos del medio se cruzan, y las
-corporaciones de crédito son **tres entidades** — su dispersión es ruido, no medición.
+El BVAR tiene la misma forma: `bloque._transformar` aplica `(log b − log a) × 100`, así que
+`Pronostico.punto` también es un Δlog en %.
 
-→ La beta se abre en **TRES** grupos, no cuatro, y las corporaciones comparten el de ahorro
-y crédito **por falta de muestra**, declarado.
+B no explotó porque **nada está puntuado en prod todavía**. Arreglar A sin B publica un RMSE
+de ~130 en la primera corrida.
 
-### Retención implícita `b = ΔPatrimonio / Utilidad`
+## La causa raíz, y dónde ya está resuelta un nivel más arriba
 
-| tipo | n | b mediano |
-|---|---:|---:|
-| banca múltiple | 54 | **0,75** |
-| bancos de ahorro y crédito | 51 | **0,74** |
-| asociaciones de ahorros y préstamos | 25 | **0,99** |
-| corporaciones de crédito | 15 | **0,76** |
+`shared/data/series_nature.py` cerró exactamente esta clase de defecto para las SERIES: «el
+emisor siempre declara qué mide, nosotros lo tirábamos, y cada consumidor tenía que ADIVINAR
+qué transformación aplica». La corrección fue capturar la naturaleza, persistirla junto al
+dato y que cada consumidor la LEA.
 
-El 0,99 de las asociaciones no es un artefacto: **son mutuales, no tienen accionistas a
-quienes pagar dividendos**, así que retienen todo. Es la diferencia por tipo mejor sostenida
-de todas, y hoy el modelo usa un 0,60 igual para las cuatro — una rúbrica que el dato
-desmiente.
+El ledger repite el defecto un nivel abajo: guarda un número sin declarar en qué medida está.
+La cura es la misma — **la medida del punto se DECLARA al escribir y se lee al puntuar**.
 
-## Y el segundo defecto, que apareció al pedir el informe de la asociación
+Y la transformación en sí ya tiene tres copias: `panel._dlog` (sin ×100),
+`bloque._transformar` (×100) y `backtest.correr:66-72` (×100, la que lo hace bien). El
+ledger sería la cuarta.
 
-El techo tapó el lado de arriba y dejó intacto el de abajo. APAP, ROE 11,00 % contra un `Ke`
-de 12,91 %: ingreso residual negativo todos los años, creciendo al 9,03 % y dividido por un
-`(Ke − g)` de 3,88 pp. **P/B 0,16× – 0,47×** — la entidad valdría el 16 % de su patrimonio,
-cuando el mínimo del panel es 0,77× y fue una venta post-crisis.
+## El arreglo
 
-Es el mismo defecto con el signo cambiado, y el segundo es peor porque **no se ve raro**: un
-múltiplo bajo para una entidad que destruye valor parece razonable hasta que se mira cuánto.
+### 1 · `shared/data/periodos.py` gana `periodo_anterior`
 
-### La cura: el exceso se EROSIONA, y está medido
+Una tasa necesita contra qué medirse. No hay helper de «período anterior» por etiqueta:
+`shared/operations/calendario._anterior` trabaja sobre tuplas `(año, q)` y es privado. El
+archivo ya declara que es el hogar de esta pregunta y que hay copias sueltas; se agrega ahí
+en vez de escribir la cuarta.
 
-`RI_{t+1} = ω · RI_t`, con terminal `ω·RI_T / (1 + Ke − ω)`. Con `ω < 1` el denominador es
-siempre mayor que `Ke` y siempre positivo: **acotado por construcción y simétrico entre los
-dos signos**. Ni en el límite `ω → 1` explota — tiende a una perpetuidad plana, no a cero.
+**Calendario, no «la observación anterior disponible».** Con un hueco en la serie, «la
+anterior disponible» computa un cambio de dos trimestres y lo rotula de uno. Si el período
+anterior de calendario falta, no se puntúa.
 
-`ω` medida con la regresión de Ohlson sobre 259 pares (entidad, año) 2019-2025:
+### 2 · `modules/macro_monitor/forecasting/medida.py` — módulo nuevo
 
-| | ω | n |
-|---|---:|---:|
-| global | **0,867** (R² 0,776) | 259 |
-| banca múltiple | 0,902 | 93 |
-| bancos de ahorro y crédito | 0,571 | 79 |
-| corporaciones de crédito | 0,569 | 27 |
-| asociaciones | **0,358** | 60 |
+Vocabulario + realización, puro (sin DB):
 
-**Ordena igual que la dispersión**, y eso es corroboración: la clase cuyo ROE más se dispersa
-es la que más conserva su ventaja. Y los dos del medio dan 0,571 y 0,569 — que compartan
-banda de beta deja de ser una decisión por falta de muestra.
+* `LEVEL = "level"` · `DLOG_PCT = "dlog_pct"` · `MEDIDAS`
+* `periodos_necesarios(medida, period) -> Tuple[str, ...]` — qué hay que leer del observado
+* `realizar(medida, period, observado) -> Realizacion(valor, motivo)` — `valor=None` con el
+  MOTIVO nombrado, jamás 0,0
 
-### El efecto sobre los dos casos reales
+### 3 · `bloque.BloqueArmado` declara de dónde salió cada variable
 
-| | perpetuidad (antes) | con techo | **con persistencia** |
-|---|---:|---:|---:|
-| BHD (banca múltiple) | 1,40× – **12,23×** | 1,31× – 3,15× | **1,14× – 1,58×** |
-| APAP (asociación) | — | **0,16×** – 0,47× | **0,72× – 0,91×** |
+`codigo_por_variable` y `medida_por_variable`. La medida del ledger sale de la MISMA
+declaración que produjo el número (`Variable.transformacion`), no de una constante paralela
+que se desincroniza. `MEDIDA_DE_TRANSFORMACION = {NIVEL: LEVEL, DLOG: DLOG_PCT}`.
 
-El panel observado es 0,77×–2,73×, mediana 1,73×. El modelo queda ahora **por debajo** de esa
-mediana, y es deliberado: se mide la erosión en vez de suponer la ventaja perpetua. Ajustarlo
-para que coincida con el panel sería calibrar contra ocho observaciones, que es justo lo que
-dijimos que el panel no sostiene.
+### 4 · `bvar` transporta serie y medida
 
-## Qué se cambia
+`proyectar_bloque(..., serie_objetivo=None, medida=None)` → `ProyeccionBVAR` →
+`Pronostico`/`Escenario`. Opcionales porque `backtest_bvar` es numérico puro y no tiene por
+qué conocerlas; la exigencia vive en la puerta del ledger (§5), que es donde importa.
+`objetivo`/`target` sigue siendo el nombre de la variable del bloque — es lo que indexa la
+matriz — y se conserva en `ProyeccionBVAR.target`.
 
-1. **Tope de crecimiento terminal.** `g = min(b × ROE, crecimiento nominal de largo plazo)`,
-   con el tope COMPUTADO de nuestra propia serie de PIB nominal, no escrito a mano. Cuando el
-   tope muerde, se declara — es un supuesto que cambia el valor y no puede viajar callado.
-2. **Retención por tipo**, medida. Reemplaza el 0,60 de rúbrica.
-3. **Beta por tipo**, en tres grupos. El ORDEN está medido; la MAGNITUD del salto es rúbrica
-   y se declara como tal.
-4. **Persistencia por tipo**, medida. Reemplaza la perpetuidad creciente del terminal, que
-   explotaba por los dos lados.
+### 5 · `ForecastLog.measure` + `ledger.registrar` lo EXIGE
 
-## Qué NO se cambia, y por qué
+Columna `measure` (String(16), nullable). Migración Alembic sobre el head `c3f7a2d9e814`.
 
-* **Las asociaciones se valúan sin trato especial** (decisión del dueño). Que sean mutuales
-  entra por la retención medida, que es dato, y no por un caveat aparte.
-* **La beta no se desapalanca.** Sigue valiendo el motivo original: en un banco los depósitos
-  son materia prima.
-* **`Ke` sigue siendo un rango.** Abrir la beta por tipo no lo vuelve un punto.
+`registrar(..., measure)` sin default: toda fila nueva declara su medida o lanza. Valida
+también `target_series` no vacío.
+
+`puntuar_pendientes` lee la medida y realiza el observado con `medida.realizar`. Una fila sin
+medida declarada NO se puntúa (no se le supone «nivel»: eso es justo el defecto B).
+
+`realized` pasa a guardarse **en la medida del punto** — que es lo que lo hace comparable.
+
+### 6 · Lo vetado se LISTA: `ledger.no_puntuables(db)`
+
+Un `pending` que no puede cerrar nunca. Dos motivos: medida no declarada, y serie sin una
+sola observación en `mm_series` (que es la forma exacta del defecto A).
+
+`desempeno.seccion()` deja de decir «todavía no cerraron» cuando la causa es otra: nombra la
+causa y dice qué sí se puede esperar. Un veto silencioso se lee como que el eje no tiene
+validación.
+
+### 7 · `emision` no escribe lo que no se va a poder puntuar
+
+`_escribir` comprueba que la serie destino tenga al menos una observación; si no, no escribe
+y suma un `motivo`. Con el defecto A esto dispara con nombre y apellido en vez de callarse.
+`emision` pasa `serie` y `medida` desde `armado.codigo_por_variable` /
+`medida_por_variable`, y desde el nowcast (`PIB_CODE` / `DLOG_PCT`).
+
+### 8 · `backtest.correr` usa el helper compartido
+
+Deja de recomputar el dlog a mano (66-72). Era la tercera copia y la única correcta; ahora
+es la misma que puntúa el ledger, que es el punto: si divergen, el backtest y el track
+record miden cosas distintas y nadie se entera.
+
+### 9 · Migración de datos, acotada y verificable
+
+Las filas ya escritas en prod son de UNA sola versión del código (`emision.py` nació el
+2026-09-04, commit `4f7bc0f3`; hoy es 2026-09-05) y ninguna está puntuada. Sus dos
+productores conocidos —`bridge_imae_pib.*` y `bvar_minnesota.*`— emiten Δlog en % sobre
+`PIB_CODE`. La migración pone `measure='dlog_pct'` y normaliza
+`target_series 'pib_real' → PIB_CODE` **solo para esos `model_id`**. Cualquier otra fila
+queda con `measure` NULL y la lista de §6 la muestra.
+
+No es fabricar track record: es corregir un rótulo cuyo contenido es verificable leyendo el
+único commit que lo escribió. Lo contrario —dejarlas inservibles— tira historial REAL y
+ganado, en un ledger que necesita 12 observaciones para anclar y tiene 1.
+
+## Tests — primero contra el código VIEJO
+
+Regla de la casa que ya me falló: escribo la fixture que hace PASAR, no la que hace FALLAR.
+Cada test se corre contra el código actual y se muestra el fallo ANTES de escribir el
+arreglo.
+
+1. `test_medida.py` — realización de cada medida y **cada motivo de negativa**, incluyendo
+   el hueco de calendario (que es donde «la anterior disponible» mentiría).
+2. `test_ledger.py` — puntuar una fila `dlog_pct` da la TASA observada, no el nivel
+   (**falla hoy: 132,75**); una fila sin medida no se puntúa; `no_puntuables` reporta la
+   serie inexistente.
+3. `test_emision_se_puede_puntuar.py` (nuevo) — el que caza los DOS a la vez: emitir con el
+   bloque real de juguete → llega el observado → puntuar → el error es del orden del modelo,
+   no del nivel del índice. **Falla hoy por A (0 puntuados) y por B (error ~130).**
+4. `test_desempeno.py` (nuevo) — la sección no dice «todavía no cerraron» cuando la causa es
+   que no pueden cerrar.
+5. Un test de que `bloque` resuelve `pib_real` al MISMO código que usa el nowcast: si
+   divergen, el ledger puntúa contra otra serie.
+
+## Los tres gates
+
+`pytest modules/ shared/ -q` · `ruff check modules/ shared/ app/` ·
+`mypy shared/ modules/ app/ --no-incremental | mypy-baseline filter` (exit code del FILTRO).
+
+## Fuera de alcance
+
+La discrepancia de unidades de la lectura sectorial (`_payload` pasa `punto` como `g_pib`) va
+por otra rama y no se toca acá.

@@ -24,12 +24,19 @@ from typing import Dict, List, Optional, Sequence, Tuple
 
 from sqlalchemy.orm import Session
 
+from modules.macro_monitor.forecasting import medida as med
 from modules.macro_monitor.forecasting import panel as panel_mod
 from shared.data.bcrd_excel import canonical
 from shared.data.periodos import fin_del_periodo
 
 #: Cómo entra cada variable. `dlog` = variación logarítmica ×100; `nivel` = tal cual.
 NIVEL, DLOG = "nivel", "dlog"
+
+#: La misma transformación, dicha en el vocabulario con que el ledger puntúa. El mapa existe
+#: para que la medida del pronóstico salga de la MISMA declaración que produjo el número
+#: (`Variable.transformacion`) y no de una constante paralela: dos declaraciones del mismo
+#: hecho se desincronizan, y la que quedó vieja es la que puntúa.
+MEDIDA_DE_TRANSFORMACION = {NIVEL: med.LEVEL, DLOG: med.DLOG_PCT}
 
 
 @dataclass(frozen=True)
@@ -187,3 +194,46 @@ def armar(db: Session, *, hasta: Optional[str] = None) -> BloqueArmado:
     orden = sorted(comunes, key=lambda t: (fin_del_periodo(t) or date.min, t))
     Y = tuple(tuple(series[v.nombre][t] for v in BLOQUE) for t in orden)
     return BloqueArmado(tuple(orden), tuple(v.nombre for v in BLOQUE), Y, inicio, fin)
+
+
+def variable(nombre: str) -> Optional[Variable]:
+    """La declaración de una variable del bloque, por nombre."""
+    return next((v for v in BLOQUE if v.nombre == nombre), None)
+
+
+def medida_de_variable(nombre: str) -> Optional[str]:
+    """En qué medida entrega el bloque esa variable, en el vocabulario de `medida`.
+
+    Es lo que el ledger necesita para puntuar un pronóstico sobre ella: el PIB entra en
+    variación logarítmica ×100, así que el punto que sale del BVAR es un `dlog_pct` y no un
+    nivel — que es exactamente lo que la puntuación suponía y no era.
+    """
+    var = variable(nombre)
+    return None if var is None else MEDIDA_DE_TRANSFORMACION.get(var.transformacion)
+
+
+def codigo_de_variable(db: Session, nombre: str) -> Optional[str]:
+    """El `series_code` OBSERVABLE del que sale esa variable, o ``None``.
+
+    El BVAR conoce a su objetivo por el nombre que tiene en el bloque (`"pib_real"`), y ese
+    nombre no es una serie: registrado como `target_series`, la fila queda `pending` para
+    siempre porque no hay contra qué puntuarla. La serie se resuelve por el MISMO camino que
+    usó `armar` para traer el dato —el registro canónico, o el código explícito de la
+    variable—, y no por una constante escrita al lado que puede divergir.
+
+    Una variable empalmada de varios tramos se puntúa contra el ÚLTIMO, que es el vigente:
+    el pronóstico apunta al futuro y los tramos históricos ya no reciben datos.
+    """
+    var = variable(nombre)
+    if var is None:
+        return None
+    if var.codigo:
+        return var.codigo
+    from sqlalchemy import text
+
+    codigos = [r[0] for r in db.execute(text("select distinct series_code from mm_series"))]
+    for clave in reversed(var.tramos):
+        code = _codigo(clave, codigos)
+        if code is not None:
+            return code
+    return None

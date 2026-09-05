@@ -20,6 +20,7 @@ import numpy as np
 import pytest
 
 from modules.macro_monitor.forecasting import bvar
+from modules.macro_monitor.forecasting import medida as med
 
 
 def _Y(n=90, k=3, semilla=5):
@@ -34,8 +35,15 @@ def _Y(n=90, k=3, semilla=5):
 _NOMBRES = ("pib_real", "b", "c")
 
 
-def _proyeccion():
-    return bvar.proyectar_bloque(_Y(), _NOMBRES, "2025-Q4", pasos=8)
+#: El `series_code` OBSERVABLE del objetivo. `"pib_real"` es el nombre de la variable EN EL
+#: BLOQUE y no una serie: una proyección que solo declara eso no puede producir pronósticos,
+#: porque sus filas no se podrían puntuar contra nada.
+_SERIE = "bcrd.xls.pib_2018.serie_original_indice"
+
+
+def _proyeccion(serie=_SERIE, medida=med.DLOG_PCT):
+    return bvar.proyectar_bloque(_Y(), _NOMBRES, "2025-Q4", pasos=8,
+                                 serie_objetivo=serie, medida=medida)
 
 
 def test_el_corte_esta_declarado_y_es_dos():
@@ -81,5 +89,23 @@ def test_no_se_puede_mandar_un_escenario_al_ledger():
 
 def test_un_pronostico_si_se_puede_mandar():
     campos = bvar.a_ledger(_proyeccion().pronosticos()[0])
-    for k in ("model_id", "target_series", "horizon", "point", "intervals"):
+    for k in ("model_id", "target_series", "measure", "horizon", "point", "intervals"):
         assert k in campos
+    assert campos["target_series"] == _SERIE, (
+        "el pronóstico viajó al ledger con el nombre de la variable del bloque en vez del "
+        "`series_code`; esa fila queda `pending` para siempre")
+
+
+def test_sin_serie_observable_NO_HAY_pronostico():
+    """El corte que faltaba. `"pib_real"` no es una serie, y una proyección que no sabe
+    contra qué código se va a puntuar no puede emitir un horizonte con track record — antes
+    lo emitía igual y la fila no cerraba nunca."""
+    with pytest.raises(ValueError, match="serie observable|series_code"):
+        _proyeccion(serie=None).pronosticos()
+
+
+def test_sin_medida_declarada_NO_HAY_pronostico():
+    """El bloque entrega el PIB en variación logarítmica ×100. Puntuar esa tasa contra el
+    índice de volumen da un error del tamaño del índice."""
+    with pytest.raises(ValueError, match="medida"):
+        _proyeccion(medida=None).pronosticos()

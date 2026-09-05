@@ -16,7 +16,17 @@ existe porque hay una manera concreta de reescribir la historia sin querer:
 * **Se puntúan LOS DOS niveles de intervalo.** Un modelo cuyo intervalo del 80% acierta el
   45% de las veces está mal calibrado aunque su error medio sea bajo, y quien dimensiona
   riesgo con ese intervalo se equivoca.
+* **Una fila declara CONTRA QUÉ se la puntúa**, y son dos declaraciones: un `series_code`
+  observable y la medida en que está el punto. Sin la segunda, el ledger restaba una tasa
+  (~0,4) de un índice de volumen (~133) y publicaba 132,75 como error.
+
+El grueso de este archivo usa la medida `level` porque prueba la MECÁNICA de la puntuación
+—clave, revisión, linaje, intervalos— con el punto y el observado en la misma unidad. Lo que
+prueba la conversión de medida está más abajo, y el camino real de los dos motores
+—que emiten una TASA— vive en `test_el_ledger_puntua_contra_lo_que_debe.py`.
 """
+import math
+
 import pytest
 from sqlalchemy import create_engine
 from sqlalchemy.exc import IntegrityError
@@ -24,6 +34,7 @@ from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
 
 from modules.macro_monitor.forecasting import ledger
+from modules.macro_monitor.forecasting import medida as med
 from modules.macro_monitor.forecasting.models import ForecastLog
 from modules.macro_monitor.models.models import MacroSeries
 from shared.database.base import Base
@@ -48,6 +59,9 @@ def _registrar(db, **cambios):
     # del contrato, no un detalle — una fila sin `h` no se puntúa contra nada.
     base = dict(model_id=MODELO, target_series=SERIE, horizon="2026-Q1",
                 as_of="2025-11-15", revision=0, point=100.0, h=1,
+                # `level`: el punto y el observado en la misma unidad. Es lo que hace que
+                # estos tests midan la mecánica del ledger y no la conversión.
+                measure=med.LEVEL,
                 intervals=[[0.80, 98.0, 102.0], [0.90, 97.0, 103.0]])
     base.update(cambios)
     return ledger.registrar(db, **base)
@@ -168,3 +182,74 @@ def test_el_track_record_ignora_las_correcciones(db):
     assert tr["n_oos"] == 1, "una corrección infló el track record"
     assert tr["rmse"] == pytest.approx(1.0), (
         "el track record usó la corrección: mide el pronóstico como se PUBLICÓ")
+
+
+# ── La fila declara CONTRA QUÉ se la puntúa ─────────────────────────────────────────
+
+
+def test_una_medida_desconocida_no_entra_al_ledger(db):
+    """La puerta del ledger es donde la declaración se puede exigir. Sin default: el que se
+    equivoca nunca es el que la escribe a mano."""
+    with pytest.raises(ValueError, match="medida"):
+        _registrar(db, measure="porcentaje")
+
+
+def test_una_serie_objetivo_vacia_no_entra_al_ledger(db):
+    with pytest.raises(ValueError, match="serie objetivo"):
+        _registrar(db, target_series="  ")
+
+
+def test_una_TASA_se_puntua_contra_la_VARIACION_del_observado(db):
+    """El defecto que costaba 132,75 de error: el punto es un Δlog en % y la serie es el
+    índice de volumen. Se convierte el observado, no se compara crudo."""
+    _registrar(db, point=0.40, measure=med.DLOG_PCT, horizon="2026-Q1",
+               intervals=[[0.80, -0.6, 1.4], [0.90, -1.1, 1.9]])
+    _observado(db, "2025-Q4", 133.0)
+    _observado(db, "2026-Q1", 133.5)
+    assert ledger.puntuar_pendientes(db) == 1
+    f = db.query(ForecastLog).one()
+    esperado = (math.log(133.5) - math.log(133.0)) * 100
+    assert float(f.realized) == pytest.approx(esperado, abs=1e-9)
+    assert float(f.abs_error) == pytest.approx(abs(esperado - 0.40), abs=1e-9)
+
+
+def test_una_TASA_sin_el_periodo_ANTERIOR_no_se_puntua(db):
+    """Que haya llegado el trimestre del horizonte no alcanza: una variación necesita contra
+    qué medirse, y el anterior es el DE CALENDARIO. Con «el anterior que haya» un hueco
+    produce un cambio de dos trimestres rotulado de uno."""
+    _registrar(db, point=0.40, measure=med.DLOG_PCT, horizon="2026-Q1")
+    _observado(db, "2025-Q3", 132.0)        # hay anterior, pero NO el inmediato
+    _observado(db, "2026-Q1", 133.5)
+    assert ledger.puntuar_pendientes(db) == 0
+    assert db.query(ForecastLog).one().status == "pending"
+
+
+# ── Lo que no puede cerrar se LISTA ─────────────────────────────────────────────────
+
+
+def test_una_serie_que_no_existe_se_reporta_como_no_puntuable(db):
+    """El defecto A tal cual: `pib_real` es el nombre de la variable en el bloque, no una
+    serie. Esa fila no está esperando el trimestre — no puede cerrar nunca."""
+    _registrar(db, target_series="pib_real", measure=med.DLOG_PCT)
+    rotas = ledger.no_puntuables(db)
+    assert [r.motivo for r in rotas] == [ledger.SERIE_DESCONOCIDA]
+    assert rotas[0].target_series == "pib_real"
+
+
+def test_un_pendiente_que_solo_espera_el_dato_NO_se_reporta_como_roto(db):
+    """El contraejemplo. Sin él, `no_puntuables` podría devolver todo lo pendiente y los dos
+    tests pasarían igual, con el instrumento marcando roto lo que solo es paciencia."""
+    _registrar(db)
+    _observado(db, "2025-Q4", 99.0)          # la serie existe; falta el período del horizonte
+    assert ledger.no_puntuables(db) == []
+
+
+def test_una_fila_sin_medida_declarada_no_se_puntua_ni_desaparece(db):
+    """Las filas anteriores a la migración. No se les supone «nivel» —eso es el defecto— y
+    tampoco se saltean en silencio: se listan."""
+    f = _registrar(db)
+    f.measure = None
+    db.commit()
+    _observado(db, "2026-Q1", 99.0)
+    assert ledger.puntuar_pendientes(db) == 0
+    assert [r.motivo for r in ledger.no_puntuables(db)] == [ledger.SIN_MEDIDA]
