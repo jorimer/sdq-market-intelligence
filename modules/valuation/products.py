@@ -220,8 +220,57 @@ class ValuationProduct:
         return ValidationState(approved=False, score=0.0,
                                notes=contraste_del_modelo().motivo)
 
+    #: Cierres con patrimonio que hacen falta para valuar. El ROE va sobre patrimonio de
+    #: APERTURA, así que el primer cierre no tiene con qué computarlo: hacen falta DOS.
+    CIERRES_MINIMOS = 2
+
     def available_periods(self) -> List[str]:
-        return []
+        """Los cortes que el eje puede valuar. Antes devolvía `[]` escrito a mano.
+
+        No era inocuo: con readiness en 0,85 el eje quedaba «publicable» y el selector no
+        ofrecía ningún período, así que el producto se listaba y no se podía pedir. Un
+        producto listado que no se puede mostrar es una vidriera rota — y el gate de
+        readiness no lo ve, porque mide insumos y no la entrega.
+
+        Se ofrecen solo los cortes en los que ALGUNA entidad tiene ya dos cierres: pedir uno
+        anterior devolvería el mismo error para todas, y ofrecer una opción que falla al
+        elegirla es peor que no ofrecerla.
+        """
+        from sqlalchemy import text as _sql
+        if self._db is None:
+            return []
+        try:
+            filas = self._db.execute(_sql(
+                "SELECT period_end FROM banking_data WHERE patrimonio_tecnico IS NOT NULL "
+                "GROUP BY period_end ORDER BY period_end DESC")).fetchall()
+        except Exception as e:  # noqa: BLE001
+            logger.warning("no se pudieron listar los períodos de valuación: %s", e)
+            return []
+        cortes = [str(f[0])[:10] for f in filas]
+        # El más viejo no se ofrece: contra él ninguna entidad tiene apertura.
+        return cortes[:-1] if len(cortes) > 1 else []
+
+    def scope_options(self) -> List[Dict[str, str]]:
+        """Entidades que el eje puede valuar HOY, para el selector de los niveles nombrados.
+
+        Solo las que tienen al menos dos cierres con patrimonio: son las únicas donde
+        `valuar_entidad` produce algo. Ofrecer las demás daría una opción que falla al
+        elegirla, que es la forma más cara de listar un producto.
+        """
+        from sqlalchemy import text as _sql
+        if self._db is None:
+            return []
+        try:
+            filas = self._db.execute(_sql(
+                "SELECT b.id, b.name, COUNT(d.period_end) AS n "
+                "FROM banks b JOIN banking_data d ON d.bank_id = b.id "
+                "WHERE d.patrimonio_tecnico IS NOT NULL "
+                "GROUP BY b.id, b.name HAVING COUNT(d.period_end) >= :n "
+                "ORDER BY b.name"), {"n": self.CIERRES_MINIMOS}).fetchall()
+        except Exception as e:  # noqa: BLE001
+            logger.warning("no se pudieron listar las entidades de valuación: %s", e)
+            return []
+        return [{"value": str(f[0]), "label": str(f[1]), "group": ""} for f in filas]
 
     def scope_kind(self) -> str:
         return "entity"
