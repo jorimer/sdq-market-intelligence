@@ -646,13 +646,40 @@ Barriendo imports módulo→módulo aparecieron **cinco pares** que violan la do
 
 ## T-VL-1 · Datos reales — BLOQUEANTE
 
+> **La premisa estaba vieja, y se midió antes de construir.** El plan decía «700 filas con
+> `source='manual'`, residuo sintético». En producción, hoy:
+>
+> | | |
+> |---|---|
+> | registros | **1.865** |
+> | por fuente | `sib_api` 1.778 · `sib_pdf` 24 · `sib_simbad` 63 |
+> | **sintéticos** | **0** |
+> | rango | 2020-12-31 → 2026-06-30 |
+> | entidades | 92 |
+>
+> La sincronización SIB corrió el 2026-09-02 con `backfill_done: true`. El paso 1 estaba
+> hecho, y el guard contra `source='manual'` **también ya existía** (`test_seal_synthetic.py`:
+> el seed no fabrica financieros, el scoring excluye manual, y la purga los limpia).
+
 ### Pasos atómicos
-- [ ] **1.** Ingesta real de balance y resultados por entidad y período. `banking_data` tiene 700 filas con `source='manual'` — residuo sintético; el seed ya no fabrica financieros, solo el catálogo de 35 entidades.
-- [ ] **2.** El valuador **no se construye sobre eso**: datos sintéticos producen valuaciones sintéticas.
+- [x] **1.** Ingesta real: ya estaba, y se verificó en producción en vez de suponerlo.
+- [x] **2.** Cero filas sintéticas, medido.
 
 ### Sensor T-VL-1
-- [ ] Patrimonio y utilidad reconciliados contra el estado publicado de **al menos 3 entidades**.
-- [ ] Test que rechaza `source='manual'`.
+- [x] Test que rechaza `source='manual'` — **ya existía**.
+- [x] **Reconciliación de patrimonio y utilidad contra el estado publicado**, que era lo único que faltaba de verdad: `scripts/qa_reconciliacion_patrimonio.py`, cinco entidades contra SIMBAD —el Superset PÚBLICO de la Superintendencia— con tolerancia del 1 % y código de salida como sensor. Por ENTIDAD y no por total: un total puede cerrar con dos entidades cruzadas entre sí, y la valuación es por entidad.
+
+### La trampa que la reconciliación destapó
+
+**`patrimonio_tecnico` NO contiene patrimonio técnico**: contiene el patrimonio CONTABLE del
+balance. La ETL lo hace a propósito y con el motivo escrito —la métrica que lo consume es
+patrimonio/activos, que necesita el contable— y las cifras de Basilea de verdad viven aparte
+(`capital_primario`, `capital_tier1`, `apr`). O sea que el dato que el valuador necesita **ya
+está**, bajo un nombre que engaña.
+
+Para el valuador es buena noticia; para quien lea el campo esperando capital regulatorio, no:
+computaría un índice de solvencia que no lo es. Queda fijado por test para que la próxima
+persona lo lea ahí y no lo descubra en un informe.
 
 ---
 
