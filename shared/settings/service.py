@@ -449,6 +449,52 @@ def _provider(db: Session, provider: str) -> Optional[SectorApiConfig]:
     return db.query(SectorApiConfig).filter(SectorApiConfig.provider == provider).first()
 
 
+def _test_cmf_connection(db, cfg, base: str, api_key: str) -> TestConnectionOut:
+    """Prueba contra la API de la CMF de Chile, que tiene un contrato propio.
+
+    Nada del camino del SIB sirve acá: la CMF pide la credencial en la QUERY STRING
+    (`?apikey=…&formato=json`), no en un header de suscripción de Azure APIM, y no está
+    detrás de un WAF que exija proxy. Sin esta rama, la prueba armaba
+    `api.cmfchile.cl/indicadores/principales` —una ruta del emisor dominicano— y devolvía
+    «HTTP 500 (SIB)»: un error que hace revisar la clave cuando lo que estaba mal era el
+    emisor contra el que se probaba.
+
+    Se consulta la UF y no un reporte bancario a propósito. La cuota es de 100 llamadas
+    DIARIAS y 3.000 mensuales, así que la prueba tiene que costar lo mínimo; y la UF existe
+    todos los días, mientras que un cuadro de adecuación de capital de un mes concreto puede
+    no estar publicado todavía y haría fallar una credencial que está perfecta.
+    """
+    import httpx
+
+    target = f"{base.rstrip('/')}/api-sbifv3/recursos_api/uf"
+    try:
+        resp = httpx.get(target, params={"apikey": api_key, "formato": "json"},
+                         timeout=25, follow_redirects=True)
+    except httpx.HTTPError as e:
+        return _persist_test(db, cfg, "error",
+                             f"No se pudo alcanzar {base} ({type(e).__name__}).", None)
+    if resp.status_code == 422:
+        # El emisor usa 422 —no 401— para «API key no ha sido suministrada» y también para
+        # una clave inválida. Se reporta lo que dice, sin adivinar cuál de las dos fue.
+        return _persist_test(db, cfg, "error",
+                             "La CMF rechazó la credencial (422). Revisá que la clave esté "
+                             "cargada y vigente.", 422)
+    if resp.status_code >= 400:
+        return _persist_test(db, cfg, "error",
+                             f"La CMF respondió HTTP {resp.status_code}.", resp.status_code)
+    try:
+        cuerpo = resp.json()
+    except ValueError:
+        return _persist_test(db, cfg, "error",
+                             "La CMF respondió algo que no es JSON.", resp.status_code)
+    if not isinstance(cuerpo, dict) or not cuerpo:
+        return _persist_test(db, cfg, "error",
+                             "La CMF respondió un cuerpo vacío o inesperado.",
+                             resp.status_code)
+    return _persist_test(db, cfg, "success",
+                         "Conexión con la CMF de Chile verificada (UF).", resp.status_code)
+
+
 def _test_jurisai_connection(db, cfg, base: str, api_key: str) -> TestConnectionOut:
     """Prueba contra el endpoint REAL de JurisAI, con el contrato que declaró el emisor.
 
@@ -668,9 +714,15 @@ def test_connection(db: Session, payload: TestConnectionIn) -> TestConnectionOut
         return _test_bcrd_connection(db, cfg, base, api_key)
     if payload.provider == "jurisai":
         return _test_jurisai_connection(db, cfg, base, api_key)
+    if payload.provider == "cmf_chile":
+        return _test_cmf_connection(db, cfg, base, api_key)
 
-    # SIB lives behind Azure APIM (subscription-key header) + a Sucuri WAF that
-    # blocks datacenter IPs, so a Mozilla UA is required and prod must use a proxy.
+    # De acá para abajo es el contrato del SIB —Azure APIM con subscription-key + un WAF
+    # de Sucuri que bloquea IPs de datacenter, de ahí la UA de Mozilla y el proxy en prod—.
+    # NO es un camino genérico: un proveedor sin rama propia termina probándose contra las
+    # rutas del emisor dominicano, y el error que ve el operador lleva la etiqueta «SIB».
+    # Pasó con la CMF de Chile: «HTTP 500 (SIB)» mandaba a revisar una clave que estaba
+    # perfecta. Si agregás una fuente nueva con otro contrato, agregale su rama arriba.
     target = f"{base}/indicadores/principales?periodoInicial=2024-01&periodoFinal=2024-03&registros=2"
     headers = {
         "Ocp-Apim-Subscription-Key": api_key,
@@ -717,7 +769,14 @@ def test_connection(db: Session, payload: TestConnectionIn) -> TestConnectionOut
                 msg = "403 — bloqueado por el WAF del SIB. Configure el proxy Cloudflare."
             return _persist_test(db, cfg, "error", msg, 403, use_proxy)
         # Any other status: if proxying and not relayed, the Worker erred itself.
-        origin = "proxy Cloudflare" if (use_proxy and not relayed) else "SIB"
+        if use_proxy and not relayed:
+            origin = "proxy Cloudflare"
+        elif payload.provider == "sb_do":
+            origin = "SIB"
+        else:
+            # Se prueba con el contrato del SIB porque no hay rama para este proveedor: el
+            # error es de esa ruta, no del emisor que el operador cree estar probando.
+            origin = f"{payload.provider} probado con el contrato del SIB — falta su rama"
         return _persist_test(db, cfg, "error", f"HTTP {resp.status_code} ({origin})", resp.status_code, use_proxy)
     except httpx.TimeoutException:
         return _persist_test(db, cfg, "error", "Tiempo de espera agotado.", None, use_proxy)
