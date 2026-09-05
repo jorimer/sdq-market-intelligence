@@ -80,3 +80,43 @@ def test_las_bandas_son_TRES_y_no_cuatro():
     assert len(set(pt.BETA_POR_TIPO.values())) == 3, (
         f"hay {len(set(pt.BETA_POR_TIPO.values()))} bandas distintas y la evidencia "
         "sostiene tres")
+
+
+def test_la_persistencia_ORDENA_igual_que_la_dispersion():
+    """La segunda medición, y es corroboración: la clase cuyo ROE más se dispersa es también
+    la que más conserva su ventaja de un año al otro.
+
+    Que las dos mediciones —dispersión y persistencia— den el mismo orden es lo que convierte
+    una banda de beta compartida por falta de muestra en una decisión respaldada. Sin este
+    test, subirle la persistencia a las asociaciones no rompía nada: se detectó corriendo la
+    rotura, no leyendo el código.
+    """
+    assert pt.persistencia_de("aap") < pt.persistencia_de("banco_ahorro_credito")
+    assert pt.persistencia_de("banco_ahorro_credito") < pt.persistencia_de("banca_multiple")
+    assert pt.persistencia_de("aap") < 0.5, (
+        "las asociaciones dejaron de erosionar rápido su ventaja; era lo mejor medido de la "
+        "tabla, con 60 pares")
+
+
+def test_los_dos_grupos_del_MEDIO_coinciden_en_persistencia():
+    """0,571 y 0,569. Es la evidencia independiente que respalda que compartan banda de beta:
+    esa decisión se tomó por falta de muestra, y esta medición la confirma."""
+    a = pt.persistencia_de("banco_ahorro_credito")
+    b = pt.persistencia_de("corporacion_credito")
+    assert abs(a - b) < 0.02, f"{a} y {b}: dejaron de coincidir"
+
+
+def test_TODA_persistencia_esta_en_rango_y_trae_su_evidencia():
+    """`ω = 1` devuelve la perpetuidad que el parámetro existe para cerrar."""
+    for t, w in pt.PERSISTENCIA_POR_TIPO.items():
+        assert 0.0 < w < 1.0, f"{t}: ω = {w} fuera de (0,1)"
+        assert len(pt.PERSISTENCIA_EVIDENCIA_POR_TIPO[t]) > 30, f"{t}: ω sin evidencia"
+
+
+def test_la_evidencia_del_tipo_incluye_LAS_TRES_mediciones():
+    """Beta, retención y persistencia viajan juntas al informe: son las tres que cambian el
+    valor según el tipo, y publicar una sin las otras deja el resultado a medio explicar."""
+    ev = pt.evidencia_de("aap")
+    assert "MUTUALES" in ev
+    assert "Persistencia" in ev and "0.358" in ev
+    assert "menos dispersas" in ev.lower()

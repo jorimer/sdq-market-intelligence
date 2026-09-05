@@ -86,6 +86,13 @@ class Valuacion:
         return sum(p.vp_residual_income for p in self.periodos)
 
 
+#: Persistencia del exceso de rentabilidad cuando no se conoce el tipo de entidad: la MEDIDA
+#: sobre el sistema entero —259 pares (entidad, año) 2019-2025, R² = 0,776—. Las de cada tipo
+#: viven en `engine/por_tipo.py`; ésta es el respaldo, y es la más conservadora en el sentido
+#: que importa: la más alta, o sea la que menos erosiona.
+PERSISTENCIA_POR_DEFECTO = 0.867
+
+
 def crecimiento_sostenible(roe_pct: float, retencion: float) -> float:
     """`g = b × ROE`. Es lo que la entidad puede crecer reinvirtiendo, sin capital nuevo."""
     return retencion * roe_pct
@@ -107,6 +114,8 @@ def verificar_convergencia(g_pct: float, ke_pct: float) -> None:
 def valuar(*, bv_inicial: float, ke_pct: float, roe_por_periodo: Sequence[float],
            retencion: float, roe_terminal_pct: Optional[float] = None,
            g_terminal_pct: Optional[float] = None,
+           persistencia: float = PERSISTENCIA_POR_DEFECTO,
+           g_max_pct: Optional[float] = None,
            patrimonio_observado: Optional[Sequence[float]] = None) -> Valuacion:
     """El modelo completo.
 
@@ -119,11 +128,19 @@ def valuar(*, bv_inicial: float, ke_pct: float, roe_por_periodo: Sequence[float]
     ke = ke_pct / 100.0
     avisos: List[str] = []
 
+    if not 0.0 < persistencia < 1.0:
+        raise ValueError(
+            f"la persistencia tiene que estar entre 0 y 1 (llegó {persistencia}). Con ω = 1 "
+            "el exceso no se erosiona nunca y el terminal vuelve a ser una perpetuidad; con "
+            "ω > 1 crece, que es el defecto que este parámetro existe para cerrar.")
     roe_T = roe_terminal_pct if roe_terminal_pct is not None else (
         roe_por_periodo[-1] if roe_por_periodo else ke_pct)
+    # `g` ya no gobierna el terminal —lo gobierna la persistencia— pero sigue gobernando el
+    # crecimiento del PATRIMONIO en el horizonte explícito, y ahí el techo sigue haciendo
+    # falta: un balance que crece más rápido que la economía cinco años seguidos tampoco es
+    # una proyección, es una imposibilidad más corta.
     g_pct = (g_terminal_pct if g_terminal_pct is not None
              else crecimiento_sostenible(roe_T, retencion))
-    verificar_convergencia(g_pct, ke_pct)
 
     periodos: List[Periodo] = []
     bv = float(bv_inicial)
@@ -134,7 +151,10 @@ def valuar(*, bv_inicial: float, ke_pct: float, roe_por_periodo: Sequence[float]
         fd = (1.0 + ke) ** i
         ajuste = 0.0
         # Clean surplus: el patrimonio de cierre proyectado contra el observado.
-        bv_cierre_proyectado = bv * (1.0 + crecimiento_sostenible(roe_pct, retencion) / 100.0)
+        g_periodo = crecimiento_sostenible(roe_pct, retencion)
+        if g_max_pct is not None and g_periodo > g_max_pct:
+            g_periodo = g_max_pct
+        bv_cierre_proyectado = bv * (1.0 + g_periodo / 100.0)
         if patrimonio_observado is not None and i - 1 < len(patrimonio_observado):
             ajuste = float(patrimonio_observado[i - 1]) - bv_cierre_proyectado
             ajuste_total += ajuste
@@ -155,10 +175,28 @@ def valuar(*, bv_inicial: float, ke_pct: float, roe_por_periodo: Sequence[float]
             "explícita — el balance de la SIB trae revaluaciones y ajustes de inversiones "
             "disponibles para la venta que no pasan por resultados.")
 
-    # ── El terminal: perpetuidad de RESIDUAL INCOME ──
-    # RI_{T+1} sobre el patrimonio de apertura del período T+1, que es `bv`.
+    # ── El terminal: el exceso se EROSIONA, no se perpetúa ──
+    #
+    # Antes era una perpetuidad creciente del residual income: `RI_{T+1} / (Ke − g)`. Eso
+    # supone que la ventaja de una entidad dura para siempre Y ADEMÁS crece, y explota por
+    # los dos lados cuando `g` se acerca a `Ke`:
+    #
+    #   · un banco muy rentable daba P/B **12,23x** —el panel de transacciones dice que
+    #     nadie pagó nunca más de 2,73x—;
+    #   · una asociación con ROE por debajo de su Ke daba **0,16x**, o sea que valía el 16 %
+    #     de su patrimonio. El mínimo del panel es 0,77x, y fue una venta post-crisis.
+    #
+    # Los dos son el mismo defecto con distinto signo, y el segundo es peor porque no se ve
+    # raro: un múltiplo bajo para una entidad que destruye valor parece razonable hasta que
+    # se mira cuánto.
+    #
+    # Ahora el exceso decae con la PERSISTENCIA medida: `RI_{t+1} = ω · RI_t`, y el terminal
+    # es `ω · RI_T / (1 + Ke − ω)`. Con `ω < 1` el denominador es siempre mayor que `Ke`, así
+    # que está acotado por construcción y trata igual a los dos signos. Es lo que dice el
+    # equilibrio competitivo —una ventaja atrae competencia y se erosiona— y es lo que los
+    # datos dominicanos muestran: ω = 0,867 global, R² = 0,776 sobre 259 pares.
     ri_terminal = (roe_T - ke_pct) / 100.0 * bv
-    terminal_en_T = ri_terminal / ((ke_pct - g_pct) / 100.0)
+    terminal_en_T = (persistencia * ri_terminal) / (1.0 + ke - persistencia)
     # Descontado por (1+Ke)^T: el terminal YA está expresado en valor al momento T.
     t_final = len(roe_por_periodo)
     terminal_descontado = terminal_en_T / ((1.0 + ke) ** t_final) if t_final else terminal_en_T

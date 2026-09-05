@@ -113,6 +113,9 @@ class Lectura:
     g_terminal_pct: float = 0.0
     #: Qué sostiene los parámetros de este tipo. Va al informe.
     evidencia_del_tipo: str = ""
+    #: La persistencia del exceso, MEDIDA por tipo. Gobierna el terminal: con ω < 1 el
+    #: exceso se erosiona y el terminal queda acotado por los dos lados.
+    persistencia: float = 0.0
 
     @property
     def destruye_valor(self) -> bool:
@@ -168,7 +171,8 @@ def valuar_entidad(db: Session, *, bank_id: str, nombre: str) -> Optional[Lectur
     for k in (ke.bajo, ke.alto):
         try:
             v = er.valuar(bv_inicial=bv0, ke_pct=k, roe_por_periodo=[roe] * HORIZONTE,
-                          retencion=retencion, g_terminal_pct=g)
+                          retencion=retencion, g_terminal_pct=g,
+                          persistencia=pt.persistencia_de(tipo), g_max_pct=techo.valor_pct)
             valores.append(v.valor)
         except er.HorizonteInvalidoError as e:
             # `g >= Ke` en este extremo: se acorta el horizonte y se DECLARA, que es lo que
@@ -197,6 +201,7 @@ def valuar_entidad(db: Session, *, bank_id: str, nombre: str) -> Optional[Lectur
         retencion=retencion,
         g_terminal_pct=g,
         evidencia_del_tipo=pt.evidencia_de(tipo),
+        persistencia=pt.persistencia_de(tipo),
     )
 
 
