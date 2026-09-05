@@ -78,4 +78,47 @@ def test_la_prueba_de_la_CMF_no_gasta_la_cuota_en_un_reporte_pesado():
     # aparece justo cuando la clave está bien.
     assert "recursos_api/uf/2024/01" in fuente
     # Y la credencial viaja como parámetro, no como header de suscripción.
-    assert '"apikey"' in fuente and "Ocp-Apim-Subscription-Key" not in fuente
+    assert "apikey=" in fuente and "Ocp-Apim-Subscription-Key" not in fuente
+
+
+class TestElDiagnosticoDiceLoQueElEmisorDijo:
+    """Un «HTTP 500» pelado mandó a revisar tres veces una credencial que estaba bien.
+
+    Lo que faltaba no era otro intento: era el CUERPO de la respuesta. La CMF publica sus
+    propios códigos —421 «API key no valida», 420 cuota superada, 422 no suministrada— y el
+    WAF que tiene delante devuelve una página «Web Page Blocked!» con la IP que vio. Todo
+    eso estaba llegando y se descartaba para imprimir el número de HTTP.
+    """
+
+    def test_distingue_el_bloqueo_del_WAF_de_un_rechazo_de_la_CMF(self):
+        """No es lo mismo: si bloquea el WAF, la credencial NI SIQUIERA se evaluó."""
+        import inspect
+
+        from shared.settings import service
+
+        fuente = inspect.getsource(service._test_cmf_connection)
+        assert "Web Page Blocked" in fuente
+        # La frase vive en una CONSTANTE justamente para que se la pueda buscar: incrustada
+        # en la llamada se parte por ancho de línea y deja de existir en el fuente.
+        assert "no se llegó a evaluar" in service.MSG_WAF_BLOQUEO
+        assert "MSG_WAF_BLOQUEO" in fuente
+
+    def test_transcribe_el_mensaje_del_emisor(self):
+        import inspect
+
+        from shared.settings import service
+
+        fuente = inspect.getsource(service._test_cmf_connection)
+        assert '"Mensaje"' in fuente, (
+            "la CMF explica el rechazo en el cuerpo; imprimir solo el HTTP tira esa "
+            "información justo cuando hace falta")
+
+    def test_usa_el_proxy_cuando_esta_configurado(self):
+        """La CMF también está detrás de un WAF que bloquea IPs de datacenter — medido, no
+        supuesto: desde escritorio responde 421/422 y desde el datacenter, 500 con bloqueo."""
+        import inspect
+
+        from shared.settings import service
+
+        fuente = inspect.getsource(service._test_cmf_connection)
+        assert "use_proxy" in fuente and "X-Proxy-Secret" in fuente
