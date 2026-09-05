@@ -4,6 +4,14 @@ from typing import Dict
 from shared.database.session import SessionLocal
 from shared.operations.service import Operation, register_operation
 
+# El modelo se importa ACÁ, a nivel de módulo, y no dentro de los runners. Este módulo es lo
+# único de `regional_banking` que `app/main.py` importa —no tiene `api/`—, así que sin esta
+# línea NADA registra la tabla al arrancar: `Base.metadata` no la conoce y cualquier
+# `create_all` que dependa de `app.main` la omite en silencio. En producción no se nota,
+# porque ahí las tablas las crea Alembic, que sí la declara; se nota al montar una base
+# desde el metadata, que es como corren los tests y como se armó el primer boletín real.
+from modules.regional_banking.models.models import CountryBankingAggregate  # noqa: F401
+
 
 def _run_secmca_sync(params, user_id, set_phase) -> Dict:
     from modules.regional_banking.secmca_sync import secmca_sync

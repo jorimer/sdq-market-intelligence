@@ -1,8 +1,8 @@
 {
  "_meta": {
-  "note": "Recorte REAL de los cuadros EMFA del CMCA (secmca.org/emfa), capturado el 2026-09-04. Tres países a propósito: DOM es el caso completo, SLV NO publica tasa activa —la ausencia es de la fuente— y NIC trae el corte más viejo. Solo los dos últimos cortes de cada cuadro; la serie real arranca en 2001.",
+  "note": "Recorte REAL de los cuadros EMFA del CMCA (secmca.org/emfa), capturado el 2026-09-04 y RE-CAPTURADO el 2026-09-05 con la escala de tasas ya normalizada a porcentaje. DOM es el caso completo, SLV no publica tasa activa y NIC trae el corte más viejo. Solo los dos últimos cortes de cada cuadro.",
   "source": "SECMCA / CMCA — cuadros EMFA",
-  "captured_at": "2026-09-04"
+  "captured_at": "2026-09-05"
  },
  "DOM": {
   "url": "https://www.secmca.org/wp-content/uploads/2026/08/RD_CMCA_EMFA_2_DIV.xls",
@@ -163,17 +163,17 @@
     [
      "2026-06-30",
      "Consumo · Tarjeta de Crédito",
-     0.57788
+     57.788
     ],
     [
      "2026-06-30",
      "Consumo · Otros",
-     0.18507400000000002
+     18.5074
     ],
     [
      "2026-06-30",
      "Comercio · Otros",
-     0.125202
+     12.5202
     ],
     [
      "2026-06-30",
@@ -188,7 +188,7 @@
     [
      "2026-06-30",
      "Actividades Inmobiliarias · Vivienda",
-     0.119003
+     11.9003
     ],
     [
      "2026-06-30",
@@ -203,7 +203,7 @@
     [
      "2026-06-30",
      "CUADRO V.4 · Interbancaria (ponderada) · Otros",
-     0.08214619094969923
+     8.2146
     ],
     [
      "2026-07-31",
@@ -228,17 +228,17 @@
     [
      "2026-07-31",
      "Consumo · Tarjeta de Crédito",
-     0.580246
+     58.0246
     ],
     [
      "2026-07-31",
      "Consumo · Otros",
-     0.18600000000000003
+     18.6
     ],
     [
      "2026-07-31",
      "Comercio · Otros",
-     0.126495
+     12.6495
     ],
     [
      "2026-07-31",
@@ -253,7 +253,7 @@
     [
      "2026-07-31",
      "Actividades Inmobiliarias · Vivienda",
-     0.117088
+     11.7088
     ],
     [
      "2026-07-31",
@@ -268,7 +268,7 @@
     [
      "2026-07-31",
      "CUADRO V.4 · Interbancaria (ponderada) · Otros",
-     0.07625632761073714
+     7.6256
     ]
    ],
    "tasa_pasiva_mn": [
@@ -280,27 +280,27 @@
     [
      "2026-06-30",
      "Operaciones nuevas · Depósitos · Ahorro",
-     0.006306000000000001
+     0.6306
     ],
     [
      "2026-06-30",
      "Operaciones nuevas · Depósitos · Plazo · Un mes",
-     0.07431600000000001
+     7.4316
     ],
     [
      "2026-06-30",
      "Operaciones nuevas · Depósitos · Plazo · Seis meses",
-     0.072965
+     7.2965
     ],
     [
      "2026-06-30",
      "Operaciones nuevas · Depósitos · Plazo · Un año",
-     0.06742
+     6.742
     ],
     [
      "2026-06-30",
      "Operaciones nuevas · Depósitos · Plazo · Mas de un año",
-     0.056382
+     5.6382
     ],
     [
      "2026-06-30",
@@ -335,27 +335,27 @@
     [
      "2026-07-31",
      "Operaciones nuevas · Depósitos · Ahorro",
-     0.006247
+     0.6247
     ],
     [
      "2026-07-31",
      "Operaciones nuevas · Depósitos · Plazo · Un mes",
-     0.076795
+     7.6795
     ],
     [
      "2026-07-31",
      "Operaciones nuevas · Depósitos · Plazo · Seis meses",
-     0.07645400000000001
+     7.6454
     ],
     [
      "2026-07-31",
      "Operaciones nuevas · Depósitos · Plazo · Un año",
-     0.067298
+     6.7298
     ],
     [
      "2026-07-31",
      "Operaciones nuevas · Depósitos · Plazo · Mas de un año",
-     0.059005
+     5.9005
     ],
     [
      "2026-07-31",
@@ -753,12 +753,12 @@
     [
      "2025-05-31",
      "Consumo · Tarjeta de crédito",
-     0.547753592817859
+     54.7754
     ],
     [
      "2025-05-31",
      "Consumo · Otros",
-     0.18810189987843434
+     18.8102
     ],
     [
      "2025-05-31",
@@ -768,7 +768,7 @@
     [
      "2025-05-31",
      "Agricultura, ganadería silvicultura, caza y pesca · Otros",
-     0.08691412929056273
+     8.6914
     ],
     [
      "2025-05-31",
@@ -778,12 +778,12 @@
     [
      "2025-05-31",
      "Industria · Otra",
-     0.08052315582900062
+     8.0523
     ],
     [
      "2025-05-31",
      "Comercio, restaurantes y hoteles · Otra",
-     0.08931839825126273
+     8.9318
     ],
     [
      "2025-05-31",
@@ -798,17 +798,17 @@
     [
      "2025-05-31",
      "CUADRO V.4 · Interbancaria · Ponderada",
-     0.0701
+     7.01
     ],
     [
      "2025-06-30",
      "Consumo · Tarjeta de crédito",
-     0.5484612449385876
+     54.8461
     ],
     [
      "2025-06-30",
      "Consumo · Otros",
-     0.17291971741501844
+     17.292
     ],
     [
      "2025-06-30",
@@ -818,7 +818,7 @@
     [
      "2025-06-30",
      "Agricultura, ganadería silvicultura, caza y pesca · Otros",
-     0.0896074910168158
+     8.9607
     ],
     [
      "2025-06-30",
@@ -828,12 +828,12 @@
     [
      "2025-06-30",
      "Industria · Otra",
-     0.08120391680038605
+     8.1204
     ],
     [
      "2025-06-30",
      "Comercio, restaurantes y hoteles · Otra",
-     0.08393734620771605
+     8.3937
     ],
     [
      "2025-06-30",
@@ -848,7 +848,7 @@
     [
      "2025-06-30",
      "CUADRO V.4 · Interbancaria · Ponderada",
-     0.0701
+     7.01
     ]
    ],
    "tasa_pasiva_mn": [
@@ -860,27 +860,27 @@
     [
      "2025-05-31",
      "Operaciones nuevas · Depósitos · Ahorro",
-     0.010235297432642523
+     1.0235
     ],
     [
      "2025-05-31",
      "Operaciones nuevas · Depósitos · Plazo · Un mes",
-     0.018104746610500357
+     1.8105
     ],
     [
      "2025-05-31",
      "Operaciones nuevas · Depósitos · Plazo · Seis meses",
-     0.04936337062214696
+     4.9363
     ],
     [
      "2025-05-31",
      "Operaciones nuevas · Depósitos · Plazo · Un año",
-     0.05481949337093975
+     5.4819
     ],
     [
      "2025-05-31",
      "Operaciones nuevas · Depósitos · Plazo · Mas de un año",
-     0.06325196708386248
+     6.3252
     ],
     [
      "2025-05-31",
@@ -895,12 +895,12 @@
     [
      "2025-05-31",
      "Saldos vivos (tasa promedio ponderada) · Depósitos · Ahorro · Mas de un año",
-     0.010235297432642523
+     1.0235
     ],
     [
      "2025-05-31",
      "Saldos vivos (tasa promedio ponderada) · Depósitos · Plazo · Mas de un año",
-     0.05053267562357298
+     5.0533
     ],
     [
      "2025-06-30",
@@ -910,27 +910,27 @@
     [
      "2025-06-30",
      "Operaciones nuevas · Depósitos · Ahorro",
-     0.009041943435685757
+     0.9042
     ],
     [
      "2025-06-30",
      "Operaciones nuevas · Depósitos · Plazo · Un mes",
-     0.03036330959267407
+     3.0363
     ],
     [
      "2025-06-30",
      "Operaciones nuevas · Depósitos · Plazo · Seis meses",
-     0.04883863454615053
+     4.8839
     ],
     [
      "2025-06-30",
      "Operaciones nuevas · Depósitos · Plazo · Un año",
-     0.056719611660255
+     5.672
     ],
     [
      "2025-06-30",
      "Operaciones nuevas · Depósitos · Plazo · Mas de un año",
-     0.06232054627066451
+     6.2321
     ],
     [
      "2025-06-30",
@@ -945,12 +945,12 @@
     [
      "2025-06-30",
      "Saldos vivos (tasa promedio ponderada) · Depósitos · Ahorro · Mas de un año",
-     0.009041943435685757
+     0.9042
     ],
     [
      "2025-06-30",
      "Saldos vivos (tasa promedio ponderada) · Depósitos · Plazo · Mas de un año",
-     0.05045447684215756
+     5.0454
     ]
    ]
   }

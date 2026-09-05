@@ -7,8 +7,8 @@ extraía (17.997 → 47.304 observaciones) y sacaron una fecha futura del result
 import datetime as dt
 
 from shared.data.secmca_client import (
-    SECMCAClient, clasificar_hoja, discover_country_files, parse_cuadro, parse_periodo,
-    parse_valor, titulo_de_hoja,
+    TASA_MAXIMA_CREIBLE_PCT, SECMCAClient, clasificar_hoja, discover_country_files,
+    normalizar_escala, parse_cuadro, parse_periodo, parse_valor, titulo_de_hoja,
 )
 
 
@@ -134,3 +134,81 @@ class TestContrato:
         credito = next(r for r in recs if r.series.startswith("credito_"))
         assert credito.unit == "moneda local, unidad no declarada"
         assert next(r for r in recs if r.series.startswith("tasa_")).unit == "%"
+
+
+class TestEscalaDeLasTasas:
+    """EMFA armoniza la metodología, NO la escala — y eso llegó al primer boletín real.
+
+    El PDF decía «República Dominicana registra 0.186% en julio de 2026» sobre una tasa de
+    consumo que es del 18,6%. La cifra era REAL: lo que cambió fue su forma. Y el error no
+    era parejo: RD y Nicaragua publican como fracción, mientras Guatemala, Honduras, Costa
+    Rica, Panamá y El Salvador ya publican en porcentaje, así que una comparación cruda
+    ponía un 0,58 al lado de un 54,5 como si midieran lo mismo.
+    """
+
+    def test_la_fraccion_se_lleva_a_porcentaje(self):
+        obs = [(dt.date(2026, 7, 31), "Tarjeta", 0.580246),
+               (dt.date(2026, 7, 31), "Consumo", 0.186)]
+        salida, avisos = normalizar_escala(obs)
+        assert [v for _, _, v in salida] == [58.0246, 18.6]
+        assert not avisos
+
+    def test_lo_que_ya_viene_en_porcentaje_no_se_toca(self):
+        obs = [(dt.date(2026, 7, 31), "Consumo", 54.5135),
+               (dt.date(2026, 7, 31), "Ahorro", 5.72)]
+        salida, _ = normalizar_escala(obs)
+        assert [v for _, _, v in salida] == [54.5135, 5.72]
+
+    def test_la_escala_se_decide_por_AÑO_porque_cambia_dentro_de_la_serie(self):
+        """La tasa pasiva dominicana está en porcentaje hasta 2003 y en fracción desde 2004.
+
+        Un criterio único para toda la serie dejaría cien veces mal a uno de los dos tramos.
+        """
+        obs = [(dt.date(2003, 12, 31), "Plazo", 24.42),      # ya en %
+               (dt.date(2004, 12, 31), "Plazo", 0.2457)]     # fracción
+        salida, _ = normalizar_escala(obs)
+        assert [v for _, _, v in salida] == [24.42, 24.57]
+
+    def test_una_tasa_implausible_se_descarta_y_queda_constancia(self):
+        """Fail-closed: publicar una tasa de tres dígitos porque la normalización falló es
+        peor que no publicarla."""
+        obs = [(dt.date(2026, 7, 31), "Rara", TASA_MAXIMA_CREIBLE_PCT + 1)]
+        salida, avisos = normalizar_escala(obs)
+        assert salida[0][2] is None
+        assert avisos and "fuera de rango" in avisos[0]
+
+    def test_las_ausencias_sobreviven_a_la_normalizacion(self):
+        salida, _ = normalizar_escala([(dt.date(2026, 7, 31), "X", None)])
+        assert salida == [(dt.date(2026, 7, 31), "X", None)]
+
+    def test_el_fixture_trae_tasas_en_rango_creible(self):
+        """Contra el dato real: ninguna plaza publica una tasa de tres dígitos."""
+        recs = SECMCAClient().fetch()
+        tasas = [r.value for r in recs if r.series.startswith("tasa_") and r.value is not None]
+        assert tasas
+        assert max(tasas) <= TASA_MAXIMA_CREIBLE_PCT
+        # Y ninguna quedó en escala de fracción: una tasa activa de un panel entero no puede
+        # tener su máximo por debajo del 1,5%.
+        assert max(tasas) > 1.5
+
+
+def test_el_lector_APLICA_la_normalizacion_de_escala():
+    """Que la función exista no alcanza: hay que comprobar que el lector la llama.
+
+    El fixture se guarda ya normalizado, así que un conector que dejara de normalizar
+    seguiría pasando todos los tests de arriba — pasó al escribirlos. Lo que falla en ese
+    caso es el dato NUEVO, contra los archivos reales, donde nadie lo estaría mirando.
+    """
+    import ast
+    import inspect
+
+    from shared.data import secmca_client
+
+    fuente = inspect.getsource(secmca_client.cuadros_del_libro)
+    arbol = ast.parse(fuente.lstrip())
+    llama = any(isinstance(n, ast.Call) and isinstance(n.func, ast.Name)
+                and n.func.id == "normalizar_escala" for n in ast.walk(arbol))
+    assert llama, (
+        "`cuadros_del_libro` no llama a `normalizar_escala`: las tasas saldrían con la "
+        "escala cruda de cada país —fracción en RD y Nicaragua, porcentaje en el resto— y "
+        "el boletín volvería a imprimir «0.186%» sobre una tasa del 18,6%.")

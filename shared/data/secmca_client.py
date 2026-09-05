@@ -270,6 +270,60 @@ def etiquetas_de_columna(filas: List[List], fila_datos: int, ncols: int,
     return etiquetas
 
 
+#: Techo de una tasa bancaria creíble, en PORCENTAJE. Una activa de tarjeta ronda el 60% y
+#: ninguna plaza de la región publica tres dígitos: por encima de esto, la normalización se
+#: equivocó y es preferible no publicar a publicar un número cien veces mal.
+TASA_MAXIMA_CREIBLE_PCT = 150.0
+
+#: Por debajo de esto, el grupo entero está expresado como FRACCIÓN (0,186 = 18,6%). El
+#: umbral va en 1,5 y no en 1,0 porque el máximo de un cuadro de tasas —que incluye los
+#: plazos largos y las activas de consumo— nunca cae bajo el 1,5% en ninguna plaza medida.
+_UMBRAL_FRACCION = 1.5
+
+
+def normalizar_escala(observaciones: List[Tuple[date, str, Optional[float]]],
+                      ) -> Tuple[List[Tuple[date, str, Optional[float]]], List[str]]:
+    """Lleva un cuadro de TASAS a porcentaje, y devuelve `(observaciones, avisos)`.
+
+    **EMFA armoniza la metodología, no la ESCALA.** Medido sobre los siete archivos: las
+    tasas de RD y Nicaragua vienen como fracción (0,58 = 58%) y las de Guatemala, Honduras,
+    Costa Rica, Panamá y El Salvador ya vienen en porcentaje. Compararlas crudas pone un 0,58
+    al lado de un 54,5 como si midieran lo mismo.
+
+    Y cambia DENTRO de una misma serie: la tasa pasiva dominicana está en porcentaje hasta
+    2003 (24,42) y en fracción desde 2004 (0,2457). Por eso la escala se decide por AÑO y no
+    por cuadro — un único criterio para toda la serie dejaría cien veces mal a uno de los dos
+    tramos.
+
+    Lo que NO hace: adivinar por observación suelta. Un 0,6 aislado puede ser 0,6% o 60% y no
+    hay forma de saberlo; la decisión se toma sobre el máximo del año, donde los plazos largos
+    y el consumo fijan una cota que no deja lugar a duda.
+    """
+    por_anio: Dict[int, List[float]] = {}
+    for corte, _, valor in observaciones:
+        if valor is not None:
+            por_anio.setdefault(corte.year, []).append(valor)
+
+    escala = {anio: (100.0 if max(vs) <= _UMBRAL_FRACCION else 1.0)
+              for anio, vs in por_anio.items() if vs}
+
+    fuera: List[Tuple[date, str, Optional[float]]] = []
+    avisos: List[str] = []
+    for corte, etiqueta, valor in observaciones:
+        if valor is None:
+            fuera.append((corte, etiqueta, None))
+            continue
+        convertido = valor * escala.get(corte.year, 1.0)
+        if convertido > TASA_MAXIMA_CREIBLE_PCT or convertido < 0:
+            # Fail-closed: se descarta la observación y queda constancia. Publicar una tasa
+            # de tres dígitos porque la normalización falló es peor que no publicarla.
+            avisos.append(f"{corte} · {etiqueta[:40]}: {convertido:.2f}% fuera de rango")
+            fuera.append((corte, etiqueta, None))
+            continue
+        fuera.append((corte, etiqueta, round(convertido, 4)))
+    return fuera, avisos
+
+
 def parse_cuadro(filas: List[List]) -> List[Tuple[date, str, Optional[float]]]:
     """``[(corte, etiqueta de columna, valor)]`` de un cuadro EMFA ya leído.
 
@@ -426,6 +480,14 @@ def cuadros_del_libro(libro) -> Dict[str, List[Tuple[date, str, Optional[float]]
         if not clave:
             continue
         obs = parse_cuadro(filas)
+        if clave.startswith("tasa_"):
+            # Solo las tasas: los saldos de crédito van en moneda local y no tienen escala
+            # que normalizar — de hecho el cuadro ni declara su unidad.
+            obs, avisos = normalizar_escala(obs)
+            for aviso in avisos[:5]:
+                logger.warning("[SECMCA] tasa descartada por escala implausible: %s", aviso)
+            if avisos:
+                logger.warning("[SECMCA] %d observaciones descartadas en %s", len(avisos), clave)
         con_valor = sum(1 for o in obs if o[2] is not None)
         previas = fuera.get(clave)
         if previas is None or con_valor > sum(1 for o in previas if o[2] is not None):
