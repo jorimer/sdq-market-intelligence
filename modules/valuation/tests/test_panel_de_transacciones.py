@@ -34,27 +34,27 @@ def test_el_minimo_son_OCHO_casos():
     assert tx.MINIMO_DE_CASOS == 8
 
 
-def test_hay_CINCO_verificables_y_solo_TRES_COMPARABLES():
+def test_hay_SEIS_verificables_y_solo_CUATRO_COMPARABLES():
     """La distinción que decide si la vista de M&A se abre.
 
-    Las cinco tienen las dos puntas publicadas. Solo tres están sobre patrimonio CONTABLE,
+    Las seis tienen las dos puntas publicadas. Solo cuatro están sobre patrimonio CONTABLE,
     que es la base contra la que valúa el Excess Return. Las otras dos vienen de la NIIF 3,
     cuyo denominador son activos netos a VALOR RAZONABLE — lo que el COMPRADOR reconoce, no
     lo que el vendedor tenía en libros.
     """
-    assert len([t for t in tx.PANEL if t.verificable]) == 5
+    assert len([t for t in tx.PANEL if t.verificable]) == 6
     comparables = [t for t in tx.PANEL if t.comparable]
-    assert len(comparables) == 3
+    assert len(comparables) == 4
     assert {t.pais for t in comparables} == {"DO", "PR"}
     progreso = next(t for t in comparables if "Progreso" in t.adquirida)
     assert progreso.pb == pytest.approx(2.531, abs=0.001)
 
 
 def test_el_gate_cuenta_COMPARABLES_y_no_verificables():
-    """Sumar los cinco abriría antes una vista cuya tabla mezcla dos bases, que es peor que
+    """Sumar los seis abriría antes una vista cuya tabla mezcla dos bases, que es peor que
     tenerla cerrada."""
     e = tx.estado()
-    assert e.n_verificables == 5 and e.n_comparables == 3
+    assert e.n_verificables == 6 and e.n_comparables == 4
     assert "valor razonable" in e.motivo.lower()
 
 
@@ -111,9 +111,7 @@ def test_BELLBANK_usa_el_tipo_de_cambio_del_CORTE_y_no_el_de_la_prensa():
     t = next(x for x in tx.PANEL if "Bellbank" in x.adquirida)
     unidos = " ".join(t.caveats)
     assert "57,16" in unidos and "54,46" in unidos
-    assert t.pb == pytest.approx(t.precio / (t.valor_libro / 54.9967), abs=0.002), (
-        "el múltiplo publicado no sale del patrimonio del corte con el tipo de cambio de "
-        "ese mismo mes")
+    assert t.tipo_de_cambio == 54.9967, "el tipo de cambio no es el de junio 2022"
 
 
 def test_las_VIAS_ABIERTAS_nombran_QUE_falta_en_cada_una():
@@ -123,9 +121,12 @@ def test_las_VIAS_ABIERTAS_nombran_QUE_falta_en_cada_una():
     assert len(tx.VIAS_ABIERTAS) >= 3
     for nombre, falta in tx.VIAS_ABIERTAS:
         assert nombre and len(falta) > 60, f"«{nombre}» sin decir qué falta"
-    rio = next(f for n, f in tx.VIAS_ABIERTAS if "Río" in n)
-    assert "LA FECHA, no el denominador" in rio
-    assert "SIMBAD" in rio
+    assert not any("Río" in n for n, _f in tx.VIAS_ABIERTAS), (
+        "Banco Río sigue listado como vía y ya es un caso cerrado del panel")
+    clarien = next(f for n, f in tx.VIAS_ABIERTAS if "Clarien" in n)
+    assert "SUSCRIBIÓ" in clarien, (
+        "no dice que lo que falta es saber QUÉ FUE la operación: una suscripción es un "
+        "aporte de capital, no un precio pagado a un vendedor")
 
 
 def test_una_operacion_que_NO_se_consumo_no_es_una_transaccion():
@@ -248,3 +249,57 @@ def test_abrir_el_gate_exige_OCHO_verificables():
         for i in range(tx.MINIMO_DE_CASOS))
     assert tx.estado(ocho).abierto
     assert not tx.estado(ocho[:-1]).abierto
+
+
+def test_TODO_multiplo_del_panel_se_recomputa_desde_sus_INSUMOS():
+    """El invariante que cubre a todo el panel de una vez.
+
+    Las dos correcciones que hace `denominador_homogeneo` —la moneda al tipo de cambio del
+    corte y la FRACCIÓN que compró el precio— ya entraron mal en este relevamiento: una
+    conversión de prensa hecha a un mes que no era el del corte, y un precio por el 90 %
+    contra un patrimonio del 100 %. Ninguna de las dos se ve mirando el múltiplo, porque el
+    número sale plausible. Por eso se cruza contra los insumos y no se revisa a ojo.
+    """
+    for t in tx.PANEL:
+        assert t.pb_recomputado is not None, f"{t.adquirida}: el múltiplo no es reproducible"
+        assert t.pb == pytest.approx(t.pb_recomputado, abs=0.001), (
+            f"{t.adquirida}: pb={t.pb} pero sus insumos dan {t.pb_recomputado:.4f}")
+
+
+def test_una_compra_PARCIAL_homogeneiza_el_denominador():
+    """Banco Río es el 90 %. Contra el patrimonio entero el múltiplo daría 1,47x en vez de
+    1,64x —un 10 % bajo— y saldría plausible, que es lo que lo hace peligroso."""
+    t = next(x for x in tx.PANEL if "Río" in x.adquirida)
+    assert t.porcentaje == 0.90
+    sin_homogeneizar = t.precio / (t.valor_libro / t.tipo_de_cambio)
+    assert t.pb == pytest.approx(1.636, abs=0.001)
+    assert sin_homogeneizar == pytest.approx(1.473, abs=0.001)
+    assert t.pb > sin_homogeneizar
+
+
+def test_el_100_por_ciento_es_el_DEFECTO_y_no_hay_que_declararlo():
+    """Un campo que hubiera que acordarse de poner se olvidaría, y el olvido inflaría el
+    denominador en silencio. El defecto es el caso seguro."""
+    assert tx.Transaccion(
+        anio=2020, comprador="C", adquirida="A", pais="DO", precio=2.0, moneda_precio="USD",
+        valor_libro=1.0, moneda_libro="USD", periodo_libro="2020-01", pb=2.0,
+        fuente_precio="x", fuente_libro="y").porcentaje == 1.0
+
+
+def test_sin_tipo_de_cambio_el_denominador_NO_se_convierte():
+    """Los casos en una sola moneda —OFG— no llevan conversión, y el que no la lleva no
+    puede recibir una por defecto: un 1,0 implícito pasaría inadvertido en un caso en
+    pesos."""
+    ofg = next(x for x in tx.PANEL if "OFG" in x.comprador)
+    assert ofg.tipo_de_cambio is None
+    assert ofg.denominador_homogeneo == ofg.valor_libro
+
+
+def test_la_serie_MENSUAL_es_la_que_corrobora_la_fecha_de_Banco_Rio():
+    """La evidencia que ninguna de las dos fuentes de prensa aportaba: el patrimonio cae sin
+    interrupción hasta noviembre de 2015 y salta en diciembre. La capitalización llega
+    después de julio de 2015, así que la operación no pudo ser de julio de 2014."""
+    t = next(x for x in tx.PANEL if "Río" in x.adquirida)
+    assert "1 de julio de 2015" in t.fuente_precio
+    assert "CORROBORA LA FECHA" in t.fuente_libro
+    assert "1,25x" in " ".join(t.caveats), "no declara lo que costaba equivocarse de fecha"

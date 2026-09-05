@@ -76,8 +76,41 @@ class Transaccion:
     #: lo más valioso que puede traer un caso: con las dos cifras del mismo balance, la
     #: distancia entre bases se MIDE en vez de suponerse.
     valor_razonable: Optional[float] = None
+    #: Qué fracción de la entidad compró el precio. NO es un detalle: un precio por el 90 %
+    #: contra un patrimonio del 100 % da un múltiplo 11 % bajo, y el error no se ve —el
+    #: número sale plausible—. Vive como campo y no como caveat para que el múltiplo se
+    #: pueda VERIFICAR contra sus insumos.
+    porcentaje: float = 1.0
+    #: RD$ (o moneda del libro) por unidad de la moneda del precio, del MES del corte. Vive
+    #: como campo por el mismo motivo: una conversión metida en la prosa no se puede
+    #: recomputar, y ya entró mal una vez —la de prensa, a un mes que no era el del corte—.
+    tipo_de_cambio: Optional[float] = None
     #: Lo que el caso NO permite afirmar. Se declara con el dato, no en un anexo.
     caveats: Tuple[str, ...] = ()
+
+    @property
+    def denominador_homogeneo(self) -> Optional[float]:
+        """El denominador en la MONEDA y la FRACCIÓN del precio.
+
+        Es lo que hace comparable un múltiplo con otro. Las dos correcciones que aplica ya
+        entraron mal alguna vez en este mismo relevamiento: una conversión hecha a un mes que
+        no era el del corte, y un precio por el 90 % puesto contra el patrimonio del 100 %.
+        """
+        if self.valor_libro is None:
+            return None
+        libro = self.valor_libro
+        if self.tipo_de_cambio is not None:
+            libro = libro / self.tipo_de_cambio
+        return libro * self.porcentaje
+
+    @property
+    def pb_recomputado(self) -> Optional[float]:
+        """El múltiplo derivado de sus insumos. Si no coincide con `pb`, uno de los dos
+        miente — y el test lo cruza para todo el panel."""
+        den = self.denominador_homogeneo
+        if self.precio is None or not den:
+            return None
+        return self.precio / den
 
     @property
     def cuna_de_base_pct(self) -> Optional[float]:
@@ -115,7 +148,7 @@ PANEL: Tuple[Transaccion, ...] = (
         pais="DO",
         precio=330_000_000.0, moneda_precio="USD",
         valor_libro=6_482_978_970.0, moneda_libro="DOP", periodo_libro="2018-08",
-        pb=2.531,
+        pb=2.531, tipo_de_cambio=49.7276,
         fuente_precio=("Anuncio del acuerdo, agosto 2018 — US$330 millones. Reportado por "
                        "prensa dominicana (Hoy, El Dinero). Es el monto del ACUERDO: la "
                        "consideración final podría haber diferido."),
@@ -244,7 +277,7 @@ PANEL: Tuple[Transaccion, ...] = (
         pais="DO",
         precio=7_200_000.0, moneda_precio="USD",
         valor_libro=217_851_372.0, moneda_libro="DOP", periodo_libro="2022-06",
-        pb=1.818,
+        pb=1.818, tipo_de_cambio=54.9967,
         fuente_precio=("Estados financieros de JMMB Group Limited al 31-dic-2022, nota de "
                        "combinación de negocios: la operación dominicana «was acquired at a "
                        "cost of approximately US$7.2 million». El 100 % del capital suscrito "
@@ -280,6 +313,50 @@ PANEL: Tuple[Transaccion, ...] = (
             "chica cualquier ajuste de valor razonable mueve mucho el múltiplo.",
         ),
     ),
+    Transaccion(
+        anio=2015, comprador="JMMB Holding Company Limited",
+        adquirida="Banco de Ahorro y Crédito Río (90 % de las acciones)",
+        pais="DO",
+        precio=2_150_000.0, moneda_precio="USD",
+        valor_libro=65_568_455.0, moneda_libro="DOP", periodo_libro="2015-06",
+        pb=1.636, porcentaje=0.90, tipo_de_cambio=44.914857142857144,
+        fuente_precio=("Estados financieros auditados de JMMB Group Limited al 31 de marzo "
+                       "de 2016, nota de adquisición: el 1 de julio de 2015 adquirió el 90 % "
+                       "del capital y el control de gestión de Banco Río de Ahorro y "
+                       "Crédito por US$2.150.000 (J$252,7 millones)."),
+        fuente_libro=("Patrimonio publicado por la Superintendencia de Bancos vía SIMBAD al "
+                      "30 de junio de 2015 —el último cierre mensual ANTES del 1 de julio—: "
+                      "RD$65.568.455. Convertido con el tipo de cambio de venta promedio del "
+                      "BCRD del mismo mes (RD$44,9149/US$) y tomado al 90 %, la fracción que "
+                      "compró el precio.\n\n"
+                      "LA ENTIDAD ESTÁ BAJO SU NOMBRE POSTERIOR: la SB la publica como "
+                      "«JMMB», banco de ahorro y crédito, hacia atrás hasta 2013 — es el "
+                      "balance del Río bajo el nombre que le puso el comprador. Una búsqueda "
+                      "por «Río» no la encuentra, y concluir que el dato no existe sería el "
+                      "error.\n\n"
+                      "LA SERIE MENSUAL CORROBORA LA FECHA, y es evidencia que ninguna de las "
+                      "dos fuentes de prensa aporta: el patrimonio cae sin interrupción de "
+                      "RD$87,2 M en enero 2014 a RD$60,2 M en noviembre 2015 —una entidad "
+                      "que se achicaba— y salta a RD$94,3 M en diciembre 2015. La "
+                      "capitalización llega DESPUÉS de julio de 2015, no de julio de 2014. "
+                      "Si la compra hubiera sido en 2014 el aporte se vería en 2014, y no "
+                      "hay ninguno."),
+        caveats=(
+            "Es el 90 %, no el 100 %. El múltiplo homogeneiza —precio del 90 % contra "
+            "patrimonio del 90 %—; contra el patrimonio entero habría dado 1,47x, un 10 % "
+            "bajo, y el número habría salido plausible.",
+            "LA FECHA ERA EL RIESGO, no el denominador. La prensa dominicana situaba la "
+            "operación en julio de 2014 y la jamaiquina en julio de 2015; los estados "
+            "auditados del comprador fijan el 1 de julio de 2015, y lo de 2014 es la "
+            "autorización de la Junta Monetaria (diciembre). Con el corte de junio 2014 el "
+            "múltiplo habría dado 1,25x en vez de 1,64x: un 31 % de diferencia por una fecha.",
+            "El 1,5x que publicó la prensa dominicana es una derivación de terceros, no la "
+            "fuente del denominador. Que quede cerca del 1,64x computado es corroboración, "
+            "no insumo.",
+            "El 10 % restante quedó en manos de un inversionista privado, así que no hay un "
+            "precio del 100 % con el que contrastar.",
+        ),
+    ),
 )
 
 #: Operaciones RELEVADAS y descartadas del panel, con el motivo. Se listan porque un panel
@@ -295,11 +372,25 @@ DESCARTADAS: Tuple[Tuple[str, str], ...] = (
      "están y el caso NO entra igual: Sagicor es aseguradora y conglomerado financiero, no "
      "banco, y la operación fue una cotización por SPAC más que una compra de control "
      "bancaria. Se anota su múltiplo como referencia regional y no como caso del panel."),
-    ("NCB Financial Group / Clarien Group, Bermuda (2017)",
-     "Adquisición del 50,1 % —control— completada, y SIN PRECIO divulgado: las partes "
-     "evitaron toda cifra. Es el descarte inverso al resto: acá falta el numerador, no el "
-     "denominador. El patrimonio de Clarien a junio 2017 (US$107 millones) sí es público, "
-     "así que si el precio apareciera el caso cerraría de inmediato."),
+    ("RBC / operaciones del Caribe Oriental a un consorcio regional (cierre abril 2021)",
+     "Once SUCURSALES vendidas a cinco bancos locales, y el comunicado dice «without "
+     "financial terms». Sin precio, y además el objeto no es una entidad con patrimonio "
+     "publicado por un regulador sino un conjunto de sucursales: aunque apareciera el monto, "
+     "no habría denominador que le corresponda. Es el descarte inverso al resto —acá falta "
+     "el numerador— y no se arregla encontrándolo."),
+    ("Banco Múltiple de Las Américas, Bancamérica (2022)",
+     "No fue una compra: la Junta Monetaria dispuso su DISOLUCIÓN (Segunda Resolución del "
+     "28-ene-2022) y la SB licitó activos y captaciones, adjudicados a Banreservas con "
+     "aporte del Fondo de Contingencia. En una disolución gana quien pide MENOS aporte, que "
+     "es lo contrario de un precio de control."),
+    ("Banco Caribe / BID Invest (2023)",
+     "Préstamo sénior de hasta US$25,15 millones. No hay inversión accionaria ni cambio de "
+     "control: financiar a una entidad no es comprarla."),
+    ("Banesco Banco Múltiple RD · Lafise · Ademi · Promérica RD y el resto del padrón",
+     "Barrido del padrón de la SB sin operación de control con monto. Lo que aparece son "
+     "cosas que NO son compras: entradas de novo (Lafise, autorizada en 2013), conversiones "
+     "de licencia (Ademi, de ahorro y crédito a banco múltiple) y aumentos de capital por "
+     "oferta pública (Promérica, 2023). Banesco sigue siendo subsidiaria de Banesco Panamá."),
     ("Centro Financiero BHD y Grupo Financiero León (diciembre 2014)",
      "Fusión ENTRE IGUALES, no una compra: no hay precio porque no hubo comprador. Aunque se "
      "hubiera publicado una relación de canje, un múltiplo de fusión no informa sobre lo que "
@@ -331,14 +422,26 @@ DESCARTADAS: Tuple[Tuple[str, str], ...] = (
 #: es una vía cerrada— y no son casos: entran al panel el día que se cierre lo que falta.
 #: Se listan porque nombrar el obstáculo exacto es lo que hace accionable un relevamiento.
 VIAS_ABIERTAS: Tuple[Tuple[str, str], ...] = (
-    ("JMMB / Banco de Ahorro y Crédito Río (RD)",
-     "Falta LA FECHA, no el denominador. El precio está verificado en los estados auditados "
-     "de JMMB Group —US$2,15 millones (J$252,7 millones) por el 90 %— y el patrimonio de la "
-     "entidad está en SIMBAD en todos los cortes, porque la SB la publica bajo su nombre "
-     "POSTERIOR («JMMB», banco de ahorro y crédito) hacia atrás hasta 2013. Lo que bloquea "
-     "es que las fuentes discrepan entre julio de 2014 y julio de 2015, y el múltiplo es "
-     "muy sensible: ~1,25x con el corte de junio 2014 y ~1,64x con el de junio 2015. "
-     "Fijar la fecha con la resolución de la Junta Monetaria la convierte en caso."),
+    ("JMMB / Intercommercial Bank Ltd (Trinidad y Tobago, 2013)",
+     "Precio verificado: US$8,75 millones (J$914,1 millones) por el 50 % RESTANTE, pasando "
+     "de 50 % a 100 %. Falta el patrimonio contable de la entidad al corte 2013, que "
+     "publicaría el Central Bank of Trinidad and Tobago. Además es una compra POR ETAPAS: el "
+     "precio es solo del segundo tramo y el múltiplo hay que homogeneizarlo al 50 %."),
+    ("First Citizens / Butterfield Bank (Barbados) (2012)",
+     "Precio verificado: US$45 millones por el 100 %. Falta el patrimonio contable de la "
+     "entidad al corte 2012, que publicaría el Central Bank of Barbados. Se conocen sus "
+     "activos (US$308 M) y depósitos (US$270 M), que NO son patrimonio. El vendedor reportó "
+     "una ganancia de ~US$7 M, de la que se podría despejar un valor en libros de ~US$38 M: "
+     "eso es el carrying value CONSOLIDADO del vendedor, no el patrimonio de la entidad, y "
+     "es una derivación, no un dato."),
+    ("NCB Financial Group / Clarien Group (Bermuda, 2017)",
+     "Falta aclarar QUÉ FUE la operación, antes que cualquier cifra. NCBFG SUSCRIBIÓ el "
+     "50,1 % —un aporte de capital que entra a la sociedad— y no está establecido que le "
+     "haya comprado las acciones a un accionista. Si fue suscripción, el monto NO es un "
+     "precio de control y el caso no pertenece a este panel por más que las dos cifras "
+     "existan. Lo que sí está, y vale aparte: la nota del comprador declara una GANANCIA POR "
+     "COMPRA VENTAJOSA final de J$4.392.149 miles, o sea que el valor razonable de los "
+     "activos netos SUPERÓ al monto pagado. Es el único caso relevado en esa dirección."),
     ("Republic Financial Holdings / desglose por país del Caribe Oriental",
      "La nota 34 agrega siete territorios en una sola cifra. Si algún estado local o el "
      "regulador de un territorio publicara su parte, esa observación se desdoblaría en "

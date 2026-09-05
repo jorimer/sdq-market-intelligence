@@ -1,8 +1,8 @@
 # Encargo de investigación · Panel de transacciones bancarias RD/Caribe
 
-> **Segunda actualización.** La ronda anterior cerró dos casos nuevos y refutó tres supuestos
-> de este mismo documento. Leer «Lo que cambió en esta ronda» antes de empezar: hay una pista
-> que estaba mal priorizada y una vía que se creía cerrada y no lo está.
+> **Tercera actualización.** Van dos rondas de investigación. Entre las dos el panel pasó de
+> **1 caso comparable a 4**, y cinco afirmaciones de este mismo documento quedaron refutadas.
+> Leer «Lo que cambió» antes de empezar.
 
 ## Qué necesitamos, exactamente
 
@@ -13,7 +13,7 @@ la última década, con **las dos puntas verificables Y sobre base CONTABLE**:
 2. **PATRIMONIO CONTABLE de la entidad adquirida** al momento de la operación, tal como lo
    tenía en SU balance — el denominador.
 
-**Meta: 8 casos sobre base contable. Hoy hay 3.** Faltan cinco.
+**Meta: 8 casos sobre base contable. Hoy hay 4.** Faltan cuatro.
 
 ## Por qué importa
 
@@ -58,37 +58,43 @@ múltiplo pasa de 1,83× a ~5,4× según qué base se use.
 
 ---
 
-## Lo que cambió en esta ronda
+## Lo que cambió
 
-1. **La Pista A está agotada para RFHL, y NO hace falta volver al PDF.** La nota 34 de la
-   memoria 2020 ya se leyó entera. Las cifras están abajo, en «ya está hecho». Si el intento
-   de descargar ese PDF quedó pendiente, cancelarlo.
-2. **Apareció una pista mejor que las que este documento priorizaba: la SEC.** Un comprador
-   que cotiza en EE.UU. presenta la tabla de asignación del precio de compra con la columna
-   **«Book Value»**, que es exactamente el denominador que buscamos. Es la única fuente
-   encontrada hasta ahora que entrega base contable *y* valor razonable a la vez. Pasa a ser
-   **Pista D** y va arriba en prioridad.
-3. **El atajo dominicano quedó probado dos veces, no una.** Ver abajo: para una operación
-   dominicana el denominador ya lo tenemos, y lo único que falta buscar es el precio.
-4. **Banco Río no está cerrado por falta de denominador — lo tenemos.** Lo que bloquea es la
-   fecha. Ver «vías abiertas».
-5. **Tres descartes nuevos, con motivo**, incluido uno que este documento listaba como pista
-   viva y no lo es.
+1. **El atajo dominicano quedó probado TRES veces.** Progreso, Bellbank y Banco Río cerraron
+   los tres con el denominador de la Superintendencia y el tipo de cambio del BCRD. Para una
+   operación dominicana **lo único que hay que buscar es el precio** — y de ahí sale la
+   prioridad número uno de abajo.
+2. **Banco Río cerró, y no fue por el denominador.** Estaba listado como vía porque las
+   fuentes discrepaban entre 2014 y 2015. Los estados auditados de JMMB Group fijan el **1 de
+   julio de 2015**, y lo de 2014 era la autorización de la Junta Monetaria. Con el corte
+   correcto da **1,64×**; con el de 2014 habría dado 1,25×. Un 31 % por una fecha.
+3. **La Pista A está agotada para RFHL: no volver al PDF.** La nota 34 ya se leyó entera y
+   sus cifras están abajo.
+4. **La mejor fuente de base contable resultó ser la SEC.** Un comprador que cotiza en EE.UU.
+   publica la tabla de asignación del precio de compra con la columna **«Book Value»**, que
+   es exactamente el denominador que buscamos. Es **Pista D** y va arriba.
+5. **Ocho descartes nuevos entre las dos rondas**, tres de ellos contra lo que este mismo
+   documento afirmaba: CIBC/GNB nunca se consumó, Clarien sí tiene precio, y Bancamérica no
+   fue una compra sino una disolución.
 
 ---
 
 ## Lo que YA está hecho — no repetir
 
-### Los TRES casos COMPARABLES (base contable) — el conteo que importa
+### Los CUATRO casos COMPARABLES (base contable) — el conteo que importa
 
-| | Progreso | Scotiabank PR | Bellbank |
-|---|---|---|---|
-| comprador | Scotiabank | OFG Bancorp | JMMB |
-| país · año | DO · 2018 | PR · 2019 | DO · 2022 |
-| precio | US$330 M | US$430,437 M | ≈US$7,2 M |
-| denominador | RD$6.482.978.970 | US$381,032 M | RD$217.851.372 |
-| corte | 2018-08 | 2019-12 | 2022-06 |
-| **P/B** | **2,53×** | **1,13×** | **1,82×** |
+| | Progreso | Banco Río | Scotiabank PR | Bellbank |
+|---|---|---|---|---|
+| comprador | Scotiabank | JMMB | OFG Bancorp | JMMB |
+| país · año | DO · 2018 | DO · 2015 | PR · 2019 | DO · 2022 |
+| % comprado | n/d | **90 %** | 100 % | 100 % |
+| precio | US$330 M | US$2,15 M | US$430,437 M | ≈US$7,2 M |
+| denominador | RD$6.482.978.970 | RD$65.568.455 | US$381,032 M | RD$217.851.372 |
+| corte | 2018-08 | 2015-06 | 2019-12 | 2022-06 |
+| **P/B** | **2,53×** | **1,64×** | **1,13×** | **1,82×** |
+
+Los tres dominicanos cerraron igual: **precio de la fuente del comprador, denominador de la
+Superintendencia, conversión al tipo de cambio de venta del BCRD del mes del corte.**
 
 - **Progreso**: precio de prensa; patrimonio del histórico de la SIB que ya ingerimos;
   conversión al tipo de cambio de venta del BCRD de 2018-08 (RD$49,7276). Verificación
@@ -101,6 +107,16 @@ múltiplo pasa de 1,83× a ~5,4× según qué base se use.
   **SIMBAD**, el Superset público de la Superintendencia. Verificación cruzada: los estados
   auditados de la propia adquirida dan RD$217.294.194 a diciembre 2021 y SIMBAD da
   RD$217.294.150 — **44 pesos de diferencia** sobre 217 millones.
+- **Banco Río**: precio de los estados auditados de JMMB Group al 31-mar-2016 (US$2.150.000
+  por el 90 %, cierre 1-jul-2015); patrimonio de SIMBAD al 30-jun-2015, el último cierre
+  mensual antes de esa fecha. **El múltiplo homogeneiza**: precio del 90 % contra patrimonio
+  del 90 %. Contra el patrimonio entero habría dado 1,47× — un 10 % bajo, y plausible.
+
+> **La serie mensual corroboró la fecha, y es evidencia que ninguna de las dos rondas de
+> investigación aportó.** El patrimonio del Río cae sin interrupción de RD$87,2 M en enero
+> 2014 a RD$60,2 M en noviembre 2015 —una entidad que se achicaba— y **salta a RD$94,3 M en
+> diciembre 2015**. La capitalización llega después de julio de 2015. Si la compra hubiera
+> sido en julio de 2014, el aporte se vería en 2014; no hay ninguno.
 
 > **Corrección aportada por nuestros propios datos:** la prensa convirtió el patrimonio de
 > diciembre 2021 a «US$3,99 millones», lo que implica RD$54,46/US$. El tipo de cambio de
@@ -133,7 +149,22 @@ agregada**: es una observación, no siete.
 
 ### Descartadas, con motivo — no volver sobre ellas
 
-**Nuevas en esta ronda:**
+**De la segunda ronda:**
+
+- **RBC / Caribe Oriental a un consorcio regional (2021)** — once **sucursales** vendidas a
+  cinco bancos locales, «without financial terms». Sin precio, y además el objeto no es una
+  entidad con patrimonio publicado: aunque apareciera el monto, no habría denominador.
+- **Bancamérica (2022)** — no fue una compra: la Junta Monetaria dispuso su **disolución**
+  (Segunda Resolución del 28-ene-2022) y la SB licitó activos y captaciones, adjudicados a
+  Banreservas con aporte del Fondo de Contingencia. En una disolución gana quien pide **menos**
+  aporte, que es lo contrario de un precio de control.
+- **Banco Caribe / BID Invest (2023)** — préstamo sénior de hasta US$25,15 M. Financiar una
+  entidad no es comprarla.
+- **Banesco RD · Lafise · Ademi · Promérica y el resto del padrón** — barrido sin operación
+  de control con monto. Lo que aparece no son compras: entradas de novo (Lafise, 2013),
+  conversiones de licencia (Ademi) y aumentos de capital por oferta pública (Promérica, 2023).
+
+**De la primera ronda:**
 
 - **CIBC FirstCaribbean / GNB Financial (anuncio nov-2019)** — US$797 M por el 66,73 %, y la
   operación **NO SE CONSUMÓ**: los reguladores no la aprobaron. Este documento la listaba
@@ -141,11 +172,6 @@ agregada**: es una observación, no siete.
 - **Sagicor Financial / Alignvest (2019)** — US$536 M a ~1,0× libro, con las dos puntas
   disponibles, y **fuera de alcance igual**: Sagicor es aseguradora y conglomerado, no banco,
   y fue una cotización por SPAC. Queda como referencia regional, no como caso.
-- **NCB Financial / Clarien Group, Bermuda (2017)** — adquisición del 50,1 % **completada** y
-  **sin precio divulgado**. Es el descarte inverso al resto: falta el numerador. El
-  patrimonio de Clarien a junio 2017 (US$107 M) sí es público, así que **si el precio
-  apareciera, el caso cerraría de inmediato**.
-
 **De rondas anteriores:**
 
 - **BHD + León (2014)** — fusión entre iguales: no hay comprador, no hay precio de control.
@@ -164,86 +190,78 @@ agregada**: es una observación, no siete.
 
 No son descartes ni son casos. Entran al panel el día que se cierre lo que falta.
 
-### 1. JMMB / Banco de Ahorro y Crédito Río (RD) — falta LA FECHA
+### Tres con el PRECIO ya verificado — solo falta el denominador, en su regulador
 
-El precio está verificado: **US$2,15 millones (J$252,7 M) por el 90 %**, en los estados
-auditados de JMMB Group. **Y el denominador también lo tenemos**: la Superintendencia publica
-esa entidad en SIMBAD bajo su nombre **posterior** («JMMB», banco de ahorro y crédito), hacia
-atrás hasta 2013 — el mismo patrón de renombrado retroactivo que ya nos mordió con otras dos
-entidades.
+Es la vía de mayor rendimiento marginal que queda: la mitad cara del trabajo ya está hecha.
 
-| corte | patrimonio (RD$) |
-|---|---:|
-| 2013-12 | 85.617.576 |
-| 2014-06 | 83.000.919 |
-| 2014-12 | 78.075.881 |
-| 2015-06 | 65.568.455 |
+| operación | precio | qué falta | dónde |
+|---|---|---|---|
+| JMMB / Intercommercial Bank (Trinidad, 2013) | US$8,75 M por el 50 % restante | patrimonio contable al corte 2013 | Central Bank of Trinidad and Tobago |
+| First Citizens / Butterfield Barbados (2012) | US$45 M por el 100 % | patrimonio contable al corte 2012 | Central Bank of Barbados |
+| NCB / Clarien (Bermuda, 2017) | J$4,15 mm ≈ US$33,04 M por el 50,1 % | ver abajo | Bermuda Monetary Authority |
 
-Lo que bloquea es que las fuentes discrepan entre **julio de 2014** (prensa dominicana) y
-**julio de 2015** (prensa jamaiquina), y el múltiplo es muy sensible: **~1,25×** con el corte
-de junio 2014 y **~1,64×** con el de junio 2015. Un 30 % de diferencia según la fecha.
+- **IBL** es una compra **por etapas**: el precio es solo del segundo tramo (50 %→100 %), así
+  que el múltiplo hay que homogeneizarlo al 50 %.
+- **Butterfield Barbados**: se conocen activos (US$308 M) y depósitos (US$270 M), que **no son
+  patrimonio**. El vendedor reportó una ganancia de ~US$7 M de la que se podría despejar un
+  valor en libros de ~US$38 M: eso es el *carrying value consolidado del vendedor*, no el
+  patrimonio de la entidad. Es una derivación, no un dato.
+- **Clarien**: lo que falta primero **no es una cifra sino saber qué fue la operación**. NCBFG
+  *suscribió* el 50,1 % —un aporte de capital que entra a la sociedad— y no está establecido
+  que le haya comprado acciones a un accionista. Si fue suscripción, el monto **no es un
+  precio de control** y el caso no pertenece a este panel por más que las dos puntas existan.
+  Lo que sí vale aparte: su nota declara una **ganancia por compra ventajosa** final de
+  J$4.392.149 miles — el valor razonable de los activos netos **superó** al monto pagado. Es
+  el único caso relevado en esa dirección.
 
-> **Lo único que hay que traer:** la resolución de la Junta Monetaria o de la SB que autorizó
-> la venta, con su fecha. Nada más. No hace falta buscar el patrimonio.
+### Dos más, de menor rendimiento
 
-### 2. Bellbank — falta el segundo denominador
+- **Bellbank — segundo denominador.** El PPA estaba «not yet finalized» a diciembre 2022. La
+  memoria auditada de JMMB Group del año fiscal a **marzo 2023** debería traerlo.
+- **RFHL Caribe Oriental — desglose por país.** La nota 34 agrega siete territorios en una
+  cifra. Si un regulador local (ECCB, o el banco central de un territorio) publicara su parte,
+  esa observación se desdoblaría en varias.
 
-El PPA estaba «not yet finalized» al trimestre de diciembre 2022. La memoria auditada de JMMB
-Group del año fiscal a **marzo 2023** debería traerlo. Con eso el caso mediría la separación
-entre bases, como hace el de OFG.
+## Las pistas, por orden de rendimiento
 
-### 3. RFHL Caribe Oriental — falta el desglose por país
+### 1. Resoluciones de la Junta Monetaria, año por año (RD) — LA PRIORIDAD
 
-La nota 34 agrega siete territorios en una cifra. Si un regulador local (ECCB, o el banco
-central de un territorio) publicara su parte, esa observación se desdoblaría en varias.
+Es el camino más corto a los cuatro casos que faltan, y sale directo de lo que ya probamos
+tres veces: **para una operación dominicana el denominador ya lo tenemos.**
 
----
+Barrer `bancentral.gob.do` **año por año, 2016→2026**, por resoluciones que autoricen venta o
+traspaso de acciones de una entidad de intermediación financiera. De cada una hace falta:
+**la entidad, la fecha de cierre, el porcentaje y el monto**. Nada más — el patrimonio lo
+ponemos nosotros, al corte que fije esa fecha.
 
-## Las pistas, reordenadas
+Las resoluciones sirven además para lo que ya está: es lo que habría cerrado la fecha de
+Banco Río sin depender de dos prensas que se contradecían.
 
-### Pista D — filings ante la SEC (NUEVA, y la mejor para base contable)
+### 2. Reguladores del Caribe, para las tres con precio verificado
 
-**Es la única fuente encontrada que entrega el patrimonio CONTABLE del vendedor sin depender
-del regulador local.** Un comprador que cotiza en EE.UU. presenta en su 10-K/10-Q la tabla de
-asignación del precio de compra, y esa tabla suele traer la columna «Book Value» al lado de
-la de valor razonable. Así cerró OFG.
+CBTT (Trinidad), Central Bank of Barbados y Bermuda Monetary Authority publican estados por
+entidad. Tres casos donde solo falta el denominador — ver «vías abiertas».
 
-Compradores cotizados en EE.UU. con operaciones caribeñas a revisar: **OFG Bancorp**,
-**Popular Inc. (BPOP)**, **First BanCorp (FBP)**. Buscar en EDGAR por «business combination»
-y «purchase price allocation».
+### 3. Filings ante la SEC — la mejor fuente de base contable
 
-### Pista B — reguladores (la principal para República Dominicana)
+Un comprador que cotiza en EE.UU. presenta en su 10-K/10-Q la tabla de asignación del precio
+de compra, y esa tabla suele traer la columna **«Book Value»** al lado de la de valor
+razonable. Así cerró OFG, y es la única fuente encontrada que entrega **las dos bases a la
+vez**.
 
-- **SIMBAD / Superintendencia de Bancos** (<https://simv.gob.do> y el Superset de la SB): ya
-  probado dos veces. **Para RD el denominador está resuelto.**
-- **Junta Monetaria / Banco Central de RD**: toda fusión o adquisición bancaria requiere
-  autorización, y las resoluciones traen fecha, porcentaje y a veces el monto. Es lo que
-  cierra Banco Río.
-- **SIMV**: prospectos y hechos relevantes de bancos con deuda listada. Devuelve **403 a
-  peticiones automatizadas**; hay que entrar con navegador.
-- **Bolsas y reguladores del Caribe**: Trinidad (TTSE, CBTT), Jamaica (JSE), Barbados (BSE),
-  ECCB para el Caribe Oriental.
+Compradores cotizados con operaciones caribeñas: **OFG Bancorp**, **Popular Inc. (BPOP)**,
+**First BanCorp (FBP)**. Buscar en EDGAR por «business combination» y «purchase price
+allocation».
 
-> **Atajo para República Dominicana, ya probado dos veces:** el patrimonio de cualquier banco
-> dominicano está en SIMBAD y en la serie histórica de la SIB que esta plataforma ingiere.
-> Para un caso dominicano, **basta con encontrar el precio**.
+### 4. NIIF 3 de compradores no estadounidenses
 
-### Pista C — el resto del Caribe
+Sigue valiendo, con la advertencia de que devolverá **valor razonable** salvo que la nota
+además publique el valor en libros del vendedor. **Agotada para RFHL: no volver a esa
+memoria.** Quedan JMMB Group y NCB Financial Group para sus otras operaciones.
 
-Con su comprador, que es donde estaría la nota de combinación de negocios:
-
-- **JMMB Group** — Intercommercial Bank (Trinidad), y cualquier otra operación de la memoria.
-- **NCB Financial Group** — Guardian Holdings; Clarien queda abierta si aparece el precio.
-- **Banco Múltiple Caribe · Banesco · Bancamérica** — cambios de control recientes en RD;
-  verificar si hubo operación con monto.
-
-### Pista A — NIIF 3 de compradores no estadounidenses
-
-Sigue valiendo para compradores que no reporten a la SEC, con la advertencia de que devolverá
-**valor razonable** salvo que la nota además publique el valor en libros del vendedor.
-**Agotada para RFHL.**
-
----
+> **Atajo, probado tres veces:** el patrimonio de cualquier banco dominicano está en SIMBAD y
+> en la serie histórica de la SIB que esta plataforma ingiere. Para un caso dominicano,
+> **basta con encontrar el precio y la fecha.**
 
 ## Formato de entrega
 
@@ -281,14 +299,25 @@ CAVEATS:        <lo que el caso NO permite afirmar>
 5. **El precio que vale es el REGISTRADO, no el del titular.** En OFG el titular era US$550 M
    y la consideración registrada US$430 M — un 28 % de diferencia por un dividendo
    pre-cierre.
-6. **Activos totales ≠ precio ≠ patrimonio.**
-7. **Una operación que no se consumó no es una transacción.** Verificar que cerró.
-8. **Fusiones entre iguales quedan fuera.** No hay comprador, no hay precio de control.
-9. **Participaciones minoritarias quedan fuera** o se marcan: se pagan con otro múltiplo.
-10. **Operaciones de rescate en crisis se marcan**, y **anterior a 2010 también**: el sistema
+6. **El PORCENTAJE comprado es obligatorio, y el múltiplo se homogeneiza.** Un precio por el
+   90 % contra un patrimonio del 100 % da un múltiplo ~10 % bajo, y el número sale plausible.
+   Pasó con Banco Río.
+7. **Un aporte de capital NO es un precio.** Si el dinero entró a la sociedad (suscripción de
+   acciones nuevas) en vez de ir a un vendedor, no es una transacción de control. Ante un
+   monto, preguntar siempre a quién se le pagó.
+8. **Activos totales ≠ precio ≠ patrimonio.** Y una ganancia contable del vendedor tampoco
+   despeja el patrimonio de la adquirida: despeja el valor en libros que la matriz tenía
+   registrado, que es otra cosa.
+9. **Una operación que no se consumó no es una transacción.** Verificar que cerró.
+10. **Una disolución o liquidación no es una compra.** En una licitación de rescate gana quien
+    pide menos aporte del fondo de contingencia: es lo contrario de un precio.
+11. **Fusiones entre iguales quedan fuera.** No hay comprador, no hay precio de control.
+12. **Participaciones minoritarias quedan fuera** o se marcan: se pagan con otro múltiplo.
+13. **Operaciones de rescate en crisis se marcan**, y **anterior a 2010 también**: el sistema
     dominicano se reestructuró tras la crisis de 2003.
-11. **Una cifra agregada de varios países es UNA observación**, no una por país.
-12. **Ojo con los nombres**: la SB publica las entidades bajo su nombre ACTUAL hacia atrás en
+14. **Una cifra agregada de varios países es UNA observación**, no una por país.
+15. **Una compra POR ETAPAS** trae un precio de un tramo: homogeneizar contra ese tramo.
+16. **Ojo con los nombres**: la SB publica las entidades bajo su nombre ACTUAL hacia atrás en
     el tiempo. Una entidad puede estar en los datos bajo el nombre que le puso el comprador
     años después. No concluir «no está» sin buscar también por el nombre posterior.
 
