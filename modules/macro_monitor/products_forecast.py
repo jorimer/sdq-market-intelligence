@@ -53,16 +53,24 @@ SECCION_TRAYECTORIA = "trajectory"
 SECCION_SECTORIAL = "sectoral"
 SECCION_DESEMPENO = "forecast_track_record"
 SECCION_ESCENARIOS = "scenarios"
+SECCION_RESUMEN = "resumen_ejecutivo"
+SECCION_PROPOSITO = "proposito_y_alcance"
 SECCION_METODOLOGIA = "methodology"
 
 _SECTION_TITLES = {
+    SECCION_RESUMEN: "Resumen ejecutivo",
+    SECCION_PROPOSITO: "Propósito y alcance",
     SECCION_NOWCAST: "Nowcast del trimestre en curso",
     SECCION_TRAYECTORIA: "Trayectoria proyectada",
     SECCION_SECTORIAL: "Lectura sectorial",
     # En el CUERPO y no en anexo: es el argumento de venta, no la letra chica (§5 del spec).
     SECCION_DESEMPENO: "Desempeño de nuestras proyecciones anteriores",
     SECCION_ESCENARIOS: "Escenarios a 3-8 trimestres (sin track record)",
-    SECCION_METODOLOGIA: "Metodología y límites",
+    # NO empieza con «Metodología»: el framework agrega su propia «Metodología y fuentes»
+    # —corte, frescura, cobertura, validación, procedencia— y dos secciones que empiezan
+    # igual en el mismo índice se leen como una repetida. Ésta dice de qué están hechos los
+    # números; aquélla, de dónde salen y qué los limita como dato.
+    SECCION_METODOLOGIA: "Cómo se construye cada cifra",
 }
 
 _METODOLOGIA = (
@@ -104,7 +112,8 @@ def macro_forecast_manifest() -> SectorProductManifest:
             # trimestral.
             ProductTier.insight: TierLevelSpec(
                 tier=ProductTier.insight, granularity=Granularity.system,
-                sections=(SECCION_NOWCAST, SECCION_TRAYECTORIA, SECCION_SECTORIAL,
+                sections=(SECCION_RESUMEN, SECCION_PROPOSITO,
+                          SECCION_NOWCAST, SECCION_TRAYECTORIA, SECCION_SECTORIAL,
                           SECCION_DESEMPENO, SECCION_METODOLOGIA),
                 narrative_templates=(), prosa_computada=True,
                 audience="cliente / comité", cadence="recurring", price_band="suscripción"),
@@ -115,7 +124,8 @@ def macro_forecast_manifest() -> SectorProductManifest:
             # anclar nada aunque alguien lo intente.
             ProductTier.deep_dive: TierLevelSpec(
                 tier=ProductTier.deep_dive, granularity=Granularity.system,
-                sections=(SECCION_NOWCAST, SECCION_TRAYECTORIA, SECCION_ESCENARIOS,
+                sections=(SECCION_RESUMEN, SECCION_PROPOSITO,
+                          SECCION_NOWCAST, SECCION_TRAYECTORIA, SECCION_ESCENARIOS,
                           SECCION_SECTORIAL, SECCION_DESEMPENO, SECCION_METODOLOGIA),
                 narrative_templates=(), prosa_computada=True,
                 audience="comité / tesorería", cadence="on_demand", price_band="on-demand"),
@@ -340,7 +350,11 @@ class MacroForecastProduct:
         p = snapshot.payload
         out: Dict[str, str] = {}
         for sec in secciones:
-            if sec == SECCION_NOWCAST:
+            if sec == SECCION_RESUMEN:
+                out[sec] = _md_resumen_ejecutivo(p)
+            elif sec == SECCION_PROPOSITO:
+                out[sec] = _PROPOSITO
+            elif sec == SECCION_NOWCAST:
                 out[sec] = _md_nowcast(p)
             elif sec == SECCION_TRAYECTORIA:
                 out[sec] = _md_trayectoria(p)
@@ -418,6 +432,8 @@ class MacroForecastProduct:
         secciones = self.product_manifest().require_level(tier).sections
         p = _SAMPLE_PAYLOAD
         fijas = {
+            SECCION_RESUMEN: _md_resumen_ejecutivo(p),
+            SECCION_PROPOSITO: _PROPOSITO,
             SECCION_NOWCAST: _md_nowcast(p),
             SECCION_TRAYECTORIA: _md_trayectoria(p),
             SECCION_SECTORIAL: _md_sectorial(p),
@@ -440,24 +456,32 @@ class MacroForecastProduct:
         tablas: List = []
         graficos: List = []
 
+        # NO se arman tablas de portada. Las que había —«Proyecciones vigentes» e
+        # «Incidencia sectorial proyectada»— publicaban exactamente las filas que la prosa de
+        # §Trayectoria y §Lectura sectorial vuelve a publicar, y las de portada salían SIN
+        # ENCABEZADO: la lista por comprensión emitía solo filas de dato. Un lector abría el
+        # informe con 18 filas de números sin nombres de columna antes de la primera frase, y
+        # después las mismas 18 con encabezado. Tras el arreglo de la lectura sectorial la de
+        # portada era además un SUBCONJUNTO: 4 columnas contra 5.
+        #
+        # `render_product_pdf` ofrece `tables_last` para el caso vecino —«un informe que abre
+        # con páginas de tablas antes de una sola frase se lee como un anexo», decisión del
+        # dueño sobre brand_intel— pero acá no aplica: mover un duplicado no lo deja de ser.
         proys = p.get("proyecciones") or []
-        if proys:
-            tablas.append(("Proyecciones vigentes", [
-                [d["serie"], d["horizonte"], f"{d['punto']:.2f}",
-                 _banda(d.get("intervalos"), 0.80),
-                 "sí" if d.get("ancla") else "no"]
-                for d in proys]))
-            items = [(d["horizonte"], d["punto"]) for d in proys]
-            if len(items) >= 2:
-                graficos.append({"title": "Trayectoria proyectada del PIB (%)",
-                                 "items": items, "kind": "line", "unit": "%"})
-
-        sect = p.get("sectorial") or {}
-        if sect.get("sectores"):
-            tablas.append((f"Incidencia sectorial proyectada · {sect.get('horizonte','')}", [
-                [s["etiqueta"], f"{s['peso'] * 100:.2f}%", f"{s['crecimiento']:.2f}%",
-                 f"{s['incidencia']:.3f} pp"]
-                for s in sect["sectores"]]))
+        escenarios = p.get("escenarios") or []
+        # La trayectoria son las vigentes MÁS los escenarios: son puntos de la misma serie y
+        # el informe ya publica los dos. Exigir >=2 sobre las vigentes dejaba el caso real de
+        # producción —una vigente y seis escenarios— sin ningún gráfico, con siete puntos
+        # disponibles.
+        #
+        # Los escenarios van ROTULADOS. Un escenario no tiene track record y no ancla ninguna
+        # afirmación; fundirlo con un pronóstico en la misma línea borra la distinción que la
+        # sección de escenarios se toma tres párrafos en sostener.
+        items = [(str(d["horizonte"]), d["punto"]) for d in proys]
+        items += [(f"{e['horizonte']} (esc.)", e["punto"]) for e in escenarios]
+        if len(items) >= 2:
+            graficos.append({"title": "Trayectoria proyectada del PIB (%) · «esc.» = escenario",
+                             "items": items, "kind": "line", "unit": "%"})
 
         titular = None
         cif = p.get("cifra_determinada")
@@ -500,6 +524,75 @@ def _banda(intervalos, nivel: float) -> str:
         if len(tramo) >= 3 and abs(float(tramo[0]) - nivel) < 1e-9:
             return f"{float(tramo[1]):.2f} … {float(tramo[2]):.2f}"
     return "—"
+
+
+def _md_resumen_ejecutivo(p: Dict[str, Any]) -> str:
+    """Las tres o cuatro frases que un lector usa para decidir si sigue leyendo.
+
+    COMPUTADO del mismo payload que el resto, nunca escrito a mano: un resumen curado
+    envejece contra las cifras que resume y termina diciendo algo que el informe desmiente
+    tres páginas después. Y dice explícitamente qué NO ancla una afirmación — enterrarlo al
+    final es la práctica que esta plataforma existe para no repetir.
+    """
+    partes: List[str] = []
+    cif = p.get("cifra_determinada")
+    if cif:
+        var = (f", una variación de {cif['dlog_pct']:.2f} % contra el trimestre anterior"
+               if cif.get("dlog_pct") is not None else "")
+        partes.append(
+            f"El trimestre {cif['trimestre']} ya está **determinado**: el índice de volumen "
+            f"del PIB es {cif['indice']:.3f}{var}. No es una estimación —es una identidad de "
+            "construcción del BCRD— y por eso se sirve sin banda de error.")
+
+    proys = p.get("proyecciones") or []
+    if proys:
+        d = proys[0]
+        anclan = [x for x in proys if x.get("ancla")]
+        partes.append(
+            f"La proyección vigente para {d['horizonte']} es de **{d['punto']:.2f} %**, con "
+            f"una banda del 80 % de {_banda(d.get('intervalos'), 0.80)}.")
+        if not anclan:
+            partes.append(
+                "**Ninguna de las proyecciones vigentes pasa hoy el gate de admisibilidad**, "
+                "así que ninguna cifra de este informe puede sostener una afirmación anclada. "
+                "Se publican con su banda y con el motivo del rechazo, no a medias.")
+        elif len(anclan) < len(proys):
+            # La concordancia se computa: «1 pasan» es de las cosas que hacen que un
+            # informe se lea como generado por una máquina, y esto se vende.
+            verbo = "pasa" if len(anclan) == 1 else "pasan"
+            partes.append(
+                f"De las {len(proys)} proyecciones vigentes, {len(anclan)} {verbo} el gate de "
+                "admisibilidad; el resto se publica con el motivo por el que no ancla.")
+
+    sect = p.get("sectorial") or {}
+    if sect.get("sectores"):
+        mayor = max(sect["sectores"], key=lambda x: x["incidencia"])
+        menor = min(sect["sectores"], key=lambda x: x["incidencia"])
+        partes.append(
+            f"En la desagregación sectorial de {sect.get('horizonte', 'el horizonte')}, quien "
+            f"más aporta es **{mayor['etiqueta']}** ({mayor['incidencia']:.3f} pp) y quien "
+            f"menos, {menor['etiqueta']} ({menor['incidencia']:.3f} pp).")
+
+    if not partes:
+        return ("No hay nada que resumir en este corte: ni cifra determinada ni proyecciones "
+                "vigentes. La sección aparece igual — un resumen que solo sale cuando hay "
+                "buenas noticias no es un resumen.")
+    return "\n\n".join(partes)
+
+
+_PROPOSITO = (
+    "**Qué responde este informe.** Cuánto va a crecer la economía dominicana en los "
+    "próximos trimestres, con qué incertidumbre, y qué actividades explican ese número.\n\n"
+    "**Qué NO es.** No es una recomendación de inversión ni una proyección oficial: el BCRD "
+    "publica las suyas y éstas son nuestras, con nuestros modelos y nuestro track record a "
+    "la vista.\n\n"
+    "**Alcance.** El sujeto es el país, no una entidad: no hay panel de pares que ordenar, "
+    "así que este eje no lleva un score comparativo ni un Gini de discriminación. Se juzga "
+    "por el error contra un random walk y por la cobertura empírica de sus intervalos, que "
+    "viajan al lado de cada cifra.\n\n"
+    "**Cadencia.** Trimestral, atada a la publicación del PIB por el BCRD. Cada proyección "
+    "queda registrada antes de conocerse el resultado y se puntúa sola cuando el dato llega."
+)
 
 
 def _md_nowcast(p: Dict[str, Any]) -> str:

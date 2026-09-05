@@ -170,7 +170,8 @@ FRASE_COBERTURA_METODOLOGIA = {
 }
 
 
-def _methodology_md(sig, val, as_of: Optional[str] = None) -> str:
+def _methodology_md(sig, val, as_of: Optional[str] = None, *,
+                    con_seccion_de_fuentes: bool = False) -> str:
     """Markdown de Metodología desde ``DataHealth`` (sig) + ``ValidationState`` (val).
 
     ``as_of`` es el CORTE del informe. Con él, la metodología deja de hablar del estado
@@ -189,8 +190,26 @@ def _methodology_md(sig, val, as_of: Optional[str] = None) -> str:
                      "evaluada corresponden a esa fecha. Las capas de contexto agregado —mercado, "
                      "mezcla, cobertura sectorial— llevan el período de su propia fuente, "
                      "indicado donde se presentan.")
-    sources = ", ".join(s for s in (sig.sources or ()) if s) if sig else ""
-    lines.append(f"**Fuentes de dato:** {sources or '—'}.")
+    # La lista inline sale SOLO si la sección de Fuentes no va a renderizarse. Salían las
+    # dos —inline acá y en viñetas cuatro líneas después— porque las dos leen `sig.sources`,
+    # y eso es el mismo dato dos veces en la misma página, en TODO producto de deep dive.
+    #
+    # Y no alcanza con borrarla: `_TIERS_WITH_SOURCES` es solo deep dive mientras la
+    # metodología se sirve también en insight, así que borrarla dejaría a insight SIN fuentes
+    # en ninguna parte. Eso no sería arreglar una repetición, sería borrar el dato.
+    fuentes = [s for s in (sig.sources or ()) if s] if sig else []
+    if con_seccion_de_fuentes:
+        # Con la sección de Fuentes presente, acá va el PUNTERO y no la lista: repetir los
+        # nombres es el mismo dato dos veces en la misma página. Pero borrarla del todo
+        # dejaría a esta sección —titulada «Metodología y fuentes» en SIETE superficies, sin
+        # guard de paridad entre ellas— prometiendo algo que no trae. El puntero cuesta una
+        # línea y evita un renombre que se olvidaría en alguna de las siete.
+        cuantas = ("La fuente que respalda" if len(fuentes) == 1
+                   else f"Las {len(fuentes)} fuentes que respaldan")
+        lines.append(f"**Fuentes de dato:** {cuantas} este informe se listan en «Fuentes y "
+                     "referencias»." if fuentes else "**Fuentes de dato:** —.")
+    else:
+        lines.append(f"**Fuentes de dato:** {', '.join(fuentes) or '—'}.")
     lines.append(_frescura_md(sig, as_of))
     if sig and sig.coverage is not None:
         kind = getattr(sig, "coverage_kind", "") or COVERAGE_INDEX
@@ -260,7 +279,8 @@ def standard_sections(product, tier: ProductTier,
         val = product.validation_state()
     except Exception:  # noqa: BLE001
         val = None
-    methodology = _methodology_md(sig, val, as_of)
+    methodology = _methodology_md(sig, val, as_of,
+                                  con_seccion_de_fuentes=tv in _TIERS_WITH_SOURCES)
     # Procedencia POR VARIABLE, generada del registro en vivo — nunca prosa escrita a
     # mano (lección Hallazgo 7: la prosa que afirma procedencia envejece con cada
     # conector; la generada no puede divergir del estado real porque ES el estado real).

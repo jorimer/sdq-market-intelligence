@@ -91,3 +91,81 @@ se aplicó al eje de VALUACIÓN y este eje nunca lo recibió. Le faltan **resume
 - [ ] Contar las tablas del PDF antes y después
 - [ ] Comprobar que el gráfico sale con UNA sola proyección vigente
 - [ ] Los tres gates
+
+---
+
+## Hecho (1-4) y lo que queda declarado
+
+### Hecho
+
+1. **Tablas de portada fuera.** `render()` ya no arma `tables`: la prosa de §Trayectoria y
+   §Lectura sectorial publica esas filas con encabezado y con más columnas. El informe abre
+   con el resumen ejecutivo, no con dos páginas de números sin nombres de columna.
+2. **La trayectoria se dibuja.** Vigentes **más** escenarios, con los escenarios rotulados
+   `(esc.)` y el título diciendo qué significa. Verificado: con una sola vigente el gráfico
+   sale igual, que es el caso real de producción.
+   *Límite del instrumento, declarado:* `line_chart_png` no admite estilo por segmento, así
+   que la distinción vive en el rótulo y el título, no en el trazo.
+3. **§«Cómo se construye cada cifra»** en vez de una segunda «Metodología».
+4. **Resumen ejecutivo y Propósito y alcance**, computados del mismo payload y servidos en
+   los dos niveles pagos. El resumen dice explícitamente cuántas proyecciones **no** anclan
+   una afirmación: enterrar eso al final es la práctica que esta plataforma existe para no
+   repetir.
+
+Estructura resultante, leída del PDF generado:
+
+```
+1. Resumen ejecutivo        5. Escenarios a 3-8 trimestres (sin track record)
+2. Propósito y alcance      6. Lectura sectorial
+3. Nowcast del trimestre    7. Desempeño de nuestras proyecciones anteriores
+4. Trayectoria proyectada   8. Cómo se construye cada cifra
+```
+
+### Los dos declarados, ya HECHOS
+
+**Las fuentes salían dos veces, y era del FRAMEWORK.** `_methodology_md` las listaba inline
+(«Fuentes de dato: …») y `_sources_md` las repetía en viñetas cuatro líneas después, las dos
+desde `sig.sources`. Alcanzaba a todo producto de deep dive que declare fuentes.
+
+La cura no podía ser borrar la lista inline: `_TIERS_WITH_SOURCES` es solo deep dive mientras
+la metodología se sirve también en **insight**, así que borrarla dejaba a insight sin fuentes
+en ninguna parte. Eso no es arreglar una repetición, es borrar el dato. La metodología ahora
+RECIBE su nivel y decide.
+
+Y como la sección se titula «Metodología y fuentes», no podía quedarse sin decir nada de
+ellas. Se renombró el título: **no**. Vive en SIETE superficies —backend, el motor de
+research, los tres i18n y dos pantallas— sin ningún guard de paridad, que es exactamente el
+modo de falla de «un tipo nuevo se registra en todas sus superficies». Va un PUNTERO de una
+línea, con la cuenta concordada:
+
+```
+insight    **Fuentes de dato:** BCRD — IMAE, SDQ — ledger.
+deep_dive  **Fuentes de dato:** Las 2 fuentes que respaldan este informe se listan en
+                                «Fuentes y referencias».
+```
+
+Verificado en el PDF completo: la fuente del BCRD aparece **una sola vez**, en §10.
+
+**El signo huérfano.** «una variación de 0.38 \n% contra…» partía el número de su unidad al
+saltar de línea. La regla vive en UNA constante (`_UNIDAD_PEGADA_RE`, en `render.py`) y los
+dos renderers la importan, con el mecanismo que corresponde a cada formato:
+
+* PDF → la ENTIDAD `&nbsp;`, que es la que este renderer ya tiene funcionando en las viñetas
+  y en la numeración de secciones. No un carácter nuevo sin probar: así llegaron los glifos
+  de subíndice que salían como cajas.
+* Word → el CARÁCTER U+00A0, que es lo que Word entiende. La entidad se dibujaría literal.
+
+El orden importa y tiene su test: insertada ANTES del escape de `&`, la entidad quedaría
+`&amp;nbsp;` y el cliente leería «0.38&nbsp;%» literal — peor que el defecto original.
+
+Verificado en el PDF real: **ninguna** línea empieza con `%` ni con `pp`, y la cadena `nbsp`
+no aparece ni una vez.
+
+### Lo que queda (forma, siguiente pasada)
+
+
+- La portada dice `Período: 2026-09-05`, que es la FECHA del corte, no un período.
+- La tabla de trayectoria publica el código interno `pib_real` como nombre de serie.
+- Los glifos de subíndice (`BV₀`, `λ₁`, `λ₂`) salen como cajas: la fuente del renderer no
+  los tiene. Es el mismo `_GLYPH_RE` que ya borra emojis; hay que decidir si se transliteran
+  (`BV_0`) o se cambia la fuente.

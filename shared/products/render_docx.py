@@ -76,6 +76,21 @@ def _left_accent(paragraph, hex_color: str) -> None:
     pPr.append(pbdr)
 
 
+def _texto_sin_cortes(text: str) -> str:
+    """Une el número con su unidad para que Word no los separe al saltar de línea.
+
+    Mismo defecto y misma regla que en el PDF, con el mecanismo que corresponde a CADA
+    formato: allá la entidad `&nbsp;` de ReportLab, acá el CARÁCTER U+00A0, que es lo que
+    Word entiende. Poner la entidad acá la dibujaría literal en el documento.
+
+    La regla vive en `render.py` y se importa: dos copias del mismo criterio divergen, y la
+    lista de unidades es exactamente la clase de cosa que alguien amplía en un solo lado.
+    """
+    from shared.products.render import _UNIDAD_PEGADA_RE
+
+    return _UNIDAD_PEGADA_RE.sub("\\1\u00a0\\2", text)
+
+
 def _add_runs(paragraph, text: str, *, color: Optional[RGBColor] = None, size: Optional[int] = None,
               bold_all: bool = False) -> None:
     """Añade *text* a *paragraph* respetando **negritas** y *cursivas* markdown.
@@ -85,6 +100,8 @@ def _add_runs(paragraph, text: str, *, color: Optional[RGBColor] = None, size: O
     `*`, de modo que `**x**` no lo consuma la regla de un asterisco.
     """
     from shared.products.render import _ITALIC_RE
+
+    text = _texto_sin_cortes(text)
 
     def _emitir(txt: str, *, negrita: bool) -> None:
         """Parte por CURSIVA y emite. Un mismo criterio de frontera que el PDF."""
