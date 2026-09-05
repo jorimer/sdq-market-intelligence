@@ -85,6 +85,11 @@ class Transaccion:
     #: como campo por el mismo motivo: una conversión metida en la prosa no se puede
     #: recomputar, y ya entró mal una vez —la de prensa, a un mes que no era el del corte—.
     tipo_de_cambio: Optional[float] = None
+    #: QUÉ perímetro cubren las DOS puntas. No es una etiqueta descriptiva: es la condición
+    #: para que el caso exista. Un precio que compró la sociedad TENEDORA contra un
+    #: patrimonio que el regulador publica del BANCO da un múltiplo plausible y equivocado —
+    #: en Santander PR daría 1,26x—. Si los dos perímetros no coinciden, el caso no entra.
+    alcance: str = "entidad"
     #: Lo que el caso NO permite afirmar. Se declara con el dato, no en un anexo.
     caveats: Tuple[str, ...] = ()
 
@@ -464,6 +469,86 @@ PANEL: Tuple[Transaccion, ...] = (
             "contrato y no por un balance.",
         ),
     ),
+    Transaccion(
+        anio=2008, comprador="Royal Bank of Canada",
+        adquirida="RBTT Financial Holdings Limited (100 % de las acciones)",
+        pais="TT",
+        precio=13_756_680_000.0, moneda_precio="TTD",
+        valor_libro=5_039_274_000.0, moneda_libro="TTD", periodo_libro="2008-03",
+        pb=2.730, alcance="grupo cotizado (las dos puntas)",
+        fuente_precio=("Memoria anual 2008 de la PROPIA RBTT: «On June 16, RBC completed the "
+                       "sale, paying US$2.2 billion to RBTT shareholders, 60% in cash and 40% "
+                       "in RBC shares», con una consideración de TT$40 por acción y 343.917 "
+                       "miles de acciones ordinarias en circulación (nota 28). "
+                       "343.917.000 × TT$40 = TT$13.756.680.000.\n\n"
+                       "CONTROL DE CONSISTENCIA: ese total contra los US$2.200 millones "
+                       "declarados implica TT$6,2530 por dólar, dentro del rango real de "
+                       "2008 (6,25-6,30). Las dos formas de expresar el precio —por acción y "
+                       "agregada en dólares— concuerdan sin que haya que elegir un tipo de "
+                       "cambio."),
+        fuente_libro=("Balance consolidado AUDITADO de RBTT Financial Holdings al 31 de marzo "
+                      "de 2008 —cierre de su ejercicio, dos meses y medio antes de la "
+                      "operación—: «Total Shareholders' Equity» TT$5.039.274 miles, sobre "
+                      "activos de TT$53.527.214 miles. El interés minoritario (TT$46.353 "
+                      "miles) queda FUERA: el precio compró las acciones de la matriz.\n\n"
+                      "Como en Cayman National, el denominador sale de la adquirida y no del "
+                      "comprador: RBTT cotizaba y publicaba sus estados.\n\n"
+                      "Comprobación por acción: TT$5.039.274 miles / 343.917 miles de "
+                      "acciones = TT$14,653 de valor libro por acción, contra los TT$40 "
+                      "pagados. Mismo múltiplo por las dos vías."),
+        caveats=(
+            "ES LA OPERACIÓN MÁS VIEJA DEL PANEL —2008, anterior a la crisis financiera "
+            "global— y se publica marcada. Un múltiplo pagado en el pico del ciclo de "
+            "fusiones caribeño no informa igual que uno de 2022.",
+            "El 40 % de la consideración se pagó en ACCIONES de RBC, así que el valor "
+            "efectivo dependió de la cotización de RBC al cierre. Los US$2.200 millones son "
+            "el valor declarado de la operación, no un desembolso en efectivo.",
+            "El número de acciones es el PROMEDIO PONDERADO del ejercicio (nota 28). Durante "
+            "el año se emitieron 353.089 acciones, un 0,1 % del total, así que la diferencia "
+            "contra las acciones en circulación al cierre es inmaterial — pero es una "
+            "aproximación y se declara.",
+            "El comparativo de 2007 fue REEXPRESADO en esta misma memoria (de TT$4.494.098 a "
+            "TT$4.391.969 miles): un recordatorio de que las cifras de libro se mueven "
+            "después de publicadas.",
+            "RBTT era un grupo financiero de 18 países con banca, seguros y banca de "
+            "inversión, no un banco solo.",
+        ),
+    ),
+    Transaccion(
+        anio=2012, comprador="First Citizens Bank Limited",
+        adquirida="Butterfield Bank (Barbados) Limited (100 % de las acciones)",
+        pais="BB",
+        precio=45_000_000.0, moneda_precio="USD",
+        valor_libro=34_995_000.0, moneda_libro="USD", periodo_libro="2011-12",
+        pb=1.286, alcance="entidad, medida en las cuentas CONSOLIDADAS del vendedor",
+        fuente_precio=("Memoria anual 2012 de The Bank of N.T. Butterfield & Son, nota 3 "
+                       "«Discontinued Operations»: venta cerrada el 27 de agosto de 2012 con "
+                       "«gross proceeds, subject to normal adjustments, of $45 million»."),
+        fuente_libro=("Misma nota 3, que PUBLICA los activos y pasivos de la operación "
+                      "discontinuada al 31 de diciembre de 2011: activos totales US$307.044 "
+                      "miles menos pasivos totales US$272.049 miles = US$34.995 miles de "
+                      "activos netos. No hay que despejarlo de la ganancia — la nota los "
+                      "lista línea por línea.\n\n"
+                      "CONTROL DE CONSISTENCIA: 45.000 − 34.995 = 10.005 contra la ganancia "
+                      "NETA reportada de US$7.240 miles. La diferencia de US$2.765 miles son "
+                      "costos de transacción y el reciclaje de conversión acumulada, que es "
+                      "el orden de magnitud esperable. Las dos cifras se sostienen."),
+        caveats=(
+            "EL DENOMINADOR ES LA MEDICIÓN DEL GRUPO VENDEDOR, no el patrimonio que la "
+            "entidad declaraba a su propio regulador. Incluye US$3.084 miles de intangibles "
+            "—el 8,8 % del denominador— que vienen de la compra original de Butterfield. "
+            "Sobre un libro individual sin ese intangible el múltiplo sería ~1,41x en vez de "
+            "1,29x. El PERÍMETRO sí coincide con el del precio —la entidad entera—, que es "
+            "la condición para entrar; lo que difiere es la medición, y se declara.",
+            "El corte es diciembre 2011 y la venta cerró en agosto de 2012: ocho meses de "
+            "distancia, la mayor del panel. Es la última cifra publicada, porque la columna "
+            "de 2012 ya está en cero por la desconsolidación.",
+            "US$45 millones son proceeds BRUTOS «sujetos a ajustes normales»: la "
+            "consideración final pudo diferir, igual que pasó en OFG y en Belice.",
+            "Los activos (US$308 M) y los depósitos (US$270 M) que publicó la prensa NO son "
+            "el patrimonio; el denominador es la resta que hace la propia nota.",
+        ),
+    ),
 )
 
 #: Operaciones RELEVADAS y descartadas del panel, con el motivo. Se listan porque un panel
@@ -493,6 +578,11 @@ DESCARTADAS: Tuple[Tuple[str, str], ...] = (
     ("Banco Caribe / BID Invest (2023)",
      "Préstamo sénior de hasta US$25,15 millones. No hay inversión accionaria ni cambio de "
      "control: financiar a una entidad no es comprarla."),
+    ("ANSA Merchant Bank / Bank of Baroda (Trinidad y Tobago) (2021)",
+     "Compra del 100 % de las 525.597 acciones, aprobada por el Banco Central de Trinidad y "
+     "Tobago el 20 de noviembre de 2020 y consumada el 1 de marzo de 2021 — y SIN PRECIO "
+     "divulgado. Falta el numerador. Es de las que quedarían a un paso si el monto "
+     "apareciera: la adquirida es una entidad completa con un solo regulador."),
     ("Banesco Banco Múltiple RD · Lafise · Ademi · Promérica RD y el resto del padrón",
      "Barrido del padrón de la SB sin operación de control con monto. Lo que aparece son "
      "cosas que NO son compras: entradas de novo (Lafise, autorizada en 2013), conversiones "
@@ -534,14 +624,12 @@ VIAS_ABIERTAS: Tuple[Tuple[str, str], ...] = (
      "de 50 % a 100 %. Falta el patrimonio contable de la entidad al corte 2013, que "
      "publicaría el Central Bank of Trinidad and Tobago. Además es una compra POR ETAPAS: el "
      "precio es solo del segundo tramo y el múltiplo hay que homogeneizarlo al 50 %."),
-    ("First Citizens / Butterfield Bank (Barbados) (2012)",
-     "Precio verificado: US$45 millones por el 100 %. Falta el patrimonio contable de la "
-     "entidad al corte 2012, que publicaría el Central Bank of Barbados. Se conocen sus "
-     "activos (US$308 M) y depósitos (US$270 M), que NO son patrimonio. El vendedor reportó "
-     "una ganancia NETA de US$7,2 M sobre US$45 M brutos, de la que se despejaría un valor "
-     "en libros de ~US$37,8 M: eso es el carrying value CONSOLIDADO del vendedor —lo que la "
-     "matriz tenía registrado, con su goodwill asignado y sus diferencias de cambio "
-     "acumuladas—, no el patrimonio de la entidad. Es una derivación, no un dato."),
+    ("Butterfield Barbados — el patrimonio INDIVIDUAL de la entidad",
+     "El caso ya está en el panel, con el denominador que publica la nota de operaciones "
+     "discontinuadas del vendedor. Lo que falta es el patrimonio que la entidad declaraba a "
+     "su PROPIO regulador, el Central Bank of Barbados: sobre esa base el múltiplo sería "
+     "~1,41x en vez de 1,29x, porque la medición del grupo carga US$3,1 M de intangibles de "
+     "la compra original. No bloquea el caso; lo afinaría."),
     ("NCB Financial Group / Clarien Group (Bermuda, 2017)",
      "Falta aclarar QUÉ FUE la operación, antes que cualquier cifra. NCBFG SUSCRIBIÓ el "
      "50,1 % —un aporte de capital que entra a la sociedad— y no está establecido que le "
@@ -597,6 +685,74 @@ DISCREPANCIA_RFHL = (
 )
 
 
+#: Los países cuyo balance POR ENTIDAD esta plataforma ingiere, y por lo tanto las únicas
+#: adquiridas a las que le podríamos correr nuestro propio motor. Fuera de acá tenemos el
+#: precio y el libro del caso —que es lo que el gate del panel exige— pero NO la historia de
+#: ROE y patrimonio que el Excess Return necesita para producir SU valuación.
+PAISES_CON_MOTOR: Tuple[str, ...] = ("DO",)
+
+
+@dataclass(frozen=True)
+class ContrasteDelModelo:
+    """Qué se puede afirmar con el panel, que NO es lo mismo que tenerlo completo."""
+
+    #: Comparables cuya adquirida podríamos valuar con nuestro propio motor.
+    n_valuables: int
+    #: Comparables totales.
+    n_comparables: int
+    #: ¿El panel contrasta el MODELO contra precios pagados?
+    contrasta_el_modelo: bool
+    motivo: str
+
+
+def contraste_del_modelo(panel: Sequence[Transaccion] = PANEL) -> ContrasteDelModelo:
+    """¿El panel valida el modelo, o solo muestra los múltiplos que se pagaron?
+
+    **No es la pregunta del gate, y confundirlas sería el error más caro de este eje.** El
+    gate pregunta si hay ocho múltiplos sobre la misma base; contrastar el MODELO exige
+    además correr el Excess Return sobre cada adquirida a la fecha de su operación y comparar
+    su valor con el precio. Para eso hace falta la historia de ROE y patrimonio de ESA
+    entidad, y la tenemos donde ingerimos el balance por entidad.
+
+    Un panel de ocho comparables es evidencia de MERCADO —a cuánto se paga un banco del
+    Caribe sobre libro— y no es evidencia de que este modelo acierte. Publicar lo segundo
+    apoyado en lo primero sería cierto en la forma y falso en el fondo.
+    """
+    comp = [t for t in panel if t.comparable]
+    valuables = [t for t in comp if t.pais in PAISES_CON_MOTOR]
+    n_v, n_c = len(valuables), len(comp)
+    faltan = sorted({t.pais for t in comp if t.pais not in PAISES_CON_MOTOR})
+    return ContrasteDelModelo(
+        n_v, n_c, False,
+        (f"El panel tiene {n_c} múltiplo(s) comparable(s) y eso ABRE la vista de fusiones y "
+         f"adquisiciones: se puede mostrar a cuánto sobre libro se pagó un banco del Caribe. "
+         f"NO contrasta el modelo. Para eso habría que valuar cada adquirida con el Excess "
+         f"Return a la fecha de su operación, y eso exige su historia de ROE y patrimonio: "
+         f"la tenemos para {n_v} de los {n_c}, porque el balance por entidad solo lo "
+         f"ingerimos de {', '.join(PAISES_CON_MOTOR)}"
+         + (f" y las otras adquiridas son de {', '.join(faltan)}." if faltan else ".")
+         + " El eje sigue declarando que sus valores NO están contrastados contra precios "
+           "pagados."))
+
+
+@dataclass(frozen=True)
+class ResumenDelPanel:
+    n: int
+    minimo: float
+    maximo: float
+    mediana: float
+
+
+def resumen(panel: Sequence[Transaccion] = PANEL) -> Optional[ResumenDelPanel]:
+    """El rango y la mediana de los COMPARABLES, computados y no transcritos."""
+    pbs = sorted(t.pb for t in panel if t.comparable and t.pb is not None)
+    if not pbs:
+        return None
+    n = len(pbs)
+    mediana = pbs[n // 2] if n % 2 else (pbs[n // 2 - 1] + pbs[n // 2]) / 2
+    return ResumenDelPanel(n, pbs[0], pbs[-1], mediana)
+
+
 @dataclass(frozen=True)
 class EstadoDelPanel:
     #: Con las dos puntas publicadas, en cualquier base.
@@ -619,7 +775,11 @@ def estado(panel: Sequence[Transaccion] = PANEL) -> EstadoDelPanel:
     n_ver = sum(1 for t in panel if t.verificable)
     n_comp = sum(1 for t in panel if t.comparable)
     if n_comp >= MINIMO_DE_CASOS:
-        return EstadoDelPanel(n_ver, n_comp, MINIMO_DE_CASOS, True, "", len(DESCARTADAS))
+        # El gate abierto TAMBIÉN lleva motivo, y no por simetría: un `abierto=True` con
+        # motivo vacío se lee como «ya está validado», que es justo lo que el panel no
+        # demuestra. Ver `contraste_del_modelo`.
+        return EstadoDelPanel(n_ver, n_comp, MINIMO_DE_CASOS, True,
+                              contraste_del_modelo(panel).motivo, len(DESCARTADAS))
     otras_bases = n_ver - n_comp
     extra = ""
     if otras_bases:

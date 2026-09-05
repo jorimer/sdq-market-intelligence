@@ -22,40 +22,51 @@ import pytest
 from modules.valuation.panel import transacciones as tx
 
 
-def test_el_gate_esta_CERRADO_y_dice_por_que():
+def test_el_gate_ABIERTO_igual_dice_que_NO_valida_el_modelo():
+    """Un `abierto=True` con motivo vacío se leería como «ya está validado».
+
+    Es el riesgo del momento en que un gate cruza su umbral: lo que abre es la vista de
+    fusiones y adquisiciones, no una afirmación de que el modelo predice precios.
+    """
     e = tx.estado()
-    assert not e.abierto
-    assert e.n_comparables < e.minimo
-    assert "no es falta de relevamiento" in e.motivo.lower()
-    assert "las dos puntas" in e.motivo
+    assert e.abierto and e.n_comparables >= e.minimo
+    assert e.motivo, "el gate abrió con motivo vacío"
+    assert "NO contrasta el modelo" in e.motivo
 
 
 def test_el_minimo_son_OCHO_casos():
     assert tx.MINIMO_DE_CASOS == 8
 
 
-def test_hay_NUEVE_verificables_y_solo_SEIS_COMPARABLES():
+def test_hay_ONCE_verificables_y_OCHO_COMPARABLES():
     """La distinción que decide si la vista de M&A se abre.
 
-    Las nueve tienen las dos puntas publicadas. Solo seis están sobre patrimonio CONTABLE,
+    Las once tienen las dos puntas publicadas. Solo ocho están sobre patrimonio CONTABLE,
     que es la base contra la que valúa el Excess Return. Las otras dos vienen de la NIIF 3,
     cuyo denominador son activos netos a VALOR RAZONABLE — lo que el COMPRADOR reconoce, no
     lo que el vendedor tenía en libros.
     """
-    assert len([t for t in tx.PANEL if t.verificable]) == 9
+    assert len([t for t in tx.PANEL if t.verificable]) == 11
     comparables = [t for t in tx.PANEL if t.comparable]
-    assert len(comparables) == 6
-    assert {t.pais for t in comparables} == {"DO", "PR", "KY"}
+    assert len(comparables) == 8
+    assert {t.pais for t in comparables} == {"DO", "PR", "KY", "TT", "BB"}
     progreso = next(t for t in comparables if "Progreso" in t.adquirida)
     assert progreso.pb == pytest.approx(2.531, abs=0.001)
 
 
 def test_el_gate_cuenta_COMPARABLES_y_no_verificables():
-    """Sumar los nueve abriría antes una vista cuya tabla mezcla dos bases, que es peor que
-    tenerla cerrada."""
+    """Contar los once habría abierto la vista con una tabla que mezcla dos bases —y ahora
+    que el gate CRUZÓ su umbral, contarlos mal la habría abierto tres casos antes.
+
+    La exclusión se comprueba sobre los datos y no sobre la prosa del motivo: el texto cambia
+    según el gate esté abierto o cerrado, y un test atado a él se rompe por la razón
+    equivocada o, peor, pasa por la razón equivocada.
+    """
     e = tx.estado()
-    assert e.n_verificables == 9 and e.n_comparables == 6
-    assert "valor razonable" in e.motivo.lower()
+    assert e.n_verificables == 11 and e.n_comparables == 8
+    excluidos = [t for t in tx.PANEL if t.verificable and not t.comparable]
+    assert len(excluidos) == e.n_verificables - e.n_comparables == 3
+    assert all(t.base == tx.BASE_VALOR_RAZONABLE for t in excluidos)
 
 
 def test_OFG_mide_la_cuna_entre_bases_y_NO_la_transcribe():
@@ -355,3 +366,75 @@ def test_SANTANDER_no_cruza_el_ALCANCE_del_precio_con_el_del_regulador():
         "el caso quedó sobre base contable usando el patrimonio del banco contra el precio "
         "de la tenedora")
     assert "error de ALCANCE" in " ".join(t.caveats)
+
+
+def test_ABRIR_el_panel_no_es_VALIDAR_el_modelo():
+    """La distinción más cara del eje, y la que se vuelve peligrosa justo ahora.
+
+    El gate pidió ocho múltiplos comparables y los hay. Eso dice a cuánto sobre libro se paga
+    un banco del Caribe — evidencia de MERCADO. No dice que este modelo acierte: para eso
+    habría que valuar cada adquirida con el Excess Return a la fecha de su operación, y eso
+    exige su historia de ROE y patrimonio, que solo tenemos donde ingerimos el balance por
+    entidad.
+
+    Dejar que el gate abierto arrastre la segunda afirmación sería cierto en la forma y falso
+    en el fondo, que es el modo de falla que esta plataforma existe para no tener.
+    """
+    e, c = tx.estado(), tx.contraste_del_modelo()
+    assert e.abierto, "el panel ya no llega a ocho; este test perdió su sentido"
+    assert not c.contrasta_el_modelo
+    assert c.n_valuables < c.n_comparables
+    assert "NO contrasta el modelo" in c.motivo
+
+
+def test_el_contraste_cuenta_las_adquiridas_que_PODRIAMOS_valuar():
+    """Se computa desde el panel y la cobertura de balances, no se escribe a mano."""
+    c = tx.contraste_del_modelo()
+    esperado = len([t for t in tx.PANEL if t.comparable and t.pais in tx.PAISES_CON_MOTOR])
+    assert c.n_valuables == esperado
+    assert tx.PAISES_CON_MOTOR == ("DO",), (
+        "cambió la cobertura de balances por entidad: revisar si el contraste ya es posible")
+
+
+def test_si_TODAS_fueran_dominicanas_el_contraste_seguiria_declarandose_por_dato():
+    """Contraejemplo: sin esto, un `contrasta_el_modelo=False` constante pasaría el test de
+    arriba sin medir nada. Con las ocho valuables, el conteo tiene que reflejarlo."""
+    todas_do = tuple(
+        tx.Transaccion(anio=2020 + i, comprador="C", adquirida=f"A{i}", pais="DO",
+                       precio=2.0, moneda_precio="USD", valor_libro=1.0, moneda_libro="USD",
+                       periodo_libro="2020-01", pb=2.0, fuente_precio="x", fuente_libro="y")
+        for i in range(tx.MINIMO_DE_CASOS))
+    c = tx.contraste_del_modelo(todas_do)
+    assert c.n_valuables == c.n_comparables == tx.MINIMO_DE_CASOS
+
+
+def test_el_resumen_del_panel_se_COMPUTA():
+    """Rango y mediana salen de los comparables, no de un texto. Y solo de los comparables:
+    meter un múltiplo sobre valor razonable movería la mediana sin que se note."""
+    r = tx.resumen()
+    pbs = sorted(t.pb for t in tx.PANEL if t.comparable)
+    assert r.n == len(pbs) == 8
+    assert r.minimo == pbs[0] and r.maximo == pbs[-1]
+    assert r.mediana == pytest.approx((pbs[3] + pbs[4]) / 2)
+    assert r.minimo < 1.0 < r.maximo, "el panel dejó de tener casos a los dos lados del libro"
+
+
+def test_toda_transaccion_declara_su_ALCANCE():
+    """El perímetro que cubren las DOS puntas. Es la condición para que el caso exista: un
+    precio de la tenedora contra un patrimonio del banco da un múltiplo plausible y
+    equivocado."""
+    for t in tx.PANEL:
+        assert t.alcance and len(t.alcance) >= 7, f"{t.adquirida} sin alcance declarado"
+    butterfield = next(t for t in tx.PANEL if "Butterfield" in t.adquirida)
+    assert "CONSOLIDADAS" in butterfield.alcance, (
+        "no declara que el denominador es la medición del grupo vendedor y no el patrimonio "
+        "individual de la entidad")
+
+
+def test_RBTT_reconcilia_sus_DOS_formas_de_precio():
+    """El precio existe por acción (TT$40) y agregado (US$2.200 M). Que concuerden a un tipo
+    de cambio real de 2008 es lo que permite usar el total sin elegir una cotización."""
+    t = next(x for x in tx.PANEL if "RBTT" in x.adquirida)
+    implicito = t.precio / 2_200_000_000.0
+    assert 6.20 < implicito < 6.35, f"TT$/US$ implícito {implicito:.4f} fuera del rango real"
+    assert "más vieja del panel" in " ".join(t.caveats).lower() or "2008" in " ".join(t.caveats)
