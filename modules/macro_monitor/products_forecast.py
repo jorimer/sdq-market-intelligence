@@ -220,7 +220,9 @@ class MacroForecastProduct:
     # ── Snapshot ──
 
     def _payload(self, db: Session) -> Dict[str, Any]:
-        from modules.macro_monitor.forecasting import nowcast, procedencia, sectoral
+        from modules.macro_monitor.forecasting import (
+            bloque, nowcast, procedencia, sectoral,
+        )
         from modules.macro_monitor.forecasting.desempeno import filas
 
         hoy = date.today()
@@ -248,14 +250,19 @@ class MacroForecastProduct:
             panel = sectoral.construir_panel(db)
             if panel.trimestres and proyecciones:
                 primera = proyecciones[0]
+                # La medida se le PREGUNTA al bloque, no se supone. Suponerla fue el
+                # defecto: el punto del BVAR era trimestral y el panel proyecta interanual.
                 pr = sectoral.proyectar(
                     panel, g_pib=float(primera["punto"]),
                     horizonte=str(primera["horizonte"]),
-                    origen_del_agregado=str(primera["modelo"]))
+                    origen_del_agregado=str(primera["modelo"]),
+                    medida_del_agregado=bloque.medida_de(str(primera["serie"])))
                 sect = {
                     "horizonte": pr.horizonte, "brecha_pp": pr.brecha_pp,
                     "ajuste_pp": pr.ajuste_pp, "brechas": pr.brechas,
                     "sectores": [{"etiqueta": s.etiqueta, "crecimiento": s.crecimiento,
+                                  "crecimiento_sin_reconciliar":
+                                      s.crecimiento_sin_reconciliar,
                                   "peso": s.peso, "incidencia": s.incidencia}
                                  for s in pr.sectores],
                 }
@@ -488,18 +495,27 @@ def _md_sectorial(p: Dict[str, Any]) -> str:
         "actividades del PIB. La suma ponderada **reconcilia exactamente** con el agregado "
         "que publicamos.",
         "",
-        "| actividad | peso | crecimiento proyectado | incidencia |",
-        "|---|---:|---:|---:|",
+        "| actividad | peso | proyectado | reconciliado | incidencia |",
+        "|---|---:|---:|---:|---:|",
     ]
     for s in sect["sectores"]:
-        lineas.append(f"| {s['etiqueta']} | {s['peso'] * 100:.2f} % | "
+        crudo = s.get("crecimiento_sin_reconciliar")
+        col_crudo = f"{crudo:.2f} %" if crudo is not None else "—"
+        lineas.append(f"| {s['etiqueta']} | {s['peso'] * 100:.2f} % | {col_crudo} | "
                       f"{s['crecimiento']:.2f} % | {s['incidencia']:.3f} pp |")
     lineas.append("")
+    # Las DOS columnas, y no solo la reconciliada, porque el ajuste puede darle vuelta el
+    # signo a un sector y con una sola columna eso se lee como una contracción proyectada.
+    # Pasó: un informe publicó ocho actividades en rojo que el modelo daba todas en verde.
     lineas.append(
-        f"El ajuste de reconciliación fue de **{sect.get('ajuste_pp', 0.0):+.3f} pp** por "
-        "actividad, repartido proporcional al PESO y no al crecimiento: repartir por "
-        "crecimiento le pega más al que más se mueve y puede darle vuelta el signo a un "
-        "sector, que es justo la lectura que esta sección existe para dar.")
+        f"«Proyectado» es la lectura del modelo sectorial; «reconciliado» es esa lectura "
+        f"después de repartir la brecha contra el agregado, que fue de "
+        f"**{sect.get('ajuste_pp', 0.0):+.3f} pp** por actividad. El reparto es proporcional "
+        "al PESO y no al crecimiento: repartir por crecimiento le pega más al que más se "
+        "mueve y puede darle vuelta el signo a un sector, que es justo la lectura que esta "
+        "sección existe para dar. Las dos columnas van juntas para que un cambio de signo "
+        "entre una y otra se vea como lo que es —el ajuste— y no como una contracción "
+        "proyectada.")
     if sect.get("brechas"):
         faltan = ", ".join(sorted(sect["brechas"]))
         lineas.append(f"\n**No proyectadas:** {faltan}. Una actividad con huecos se declara, "
@@ -592,16 +608,20 @@ _SAMPLE_PAYLOAD: Dict[str, Any] = {
     "sectorial": {
         "horizonte": "2026-Q3", "brecha_pp": -0.4178, "ajuste_pp": -0.4713,
         "brechas": {},
+        # Cada sector lleva su crudo Y su reconciliado, y el ajuste (-0,4713 pp) es la
+        # diferencia exacta entre las dos columnas. La muestra vieja traía solo el
+        # reconciliado, y por eso enseñaba una tabla que el pipeline no podía producir.
         "sectores": [
-            {"etiqueta": "Construcción", "crecimiento": 5.40, "peso": 0.1226,
-             "incidencia": 0.662},
-            {"etiqueta": "Comercio", "crecimiento": 2.04, "peso": 0.1173, "incidencia": 0.240},
-            {"etiqueta": "Hoteles, bares y restaurantes", "crecimiento": 6.77, "peso": 0.1000,
-             "incidencia": 0.677},
-            {"etiqueta": "Manufactura local", "crecimiento": 2.39, "peso": 0.0906,
-             "incidencia": 0.217},
+            {"etiqueta": "Construcción", "crecimiento": 5.40,
+             "crecimiento_sin_reconciliar": 5.87, "peso": 0.1226, "incidencia": 0.662},
+            {"etiqueta": "Comercio", "crecimiento": 2.04,
+             "crecimiento_sin_reconciliar": 2.51, "peso": 0.1173, "incidencia": 0.240},
+            {"etiqueta": "Hoteles, bares y restaurantes", "crecimiento": 6.77,
+             "crecimiento_sin_reconciliar": 7.24, "peso": 0.1000, "incidencia": 0.677},
+            {"etiqueta": "Manufactura local", "crecimiento": 2.39,
+             "crecimiento_sin_reconciliar": 2.86, "peso": 0.0906, "incidencia": 0.217},
             {"etiqueta": "Impuestos a la producción netos de subsidios", "crecimiento": 3.10,
-             "peso": 0.0687, "incidencia": 0.213},
+             "crecimiento_sin_reconciliar": 3.57, "peso": 0.0687, "incidencia": 0.213},
         ],
     },
     "escenarios": [

@@ -1,110 +1,138 @@
-# Modelo de valuación por TIPO de entidad — plan
+# La lectura sectorial publica ocho contracciones que el modelo no proyectó
 
-## Lo que se encontró pidiendo el informe de punta a punta
+## Qué se midió (antes de proponer nada)
 
-BHD, cierre 2025, datos reales: **P/B implícito 1,40× a 12,23×**. El panel de ocho
-transacciones dice que lo que se paga es **0,77×–2,73×**. El 12,23× no es un valor, es un
-modelo roto.
+El informe `SDQ_Proyecciones_Deep-Dive_Sistema_2026-09-05.pdf` publica una tabla sectorial con
+**8 de 18 actividades contrayéndose**. Deshaciendo el ajuste declarado de −3,536 pp, el modelo
+crudo proyecta **las 18 positivas** (+1,24 % a +7,24 %). Las ocho contracciones son un artefacto
+de la reconciliación, no una lectura.
 
-Causa: `g = b × ROE = 0,60 × 22,57 % = 13,54 %` contra `Ke = 14,28 %` — el denominador de la
-perpetuidad queda en 0,74 pp. El guard existente solo atrapa `g ≥ Ke`, o sea el caso que **no
-converge**; no atrapa el que converge y es imposible. El PIB nominal dominicano crece 9,03 %
-de largo plazo: una entidad que crece 13,54 % para siempre termina siendo más grande que la
-economía.
+La reconciliación no está mal repartida: está **restando dos cosas que no son la misma medida**.
 
-## Lo que se midió (SIMBAD, cierres 2019-2025, 145 entidad-año)
+| | qué mide | dónde |
+|---|---|---|
+| panel sectorial | `_interanual` → `trimestres[i-4]` → **interanual (YoY)** | `forecasting/sectoral.py:189` |
+| BVAR `pib_real` | `DLOG` → `zip(ks, ks[1:])` → **trimestral (QoQ)** | `forecasting/bloque.py:51,127` |
 
-### Dispersión de ROE (p75 − p25, pp) — la evidencia del riesgo relativo
+`products_forecast.py:252` pasa `g_pib=float(primera["punto"])` —el punto QoQ del BVAR— a
+`reconciliar`, que lo resta de una suma ponderada de crecimientos **interanuales**.
 
-| año | banca múltiple | ahorro y crédito | asociaciones | corp. crédito |
-|---|---:|---:|---:|---:|
-| 2020 | 15,3 | 8,4 | 2,0 | 8,6 |
-| 2021 | 23,6 | 7,3 | 2,0 | 3,9 |
-| 2022 | 12,7 | 13,8 | 4,0 | 7,6 |
-| 2023 | 21,2 | 6,2 | 3,5 | 6,5 |
-| 2024 | 17,6 | 11,8 | 3,4 | 0,7 |
-| 2025 | 19,3 | 6,3 | 2,4 | 5,2 |
+### Medido sobre la serie real de producción (`bcrd.xls.pib_2018.serie_original_indice`, 77 trimestres, 2007-Q1 → 2026-Q1)
 
-**Lo que la evidencia SÍ sostiene:** las asociaciones son las menos dispersas los **seis de
-seis** años, y la banca múltiple la más dispersa **cinco de seis**.
+```
+QoQ (lo que ve el BVAR) : media +1,13 %   mediana +0,94 %
+YoY (lo que usa el panel): media +4,54 %   mediana +5,04 %
+                           diferencia sistemática: 3,41 pp
+```
 
-**Lo que NO sostiene:** un orden fino de cuatro. Los dos del medio se cruzan, y las
-corporaciones de crédito son **tres entidades** — su dispersión es ruido, no medición.
+La brecha publicada es **−3,536 pp**. No es desacuerdo entre modelos: es la diferencia entre
+una tasa anual y una trimestral.
 
-→ La beta se abre en **TRES** grupos, no cuatro, y las corporaciones comparten el de ahorro
-y crédito **por falta de muestra**, declarado.
+### Y hay un segundo defecto, independiente
 
-### Retención implícita `b = ΔPatrimonio / Utilidad`
+El BVAR hace el QoQ sobre la serie **ORIGINAL**, que no está desestacionalizada:
 
-| tipo | n | b mediano |
-|---|---:|---:|
-| banca múltiple | 54 | **0,75** |
-| bancos de ahorro y crédito | 51 | **0,74** |
-| asociaciones de ahorros y préstamos | 25 | **0,99** |
-| corporaciones de crédito | 15 | **0,76** |
+```
+QoQ medio por trimestre del año, serie ORIGINAL (la que se usa hoy):
+  Q1 −0,13 %   Q2 +1,11 %   Q3 −1,13 %   Q4 +4,67 %     amplitud estacional: 5,80 pp
+QoQ medio por trimestre, serie DESESTACIONALIZADA (existe en prod, 77 obs):
+  Q1 +1,28 %   Q2 +0,61 %   Q3 +1,82 %   Q4 +0,75 %     amplitud estacional: 1,21 pp
+```
 
-El 0,99 de las asociaciones no es un artefacto: **son mutuales, no tienen accionistas a
-quienes pagar dividendos**, así que retienen todo. Es la diferencia por tipo mejor sostenida
-de todas, y hoy el modelo usa un 0,60 igual para las cuatro — una rúbrica que el dato
-desmiente.
+O sea que el número agregado que el informe titula depende de **en qué trimestre cae el
+horizonte**, por calendario. Un pronóstico a Q4 y uno a Q3 no son comparables entre sí.
 
-## Y el segundo defecto, que apareció al pedir el informe de la asociación
+### La entrada canónica ya declaraba la regla que el bloque rompe
 
-El techo tapó el lado de arriba y dejó intacto el de abajo. APAP, ROE 11,00 % contra un `Ke`
-de 12,91 %: ingreso residual negativo todos los años, creciendo al 9,03 % y dividido por un
-`(Ke − g)` de 3,88 pp. **P/B 0,16× – 0,47×** — la entidad valdría el 16 % de su patrimonio,
-cuando el mínimo del panel es 0,77× y fue una venta post-crisis.
+`shared/data/bcrd_excel/canonical.py:352` — `key="pib_real"`:
 
-Es el mismo defecto con el signo cambiado, y el segundo es peor porque **no se ve raro**: un
-múltiplo bajo para una entidad que destruye valor parece razonable hasta que se mira cuánto.
+> `homogenization="…el crecimiento (YoY del volumen) es invariante a la base"`
 
-### La cura: el exceso se EROSIONA, y está medido
+Y `pib_sectores_origen`: *«el crecimiento se deriva como YoY, que es invariante a la base»*.
+El panel sectorial obedece el registro. `bloque.py` no.
 
-`RI_{t+1} = ω · RI_t`, con terminal `ω·RI_T / (1 + Ke − ω)`. Con `ω < 1` el denominador es
-siempre mayor que `Ke` y siempre positivo: **acotado por construcción y simétrico entre los
-dos signos**. Ni en el límite `ω → 1` explota — tiende a una perpetuidad plana, no a cero.
+### Por qué nadie lo vio: la muestra curada está en la unidad CORRECTA
 
-`ω` medida con la regresión de Ohlson sobre 259 pares (entidad, año) 2019-2025:
+`_SAMPLE_PAYLOAD` (`products_forecast.py:578`) publica `pib_real` = **3,41 %** y sectoriales de
+5,40 / 2,04 / 6,77 / 2,39 / 3,10, con una brecha de solo **−0,42 pp**. La muestra es coherente
+**en anual**. Producción emite +0,74 % con −3,54 pp. La muestra escrita a mano enseña cómo
+DEBERÍA verse el número; el pipeline produce otro. La vidriera y el producto no coinciden.
 
-| | ω | n |
-|---|---:|---:|
-| global | **0,867** (R² 0,776) | 259 |
-| banca múltiple | 0,902 | 93 |
-| bancos de ahorro y crédito | 0,571 | 79 |
-| corporaciones de crédito | 0,569 | 27 |
-| asociaciones | **0,358** | 60 |
+---
 
-**Ordena igual que la dispersión**, y eso es corroboración: la clase cuyo ROE más se dispersa
-es la que más conserva su ventaja. Y los dos del medio dan 0,571 y 0,569 — que compartan
-banda de beta deja de ser una decisión por falta de muestra.
+## Plan
 
-### El efecto sobre los dos casos reales
+### 1 · `pib_real` del BVAR pasa a interanual  (`forecasting/bloque.py`)
 
-| | perpetuidad (antes) | con techo | **con persistencia** |
-|---|---:|---:|---:|
-| BHD (banca múltiple) | 1,40× – **12,23×** | 1,31× – 3,15× | **1,14× – 1,58×** |
-| APAP (asociación) | — | **0,16×** – 0,47× | **0,72× – 0,91×** |
+Transformación nueva `DLOG4`: diferencia de logs contra **t−4**. Cura los dos defectos de una:
+la vuelve conmensurable con el panel sectorial **y** elimina la estacionalidad, que es
+exactamente el motivo por el que la entrada canónica declara el YoY como la medida citable.
 
-El panel observado es 0,77×–2,73×, mediana 1,73×. El modelo queda ahora **por debajo** de esa
-mediana, y es deliberado: se mide la erosión en vez de suponer la ventaja perpetua. Ajustarlo
-para que coincida con el panel sería calibrar contra ocho observaciones, que es justo lo que
-dijimos que el panel no sostiene.
+*Alternativa considerada y descartada:* mantener QoQ y cambiar a
+`serie_desestacionalizada_indice`. Arregla la estacionalidad, **no** la falta de unidad común,
+y seguiría titulando una tasa trimestral que todo lector lee como anual.
 
-## Qué se cambia
+Costo: la serie pierde 3 observaciones de arranque (4 en vez de 1). Sobre 77 trimestres no
+mueve la aguja; hay que **medirlo**, no suponerlo.
 
-1. **Tope de crecimiento terminal.** `g = min(b × ROE, crecimiento nominal de largo plazo)`,
-   con el tope COMPUTADO de nuestra propia serie de PIB nominal, no escrito a mano. Cuando el
-   tope muerde, se declara — es un supuesto que cambia el valor y no puede viajar callado.
-2. **Retención por tipo**, medida. Reemplaza el 0,60 de rúbrica.
-3. **Beta por tipo**, en tres grupos. El ORDEN está medido; la MAGNITUD del salto es rúbrica
-   y se declara como tal.
-4. **Persistencia por tipo**, medida. Reemplaza la perpetuidad creciente del terminal, que
-   explotaba por los dos lados.
+### 2 · Un guard: `reconciliar` no puede restar unidades distintas
 
-## Qué NO se cambia, y por qué
+El defecto sobrevivió porque **nada afirma en ninguna parte** que `g_pib` y
+`panel.crecimiento` midan lo mismo. Familia «un guard que falla en silencio».
+`reconciliar` recibe la unidad de forma explícita y la contrasta; y un test mide que la
+transformación de `bloque` para `pib_real` y `sectoral._interanual` producen la MISMA medida
+sobre la misma serie.
 
-* **Las asociaciones se valúan sin trato especial** (decisión del dueño). Que sean mutuales
-  entra por la retención medida, que es dato, y no por un caveat aparte.
-* **La beta no se desapalanca.** Sigue valiendo el motivo original: en un banco los depósitos
-  son materia prima.
-* **`Ke` sigue siendo un rango.** Abrir la beta por tipo no lo vuelve un punto.
+### 3 · Publicar `crecimiento_sin_reconciliar`
+
+El campo existe con el comentario *«se publica al lado, para que el ajuste sea visible»* y la
+tabla **no lo renderiza**. Con la columna puesta, las ocho contracciones se habrían leído como
+lo que eran.
+
+### 4 · La muestra curada se genera, no se escribe a mano
+
+Es la misma lección que ya pagamos en el eje de valuación (`_sample_narrativas_de()`): una
+muestra escrita a mano no valida el pipeline, lo tapa.
+
+## Verificación
+- [ ] Correr los tests nuevos contra el código VIEJO y ver que FALLAN
+- [ ] Medir cuántas observaciones pierde el bloque con DLOG4
+- [ ] Re-emitir la proyección y comprobar que la brecha cae al orden de la muestra (~0,4 pp)
+- [ ] Comprobar el informe REAL en prod (tiempo de respuesta > 15 s = no es caché)
+- [ ] Los tres gates
+
+---
+
+## Dos hallazgos ADYACENTES, de la misma familia (no son la lectura sectorial)
+
+Aparecieron persiguiendo la unidad. Los declaro acá y van por su cuenta, no en este arreglo.
+
+### A · Las proyecciones del BVAR no se pueden puntuar NUNCA
+
+`emision.OBJETIVO = "pib_real"` viaja al ledger como `target_series`. `ledger.puntuar_pendientes`
+(`ledger.py:91`) busca `MacroSeries.filter_by(series_code="pib_real")` — y **`pib_real` no es un
+código de serie**, es el nombre que el bloque le da a la variable. Verificado en producción:
+`GET /api/v1/macro-monitor/series/pib_real` → `observations: []`.
+
+Consecuencia: el informe publica *«Todavía no hay pronósticos puntuados: ninguna de las
+proyecciones emitidas alcanzó su período de cierre»*. Se lee como «los trimestres no cerraron
+todavía». Lo cierto es que **no pueden cerrar**. Familia «un binding a una serie INEXISTENTE
+no falla».
+
+### B · El ledger puntúa una TASA contra un NIVEL
+
+`Nowcast.target_series = PIB_CODE = "bcrd.xls.pib_2018.serie_original_indice"` y su `point` es
+un **dlog en %** (~0,4). `puntuar_pendientes` lo compara contra `MacroSeries.value` de ese
+código, que es el **índice de volumen** (~133). Un nowcast puntuado daría
+`abs_error ≈ |133,13 − 0,38| = 132,75`, y el informe publicaría eso como RMSE.
+
+No explotó todavía **solo porque (A) mantiene la sección vacía**. Arreglar (A) sin (B) hace
+que el informe publique un RMSE de ~130 en la primera corrida.
+
+### Y de paso, sobre el titular
+
+`pib_real 2026-Q3 · 0,74 · banda −6,63 … 8,11 · ¿ancla una afirmación? no`
+
+La banda del 80 % mide **14,7 pp** alrededor de un punto de 0,74 — es la varianza estacional
+que un VAR sin estacionalidad no puede capturar. Y la proyección **no pasa el gate**: no ancla
+ninguna afirmación. Toda la tabla sectorial se reconcilia contra ella igual.
