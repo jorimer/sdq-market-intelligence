@@ -785,3 +785,33 @@ peor que el defecto original. Un arreglo de forma puede empeorar la forma.
 resuelve el repo hoy** y verificarlo EN EL PDF, no en la cadena de Python. La verificación que
 sirve es negativa y sobre el artefacto: «ninguna línea empieza con `%`» y «la cadena `nbsp` no
 aparece ni una vez».
+
+---
+
+## Una aserción de RELOJ no distingue «lento» de «roto»
+
+**Síntoma.** CI puso en rojo un PR que no tocaba el módulo del fallo:
+`test_las_tres_secciones_corren_A_LA_VEZ`, de `banking_score`, con
+`assert tardanza < motor.demora * 2` → 0,60 s contra un tope de 0,30 s. En local pasaba 10 de
+10 en 0,18 s.
+
+**Lo que el propio fallo probaba.** La aserción que reventó era la TERCERA. La segunda —
+`motor.max_en_vuelo == 3`— **había pasado en esa misma corrida**: las tres secciones sí se
+generaron solapadas. Lo lento era el runner, no el código.
+
+**Y no se arregla subiendo el umbral.** Una corrida secuencial de tres tramos de 0,15 s daría
+>= 0,45 s, y lo observado fue 0,60 s: **no existe un umbral que separe «runner cargado» de
+«se volvió secuencial»**. La aserción no tenía poder discriminante en el entorno donde corre.
+
+**Regla futura.** Para una propiedad de CONCURRENCIA, el instrumento es un **contador de
+solapamiento**, no el reloj: tres corrutinas simultáneamente dentro de la función solo pueden
+estar ahí si se agendaron a la vez, y en serie el máximo sería 1. Es una prueba directa; el
+tiempo total es un indicio, y encima uno que mide la máquina.
+
+Antes de borrar la aserción hay que comprobar que la que queda tiene dientes: se rompió el
+`asyncio.gather` a un bucle secuencial y el test falló con «solo 1 sección(es) a la vez». Sin
+esa comprobación, «saqué la aserción flaky» y «dejé el test ciego» se ven igual.
+
+**Disparador.** Cualquier `assert` sobre `time.monotonic()`, `elapsed`, `duration` o un
+`timeout` en un test. Preguntar: si esto falla, ¿puedo distinguir un bug de una máquina
+ocupada? Si la respuesta es no, el instrumento está mal elegido.
