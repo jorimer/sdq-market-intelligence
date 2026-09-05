@@ -690,17 +690,42 @@ persona lo lea ahí y no lo descubra en un informe.
 - [ ] `shared/products/contract.py:300` (`Protocol SectorProduct`).
 - [ ] `modules/pension_intel/` como plantilla de estructura.
 
+> **`docs/SPEC_VALUADOR_ENTIDADES.md` NUNCA EXISTIÓ.** Está declarado como spec rectora en el
+> encabezado de este plan y no se escribió: `git log --diff-filter=A` no lo encuentra en
+> ninguna rama. Los pasos que lo referencian (§7 acá, §2/§4.1/§5.4/§6/§8.2 en T-VL-3 a T-VL-8)
+> apuntan a un documento ausente.
+>
+> No bloqueó el alta porque **este plan carga la sustancia del spec**: el método (Excess
+> Return), la fórmula de `Ke`, la beta sin desapalancar y por qué, el ROE sobre patrimonio de
+> apertura, el terminal como perpetuidad de residual income, `g < Ke`, los dos motores y el
+> gate de N ≥ 8. La estructura salió de `modules/pension_intel/`, que este mismo plan nombra
+> como plantilla.
+
 ### Pasos atómicos
-- [ ] **1.** `CatalogEntry("valuation", ...)` en `PRODUCT_CATALOG`.
-- [ ] **2.** Estructura de `modules/valuation/` según §7 del spec.
-- [ ] **3.** `register_product(SECTOR_KEY, ...)` al final de `products.py`.
-- [ ] **4.** Cuatro puntos de cableado en `app/main.py`: import del router (~`:110`), `include_router(prefix="/api/v1/valuation")` (~`:138`), `import modules.valuation.operations` (~`:222`), `import modules.valuation.products` (~`:249`).
-- [ ] **5.** `ESTADO_BACKTEST` de clase.
-- [ ] **6.** `AXIS_DOCTRINE["valuation"]` y `AUDIENCE_FRAMES["valuation"]` en `cerebro.py` (`:302`, `:572`). La primera audiencia declarada es el default.
-- [ ] **7.** Migración Alembic `{rev12hex}_add_valuation.py`.
+- [x] **1.** `CatalogEntry("valuation", …)` en `PRODUCT_CATALOG`.
+- [x] **2.** `modules/valuation/` con `api/`, `engine/`, `models/`, `panel/`, `tests/`.
+- [x] **3.** `register_product` al final de `products.py`.
+- [x] **4.** Cableado en `app/main.py`. **Dos puntos, no cuatro**: el router y `operations` no existen todavía —el eje no tiene qué exponer ni qué operar sin motor— y registrarlos vacíos sería cableado muerto.
+- [x] **5.** `ESTADO_BACKTEST` de clase, con `obstaculo="dato_pendiente"` y el dato nombrado: transacciones RD/Caribe con precio sobre valor libro verificable. Una valuación se valida contra lo que alguien PAGÓ.
+- [x] **6.** `AXIS_DOCTRINE["valuation"]` y `AUDIENCE_FRAMES["valuation"]` con tres audiencias; la primera —comité/inversionista— es el default.
+- [ ] **7.** Migración: **no procede todavía**. No hay modelos que crear; la tabla de corridas y supuestos se diseña con el motor (T-VL-3/T-VL-4). Una migración vacía es ceremonia.
+
+### El eje está de alta y NO puede entregar, a propósito
+
+`has_engine()` devuelve False hasta que existan el costo de capital y el Excess Return, así que
+ningún nivel alcanza su umbral y nada se activa. El alta y la capacidad de entregar son dos
+cosas, y confundirlas es cómo se publica una vidriera vacía.
+
+**La muestra curada usa una entidad explícitamente FICTICIA.** El framework exige que todo
+producto del catálogo se pueda mostrar, pero enseñar una valuación de un banco real que
+todavía no podemos computar sería fabricar una cifra financiera sobre una empresa que existe —
+y eso no se arregla con una marca de agua. La muestra enseña, además, el caso INCÓMODO: un
+spread que cruza el cero dentro del rango de `Ke`, porque ése es el hallazgo que el eje existe
+para dar.
 
 ### Sensor T-VL-2
-- [ ] Test de contrato de producto verde.
+- [x] Contrato de producto verde: **8.108 tests**, con las cinco superficies que el framework reclamó al registrar el eje —huella de contexto, etiqueta de archivo, resumidor de data-pull, keywords de ruteo y muestra curada— cerradas porque **sus tests las señalaron**, no porque yo recordara la lista.
+- [x] El eje **no invade**: las preguntas de solidez siguen ruteando a `banking`, y «cuánto vale» rutea a `valuation`. Con su contraejemplo.
 
 ---
 

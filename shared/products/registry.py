@@ -48,6 +48,12 @@ PRODUCT_CATALOG: List[CatalogEntry] = [
     CatalogEntry("pension", "SDQ Pensiones (SIPEN)", "pension_intel", "SIPEN · ADAFP"),
     CatalogEntry("insurance", "SDQ Seguros (SIS)", "insurance_intel",
                  "SIS · SISALRIL · datos.gob.do"),
+    # Producto de VALUACIÓN. El único del catálogo cuyo entregable es un PRECIO, y por eso
+    # el único que tiene que decir en voz alta lo que NO es: `banking_score` responde «qué tan
+    # sana está» y ninguna de sus salidas se convierte en un valor. Un score alto describe
+    # solidez, no precio.
+    CatalogEntry("valuation", "SDQ Valuación de Entidades", "valuation",
+                 "SIB · SIMBAD · comparables LATAM · BCRD (costo de capital)"),
     # Producto de PROYECCIÓN (nacional, prospectivo): el único del catálogo cuyo entregable
     # es una afirmación sobre el FUTURO con su track record al lado. Se vende aparte del eje
     # macro por decisión del dueño; la familia `special:` no servía —no admite suscripción ni

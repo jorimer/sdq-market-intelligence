@@ -132,6 +132,40 @@ def _monetary_summary(label: str, payload: Dict[str, Any], period: Optional[str]
     return out or _generic_summary(label, payload, period, source)
 
 
+def _valuation_summary(label: str, payload: Dict[str, Any], period: Optional[str],
+                       source: str) -> List[Evidence]:
+    """Evidencia del eje de VALUACIÓN.
+
+    Lo primero que emite es el SPREAD, no el valor: `ROE − Ke` es la lectura que sostiene
+    todo lo demás, y una síntesis que arranca por el valor invita a discutir el supuesto en
+    vez de la palanca.
+
+    **El rango nunca se colapsa a un punto.** Promediar los extremos daría una cifra que
+    ningún supuesto sostiene, y la síntesis la citaría como si fuera la respuesta.
+    """
+    out: List[Evidence] = []
+    p = payload or {}
+    if p.get("es_ilustrativo"):
+        # Una muestra no es evidencia. Dejarla entrar al ledger de una investigación pondría
+        # cifras de una entidad ficticia al lado de dato real.
+        return out
+    spread = p.get("spread_pp")
+    if isinstance(spread, (list, tuple)) and len(spread) >= 2:
+        alto, bajo = float(spread[0]), float(spread[-1])
+        cruza = " — el signo CAMBIA dentro del rango de Ke" if alto * bajo < 0 else ""
+        out.append(Evidence(
+            text=(f"Creación de valor (ROE − Ke): entre {_fmt(alto)} y {_fmt(bajo)} pp"
+                  f"{cruza}."),
+            source=source, kind="engine", state=REAL, score=92.0, variable="spread_roe_ke"))
+    rango = p.get("valor_rango")
+    if isinstance(rango, (list, tuple)) and len(rango) >= 2:
+        out.append(Evidence(
+            text=(f"Valor estimado: rango de {_fmt(min(rango))} a {_fmt(max(rango))} "
+                  "(no se publica un punto: el costo de capital se estima, no se observa)."),
+            source=source, kind="engine", state=REAL, score=88.0, variable="valor_estimado"))
+    return out
+
+
 def _macro_forecast_summary(label: str, payload: Dict[str, Any], period: Optional[str],
                             source: str) -> List[Evidence]:
     """Evidencia del eje PROSPECTIVO. Es el único summarizer que emite estado PROJECTED.
@@ -605,6 +639,7 @@ _AXIS_SUMMARY = {
     "monetary_policy": _monetary_summary,
     "macro": _macro_summary,
     "macro_forecast": _macro_forecast_summary,
+    "valuation": _valuation_summary,
     "trade": _trade_summary,
     "tourism": _make_index_summary("ITT"),
     "free_zones": _make_index_summary("IZF"),

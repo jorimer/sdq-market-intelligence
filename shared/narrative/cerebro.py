@@ -305,6 +305,26 @@ SCOPE_DISCIPLINE = (
 # ── POR MÓDULO — Doctrina del eje ─────────────────────────────────────────────
 
 AXIS_DOCTRINE: Dict[str, str] = {
+    "valuation": (
+        "DOCTRINA DE CASA — Eje de VALUACIÓN de entidades:\n"
+        "Respondés CUÁNTO VALE, no qué tan sana está. Son preguntas distintas y la confusión "
+        "es cara: una entidad puede estar sólida y destruir valor, y una entidad rentable "
+        "puede valer menos que su libro. El score de solidez NO es un proxy de precio y jamás "
+        "lo presentás como tal.\n"
+        "LA LECTURA ES `ROE − Ke`, NO EL VALOR. El spread es la palanca: dice si la entidad "
+        "gana más de lo que su capital exige. Abrí por ahí. Un lector que ve solo el valor "
+        "discute el supuesto; uno que ve el spread entiende de dónde sale.\n"
+        "EL VALOR ES UN RANGO, NUNCA UN PUNTO. El costo de capital no se observa: se estima, "
+        "y una diferencia de 50 puntos básicos mueve el resultado. Si el valor cambia de "
+        "SIGNO dentro del rango razonable de `Ke`, eso NO es un problema del modelo — es EL "
+        "hallazgo, y va en el resumen ejecutivo.\n"
+        "LO QUE ES RÚBRICA SE DICE RÚBRICA. La beta y la prima de riesgo de mercado son "
+        "supuestos de comparables, no dato dominicano observado. Viajan declarados como tales "
+        "y su peso en el resultado se muestra.\n"
+        "DOS MOTORES, UN RANGO. Excess Return y la regresión P/B son independientes. Si "
+        "divergen mucho, la divergencia ES información y se reporta — no se promedia hasta "
+        "que parezca una sola respuesta.\n"
+    ),
     "law_intel": (
         "DOCTRINA DE CASA — Eje de evaluación INDEPENDIENTE de una ley:\n"
         "Juzgas si una ley está consiguiendo lo que ELLA MISMA se propuso. No opinas sobre si "
@@ -575,6 +595,31 @@ AXIS_DOCTRINE: Dict[str, str] = {
 # el default (DEFAULT_AUDIENCE).
 
 AUDIENCE_FRAMES: Dict[str, Dict[str, str]] = {
+    "valuation": {
+        "comité / inversionista": (
+            "FRAME DE DECISIÓN — Audiencia: quien pone o mueve capital sobre la entidad "
+            "(comité de inversión, accionista, contraparte de una operación).\n"
+            "Decide: si el precio que se discute tiene sustento, y qué tendría que ser cierto "
+            "para justificarlo.\n"
+            "Le importa: el spread `ROE − Ke` y su trayectoria, cuánto del valor es libro y "
+            "cuánto es exceso, y qué supuesto sostiene la diferencia. Tu «y por tanto» apunta "
+            "a QUÉ SUPUESTO habría que creer, no a una recomendación de comprar o vender."
+        ),
+        "consejo de la entidad": (
+            "FRAME DE DECISIÓN — Audiencia: el consejo o la alta gerencia de la propia "
+            "entidad.\n"
+            "Decide: dónde actuar para crear valor.\n"
+            "Le importa: si la entidad está creando o destruyendo valor y por qué palanca — "
+            "rentabilidad, crecimiento o costo de capital. El spread negativo no es un "
+            "reproche: es un punto de partida operable."
+        ),
+        "abierto": (
+            "FRAME DE DECISIÓN — Audiencia: pública, sin acceso al expediente.\n"
+            "Decide: si vale la pena mirar más de cerca.\n"
+            "Le importa: si el sistema crea o destruye valor, en una lectura, y con cuánta "
+            "incertidumbre se está hablando."
+        ),
+    },
     "law_intel": {
         "cliente / comisión": (
             "FRAME DE DECISIÓN — Audiencia: quien tiene que actuar sobre la ley o rendir "
