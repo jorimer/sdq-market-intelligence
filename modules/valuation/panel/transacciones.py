@@ -33,6 +33,19 @@ from typing import Optional, Sequence, Tuple
 #: Casos con precio sobre valor libro verificable que el gate exige para abrir la vista M&A.
 MINIMO_DE_CASOS = 8
 
+#: La BASE del denominador. No es un matiz: decide si dos múltiplos se pueden poner en la
+#: misma tabla.
+#:
+#: * `contable` — patrimonio del balance del vendedor, tal como lo publicó su regulador. Es
+#:   la base del modelo de Excess Return, que valúa contra patrimonio contable.
+#: * `valor_razonable` — activos netos identificables a valor razonable de la NIIF 3, que es
+#:   lo que el COMPRADOR reconoce. Puede incluir intangibles que **no existían** en el
+#:   balance del vendedor: en la compra del Caribe Oriental, el intangible de depósitos es el
+#:   62 % del denominador publicado. Un múltiplo sobre esa base NO es un P/B y ponerlo al
+#:   lado de uno contable ordena lo que no es comparable.
+BASE_CONTABLE = "contable"
+BASE_VALOR_RAZONABLE = "valor_razonable"
+
 
 @dataclass(frozen=True)
 class Transaccion:
@@ -54,6 +67,8 @@ class Transaccion:
     #: inventado no es verificable, y agregarlas en una sola nota lo escondería.
     fuente_precio: str
     fuente_libro: str
+    #: Sobre qué base se computó el múltiplo. Ver `BASE_CONTABLE` / `BASE_VALOR_RAZONABLE`.
+    base: str = BASE_CONTABLE
     #: Lo que el caso NO permite afirmar. Se declara con el dato, no en un anexo.
     caveats: Tuple[str, ...] = ()
 
@@ -61,6 +76,17 @@ class Transaccion:
     def verificable(self) -> bool:
         """Las DOS puntas presentes. Un precio sin libro no es un múltiplo."""
         return self.pb is not None and self.precio is not None and self.valor_libro is not None
+
+    @property
+    def comparable(self) -> bool:
+        """¿Entra a la misma tabla que el resto?
+
+        Solo la base CONTABLE, porque es contra la que valúa el modelo de Excess Return.
+        Un múltiplo sobre valor razonable de la NIIF 3 es verificable y NO es un P/B: mide
+        el precio contra lo que el comprador reconoce, no contra lo que el vendedor tenía en
+        libros. Los dos son datos; mezclarlos es el error.
+        """
+        return self.verificable and self.base == BASE_CONTABLE
 
 
 #: Lo relevado. Cada entrada se agrega con sus dos fuentes o no se agrega.
@@ -92,6 +118,65 @@ PANEL: Tuple[Transaccion, ...] = (
             "acuerdo y se muestra el rango.",
             "El patrimonio de la SIB es contable, que es la base correcta para un P/B — no "
             "el patrimonio técnico regulatorio.",
+        ),
+    ),
+
+    Transaccion(
+        anio=2019, comprador="Republic Financial Holdings",
+        adquirida=("Operaciones de Scotiabank en el Caribe Oriental y St. Maarten "
+                   "(St. Maarten, Anguila, Dominica, Granada, San Cristóbal y Nieves, "
+                   "Santa Lucía, San Vicente y las Granadinas)"),
+        pais="LCA/VCT/KNA/DMA/GRD/AIA/SXM",
+        precio=377_283_000.0, moneda_precio="TTD",
+        valor_libro=205_742_000.0, moneda_libro="TTD", periodo_libro="2019-11",
+        pb=1.834, base=BASE_VALOR_RAZONABLE,
+        fuente_precio=("Memoria anual 2020 de Republic Financial Holdings, nota 34 "
+                       "«Business combinations», apartado (a). Purchase consideration "
+                       "transferred: TT$377.283 miles, liquidado en efectivo."),
+        fuente_libro=("Misma nota: «Total identifiable net assets at fair value» TT$205.742 "
+                      "miles, con goodwill de TT$171.541 miles. La aritmética CIERRA exacta "
+                      "—205.742 + 171.541 = 377.283—, que es la validación interna de que "
+                      "las tres cifras son consistentes.\n\n"
+                      "Es el hallazgo del camino de la NIIF 3: el comunicado de prensa daba "
+                      "el precio y la prima sobre el valor neto, pero NO el valor neto. La "
+                      "norma obliga al comprador a publicarlo en sus estados auditados, y "
+                      "ahí estaba."),
+        caveats=(
+            "LA BASE NO ES VALOR LIBRO. Son activos netos identificables a VALOR RAZONABLE, "
+            "que incluyen TT$127.166 miles de intangible de depósitos reconocido EN la "
+            "adquisición —no existía en el balance del vendedor— y TT$8.600 miles de revalúo "
+            "de inmuebles sobre un valor en libros de TT$30.000 miles.",
+            "El intangible solo es el 62 % del denominador publicado. Quitándolo junto con el "
+            "revalúo, el libro aproximado del vendedor sería TT$69.976 miles y el múltiplo "
+            "sobre esa base ~5,4x. Es una DERIVACIÓN, no un dato: la nota no publica el libro "
+            "del vendedor y puede haber otras marcas no desglosadas. Por eso no se publica "
+            "como P/B.",
+            "Es UNA observación, no siete: la nota agrega los siete territorios en una sola "
+            "cifra y no los desglosa por país.",
+        ),
+    ),
+    Transaccion(
+        anio=2020, comprador="Republic Financial Holdings",
+        adquirida="Scotiabank British Virgin Islands Limited (100 % de las acciones)",
+        pais="VGB",
+        precio=689_605_000.0, moneda_precio="TTD",
+        valor_libro=457_611_000.0, moneda_libro="TTD", periodo_libro="2020-06",
+        pb=1.507, base=BASE_VALOR_RAZONABLE,
+        fuente_precio=("Memoria anual 2020 de Republic Financial Holdings, nota 34, apartado "
+                       "(b). Purchase consideration transferred: TT$689.605 miles, en "
+                       "efectivo, por el 100 % de las acciones."),
+        fuente_libro=("Misma nota: «Total identifiable net assets at fair value» TT$457.611 "
+                      "miles, goodwill provisional TT$231.994 miles. La aritmética cierra "
+                      "exacta.\n\n"
+                      "A diferencia del caso del Caribe Oriental, su desglose de activos NO "
+                      "tiene línea de intangibles —caja, préstamos y otros—, así que acá el "
+                      "valor razonable está MUCHO más cerca del libro."),
+        caveats=(
+            "La base sigue siendo valor razonable de la NIIF 3, no valor libro del vendedor, "
+            "aunque sin intangible reconocido la distancia entre las dos bases es menor.",
+            "El goodwill es PROVISIONAL: la propia nota dice que el valor razonable estaba "
+            "pendiente de valuación final y sujeto a ajuste hasta junio de 2021.",
+            "Es la única de las tres con el porcentaje de acciones CONFIRMADO (100 %).",
         ),
     ),
 )
@@ -134,7 +219,10 @@ DESCARTADAS: Tuple[Tuple[str, str], ...] = (
 
 @dataclass(frozen=True)
 class EstadoDelPanel:
+    #: Con las dos puntas publicadas, en cualquier base.
     n_verificables: int
+    #: Sobre base CONTABLE, que es la única que entra a la misma tabla. El gate cuenta ésta.
+    n_comparables: int
     minimo: int
     abierto: bool
     motivo: str
@@ -142,15 +230,29 @@ class EstadoDelPanel:
 
 
 def estado(panel: Sequence[Transaccion] = PANEL) -> EstadoDelPanel:
-    """¿Se puede abrir la vista de M&A? El gate se consulta antes, no después."""
-    n = sum(1 for t in panel if t.verificable)
-    if n >= MINIMO_DE_CASOS:
-        return EstadoDelPanel(n, MINIMO_DE_CASOS, True, "", len(DESCARTADAS))
+    """¿Se puede abrir la vista de M&A? El gate se consulta antes, no después.
+
+    Cuenta los COMPARABLES, no los verificables. Un múltiplo sobre valor razonable de la
+    NIIF 3 es un dato bueno y no es un P/B: sumarlo al conteo abriría la vista con una tabla
+    que mezcla dos bases, que es peor que tenerla cerrada.
+    """
+    n_ver = sum(1 for t in panel if t.verificable)
+    n_comp = sum(1 for t in panel if t.comparable)
+    if n_comp >= MINIMO_DE_CASOS:
+        return EstadoDelPanel(n_ver, n_comp, MINIMO_DE_CASOS, True, "", len(DESCARTADAS))
+    otras_bases = n_ver - n_comp
+    extra = ""
+    if otras_bases:
+        extra = (f" Hay {otras_bases} caso(s) más con las dos puntas publicadas pero sobre "
+                 "activos netos a VALOR RAZONABLE de la NIIF 3, que no es valor libro: mide "
+                 "el precio contra lo que el comprador reconoce, no contra lo que el vendedor "
+                 "tenía en libros. Se conservan con su base declarada y NO entran al conteo.")
     return EstadoDelPanel(
-        n, MINIMO_DE_CASOS, False,
-        (f"El panel tiene {n} transacción(es) con precio sobre valor libro verificable y el "
+        n_ver, n_comp, MINIMO_DE_CASOS, False,
+        (f"El panel tiene {n_comp} transacción(es) con precio sobre valor libro CONTABLE y el "
          f"gate exige {MINIMO_DE_CASOS}. No es falta de relevamiento: se revisaron nueve "
-         "operaciones dominantes de la banca dominicana desde 1996 y la mayor del Caribe, y "
-         "el mercado divulga el precio pero **no el valor libro**. Un múltiplo necesita las "
-         "dos puntas. La vista de M&A queda cerrada y el eje lo declara."),
+         "operaciones de la banca dominicana desde 1996 y las notas de combinaciones de "
+         "negocios del mayor comprador del Caribe. El mercado divulga el precio y casi nunca "
+         "el denominador; cuando lo divulga, es sobre otra base. Un múltiplo necesita las dos "
+         f"puntas Y la misma base.{extra} La vista de M&A queda cerrada y el eje lo declara."),
         len(DESCARTADAS))
