@@ -39,9 +39,20 @@ señal de que el diseño se desvió.
 
 ---
 
-## Decisiones abiertas del dueño
+## Decisiones del dueño — **AMBAS TOMADAS (2026-09-05)**
 
-Ninguna bloquea la Fase 0 ni la Fase 1. Ambas muerden en **T-BR-8**.
+**D-1 · RESUELTA. No se publican bandas del Perfil SDQ por entidad.** Se nombran entidades
+al describir movimientos del trimestre, y las bandas quedan para agregados y para la
+distribución del sistema. Distribuir juicios recurrentes sobre la solidez de bancos con
+nombre propio, sin ser calificadora regulada, es el riesgo que cerró la retirada de la
+escala SDQ-AAA…D: el Perfil SDQ de dos ejes es más defendible que aquella escala, pero el
+CANAL cambia el perfil de exposición — un cliente firma un contrato donde los supuestos
+están escritos, un suscriptor lee un titular.
+
+**D-2 · RESUELTA, y ya implementada.** Corte declarado por país. El sync lo devuelve en
+`cortes_por_pais` y hoy conviven `DOM 2026-07-31`, `SLV 2026-06-30`, `NIC 2025-06-30` y
+`COL 2026-06-30`. Un corte único habría desperdiciado la frescura de las plazas rápidas
+para acomodar a la más lenta.
 
 | # | Decisión | Default recomendado si no hay respuesta al llegar a T-BR-8 |
 |---|---|---|
