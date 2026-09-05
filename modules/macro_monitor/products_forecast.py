@@ -95,7 +95,7 @@ def macro_forecast_manifest() -> SectorProductManifest:
         sector_key=SECTOR_KEY, display_name=DISPLAY, levels={
             ProductTier.pulse: TierLevelSpec(
                 tier=ProductTier.pulse, granularity=Granularity.system,
-                sections=(SECCION_NOWCAST,), narrative_templates=(),
+                sections=(SECCION_NOWCAST,), narrative_templates=(), prosa_computada=True,
                 audience="mercado / abierto", cadence="periodic",
                 watermark="Vista abierta · SDQMIP", price_band="abierto"),
             # `insight` es el nivel de SUSCRIPCIÓN: es el que da `insight:macro_forecast`,
@@ -105,7 +105,7 @@ def macro_forecast_manifest() -> SectorProductManifest:
                 tier=ProductTier.insight, granularity=Granularity.system,
                 sections=(SECCION_NOWCAST, SECCION_TRAYECTORIA, SECCION_SECTORIAL,
                           SECCION_DESEMPENO, SECCION_METODOLOGIA),
-                narrative_templates=(),
+                narrative_templates=(), prosa_computada=True,
                 audience="cliente / comité", cadence="recurring", price_band="suscripción"),
             # El tercer nivel no es relleno para cumplir el contrato del framework: es donde
             # viven los ESCENARIOS, que el BVAR produce a 3-8 trimestres y que
@@ -116,7 +116,7 @@ def macro_forecast_manifest() -> SectorProductManifest:
                 tier=ProductTier.deep_dive, granularity=Granularity.system,
                 sections=(SECCION_NOWCAST, SECCION_TRAYECTORIA, SECCION_ESCENARIOS,
                           SECCION_SECTORIAL, SECCION_DESEMPENO, SECCION_METODOLOGIA),
-                narrative_templates=(),
+                narrative_templates=(), prosa_computada=True,
                 audience="comité / tesorería", cadence="on_demand", price_band="on-demand"),
         })
 
