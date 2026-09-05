@@ -19,6 +19,7 @@ import pytest
 from shared.registry.projection import MIN_OOS
 from shared.registry.signals import PROJECTED, REAL, RUBRIC, GAP, ProjectionMeta
 from shared.research.models import SubQuestion
+from shared.data.medida_de_pronostico import DLOG_PCT
 
 
 def _meta(**cambios):
@@ -26,6 +27,7 @@ def _meta(**cambios):
         model_id="bridge_imae_pib.m2.v1", target_series="s", horizon="2026-Q4",
         as_of="2026-08-31", revision=0, point=3.9,
         intervals=((0.80, 3.1, 4.7), (0.90, 2.6, 5.2)),
+        measure=DLOG_PCT,
         backtest_id="bridge_imae_pib.m2.v1|s|2026-Q4", oos_error=0.62, error_metric="rmse",
         n_oos=16, n_oos_overlapping=True,
         interval_coverage=((0.80, 0.78, 16), (0.90, 0.88, 16)),

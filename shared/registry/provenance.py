@@ -24,6 +24,7 @@ from __future__ import annotations
 
 from typing import Iterable, List, Optional, Sequence
 
+from shared.data.medida_de_pronostico import COMO_SE_LEE
 from shared.registry.signals import (
     COVERAGE_INDEX,
     COVERAGE_INSTRUMENT,
@@ -167,6 +168,8 @@ def projection_sentence(axis: Optional[AxisRegistry]) -> str:
 
     Cuatro elementos, y ninguno es opcional:
 
+    * la **unidad** del punto y de su banda. Sin ella la cifra se lee en la que el lector
+      suponga, y para el PIB la natural —el nivel del índice— es la equivocada.
     * el **error** del backtest, EN LA MISMA FRASE que la proyección. Enterrarlo en una
       sección de limitaciones al final es la práctica que esta plataforma existe para no
       repetir: quien lee la cifra y sigue leyendo ya se formó la idea.
@@ -193,9 +196,16 @@ def projection_sentence(axis: Optional[AxisRegistry]) -> str:
         if not ok:
             continue
         nivel, lo, hi = sorted(m.intervals, key=lambda i: i[0])[0]
+        # La UNIDAD va pegada a las cifras. «entre 3.1 y 4.7» sin ella se lee en la unidad
+        # que el lector suponga, y para el PIB la suposición natural —el nivel del índice—
+        # es la equivocada: lo que se proyecta es su variación. Y el PUNTO se publica: era
+        # la única cifra que la frase omitía, y es justamente la que después se cita.
+        como = COMO_SE_LEE.get(str(m.measure or ""), "")
+        unidad = f" {como}" if como else ""
         partes = [
             f"La proyección de {s.label or s.key} para {m.horizon} sale del modelo "
-            f"{m.model_id}, con intervalo de {_pct(nivel)} entre {lo} y {hi}."
+            f"{m.model_id}: {m.point}{unidad}, con intervalo de {_pct(nivel)} entre "
+            f"{lo} y {hi}."
         ]
         cobertura = {lv: (cob, n) for lv, cob, n in m.interval_coverage}
         if nivel in cobertura:

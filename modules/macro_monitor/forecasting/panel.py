@@ -19,6 +19,7 @@ from sqlalchemy.orm import Session
 
 from modules.macro_monitor.models.models import MacroSeries
 from modules.macro_monitor.tpm_modeling.dataset import IMAE_INDEX_CODE, PUBLICATION_LAG_DAYS
+from shared.data import medida_de_pronostico as med
 from shared.data.periodos import fin_del_periodo
 
 PIB_CODE = "bcrd.xls.pib_2018.serie_original_indice"
@@ -36,6 +37,30 @@ _LAG_IMAE = PUBLICATION_LAG_DAYS[IMAE_INDEX_CODE]
 #: Ver `forecasting/tests/test_la_reconciliacion_resta_la_misma_medida.py`.
 INTERANUAL = "interanual"
 TRIMESTRAL = "trimestral"
+
+#: Qué CLASE de crecimiento expresa un punto según la medida en que el ledger lo declaró.
+#: Es el puente entre los dos vocabularios y vive en un solo lugar, para que el consumidor
+#: no tenga que elegir cuál mirar.
+#:
+#: `LEVEL` NO está en el mapa y la ausencia es la respuesta: un nivel no es un crecimiento,
+#: y de la medida sola no se puede deducir si la serie que ese nivel recorre es a su vez una
+#: tasa interanual. `clase_de_crecimiento` devuelve ``None`` y quien llama se niega — que es
+#: lo correcto: suponerlo es exactamente el defecto que la reconciliación existe para vetar.
+_CLASE_POR_MEDIDA: Dict[str, str] = {
+    med.DLOG_PCT: TRIMESTRAL,
+    med.YOY_PCT: INTERANUAL,
+}
+
+
+def clase_de_crecimiento(medida: Optional[str]) -> Optional[str]:
+    """`interanual` | `trimestral` | ``None`` si esa medida no expresa un crecimiento.
+
+    Se le pregunta a la MEDIDA DE LA FILA y no a la variable del bloque: en el ledger conviven
+    pronósticos de dos motores sobre la misma serie —el nowcast emite una variación trimestral
+    y el BVAR una interanual—, así que la clase depende de QUÉ FILA se está mirando, no de qué
+    variable la produjo.
+    """
+    return _CLASE_POR_MEDIDA.get(str(medida or ""))
 
 
 def variacion_interanual_pct(serie: Dict[str, float], trimestres: Sequence[str]

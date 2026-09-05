@@ -99,6 +99,11 @@ class ProjectionMeta:
     **`as_of` tampoco es decorativo.** Sin corte point-in-time no se distingue un pronóstico
     de un ajuste hecho con información posterior — que es la diferencia entre un track record
     y un autoengaño.
+
+    **Y `measure` tampoco.** `target_series` dice CONTRA QUÉ se va a puntuar el punto;
+    `measure`, en qué unidad está. Son dos declaraciones distintas y hacen falta las dos: un
+    pronóstico de la VARIACIÓN de un índice es una tasa sobre una serie de nivel, y sin la
+    segunda cada consumidor vuelve a adivinar.
     """
 
     model_id: str            # modelo + variante + versión, en un solo identificador
@@ -107,6 +112,14 @@ class ProjectionMeta:
     as_of: str               # corte point-in-time de la información usada
     revision: int            # 0 = como se publicó; 1+ = corrección posterior
     point: float             # la estimación central
+    #: **En qué medida están `point` y los `intervals`** — el vocabulario lo declara
+    #: `shared.data.medida_de_pronostico` (`level` | `dlog_pct`). No tiene default a
+    #: propósito: el ledger ya aprendió que suponer la unidad de un punto cuesta caro
+    #: —comparó un Δlog en % (~0,4) contra un índice de volumen (~133) y el error salió
+    #: 132,75—, y un default reintroduce la suposición un salto más adelante. Sin esto, la
+    #: señal proyectada llegaba al registro como «bcrd.xls.pib_2018.serie_original_indice ·
+    #: proyección 2026-Q3 = 0,38»: una TASA rotulada con el nombre de una serie de NIVEL.
+    measure: str
     #: ``((nivel, lo, hi), …)`` — p.ej. ``((0.80, 3.1, 4.7), (0.90, 2.6, 5.2))``
     intervals: Tuple[Tuple[float, float, float], ...]
     backtest_id: str         # "{model_id}|{target_series}|{horizon}"

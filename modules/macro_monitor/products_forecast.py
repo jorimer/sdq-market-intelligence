@@ -39,6 +39,7 @@ from shared.products import (
     ValidationState,
     register_product,
 )
+from shared.data import medida_de_pronostico as med
 from shared.products.contract import EstadoBacktest
 from shared.products.render import render_product_pdf
 from shared.registry.signals import COVERAGE_PROJECTION
@@ -46,6 +47,9 @@ from shared.registry.signals import COVERAGE_PROJECTION
 logger = logging.getLogger("sdq.products.macro_forecast")
 
 SECTOR_KEY = "macro_forecast"
+#: La variable objetivo dentro del bloque del BVAR. Es el nombre del MODELO, no un
+#: `series_code`: `bloque.codigo_de_variable` lo resuelve a la serie observable.
+OBJETIVO_DEL_BLOQUE = "pib_real"
 DISPLAY = "SDQ Proyecciones Macro"
 
 SECCION_NOWCAST = "nowcast"
@@ -180,6 +184,13 @@ class MacroForecastProduct:
         from modules.macro_monitor.forecasting.desempeno import filas
         return _seguro(self._db, lambda d: filas(d), [])
 
+    def _sin_poder_puntuarse(self) -> List:
+        """Los pendientes que no van a cerrar NUNCA. Se cuentan en readiness porque es la
+        superficie que mira un operador sin generar un informe: un `pending` roto y un
+        `pending` esperando el trimestre se ven igual desde afuera, y son cosas distintas."""
+        from modules.macro_monitor.forecasting.ledger import no_puntuables
+        return _seguro(self._db, lambda d: no_puntuables(d), [])
+
     def _determinadas(self) -> int:
         """Cuántas cifras determinadas hay hoy: 0 o 1.
 
@@ -224,7 +235,11 @@ class MacroForecastProduct:
         if vig or determinadas:
             detalle = (f"{admisibles} de {len(vig)} proyección(es) vigente(s) pasan el gate; "
                        f"{determinadas} cifra(s) determinada(s) por identidad; "
-                       f"{len(self._puntuados())} conjunto(s) con backtest puntuado")
+                       f"{len(self._puntuados())} conjunto(s) con backtest puntuado"
+                       # Lo que no va a cerrar NUNCA se cuenta acá también: es la superficie
+                       # que mira un operador sin generar un informe, y ahí un `pending`
+                       # roto y uno esperando el trimestre se ven igual.
+                       f"{_rotas_en_detalle(self._sin_poder_puntuarse())}")
         else:
             detalle = "sin proyecciones emitidas todavía"
         return DataHealth(
@@ -269,8 +284,9 @@ class MacroForecastProduct:
 
     def _payload(self, db: Session) -> Dict[str, Any]:
         from modules.macro_monitor.forecasting import (
-            bloque, nowcast, procedencia, sectoral,
+            desempeno, nowcast, procedencia, sectoral,
         )
+        from modules.macro_monitor.forecasting import panel as panel_mod
         from modules.macro_monitor.forecasting.desempeno import filas
 
         hoy = date.today()
@@ -280,7 +296,11 @@ class MacroForecastProduct:
             ok, motivo = procedencia.es_publicable(meta)
             proyecciones.append({
                 "serie": meta.target_series, "horizonte": meta.horizon,
-                "punto": meta.point, "intervalos": [list(t) for t in meta.intervals],
+                # La MEDIDA viaja con el punto. Sin ella, la tabla escribía «%» por su
+                # cuenta: acertaba mientras la única medida fuera `dlog_pct`, y el día que
+                # entre una proyección en nivel publicaría un índice de 133 como «133 %».
+                "punto": meta.point, "medida": meta.measure,
+                "intervalos": [list(t) for t in meta.intervals],
                 "modelo": meta.model_id, "as_of": meta.as_of,
                 "ancla": ok, "motivo": motivo, "n_oos": meta.n_oos,
             })
@@ -294,17 +314,31 @@ class MacroForecastProduct:
         except Exception:  # noqa: BLE001
             cifra = None
         sect = None
+        sect_motivo = ""
         try:
             panel = sectoral.construir_panel(db)
-            if panel.trimestres and proyecciones:
+            if not (panel.trimestres and proyecciones):
+                sect_motivo = _SIN_AGREGADO_QUE_DESAGREGAR
+            else:
                 primera = proyecciones[0]
-                # La medida se le PREGUNTA al bloque, no se supone. Suponerla fue el
-                # defecto: el punto del BVAR era trimestral y el panel proyecta interanual.
+                # La medida se le pregunta a la FILA, no a la variable del bloque. Dos
+                # motores emiten sobre la misma serie con medidas distintas —el nowcast una
+                # variación trimestral, el BVAR una interanual—, así que la clase depende de
+                # QUÉ FILA es la vigente. Y preguntarle al bloque por el `series_code`
+                # lanzaba `KeyError`: ese helper espera el nombre de la variable, y el
+                # `except` de abajo se lo tragaba haciendo desaparecer la sección entera.
+                clase = panel_mod.clase_de_crecimiento(primera.get("medida"))
+                if clase != sectoral.MEDIDA_DEL_PANEL:
+                    sect_motivo = _MEDIDAS_QUE_NO_SE_RESTAN.format(
+                        agregado=primera.get("medida") or "sin declarar",
+                        panel=sectoral.MEDIDA_DEL_PANEL,
+                        modelo=primera.get("modelo", "?"))
+                    raise _NoSeDesagrega(sect_motivo)
                 pr = sectoral.proyectar(
                     panel, g_pib=float(primera["punto"]),
                     horizonte=str(primera["horizonte"]),
                     origen_del_agregado=str(primera["modelo"]),
-                    medida_del_agregado=bloque.medida_de(str(primera["serie"])))
+                    medida_del_agregado=clase)
                 sect = {
                     "horizonte": pr.horizonte, "brecha_pp": pr.brecha_pp,
                     "ajuste_pp": pr.ajuste_pp, "brechas": pr.brechas,
@@ -314,19 +348,31 @@ class MacroForecastProduct:
                                   "peso": s.peso, "incidencia": s.incidencia}
                                  for s in pr.sectores],
                 }
+        except _NoSeDesagrega:
+            pass          # el motivo ya está escrito, y viaja en el payload
         except Exception as e:  # noqa: BLE001
             logger.warning("lectura sectorial no disponible: %s", e)
+            sect_motivo = f"{_FALLO_SECTORIAL} {e}"
         return {
             "proyecciones": proyecciones,
             "escenarios": _escenarios_vigentes(db),
             "cifra_determinada": cifra,
             "sectorial": sect,
+            # La sección se ENTERA de por qué no salió. Sin esto, una lectura sectorial
+            # ausente y una imposible se leen igual —«no está disponible»— y el informe
+            # promete diecisiete secciones y entrega dieciséis sin decir nada.
+            "sectorial_motivo": sect_motivo,
             "desempeno": [{"modelo": f.model_id, "serie": f.target_series,
                            "horizonte": f.horizonte, "n_oos": f.n_oos, "rmse": f.rmse,
                            "mae": f.mae,
                            "interval_coverage": [list(t) for t in f.interval_coverage],
                            "solapan": f.solapan}
                           for f in filas(db)],
+            # Lo que NO va a cerrar nunca. Viaja en el snapshot porque esta superficie
+            # renderiza sin base: si tuviera que consultarla, o se enteraría de otra cosa o
+            # —lo que pasó— escribiría su propia copia del texto y el arreglo del otro lado
+            # no la tocaría. La superficie no re-juzga: se entera.
+            "no_puntuables": desempeno.no_puntuables(db),
         }
 
     def snapshot(self, tier: ProductTier, period: str,
@@ -408,7 +454,10 @@ class MacroForecastProduct:
             ok, motivo = es_publicable(meta)
             señales.append(VariableSignal(
                 key=f"proyeccion_{serie}",
-                label=f"{serie} · {meta.horizon}",
+                # La UNIDAD en la etiqueta: `value` es una variación y `serie` nombra un
+                # índice de volumen. Sin decirlo, quien lea 0,38 al lado de ese nombre
+                # entiende un nivel.
+                label=f"{serie} · {meta.horizon} ({_como_se_lee(meta.measure)})",
                 # Una proyección que no pasa el gate NO es una proyección mala: es un GAP,
                 # con el motivo escrito. Nunca se publica a medias.
                 state=PROJECTED if ok else GAP,
@@ -480,15 +529,15 @@ class MacroForecastProduct:
         items = [(str(d["horizonte"]), d["punto"]) for d in proys]
         items += [(f"{e['horizonte']} (esc.)", e["punto"]) for e in escenarios]
         if len(items) >= 2:
-            graficos.append({"title": "Trayectoria proyectada del PIB (%) · «esc.» = escenario",
-                             "items": items, "kind": "line", "unit": "%"})
+            # El eje se rotula con la medida DECLARADA, no con un «%» escrito acá: un
+            # gráfico con la unidad equivocada es la forma más silenciosa de mentir.
+            unidad = _unidad_de(list(proys) + list(escenarios))
+            graficos.append({"title": f"Trayectoria proyectada del PIB ({unidad}) · "
+                                      "«esc.» = escenario",
+                             "items": items, "kind": "line",
+                             "unit": _sufijo_de(proys[0] if proys else {}) or ""})
 
-        titular = None
-        cif = p.get("cifra_determinada")
-        if cif:
-            titular = (f"{cif['trimestre']} determinado · índice {cif['indice']:.3f}")
-        elif proys:
-            titular = f"{proys[0]['serie']} {proys[0]['horizonte']} · {proys[0]['punto']:.2f}%"
+        titular = _titular_de(p.get("cifra_determinada"), proys)
 
         return render_product_pdf(
             sector_key=SECTOR_KEY, display_name=DISPLAY, title=titulo, period=snapshot.period,
@@ -510,13 +559,52 @@ def _escenarios_vigentes(db: Session) -> List[Dict[str, Any]]:
     if not armado.trimestres:
         return []
     import numpy as np
+    # La serie y la medida salen del bloque —igual que en la emisión— y no de una constante
+    # escrita acá: un escenario no entra al ledger, pero SÍ se publica, y se publica con su
+    # unidad.
     proy = bvar.proyectar_bloque(
         np.array([list(f) for f in armado.Y], dtype=float), armado.nombres,
-        armado.trimestres[-1])
+        armado.trimestres[-1],
+        serie_objetivo=bloque.codigo_de_variable(db, OBJETIVO_DEL_BLOQUE),
+        medida=bloque.medida_del_punto(OBJETIVO_DEL_BLOQUE))
     if proy is None:
         return []
-    return [{"horizonte": e.horizonte, "punto": e.punto,
+    return [{"horizonte": e.horizonte, "punto": e.punto, "medida": e.measure or "",
              "intervalos": [list(t) for t in e.intervalos]} for e in proy.escenarios()]
+
+
+def _rotas_en_detalle(rotas: List) -> str:
+    """La coletilla del readiness. Silenciosa cuando no hay nada roto —que es el estado
+    sano— y explícita cuando lo hay: si el veto no deja marca, el operador lee «todavía no»
+    donde dice «nunca»."""
+    if not rotas:
+        return ""
+    motivos = ", ".join(sorted({r.motivo for r in rotas}))
+    return f"; {len(rotas)} SIN PODER PUNTUARSE ({motivos})"
+
+
+def _como_se_lee(medida: Optional[str]) -> str:
+    """La unidad, o el hecho de que no se declaró. «Sin declarar» se dice: callarlo deja la
+    cifra leyéndose en la unidad que el lector suponga."""
+    return med.COMO_SE_LEE.get(str(medida or ""), "unidad sin declarar")
+
+
+def _sufijo_de(fila: Dict[str, Any]) -> str:
+    """El sufijo que va PEGADO al número de esa fila. Vacío cuando la medida no lo tiene o
+    no está declarada: escribir «%» por las dudas es la suposición que costó el defecto."""
+    return med.SUFIJO.get(str(fila.get("medida") or ""), "")
+
+
+def _unidad_de(filas: List[Dict[str, Any]]) -> str:
+    """Cómo se lee la columna, para el encabezado. Con medidas mezcladas —o con ninguna
+    declarada— se dice eso y no se elige una: una columna rotulada con la unidad equivocada
+    es peor que una sin rotular."""
+    medidas = {str(d.get("medida") or "") for d in filas}
+    if len(medidas) == 1:
+        como = med.COMO_SE_LEE.get(medidas.pop(), "")
+        if como:
+            return como
+    return "unidad declarada por fila"
 
 
 def _banda(intervalos, nivel: float) -> str:
@@ -524,6 +612,18 @@ def _banda(intervalos, nivel: float) -> str:
         if len(tramo) >= 3 and abs(float(tramo[0]) - nivel) < 1e-9:
             return f"{float(tramo[1]):.2f} … {float(tramo[2]):.2f}"
     return "—"
+
+
+def _titular_de(cifra: Optional[Dict[str, Any]],
+                proys: List[Dict[str, Any]]) -> Optional[str]:
+    """El titular de portada. El «%» salía escrito a mano al lado del punto — la misma
+    suposición que en las tablas, en el lugar más visible del documento."""
+    if cifra:
+        return f"{cifra['trimestre']} determinado · índice {cifra['indice']:.3f}"
+    if proys:
+        d = proys[0]
+        return f"{d['serie']} {d['horizonte']} · {d['punto']:.2f}{_sufijo_de(d)}"
+    return None
 
 
 def _md_resumen_ejecutivo(p: Dict[str, Any]) -> str:
@@ -549,8 +649,9 @@ def _md_resumen_ejecutivo(p: Dict[str, Any]) -> str:
         d = proys[0]
         anclan = [x for x in proys if x.get("ancla")]
         partes.append(
-            f"La proyección vigente para {d['horizonte']} es de **{d['punto']:.2f} %**, con "
-            f"una banda del 80 % de {_banda(d.get('intervalos'), 0.80)}.")
+            f"La proyección vigente para {d['horizonte']} es de **{d['punto']:.2f}"
+            f"{_sufijo_de(d)}** ({_como_se_lee(d.get('medida'))}), con una banda del 80 % de "
+            f"{_banda(d.get('intervalos'), 0.80)}.")
         if not anclan:
             partes.append(
                 "**Ninguna de las proyecciones vigentes pasa hoy el gate de admisibilidad**, "
@@ -621,11 +722,13 @@ def _md_trayectoria(p: Dict[str, Any]) -> str:
     if not proys:
         return ("No hay proyecciones vigentes para este corte. La operación de emisión las "
                 "produce tras cada ingesta canónica.")
-    lineas = ["| serie | horizonte | punto | banda 80 % | ¿ancla una afirmación? |",
+    lineas = [f"| serie | horizonte | punto ({_unidad_de(proys)}) | banda 80 % | "
+              "¿ancla una afirmación? |",
               "|---|---|---:|---|---|"]
     for d in proys:
         ancla = "sí" if d.get("ancla") else f"no — {d.get('motivo', '')}"
-        lineas.append(f"| {d['serie']} | {d['horizonte']} | {d['punto']:.2f} % | "
+        lineas.append(f"| {d['serie']} | {d['horizonte']} | "
+                      f"{d['punto']:.2f}{_sufijo_de(d)} | "
                       f"{_banda(d.get('intervalos'), 0.80)} | {ancla} |")
     lineas.append("")
     lineas.append(
@@ -638,8 +741,9 @@ def _md_trayectoria(p: Dict[str, Any]) -> str:
 def _md_sectorial(p: Dict[str, Any]) -> str:
     sect = p.get("sectorial")
     if not sect or not sect.get("sectores"):
-        return ("La lectura sectorial no está disponible para este corte: sin una proyección "
-                "agregada vigente no hay nada que desagregar.")
+        # El MOTIVO, no «no está disponible». Una sección que desaparece sin decir por qué
+        # se lee como que el informe no la tiene.
+        return p.get("sectorial_motivo") or _SIN_AGREGADO_QUE_DESAGREGAR
     lineas = [
         f"Desagregación de la proyección agregada de **{sect['horizonte']}** en las "
         "actividades del PIB. La suma ponderada **reconcilia exactamente** con el agregado "
@@ -690,11 +794,11 @@ def _md_escenarios(p: Dict[str, Any]) -> str:
         "trimestres, la ventaja del modelo sobre un random walk **no sobrevive** a excluir la "
         "pandemia de la muestra, así que no se le publica track record.",
         "",
-        "| horizonte | punto | banda 80 % |",
+        f"| horizonte | punto ({_unidad_de(esc)}) | banda 80 % |",
         "|---|---:|---|",
     ]
     for d in esc:
-        lineas.append(f"| {d['horizonte']} | {d['punto']:.2f} % | "
+        lineas.append(f"| {d['horizonte']} | {d['punto']:.2f}{_sufijo_de(d)} | "
                       f"{_banda(d.get('intervalos'), 0.80)} |")
     lineas.append("")
     lineas.append("Ninguno de estos números puede sostener una afirmación anclada: la "
@@ -704,13 +808,19 @@ def _md_escenarios(p: Dict[str, Any]) -> str:
 
 
 def _md_desempeno(p: Dict[str, Any]) -> str:
+    """La sección desde el SNAPSHOT. La prosa sale de las constantes de `desempeno`, no de
+    literales de acá: la frase de «todavía no hay puntuados» estaba duplicada palabra por
+    palabra, y cuando se corrigió del otro lado —porque decía que los trimestres no habían
+    cerrado cuando en realidad no PODÍAN cerrar— esta copia siguió mintiendo."""
+    from modules.macro_monitor.forecasting import desempeno as desemp
+
     fs = p.get("desempeno") or []
+    rotas = p.get("no_puntuables") or []
     if not fs:
-        return ("Todavía no hay pronósticos puntuados: ninguna de las proyecciones emitidas "
-                "alcanzó su período de cierre con el dato observado publicado. Esta sección "
-                "se llena sola a medida que los trimestres cierran, y aparece con o sin "
-                "resultados — un desempeño que solo se publica cuando conviene no es un "
-                "track record.")
+        bloque = desemp.renglones_no_puntuables(rotas)
+        if bloque:
+            return "\n".join(bloque + ["", desemp.QUE_SI_SE_PUEDE_ESPERAR])
+        return desemp.SIN_HISTORIAL
     lineas = ["Cada proyección queda registrada antes de conocerse el resultado, y se puntúa "
               "sola cuando el dato llega.", "",
               "| modelo | serie | horizonte | n | RMSE | MAE | calibración del intervalo |",
@@ -733,6 +843,10 @@ def _md_desempeno(p: Dict[str, Any]) -> str:
             "información, así que el `n` es mayor que el número de observaciones "
             "independientes que lo sostienen. Se declara, no se corrige con una fórmula "
             "inventada.")
+    bloque = desemp.renglones_no_puntuables(rotas)
+    if bloque:
+        lineas.append("")
+        lineas.extend(bloque)
     return "\n".join(lineas)
 
 
@@ -740,13 +854,43 @@ def _md_desempeno(p: Dict[str, Any]) -> str:
 # Cifras ilustrativas; el informe real las computa del ledger. Se elige a propósito un
 # cuadro con un resultado incómodo (un intervalo del 90 % que sobre-cubre) y una actividad
 # no proyectada: una muestra que solo enseña aciertos vende un producto que no existe.
+class _NoSeDesagrega(Exception):
+    """La lectura sectorial no procede, y el motivo ya está escrito. Excepción propia y no
+    `Exception` a secas: el `except` genérico de abajo existe para lo que falla, y confundir
+    «no procede» con «falló» es lo que hace que un motivo se pierda en un warning."""
+
+
+#: En CONSTANTES y no incrustadas: un literal se parte por ancho de línea y la frase deja de
+#: existir en el fuente aunque el valor sea correcto.
+_SIN_AGREGADO_QUE_DESAGREGAR = (
+    "La lectura sectorial no está disponible para este corte: sin una proyección agregada "
+    "vigente no hay nada que desagregar.")
+
+_MEDIDAS_QUE_NO_SE_RESTAN = (
+    "La lectura sectorial no se publica para este corte, y el motivo es de UNIDADES, no de "
+    "datos faltantes: la proyección agregada vigente ({modelo}) viene en «{agregado}» y el "
+    "panel sectorial proyecta en «{panel}». Restar una tasa trimestral de una suma de tasas "
+    "interanuales publicaría como «brecha contra el agregado» lo que es una diferencia de "
+    "medidas — pasó, y sacó ocho actividades contrayéndose en un informe donde el modelo "
+    "proyectaba las dieciocho positivas. La sección vuelve en cuanto la proyección vigente "
+    "sea la interanual del BVAR.")
+
+_FALLO_SECTORIAL = "La lectura sectorial no se pudo construir para este corte:"
+
+#: La serie REAL contra la que se puntúa. La muestra decía `"pib_real"` —el nombre de la
+#: variable en el bloque, que no existe como serie—, y una vidriera que enseña el
+#: identificador roto enseña a escribirlo.
+_SERIE_PIB = "bcrd.xls.pib_2018.serie_original_indice"
+
 _SAMPLE_PAYLOAD: Dict[str, Any] = {
     "proyecciones": [
-        {"serie": "pib_real", "horizonte": "2026-Q3", "punto": 3.41,
+        {"serie": _SERIE_PIB, "horizonte": "2026-Q3", "punto": 3.41,
+         "medida": med.DLOG_PCT,
          "intervalos": [[0.80, 2.11, 4.71], [0.90, 1.62, 5.20]],
          "modelo": "bvar_minnesota.5v.v1", "as_of": "2026-08-20", "ancla": True,
          "motivo": "", "n_oos": 14},
-        {"serie": "pib_real", "horizonte": "2026-Q4", "punto": 3.08,
+        {"serie": _SERIE_PIB, "horizonte": "2026-Q4", "punto": 3.08,
+         "medida": med.DLOG_PCT,
          "intervalos": [[0.80, 1.44, 4.72], [0.90, 0.82, 5.34]],
          "modelo": "bvar_minnesota.5v.v1", "as_of": "2026-08-20", "ancla": False,
          "motivo": "8 observaciones fuera de muestra: hacen falta al menos 12",
@@ -775,14 +919,16 @@ _SAMPLE_PAYLOAD: Dict[str, Any] = {
         ],
     },
     "escenarios": [
-        {"horizonte": "2027-Q1", "punto": 2.94, "intervalos": [[0.80, 0.71, 5.17]]},
-        {"horizonte": "2027-Q2", "punto": 2.81, "intervalos": [[0.80, 0.24, 5.38]]},
+        {"horizonte": "2027-Q1", "punto": 2.94, "medida": med.DLOG_PCT,
+         "intervalos": [[0.80, 0.71, 5.17]]},
+        {"horizonte": "2027-Q2", "punto": 2.81, "medida": med.DLOG_PCT,
+         "intervalos": [[0.80, 0.24, 5.38]]},
     ],
     "desempeno": [
-        {"modelo": "bridge_imae_pib.m2.v1", "serie": "pib_real", "horizonte": "+1T",
+        {"modelo": "bridge_imae_pib.m2.v1", "serie": _SERIE_PIB, "horizonte": "+1T",
          "n_oos": 14, "rmse": 1.405, "mae": 1.062,
          "interval_coverage": [[0.80, 0.79, 14]], "solapan": False},
-        {"modelo": "bvar_minnesota.5v.v1", "serie": "pib_real", "horizonte": "+2T",
+        {"modelo": "bvar_minnesota.5v.v1", "serie": _SERIE_PIB, "horizonte": "+2T",
          "n_oos": 13, "rmse": 4.640, "mae": 3.518,
          "interval_coverage": [[0.80, 0.85, 13], [0.90, 1.00, 13]], "solapan": True},
     ],

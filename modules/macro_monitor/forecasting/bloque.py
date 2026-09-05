@@ -25,6 +25,7 @@ from typing import Dict, List, Optional, Sequence, Tuple
 from sqlalchemy.orm import Session
 
 from modules.macro_monitor.forecasting import panel as panel_mod
+from shared.data import medida_de_pronostico as med
 from shared.data.bcrd_excel import canonical
 from shared.data.periodos import fin_del_periodo
 
@@ -43,6 +44,18 @@ MEDIDA_POR_TRANSFORMACION: Dict[str, str] = {
     DLOG: panel_mod.TRIMESTRAL,
     INTERANUAL: panel_mod.INTERANUAL,
 }
+
+#: **En qué MEDIDA queda el PUNTO** de una variable transformada — el vocabulario con que el
+#: ledger sabe cómo realizar el observado para puntuarlo.
+#:
+#: No confundir con `MEDIDA_POR_TRANSFORMACION`, que está unas líneas más arriba y contesta
+#: otra pregunta: aquélla dice qué CLASE de crecimiento expresa el número, para saber qué se
+#: puede restar de qué; ésta dice cómo convertir la serie observada a la unidad del punto.
+#: Se ven parecidas y no lo son — `NIVEL` es `level` acá (el punto ES el valor de la serie) y
+#: es `interanual` allá (porque las dos series a nivel del bloque ya vienen expresadas como
+#: variación interanual del emisor). Las dos salen de `Variable.transformacion`, que es la
+#: única declaración, para que no haya una tercera constante que se desincronice.
+MEDIDA_DEL_PUNTO = {NIVEL: med.LEVEL, DLOG: med.DLOG_PCT, INTERANUAL: med.YOY_PCT}
 
 
 @dataclass(frozen=True)
@@ -236,3 +249,50 @@ def armar(db: Session, *, hasta: Optional[str] = None) -> BloqueArmado:
     orden = sorted(comunes, key=lambda t: (fin_del_periodo(t) or date.min, t))
     Y = tuple(tuple(series[v.nombre][t] for v in BLOQUE) for t in orden)
     return BloqueArmado(tuple(orden), tuple(v.nombre for v in BLOQUE), Y, inicio, fin)
+
+
+def variable(nombre: str) -> Optional[Variable]:
+    """La declaración de una variable del bloque, por nombre."""
+    return next((v for v in BLOQUE if v.nombre == nombre), None)
+
+
+def medida_del_punto(nombre: str) -> Optional[str]:
+    """En qué medida queda el PUNTO de esa variable, para que el ledger sepa contra qué
+    realizar el observado.
+
+    El PIB entra al bloque como variación INTERANUAL, así que el punto que sale del BVAR es
+    un `yoy_pct`: puntuarlo contra el nivel del índice da un error del tamaño del índice, y
+    puntuarlo contra la variación trimestral da un error del tamaño de la estacionalidad.
+
+    Hermana de `medida_de`, que contesta la otra pregunta —qué clase de crecimiento expresa,
+    para la reconciliación sectorial—. Ver `MEDIDA_DEL_PUNTO`.
+    """
+    var = variable(nombre)
+    return None if var is None else MEDIDA_DEL_PUNTO.get(var.transformacion)
+
+
+def codigo_de_variable(db: Session, nombre: str) -> Optional[str]:
+    """El `series_code` OBSERVABLE del que sale esa variable, o ``None``.
+
+    El BVAR conoce a su objetivo por el nombre que tiene en el bloque (`"pib_real"`), y ese
+    nombre no es una serie: registrado como `target_series`, la fila queda `pending` para
+    siempre porque no hay contra qué puntuarla. La serie se resuelve por el MISMO camino que
+    usó `armar` para traer el dato —el registro canónico, o el código explícito de la
+    variable—, y no por una constante escrita al lado que puede divergir.
+
+    Una variable empalmada de varios tramos se puntúa contra el ÚLTIMO, que es el vigente:
+    el pronóstico apunta al futuro y los tramos históricos ya no reciben datos.
+    """
+    var = variable(nombre)
+    if var is None:
+        return None
+    if var.codigo:
+        return var.codigo
+    from sqlalchemy import text
+
+    codigos = [r[0] for r in db.execute(text("select distinct series_code from mm_series"))]
+    for clave in reversed(var.tramos):
+        code = _codigo(clave, codigos)
+        if code is not None:
+            return code
+    return None

@@ -355,12 +355,18 @@ class MacroProduct:
         recurso que usa `social_dev` para lo que ingiere y no indexa— y la señal igual llega
         al pipeline de investigación, que recorre TODAS las señales sin mirar el peso.
 
+        **La etiqueta lleva la UNIDAD del punto.** `value` es la estimación central y para el
+        PIB es una variación en %, mientras que la clave nombra la serie de NIVEL contra la
+        que se puntúa. Publicar `0,38` bajo el nombre de un índice de volumen (~133) es el
+        mismo error de categoría que el ledger acaba de cerrar, un salto más adelante.
+
         Corolario que hay que saber leer: `coverage_projected` del eje macro da **0,0**, y no
         es un bug. Esa métrica mide cuánto del ÍNDICE está sostenido por proyección en vez de
         por dato real; el índice macro es real completo y las proyecciones son producto
         aparte, no un relleno del índice.
         """
         from modules.macro_monitor.forecasting.procedencia import proyeccion_por_serie
+        from shared.data.medida_de_pronostico import COMO_SE_LEE
         from shared.registry.signals import GAP, PROJECTED, REAL, VariableSignal
 
         db = self._db
@@ -394,8 +400,14 @@ class MacroProduct:
             logger.warning("proyecciones macro no disponibles: %s", e)
             proyecciones = {}
         for serie, meta in sorted(proyecciones.items()):
+            # La UNIDAD va en la etiqueta. `value` es el punto y para el PIB es una
+            # VARIACIÓN, mientras que `serie` nombra el índice de volumen (~133): sin
+            # decirlo, quien lea 0,38 al lado de ese nombre entiende un nivel. «Sin
+            # declarar» también se dice — callarlo deja al lector suponiendo.
+            como = COMO_SE_LEE.get(str(meta.measure or ""), "unidad sin declarar")
             señales.append(VariableSignal(
-                key=f"proyeccion_{serie}", label=f"{serie} · proyección {meta.horizon}",
+                key=f"proyeccion_{serie}",
+                label=f"{serie} · proyección {meta.horizon} ({como})",
                 state=PROJECTED,
                 # Peso 0 — ver el docstring. NO es un descuido.
                 weight=0.0,

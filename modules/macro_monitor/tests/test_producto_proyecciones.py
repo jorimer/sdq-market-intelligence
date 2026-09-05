@@ -27,6 +27,11 @@ from shared.billing.skus import (
 )
 from shared.products import ProductTier
 from shared.products.registry import PRODUCT_CATALOG, get_product, is_implemented
+from shared.data.medida_de_pronostico import DLOG_PCT
+
+#: El `series_code` OBSERVABLE del PIB. Antes decía `"pib_real"`, que es el nombre de la
+#: variable en el bloque del BVAR y no existe como serie.
+_SERIE = "bcrd.xls.pib_2018.serie_original_indice"
 
 SECTOR = "macro_forecast"
 
@@ -140,10 +145,11 @@ def test_una_proyeccion_sin_backtest_sale_como_gap_con_su_motivo(monkeypatch):
     from shared.registry.signals import GAP, ProjectionMeta
 
     flaca = ProjectionMeta(
-        model_id="m.v1", target_series="pib_real", horizon="2027-Q1", as_of="2026-09-01",
-        revision=0, point=3.0, intervals=((0.80, 2.0, 4.0),), backtest_id="b",
-        oos_error=0.5, error_metric="rmse", n_oos=2, n_oos_overlapping=False)
-    monkeypatch.setattr(pf, "_seguro", lambda db, fn, defecto: {"pib_real": flaca})
+        model_id="m.v1", target_series=_SERIE, horizon="2027-Q1", as_of="2026-09-01",
+        revision=0, point=3.0, measure=DLOG_PCT, intervals=((0.80, 2.0, 4.0),),
+        backtest_id="b", oos_error=0.5, error_metric="rmse", n_oos=2,
+        n_oos_overlapping=False)
+    monkeypatch.setattr(pf, "_seguro", lambda db, fn, defecto: {_SERIE: flaca})
     # Este test es sobre PROYECCIONES: la cifra determinada se fija en 0 a mano
     # porque el monkeypatch en bloque de `_seguro` le contestaría a todo lo mismo.
     monkeypatch.setattr(pf.MacroForecastProduct, "_determinadas", lambda self: 0)
@@ -164,11 +170,11 @@ def test_la_cobertura_proyectada_de_este_eje_si_dice_algo(monkeypatch):
     from shared.registry.signals import AxisRegistry, ProjectionMeta
 
     buena = ProjectionMeta(
-        model_id="m.v1", target_series="pib_real", horizon="2027-Q1", as_of="2026-09-01",
-        revision=0, point=3.0, intervals=((0.80, 2.0, 4.0),), backtest_id="b",
-        oos_error=0.5, error_metric="rmse", n_oos=14, n_oos_overlapping=False,
-        interval_coverage=((0.80, 0.79, 14),))
-    monkeypatch.setattr(pf, "_seguro", lambda db, fn, defecto: {"pib_real": buena})
+        model_id="m.v1", target_series=_SERIE, horizon="2027-Q1", as_of="2026-09-01",
+        revision=0, point=3.0, measure=DLOG_PCT, intervals=((0.80, 2.0, 4.0),),
+        backtest_id="b", oos_error=0.5, error_metric="rmse", n_oos=14,
+        n_oos_overlapping=False, interval_coverage=((0.80, 0.79, 14),))
+    monkeypatch.setattr(pf, "_seguro", lambda db, fn, defecto: {_SERIE: buena})
     monkeypatch.setattr(pf.MacroForecastProduct, "_determinadas", lambda self: 0)
 
     señales = pf.MacroForecastProduct(db=object()).variable_signals()["signals"]
@@ -181,8 +187,9 @@ def test_la_cobertura_proyectada_de_este_eje_si_dice_algo(monkeypatch):
 def _meta(**kw):
     from shared.registry.signals import ProjectionMeta
 
-    base = dict(model_id="m.v1", target_series="pib_real", horizon="2027-Q1",
-                as_of="2026-09-01", revision=0, point=3.0, intervals=((0.80, 2.0, 4.0),),
+    base = dict(model_id="m.v1", target_series=_SERIE, horizon="2027-Q1",
+                as_of="2026-09-01", revision=0, point=3.0, measure=DLOG_PCT,
+                intervals=((0.80, 2.0, 4.0),),
                 backtest_id="b", oos_error=0.5, error_metric="rmse", n_oos=14,
                 n_oos_overlapping=False, interval_coverage=((0.80, 0.79, 14),))
     base.update(kw)

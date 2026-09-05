@@ -24,12 +24,16 @@ from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
 
 from modules.macro_monitor.forecasting import ledger as led
+from shared.data import medida_de_pronostico as med
 from modules.macro_monitor.forecasting import procedencia as proc
 from modules.macro_monitor.models.models import MacroSeries  # noqa: F401
 from shared.database.base import Base
 from shared.registry.projection import MIN_OOS
 
-MODELO, SERIE = "bvar.v1", "pib_real"
+# `SERIE` es el `series_code` OBSERVABLE, no el nombre de la variable en el bloque: decía
+# `"pib_real"`, y una fila con ese objetivo no se puede puntuar contra nada porque no existe
+# ninguna serie que se llame así.
+MODELO, SERIE = "bvar.v1", "bcrd.xls.pib_2018.serie_original_indice"
 INTERVALOS = [[0.80, 2.0, 4.0], [0.90, 1.5, 4.5]]
 
 
@@ -61,7 +65,8 @@ def _operar(db, *, pasos=(1, 2), desde=2):
         for h in pasos:
             f = led.registrar(db, model_id=MODELO, target_series=SERIE,
                               horizon=f"{a}-Q{q}", as_of=_corte(i, h), point=3.0,
-                              intervals=INTERVALOS, h=h)
+                              intervals=INTERVALOS, h=h,
+                              measure=med.DLOG_PCT)
             f.status, f.realized, f.abs_error, f.sq_error = "scored", 3.2, 0.2, 0.04
             f.interval_hit_80, f.interval_hit_90 = True, True
     db.commit()
@@ -120,7 +125,8 @@ def test_una_fila_sin_h_queda_fuera_del_conjunto(db):
     _operar(db, pasos=(1,))
     antes = led.track_record(db, led.backtest_id(MODELO, SERIE, 1))["n_oos"]
     f = led.registrar(db, model_id=MODELO, target_series=SERIE, horizon="2021-Q1",
-                      as_of="2020-10-15", point=9.9, intervals=INTERVALOS)  # sin h
+                      as_of="2020-10-15", point=9.9, intervals=INTERVALOS,
+                      measure=med.DLOG_PCT)  # sin h
     f.status, f.abs_error, f.sq_error = "scored", 5.0, 25.0
     db.commit()
     despues = led.track_record(db, led.backtest_id(MODELO, SERIE, 1))["n_oos"]
@@ -142,7 +148,8 @@ def test_re_emitir_el_mismo_trimestre_si_solapa(db):
     observaciones que comparten información y el conteo lo DECLARA."""
     _operar(db, pasos=(1,))
     f = led.registrar(db, model_id=MODELO, target_series=SERIE, horizon="2025-Q4",
-                      as_of="2025-08-15", point=3.1, intervals=INTERVALOS, h=1)
+                      as_of="2025-08-15", point=3.1, intervals=INTERVALOS, h=1,
+                      measure=med.DLOG_PCT)
     f.status, f.abs_error, f.sq_error = "scored", 0.1, 0.01
     db.commit()
     assert led.track_record(db, led.backtest_id(MODELO, SERIE, 1))["overlapping"] is True
@@ -156,7 +163,8 @@ def test_la_meta_apunta_al_conjunto_relativo_y_conserva_el_calendario(db):
     algo— y el `horizon` que el lector ve es el trimestre concreto que se proyecta."""
     _operar(db)
     fila = led.registrar(db, model_id=MODELO, target_series=SERIE, horizon="2026-Q3",
-                         as_of="2026-05-15", point=3.4, intervals=INTERVALOS, h=1)
+                         as_of="2026-05-15", point=3.4, intervals=INTERVALOS, h=1,
+                         measure=med.DLOG_PCT)
     meta = proc.meta_de(db, fila)
     assert meta.horizon == "2026-Q3"
     assert meta.backtest_id.endswith("|+1T")

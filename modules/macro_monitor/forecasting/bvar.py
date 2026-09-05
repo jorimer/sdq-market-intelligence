@@ -242,7 +242,13 @@ class Pronostico:
     punto: float
     intervalos: List[List[float]]
     model_id: str
+    #: El `series_code` OBSERVABLE contra el que se va a puntuar. **No** el nombre de la
+    #: variable dentro del bloque: acá decía `"pib_real"`, que no es ninguna serie, y la
+    #: fila quedaba `pending` para siempre porque no había contra qué puntuarla.
     target_series: str
+    #: En qué medida está `punto` — el bloque entrega el PIB en variación logarítmica ×100,
+    #: así que es una TASA y no el nivel del índice.
+    measure: str
     backtest_id: str
 
 
@@ -257,7 +263,11 @@ class Escenario:
     punto: float
     intervalos: List[List[float]]
     model_id: str
-    target_series: str
+    #: Puede ser ``None``: un escenario no entra al ledger, así que no siempre hace falta
+    #: resolverlo. Lo que NO se hace es rellenarlo con el nombre de la variable del bloque
+    #: —eso es lo que hizo que un pronóstico apuntara a una serie inexistente—.
+    target_series: Optional[str] = None
+    measure: Optional[str] = None
     es_escenario: bool = True
     advertencia: str = _ADVERTENCIA_ESCENARIO
 
@@ -270,12 +280,15 @@ def a_ledger(p) -> dict:
             "escenario: no tiene backtest que lo sostenga, y darle una fila de track record "
             "sería fabricarle uno.")
     return {"model_id": p.model_id, "target_series": p.target_series,
-            "horizon": p.horizonte, "point": p.punto, "intervals": p.intervalos}
+            "measure": p.measure, "horizon": p.horizonte, "point": p.punto,
+            "intervals": p.intervalos}
 
 
 @dataclass(frozen=True)
 class ProyeccionBVAR:
     model_id: str
+    #: El nombre de la variable DENTRO del bloque (`"pib_real"`). Es lo que indexa la
+    #: columna de la matriz — y **no** es una serie observable: ver `serie_objetivo`.
     target: str
     horizontes: Tuple[str, ...]
     puntos: Tuple[float, ...]
@@ -283,16 +296,41 @@ class ProyeccionBVAR:
     lambda1: float
     n_train: int
     variables: Tuple[str, ...]
+    #: El `series_code` observable de `target`, y en qué medida está el punto. Opcionales
+    #: porque este módulo también lo usa el backtest numérico, que no toca la base ni el
+    #: ledger; `pronosticos()` los EXIGE, que es donde importan.
+    serie_objetivo: Optional[str] = None
+    medida: Optional[str] = None
 
     def _backtest_id(self) -> str:
-        return f"{self.model_id}|{self.target}"
+        return f"{self.model_id}|{self._serie()}"
+
+    def _serie(self) -> str:
+        if not self.serie_objetivo:
+            raise ValueError(
+                f"esta proyección no declara la serie observable de «{self.target}», que es "
+                "el nombre de la variable en el bloque y no un `series_code`. Sin ella el "
+                "pronóstico no se puede puntuar contra nada: la fila quedaría `pending` para "
+                "siempre y la sección de desempeño lo publicaría como que el trimestre no "
+                "cerró.")
+        return self.serie_objetivo
 
     def pronosticos(self) -> List[Pronostico]:
-        """Los horizontes que se publican CON track record."""
+        """Los horizontes que se publican CON track record.
+
+        Exige serie observable y medida: un pronóstico con track record es, por definición,
+        uno que se va a poder puntuar.
+        """
+        serie = self._serie()
+        if not self.medida:
+            raise ValueError(
+                "esta proyección no declara en qué medida está su punto. El bloque entrega "
+                "el PIB en variación logarítmica ×100, y puntuar esa tasa contra el índice "
+                "de volumen da un error del tamaño del índice.")
         return [
             Pronostico(h=k + 1, horizonte=self.horizontes[k], punto=self.puntos[k],
                        intervalos=self.intervalos[k], model_id=self.model_id,
-                       target_series=self.target,
+                       target_series=serie, measure=self.medida,
                        # RELATIVO (`+1T`), no el trimestre calendario: el conjunto que
                        # sostiene el error son los pronósticos a la misma distancia, no los
                        # de un trimestre concreto — que serían uno solo.
@@ -305,7 +343,7 @@ class ProyeccionBVAR:
         return [
             Escenario(h=k + 1, horizonte=self.horizontes[k], punto=self.puntos[k],
                       intervalos=self.intervalos[k], model_id=self.model_id,
-                      target_series=self.target)
+                      target_series=self.serie_objetivo, measure=self.medida)
             for k in range(HORIZONTES_CON_TRACK_RECORD, len(self.horizontes))
         ]
 
@@ -317,11 +355,17 @@ def _siguiente_trimestre(t: str) -> str:
 
 def proyectar_bloque(Y: np.ndarray, nombres: Sequence[str], ultimo_trimestre: str, *,
                      objetivo: str = "pib_real", pasos: int = 8, p: int = 2,
-                     version: str = "v1") -> Optional["ProyeccionBVAR"]:
+                     version: str = "v1", serie_objetivo: Optional[str] = None,
+                     medida: Optional[str] = None) -> Optional["ProyeccionBVAR"]:
     """Ajusta el BVAR sobre *Y* y proyecta *objetivo* a *pasos* trimestres.
 
     λ₁ se elige por verosimilitud marginal SOBRE ESTA MISMA ventana — nunca mirando el error
     de lo que viene después, que es la forma más fácil de contaminar un backtest.
+
+    *objetivo* es el nombre de la variable EN EL BLOQUE; *serie_objetivo* es el `series_code`
+    observable del que salió, y *medida* en qué unidad quedó el punto tras la transformación
+    del bloque. Los dos son lo que el ledger necesita para puntuar, y van por separado
+    porque este módulo también corre sobre matrices sin base detrás (`backtest_bvar`).
     """
     if len(Y) < 4 * p + 10 or objetivo not in nombres:
         return None
@@ -340,4 +384,5 @@ def proyectar_bloque(Y: np.ndarray, nombres: Sequence[str], ultimo_trimestre: st
         model_id=f"bvar_minnesota.{len(nombres)}v.{version}", target=objetivo,
         horizontes=tuple(horizontes), puntos=tuple(puntos), intervalos=tuple(ints),
         lambda1=lam, n_train=len(Y), variables=tuple(nombres),
+        serie_objetivo=serie_objetivo, medida=medida,
     )

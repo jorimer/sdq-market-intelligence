@@ -20,6 +20,7 @@ from sqlalchemy.orm import Session
 
 from modules.macro_monitor.forecasting import nowcast as nowcast_mod
 from modules.macro_monitor.forecasting import panel as panel_mod
+from shared.data import medida_de_pronostico as med
 from shared.data.periodos import fin_del_periodo
 
 
@@ -63,13 +64,16 @@ def correr(db: Session, *, variante: int, version: str = "v1") -> Optional[Resul
     """
     if variante == 3:
         raise ValueError("m=3 no se backtestea: es una identidad, no un modelo")
-    observado = dict(panel_mod.observaciones(db, panel_mod.PIB_CODE))
-    dlog_obs: Dict[str, float] = {}
-    trimestres = sorted(observado, key=lambda t: (fin_del_periodo(t) or date.min, t))
-    for anterior, actual in zip(trimestres, trimestres[1:]):
-        if observado[anterior] > 0 and observado[actual] > 0:
-            dlog_obs[actual] = (math.log(observado[actual])
-                                - math.log(observado[anterior])) * 100
+    # La MISMA realización con que el ledger puntúa. Antes esto recomputaba el Δlog a mano y
+    # era la tercera copia de la transformación en el módulo; el ledger iba a ser la cuarta.
+    # Si el backtest y el track record no realizan el observado igual, miden cosas distintas
+    # y el informe publica las dos como si fueran comparables.
+    #
+    # Un cambio de conducta que vale la pena nombrar: `medida.realizar` exige el trimestre
+    # ANTERIOR DE CALENDARIO, no «el anterior que haya». Con un hueco en la serie, esto
+    # dejaba pasar una variación de dos trimestres rotulada de uno.
+    observado_pib = dict(panel_mod.observaciones(db, panel_mod.PIB_CODE))
+    dlog_obs: Dict[str, float] = med.serie_realizada(med.DLOG_PCT, observado_pib)
 
     errores, errores_rw = [], []
     for corte in _fechas_de_corte(db, variante):

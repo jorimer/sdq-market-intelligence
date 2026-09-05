@@ -815,3 +815,30 @@ esa comprobación, «saqué la aserción flaky» y «dejé el test ciego» se ve
 **Disparador.** Cualquier `assert` sobre `time.monotonic()`, `elapsed`, `duration` o un
 `timeout` en un test. Preguntar: si esto falla, ¿puedo distinguir un bug de una máquina
 ocupada? Si la respuesta es no, el instrumento está mal elegido.
+### 2026-09-05 — Un identificador que un modelo se pone a sí mismo no es un identificador del sistema
+
+- **Síntoma**: toda proyección del BVAR quedaba `pending` para siempre y la sección de desempeño publicaba «ninguna de las proyecciones emitidas alcanzó su período de cierre», que se lee como «los trimestres no cerraron». La verdad era que **no podían** cerrar: `emision.OBJETIVO = "pib_real"` es el nombre de la variable DENTRO del bloque del BVAR, y viajaba al ledger como `target_series`. En producción, `GET /api/v1/macro-monitor/series/pib_real` devuelve `observations: []`.
+- **Causa raíz**: el nombre con que un modelo llama a su variable y el `series_code` con que el sistema la observa son dos cosas distintas, y el código las trataba como una. Nada falló al escribir la fila: el defecto solo se manifiesta tres meses después, como silencio. Al lado había un segundo defecto de la misma familia —el `point` es un Δlog en % (~0,4) y se comparaba contra el índice de volumen (~133), o sea `abs_error ≈ 132,75` publicado como RMSE— que no explotó **solo porque el primero mantenía la sección vacía**. Arreglar uno sin el otro publicaba el número absurdo en la primera corrida.
+- **Regla**: cuando un modelo emite algo que otro proceso va a **puntuar, comparar o buscar**, lo que viaja tiene que ser el identificador del SISTEMA, no el del modelo — y el número tiene que viajar con su MEDIDA, no solo con su valor. Es la misma cura que `shared/data/series_nature.py` ya aplicó un nivel más arriba: la magnitud se declara junto al dato en vez de adivinarse al leerlo. Al escribirlo, comprobar en el momento de la ESCRITURA que el destino existe (`emision._serie_observable`), porque es el único momento en que todavía se puede decir por qué.
+- **Disparador**: cualquier campo que sea a la vez el nombre interno de algo y la clave con que otro proceso lo va a buscar. Preguntarse: si escribo esto y nadie lo lee nunca, ¿algo falla? Si la respuesta es «no, se queda pendiente», hay que hacer que falle al escribir.
+
+### 2026-09-05 — Un veto que no deja marca se lee como paciencia
+
+- **Síntoma**: el mensaje de sección vacía decía que los trimestres no habían cerrado, con filas que estaban rotas. Un lector no tenía forma de distinguir «el producto es nuevo» de «el producto está roto», y las dos son el mismo texto.
+- **Causa raíz**: `puntuar_pendientes` hacía `continue` sobre lo que no podía puntuar. Saltear en silencio convierte una rotura en espera, y la espera no se investiga.
+- **Regla**: cuando un lazo saltea filas, la pregunta no es «¿las saltea bien?» sino **«¿alguien se entera de que las salteó, y puede distinguir "todavía no" de "nunca"?»**. Lo salteado se LISTA con su causa nombrada (`ledger.no_puntuables`), y el test que importa es el CONTRAEJEMPLO: que un pendiente que solo espera el dato NO aparezca en esa lista — sin él, un `no_puntuables` que devuelva todo pasa igual.
+- **Disparador**: todo `continue`/`if not …: return` dentro de un proceso automático cuyo resultado se publica como un conteo.
+
+### 2026-09-05 — La misma sección se publicaba por DOS caminos, y arreglé uno
+
+- **Síntoma**: corregí el texto engañoso en `desempeno.seccion()` y los tests quedaron verdes. El producto «SDQ Proyecciones Macro» seguía publicando la frase vieja: `products_forecast._md_desempeno` la tenía duplicada **palabra por palabra**, porque renderiza desde el snapshot congelado y no ve la base.
+- **Causa raíz**: dos superficies, dos copias del literal. Es el mismo patrón que ya costó cuatro registros de a uno en el anuario, y que la doctrina describe como «la superficie no re-juzga: se ENTERA». Lo encontré revisando los llamadores, no porque algo fallara — no había nada que pudiera fallar.
+- **Regla**: la prosa compartida vive en CONSTANTES exportadas y el renderizador es UNO, sin `Session` en la firma, para que la superficie sin base no tenga excusa para escribir la suya. Lo que la segunda superficie necesita saber viaja en el payload ya resuelto (`no_puntuables`), no se recomputa. Y se vigila con un test de PARIDAD que compara los dos textos, más uno estructural que prohíbe el literal duplicado.
+- **Disparador**: antes de dar por cerrado un arreglo de texto o de lógica de presentación, `grep` de una frase distintiva del texto viejo en todo el árbol. Si aparece dos veces, son dos superficies.
+
+### 2026-09-05 — «El período anterior» no es «la observación anterior que haya»
+
+- **Síntoma**: al unificar la transformación Δlog en un solo lugar, las tres copias existentes tomaban la observación previa DISPONIBLE. Con un hueco en la serie eso computa una variación de dos trimestres y la rotula de uno, sin que nada avise.
+- **Causa raíz**: `zip(serie, serie[1:])` sobre las claves ordenadas es la forma natural de escribirlo y esconde el supuesto de que no hay huecos.
+- **Regla**: una variación exige el período anterior **DE CALENDARIO** (`shared.data.periodos.periodo_anterior`); si falta, no hay valor y se declara el motivo. Y el test que lo protege usa una serie CON un hueco, no una completa — con una completa las dos implementaciones dan lo mismo y el test no distingue nada.
+- **Disparador**: cualquier cálculo de variación, delta o tasa de cambio sobre una serie temporal.

@@ -119,15 +119,18 @@ def test_metodologia_y_procedencia_dan_el_MISMO_numero(monkeypatch):
     from shared.registry.provenance import coverage_sentence
     from shared.registry.signals import AxisRegistry, ProjectionMeta
 
+    from shared.data.medida_de_pronostico import YOY_PCT
+
     flaca = ProjectionMeta(
-        model_id="m.v1", target_series="pib_real", horizon="2027-Q1", as_of="2026-09-01",
-        revision=0, point=3.0, intervals=((0.80, 2.0, 4.0),), backtest_id="b",
+        model_id="m.v1", target_series="bcrd.xls.pib_2018.serie_original_indice", horizon="2027-Q1",
+        as_of="2026-09-01", revision=0, point=3.0, measure=YOY_PCT,
+        intervals=((0.80, 2.0, 4.0),), backtest_id="b",
         oos_error=0.5, error_metric="rmse", n_oos=2, n_oos_overlapping=False)
     monkeypatch.setattr(pf.MacroForecastProduct, "_vigentes", lambda self: [flaca])
     monkeypatch.setattr(pf.MacroForecastProduct, "_determinadas", lambda self: 1)
     monkeypatch.setattr(pf.MacroForecastProduct, "_puntuados", lambda self: [])
     monkeypatch.setattr(pf, "_seguro",
-                        lambda db, fn, defecto: {"pib_real": flaca}
+                        lambda db, fn, defecto: {"bcrd.xls.pib_2018.serie_original_indice": flaca}
                         if defecto == {} else defecto)
 
     prod = pf.MacroForecastProduct(db=object())

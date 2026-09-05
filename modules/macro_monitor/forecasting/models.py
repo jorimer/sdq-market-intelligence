@@ -42,6 +42,9 @@ class ForecastLog(UUIDMixin, Base):
     #: Modelo, variante y versión en un solo identificador (`bridge_imae_pib.m2.v1`). Sin un
     #: `model_version` aparte: versionar dos veces admite que se contradigan.
     model_id = Column(String(80), nullable=False, index=True)
+    #: El `series_code` OBSERVABLE contra el que se va a puntuar — el que existe en
+    #: `mm_series`. No el nombre que el modelo le da a su variable: el BVAR llamaba
+    #: `"pib_real"` a la suya y esa fila no se podía puntuar contra nada, nunca.
     target_series = Column(String(255), nullable=False, index=True)
     horizon = Column(String(16), nullable=False)          # "2026-Q4"
     #: Horizonte RELATIVO en trimestres (1 = el próximo). Es la clave del CONJUNTO sobre el
@@ -57,6 +60,15 @@ class ForecastLog(UUIDMixin, Base):
     revision = Column(Integer, nullable=False, default=0)  # 0 = como se publicó
 
     point = Column(Float, nullable=False)
+    #: **En qué medida está `point`** — `medida.LEVEL` | `medida.DLOG_PCT`. Sin esto la
+    #: puntuación suponía que el punto era directamente comparable con el valor de
+    #: `target_series`, y no lo es: los dos motores emiten un Δlog en % (~0,4) contra una
+    #: serie que es el índice de volumen del PIB (~133). El error habría salido ≈ 132,75 y
+    #: eso se publica como RMSE. Es la misma cura que `shared/data/series_nature.py` un
+    #: nivel más arriba: la magnitud se DECLARA junto al dato, no se adivina al leerlo.
+    #: Nullable porque las filas anteriores a la migración no la traen; la puntuación las
+    #: SALTEA en vez de suponerles «nivel», y `ledger.no_puntuables` las lista.
+    measure = Column(String(16), nullable=True)
     #: ``[[nivel, lo, hi], …]`` — la misma estructura que `ProjectionMeta.intervals`.
     intervals = Column(JSON, nullable=False)
     # Denormalizados para consultar sin abrir el JSON. Derivados de `intervals`, nunca al
