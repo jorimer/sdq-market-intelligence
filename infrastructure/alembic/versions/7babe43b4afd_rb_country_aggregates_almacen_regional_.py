@@ -15,7 +15,13 @@ migración que agrega una tabla no arrastra el drift de otras diez: se queda sol
 suyo. El drift sigue ahí y es trabajo aparte.
 
 Revision ID: 7babe43b4afd
-Revises: b2e9f4a71c85
+Revises: c3f7a2d9e814
+
+Re-apuntada al mergear main: esta revisión y `c3f7a2d9e814` nacieron las dos como hijas
+de `b2e9f4a71c85` —cada rama agregó la suya— y el resultado eran DOS cabezas, que es lo que
+rompió el job de reversibilidad. Se linealiza en vez de crear una revisión de merge: las dos
+son independientes (aquélla agrega una columna a `mm_forecast_log`, ésta crea una tabla
+nueva) y el repo mantiene una cadena sin ramas.
 Create Date: 2026-09-04 21:42:01.206682
 
 """
@@ -26,7 +32,7 @@ from alembic import op
 
 # revision identifiers, used by Alembic.
 revision: str = '7babe43b4afd'
-down_revision: Union[str, None] = 'b2e9f4a71c85'
+down_revision: Union[str, None] = 'c3f7a2d9e814'
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 
