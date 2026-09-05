@@ -40,6 +40,8 @@ _SIN_HISTORIAL = (
 class FilaDeDesempeno:
     model_id: str
     target_series: str
+    #: El horizonte RELATIVO del conjunto (`+1T`), no un trimestre calendario: es lo que
+    #: hace comparables a las filas que se promedian.
     horizonte: str
     n_oos: int
     rmse: Optional[float]
@@ -51,12 +53,15 @@ class FilaDeDesempeno:
 
 def filas(db: Session) -> List[FilaDeDesempeno]:
     """Un renglón por conjunto de backtest con al menos un pronóstico puntuado."""
-    conjuntos: Dict[Tuple[str, str, str], None] = {}
-    for f in db.query(ForecastLog).filter(ForecastLog.status == "scored").all():
-        conjuntos[(str(f.model_id), str(f.target_series), str(f.horizon))] = None
+    conjuntos: Dict[Tuple[str, str, int], None] = {}
+    for f in (db.query(ForecastLog)
+              .filter(ForecastLog.status == "scored", ForecastLog.h.isnot(None)).all()):
+        conjuntos[(str(f.model_id), str(f.target_series), int(f.h))] = None
     salida: List[FilaDeDesempeno] = []
-    for model_id, serie, horizonte in sorted(conjuntos):
-        tr = led.track_record(db, led.backtest_id(model_id, serie, horizonte))
+    for model_id, serie, paso in sorted(conjuntos):
+        bt = led.backtest_id(model_id, serie, paso)
+        horizonte = bt.rsplit("|", 1)[-1]
+        tr = led.track_record(db, bt)
         if not tr.get("n_oos"):
             continue
         salida.append(FilaDeDesempeno(

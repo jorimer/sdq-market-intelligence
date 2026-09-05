@@ -49,7 +49,12 @@ def _intervalos(crudo) -> Tuple[Tuple[float, float, float], ...]:
 
 def meta_de(db: Session, fila: ForecastLog) -> ProjectionMeta:
     """El `ProjectionMeta` de una fila del ledger, con su track record leído del ledger."""
-    bt = led.backtest_id(str(fila.model_id), str(fila.target_series), str(fila.horizon))
+    # La clave del conjunto es el horizonte RELATIVO, no el trimestre calendario. Con el
+    # calendario, cada conjunto tiene una sola observación y `n_oos` nunca llega al mínimo
+    # del gate: la proyección no ancla NUNCA, y el motivo que ve el lector es «1 observación
+    # fuera de muestra», indistinguible del estado honesto del día uno.
+    h = fila.h if fila.h is None else int(fila.h)
+    bt = led.backtest_id(str(fila.model_id), str(fila.target_series), h)
     tr = led.track_record(db, bt)
     rmse = tr.get("rmse")
     return ProjectionMeta(
