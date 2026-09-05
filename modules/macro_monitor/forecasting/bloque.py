@@ -18,7 +18,7 @@ existe para capturar—; el tipo de cambio en variación logarítmica.
 from __future__ import annotations
 
 import math
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import date
 from typing import Dict, List, Optional, Sequence, Tuple
 
@@ -50,12 +50,22 @@ class Variable:
 BLOQUE: Tuple[Variable, ...] = (
     Variable("pib_real", ("pib_real",), DLOG, mensual=False),
     Variable(
-        "inflacion", (), NIVEL, codigo="bcrd.inflacion.inflacion.interanual",
+        "inflacion", (), NIVEL,
+        codigo="bcrd.xls.ipc_base_2019_2020.variacion_porcentual_12_meses",
         porque_este_codigo=(
-            "`inflacion_interanual` no declara puente y no puede: la interanual NO es una "
-            "columna del archivo del IPC —que publica el índice y su variación mensual— y "
-            "la plataforma la computa. La serie que sí existe es la del conector del API, "
-            "491 meses desde 1985, y es la que se usa."),
+            "CORREGIDO. Antes apuntaba a la serie del conector del API con el motivo escrito "
+            "de que «la interanual NO es una columna del archivo del IPC». Eso era falso y no "
+            "lo medí: el archivo publica `variacion_porcentual_12_meses`, que ES la "
+            "interanual, con 511 meses desde 1984-01 y sin huecos.\n\n"
+            "El costo de la suposición fue concreto. La serie del conector tiene un hueco de "
+            "SEIS meses (2025-11 → 2026-04) que se lleva el trimestre 2026-Q1 entero; como el "
+            "bloque es la intersección, el BVAR quedaba recortado en 2025-Q4 y sus dos "
+            "horizontes publicables caían sobre trimestres YA CERRADOS. Medido en producción: "
+            "el motor no podía emitir un solo pronóstico.\n\n"
+            "Las dos series son la misma medición —diferencia media 0,0025 pp y máxima 0,0053 "
+            "sobre los 493 meses en común, que es redondeo: el API sirve dos decimales y el "
+            "archivo la precisión completa—, así que el cambio no mueve ningún número: "
+            "destapa los seis meses que faltaban y suma un año de historia."),
     ),
     Variable("tpm", ("tpm",), NIVEL),
     Variable(
@@ -128,6 +138,25 @@ class BloqueArmado:
     Y: Tuple[Tuple[float, ...], ...]
     #: Qué variable recorta la muestra, y desde cuándo empieza cada una.
     inicio_por_variable: Dict[str, str]
+    #: Hasta dónde llega CADA variable. El inicio se declaraba y el final no, y el final es
+    #: el que cuesta horizontes: el bloque termina donde termina la variable más atrasada, y
+    #: si esa variable tiene un hueco reciente el modelo pierde trimestres sin que nada avise.
+    #: Pasó — un hueco de seis meses en la serie de inflación del conector del API se llevó
+    #: 2026-Q1 entero, y con él la capacidad de emitir un solo pronóstico. Nada falló: el
+    #: motor simplemente proyectaba trimestres ya cerrados.
+    fin_por_variable: Dict[str, str] = field(default_factory=dict)
+
+    @property
+    def rezagadas(self) -> Tuple[str, ...]:
+        """Las variables cuyo último dato queda por DEBAJO del máximo del bloque.
+
+        Son las que están costando horizontes. Se nombran para que un operador pueda ver de
+        quién depende, en vez de mirar un bloque corto sin explicación.
+        """
+        if not self.fin_por_variable:
+            return ()
+        tope = max(self.fin_por_variable.values())
+        return tuple(sorted(n for n, f in self.fin_por_variable.items() if f < tope))
 
 
 def armar(db: Session, *, hasta: Optional[str] = None) -> BloqueArmado:
@@ -148,12 +177,13 @@ def armar(db: Session, *, hasta: Optional[str] = None) -> BloqueArmado:
         series[var.nombre] = trim
         if trim:
             inicio[var.nombre] = min(trim)
+    fin = {n: max(s) for n, s in series.items() if s}
     if not series or any(not s for s in series.values()):
-        return BloqueArmado((), tuple(v.nombre for v in BLOQUE), (), inicio)
+        return BloqueArmado((), tuple(v.nombre for v in BLOQUE), (), inicio, fin)
 
     comunes = set.intersection(*(set(s) for s in series.values()))
     if hasta:
         comunes = {t for t in comunes if t <= hasta}
     orden = sorted(comunes, key=lambda t: (fin_del_periodo(t) or date.min, t))
     Y = tuple(tuple(series[v.nombre][t] for v in BLOQUE) for t in orden)
-    return BloqueArmado(tuple(orden), tuple(v.nombre for v in BLOQUE), Y, inicio)
+    return BloqueArmado(tuple(orden), tuple(v.nombre for v in BLOQUE), Y, inicio, fin)
