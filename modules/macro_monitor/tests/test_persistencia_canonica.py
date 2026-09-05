@@ -176,9 +176,52 @@ def test_las_tres_series_del_modelo_no_tienen_huecos(clave):
         f"«{clave}» tiene {SERIES[clave]['huecos']} período(s) faltantes en el medio")
 
 
+#: Series cuya DISCONTINUIDAD no es un defecto de lectura sino la forma del dato. Cada una
+#: con su motivo: una lista sin motivos se llena por inercia y deja de proteger.
+#:
+#: La prueba de que una entrada pertenece acá no es que tenga huecos —eso lo tiene también
+#: una serie mal leída— sino que el hueco corresponda a un HECHO que no ocurrió. Un mes sin
+#: subasta no tiene tasa de subasta; un mes sin publicación de un índice mensual sí debería
+#: tener índice, y ése sigue siendo un defecto.
+DISCONTINUAS_POR_NATURALEZA = {
+    "curva_pesos_mas_de_dos_anos": (
+        "La curva soberana en pesos sale de SUBASTAS, no de un calendario. El Banco Central "
+        "coloca el plazo largo cuando lo necesita, no todos los meses, y el cuadro deja el "
+        "mes en blanco —o anota un 0 con el monto vacío— cuando no hubo colocación. Un mes "
+        "sin subasta no tiene tasa de subasta: el hueco ES el dato. Rellenarlo con el mes "
+        "anterior inventaría una colocación que no existió, y es justo lo que "
+        "`rf_de_la_curva` evita al tomar las últimas lecturas VIVAS en vez de la última "
+        "casilla del calendario."),
+    "curva_pesos_de_1_a_2_anos": (
+        "Mismo cuadro y mismo motivo, y más marcado: el tramo de uno a dos años es el que "
+        "menos se subasta de los seis, así que su serie es la más rala. Se conserva porque "
+        "con el término largo da la PENDIENTE de la curva."),
+}
+
+
 def test_ninguna_serie_canonica_tiene_huecos():
-    con_huecos = {k: d["huecos"] for k, d in SERIES.items() if d["huecos"]}
+    """La continuidad sigue siendo la regla; la excepción se nombra y se justifica."""
+    con_huecos = {k: d["huecos"] for k, d in SERIES.items()
+                  if d["huecos"] and k not in DISCONTINUAS_POR_NATURALEZA}
     assert not con_huecos, f"series con huecos internos: {con_huecos}"
+
+
+def test_toda_serie_declarada_DISCONTINUA_lo_es_de_verdad():
+    """Una excepción para una serie que resultó continua es una excepción de más: quedaría
+    tapando el día que esa serie SÍ desarrolle un hueco de lectura."""
+    for clave in DISCONTINUAS_POR_NATURALEZA:
+        assert clave in SERIES, f"«{clave}» declarada discontinua y no está en el manifiesto"
+        assert SERIES[clave]["huecos"] > 0, (
+            f"«{clave}» está declarada discontinua por naturaleza y no tiene huecos: sacala "
+            "de la lista para que el guard vuelva a cubrirla")
+
+
+def test_toda_excepcion_de_continuidad_explica_POR_QUE_el_hueco_es_el_dato():
+    for clave, motivo in DISCONTINUAS_POR_NATURALEZA.items():
+        assert len(motivo) > 150, f"«{clave}» excepcionada sin explicar la naturaleza del dato"
+        assert "subasta" in motivo.lower() or "no ocurrió" in motivo.lower(), (
+            f"«{clave}»: el motivo tiene que decir qué HECHO no ocurrió en el mes vacío, no "
+            "solo que la serie es rala")
 
 
 def test_el_pib_real_alcanza_para_el_bvar():

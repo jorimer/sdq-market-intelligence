@@ -37,50 +37,8 @@ _ARBOLES = ("modules", "shared", "app")
 #: Excepciones DECLARADAS: series nombradas en producción cuyo archivo no está habilitado, con
 #: el motivo y qué haría falta. Vacío es el estado sano. Una excepción sin motivo no entra.
 #:
-#: MEDIDO el 2026-09-05 sobre el archivo vigente (una sola hoja, «V.1Tasa intBC»), y por eso
-#: no se habilita. Dos defectos, ninguno de los cuales toca la serie de la curva:
-#:
-#: 1. **Tres columnas se pierden en silencio.** El cuadro V.1 tiene 15 columnas de datos y el
-#:    spec produce 12 series: se caen las de MONTO de «1 a 30 días», «1 a 2 años» y «más de
-#:    dos años» (cols 11, 15 y 16). Es OMISIÓN, no colisión — cada serie del spec tiene una
-#:    sola `value_col`—, pero perder columnas sin aviso es exactamente lo que la lista de
-#:    verificados existe para no dejar pasar.
-#:
-#: 2. **132 pares (serie, período) traen dos registros y 99 están en desacuerdo**, y la causa
-#:    está IDENTIFICADA: es una errata del propio BCRD. Las filas 49 a 59 llevan `'01'` en la
-#:    columna de año donde va **2005** — la fila 48 es «2004 Dic», la 60 es «2005 Dic» y la
-#:    61 «2006 Ene», así que el orden las fija sin ambigüedad como enero a noviembre de 2005.
-#:
-#:    `parse_year('01')` devuelve `None`, el año se arrastra de la fila anterior y esas once
-#:    filas se estampan como 2004. El daño es doble y ninguna mitad avisa: **se pierden once
-#:    meses de 2005** y **se duplican los once de 2004**, que en el archivo vienen vacíos.
-#:
-#:    Es el ÚNICO valor no-año de esa columna en todo el libro —los otros son «2001»…«2026»
-#:    y un «Notas:» al pie—, así que la corrección es puntual y verificable.
-#:
-#:    Arreglarlo pide una decisión de alcance que no se toma acá: el arrastre del año hacia
-#:    abajo es correcto para una celda VACÍA —así publica el BCRD casi todos sus cuadros— y
-#:    es el que corrompe cuando la celda tiene algo que no es un año. Cambiar esa regla toca
-#:    los 33 archivos habilitados y hay que MEDIRLO antes, no deducirlo.
-#:
-#: **Lo que NO es** —y se corrige acá porque se afirmó mal antes—: la serie
-#: `mas_de_dos_anos` NO mezcla tasas con montos. Su columna es la 10, una sola, y sus valores
-#: van de 0 a 0,1875, o sea tasas en fracción. Lo que le falta es el prefijo «tasa de
-#: interés» en el NOMBRE, porque el super-encabezado no la alcanza — que es un problema de
-#: nombre, no de contenido.
-#:
-#: Qué haría falta para levantarla: que el spec recupere las tres columnas perdidas y que el
-#: archivo dé 0 duplicados con valores en conflicto, que es el criterio con el que entraron
-#: los otros 33.
-EXCEPCIONES: Dict[str, str] = {
-    "bcrd.xls.valores_bc_mn": (
-        "El archivo NO está verificado: de sus 15 columnas de datos el spec produce 12 "
-        "series —tres de MONTO se pierden en silencio— y once filas de 2005 se estampan "
-        "como 2004 porque el BCRD escribió «01» en la columna de año, lo que pierde esos "
-        "once meses y duplica los de 2004. Para levantarla hay que recuperar las tres "
-        "columnas y resolver la errata del año, y esto último toca una regla común a los 33 "
-        "archivos habilitados: hay que medirlo antes de cambiarla."),
-}
+EXCEPCIONES: Dict[str, str] = {}
+
 
 
 def _archivos_habilitados() -> Set[str]:

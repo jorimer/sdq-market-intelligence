@@ -494,6 +494,34 @@ REGISTRY: List[CanonicalSeries] = [
         # nombra sola: no hay elección que hacer.
         robustness="green", excel_series_suffix=".tasa_de_politica_monetaria",
     ),
+    # La CURVA SOBERANA EN PESOS, del cuadro V.1 «Valores subastados del Banco Central en
+    # moneda nacional». Se declara el término largo y el de uno a dos años, que son los dos
+    # que una valuación necesita; los plazos cortos y los montos entran igual al corpus por
+    # el archivo, pero no se nombran acá porque nombrarlo todo sin uso es inventario.
+    #
+    # POR QUÉ IMPORTA, y no es un matiz: el valuador necesita una tasa libre de riesgo LARGA
+    # en pesos. La TPM es overnight y está en 5,25 % contra una inflación de 5,47 %, así que
+    # usarla a diez años daría una tasa real NEGATIVA y el modelo diría que casi cualquier
+    # entidad crea valor. El término de más de dos años está en 9,78 %: son 453 puntos
+    # básicos de diferencia, que a un ROE típico de 13 % es la línea entre crear y destruir.
+    CanonicalSeries(
+        key="curva_pesos_mas_de_dos_anos",
+        concept="Curva soberana en pesos · término de más de dos años",
+        sector="sector_monetario_financiero", source_file="valores_bc_mn.xlsx",
+        base="%", frequency="mensual", homogenization="nivel directo",
+        rationale=("Tasa libre de riesgo LARGA en pesos: el insumo de `Ke` en el eje de "
+                   "valuación. Una tasa overnight no puede descontar un flujo perpetuo."),
+        robustness="green", excel_series_suffix=".mas_de_dos_anos",
+    ),
+    CanonicalSeries(
+        key="curva_pesos_de_1_a_2_anos",
+        concept="Curva soberana en pesos · término de uno a dos años",
+        sector="sector_monetario_financiero", source_file="valores_bc_mn.xlsx",
+        base="%", frequency="mensual", homogenization="nivel directo",
+        rationale=("El tramo intermedio de la curva. Con el término largo da la PENDIENTE, "
+                   "que es lo que dice si el mercado espera que la tasa suba o baje."),
+        robustness="green", excel_series_suffix=".de_1_a_2_anos",
+    ),
     CanonicalSeries(
         key="agregados_monetarios", concept="Agregados monetarios (M1, M2…)",
         sector="sector_monetario_financiero", source_file="agregados_monetarios.xlsx",
@@ -766,6 +794,24 @@ def unidad_curada(series_code: str) -> Optional[str]:
 
 
 PERSISTIBLES_VERIFICADOS: Dict[str, Optional[List[str]]] = {
+    # El cuadro V.1 «Valores subastados del Banco Central en moneda nacional». Es la CURVA
+    # SOBERANA EN PESOS, y de acá sale la tasa libre de riesgo larga que el costo de capital
+    # necesita: el término de más de dos años está en 9,78 % contra una TPM overnight de
+    # 5,25 %, y usar la TPM subestimaría `Ke` en 453 puntos básicos.
+    #
+    # Entra ahora y no antes porque hasta ahora no extraía bien, y las dos cosas que fallaban
+    # ya están arregladas y medidas:
+    #   · once filas de 2005 se estampaban como 2004 —el BCRD escribió «01» en la columna de
+    #     año— perdiendo once meses y duplicando otros once. El arrastre del año ahora solo
+    #     opera sobre una celda VACÍA.
+    #   · tres columnas quedaban fuera por medir la densidad solo en las primeras 80 filas.
+    #     Corregido a la unión de las dos ventanas; estas tres siguen fuera y con razón —10 %,
+    #     32 % y 39 % de densidad sobre el archivo entero, contra el 40 % que se exige—: son
+    #     MONTOS de plazos que el BCRD casi no subastó, y ninguna es la serie de la curva.
+    #
+    # Verificado sobre el archivo vigente: 12 series, 279 meses 2001-12→2026-07, **0
+    # duplicados con valores en conflicto** (eran 99) y 0 avisos de truncamiento.
+    "valores_bc_mn.xlsx": None,
     "pib_2018.xlsx": None,            # PIB real trimestral: 77 trimestres 2007-Q1→2026-Q1
     "imae_2018.xlsx": None,           # IMAE mensual, incluido el índice que consume el nowcast
     "ipc_base_2019-2020.xls": None,   # IPC general: 511 meses desde 1984

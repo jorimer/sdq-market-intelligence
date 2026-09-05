@@ -1,6 +1,6 @@
 {
- "_generado": "2026-09-04",
- "_fuente": "corrida canónica completa contra la base de dev, espejo verificado de producción (2.103 series del motor Excel en las dos)",
+ "_generado": "2026-09-05",
+ "_fuente": "corrida canónica completa contra la base de dev (2.103 series) más la ingesta directa de valores_bc_mn.xlsx, el archivo habilitado después",
  "series": {
   "costo_canasta_quintil_1": {
    "code": "bcrd.xls.costo_canasta_quintiles_base_2019_2020.quintil_1",
@@ -36,6 +36,20 @@
    "min_obs": 103,
    "primero": "2018-01",
    "huecos": 0
+  },
+  "curva_pesos_de_1_a_2_anos": {
+   "code": "bcrd.xls.valores_bc_mn.de_1_a_2_anos",
+   "cadencia": "monthly",
+   "min_obs": 53,
+   "primero": "2004-12",
+   "huecos": 198
+  },
+  "curva_pesos_mas_de_dos_anos": {
+   "code": "bcrd.xls.valores_bc_mn.mas_de_dos_anos",
+   "cadencia": "monthly",
+   "min_obs": 141,
+   "primero": "2004-12",
+   "huecos": 119
   },
   "imae": {
    "code": "bcrd.xls.imae_2018.serie_original_variacion_porcentual_interanual",
