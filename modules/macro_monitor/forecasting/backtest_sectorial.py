@@ -22,7 +22,7 @@ from dataclasses import dataclass
 from typing import Callable, Dict, List, Sequence, Tuple
 
 from modules.macro_monitor.forecasting.sectoral import (
-    LAMBDA, PanelSectorial, _persistencia_encogida, reconciliar,
+    LAMBDA, MEDIDA_DEL_PANEL, PanelSectorial, _persistencia_encogida, reconciliar,
 )
 
 #: Trimestres de entrenamiento antes del primer corte.
@@ -62,7 +62,9 @@ def _corte(panel: PanelSectorial, t: int, prediccion: Callable[[Sequence[float]]
     if not reconciliar_:
         return crudo
     pesos = {k: panel.pesos[k][t] for k in claves}
-    ajustado, _ = reconciliar(crudo, pesos, panel.pib[t])
+    # El agregado es el del PROPIO panel, así que está en su misma medida.
+    ajustado, _ = reconciliar(crudo, pesos, panel.pib[t],
+                              medida_del_agregado=MEDIDA_DEL_PANEL)
     return ajustado
 
 

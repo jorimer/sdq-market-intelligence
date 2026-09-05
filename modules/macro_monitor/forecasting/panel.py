@@ -13,7 +13,7 @@ from __future__ import annotations
 import math
 from dataclasses import dataclass
 from datetime import date, timedelta
-from typing import Dict, List, Optional, Tuple
+from typing import Dict, List, Optional, Sequence, Tuple
 
 from sqlalchemy.orm import Session
 
@@ -29,6 +29,40 @@ PIB_CODE = "bcrd.xls.pib_2018.serie_original_indice"
 PIB_PUBLICATION_LAG_DAYS = 60
 
 _LAG_IMAE = PUBLICATION_LAG_DAYS[IMAE_INDEX_CODE]
+
+#: Nombre de la medida en que viaja un crecimiento. El sujeto viaja con el número: una tasa
+#: sin su medida no se puede restar de otra, y restar una anual de una trimestral fue
+#: exactamente lo que publicó ocho contracciones sectoriales que ningún modelo proyectó.
+#: Ver `forecasting/tests/test_la_reconciliacion_resta_la_misma_medida.py`.
+INTERANUAL = "interanual"
+TRIMESTRAL = "trimestral"
+
+
+def variacion_interanual_pct(serie: Dict[str, float], trimestres: Sequence[str]
+                             ) -> Dict[str, float]:
+    """Variación contra el MISMO trimestre del año anterior, en %.
+
+    Vive acá, y no en cada capa, porque las dos que la necesitan —el bloque del BVAR y el
+    panel sectorial— tienen que producir el MISMO número sobre el mismo índice para que la
+    reconciliación sectorial signifique algo. Cuando cada una tenía la suya, una medía contra
+    `t-1` y la otra contra `t-4`, y nada fallaba.
+
+    Es la medida que la entrada canónica de `pib_real` declara citable —«el crecimiento (YoY
+    del volumen) es invariante a la base»— y además la que no arrastra la estacionalidad: el
+    índice del PIB que publica el BCRD es la serie ORIGINAL, cuyo QoQ va de −1,13 % (Q3) a
+    +4,67 % (Q4) por puro calendario.
+    """
+    idx = {t: i for i, t in enumerate(trimestres)}
+    out: Dict[str, float] = {}
+    for t, i in idx.items():
+        if i < 4:
+            continue
+        previo = serie.get(trimestres[i - 4])
+        actual = serie.get(t)
+        if previo and actual is not None and previo != 0:
+            out[t] = (actual / previo - 1) * 100
+    return out
+
 
 
 def _publicado_el(period: str, lag_dias: int) -> Optional[date]:
