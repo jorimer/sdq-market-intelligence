@@ -522,17 +522,23 @@ def _test_cmf_connection(db, cfg, base: str, api_key: str,
     except httpx.HTTPError as e:
         return _persist_test(db, cfg, "error",
                              f"No se pudo alcanzar {base} ({type(e).__name__}).", None)
-    cuerpo_txt = (resp.text or "")[:500]
+    # Se BUSCA en el cuerpo entero y se MUESTRA un extracto. Recortar antes de analizar fue
+    # el defecto: la página del WAF mide 39.142 caracteres y su marca —«Web Page Blocked»,
+    # con la IP que vio— está en la posición 38.821, así que buscarla en los primeros 500
+    # la perdía siempre. Lo único que quedaba a la vista era el DOCTYPE, y el diagnóstico
+    # decía «la CMF respondió 500» sobre una petición que nunca llegó a la CMF.
+    cuerpo_completo = resp.text or ""
+    cuerpo_txt = cuerpo_completo[:500]
     if use_proxy and resp.status_code >= 400 and not _has_proxy_relay(resp):
         # El Worker rechazó: la petición nunca salió hacia la CMF, así que ni la credencial
         # ni el WAF del emisor tuvieron nada que ver.
         return _persist_test(db, cfg, "error",
                              MSG_PROXY_NO_REENVIO.format(codigo=resp.status_code),
                              resp.status_code)
-    if "Web Page Blocked" in cuerpo_txt or "has been blocked" in cuerpo_txt:
+    if "Web Page Blocked" in cuerpo_completo or "has been blocked" in cuerpo_completo:
         # El WAF, no la CMF. Distinguirlo importa: un «500» pelado manda a revisar la
         # credencial, y acá la credencial ni siquiera llegó a evaluarse.
-        m = re.search(r"Client IP:\s*([0-9.]+)", cuerpo_txt)
+        m = re.search(r"Client IP:\s*([0-9.]+)", cuerpo_completo)
         ip = f" (IP vista por el WAF: {m.group(1)})" if m else ""
         return _persist_test(
             db, cfg, "error",
