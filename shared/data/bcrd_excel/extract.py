@@ -98,12 +98,14 @@ def _forward_filled_years(grid: Grid, row: int, c0: int, c1: int) -> Dict[int, i
 
 
 def _extract_period_rows(grid: Grid, spec: ExtractionSpec, lineage: Lineage,
-                         prefix: str) -> List[Record]:
+                         prefix: str, sin_anio: Optional[List[str]] = None) -> List[Record]:
     end = spec.data_row_end if spec.data_row_end is not None else grid.nrows
     series = spec.series
     subtotal_re = re.compile(spec.subtotal_year_regex) if spec.subtotal_year_regex else None
     pcol = spec.month_col  # the within-year period column: months OR quarters
     out: List[Record] = []
+    if sin_anio is None:
+        sin_anio = []
 
     def subperiod(r: int) -> Optional[tuple]:
         """(kind, n) for the row's within-year period: ('M',1..12) or ('Q',1..4)."""
@@ -163,12 +165,34 @@ def _extract_period_rows(grid: Grid, spec: ExtractionSpec, lineage: Lineage,
 
     # Sparse year column, forward-filled down the rows. With no period column this
     # is the *annual* case: each row that carries its own year is one obs.
+    #
+    # EL ARRASTRE SOLO VALE PARA UNA CELDA VACÍA. Es la forma en que el BCRD publica casi
+    # todos sus cuadros —el año una vez por bloque y los meses debajo— y para eso el arrastre
+    # es correcto. Cuando la celda tiene ALGO que no es un año, heredar el anterior inventa
+    # una fecha, y el daño es doble y silencioso: la observación se estampa en el año
+    # equivocado y ese año queda duplicado.
+    #
+    # Pasó, y se midió: en el cuadro V.1 de valores subastados las filas de enero a noviembre
+    # de 2005 llevan «01» en la columna de año. Con el arrastre se estampaban como 2004 —que
+    # en ese archivo viene vacío— perdiendo once meses de 2005 y duplicando once de 2004.
+    #
+    # El cambio se midió antes de hacerlo, sobre los 33 archivos habilitados: **cero filas**
+    # cambian de comportamiento. Doce usan este camino y ninguna tiene una celda de año no
+    # vacía que no parsee; las otras veintiuna no lo usan.
     annual = pcol is None
     current_year: Optional[int] = None
     for r in range(spec.data_row_start, end):
-        row_year = parse_year(grid.cell(r, spec.year_col)) if spec.year_col is not None else None
+        celda_anio = grid.cell(r, spec.year_col) if spec.year_col is not None else None
+        row_year = parse_year(celda_anio) if spec.year_col is not None else None
         if row_year is not None:
             current_year = row_year
+        elif celda_anio is not None and str(celda_anio).strip():
+            # Hay algo escrito y no es un año: el año de esta fila es DESCONOCIDO. No se
+            # hereda —eso la mandaría a una fecha inventada— y la fila se declara.
+            sin_anio.append(
+                f"fila {r}: la columna de año dice {str(celda_anio).strip()!r}, que no es un "
+                "año; la fila se descarta en vez de heredar el año anterior")
+            continue
         if annual:
             if row_year is None:  # header / blank / sub-total row → skip
                 continue
@@ -582,8 +606,15 @@ def _extract_year_blocks(grid: Grid, spec: ExtractionSpec, lineage: Lineage,
     return out
 
 
-def extract_records(workbook: Workbook, spec: ExtractionSpec) -> List[Record]:
-    """Replay *spec* over *workbook* → ``Record``s (one per series × period)."""
+def extract_records(workbook: Workbook, spec: ExtractionSpec,
+                    sin_anio: Optional[List[str]] = None) -> List[Record]:
+    """Replay *spec* over *workbook* → ``Record``s (one per series × period).
+
+    `sin_anio`, si se pasa, recibe una línea por cada fila DESCARTADA porque su columna de
+    año tenía algo que no es un año. Se devuelve en vez de solo registrarse en el log: una
+    brecha que solo va al log no la ve nadie, y el motor ya tiene un canal de avisos que
+    llega al reporte de validación.
+    """
     grid = workbook.grid(spec.sheet)
     lineage = _lineage(spec)
     prefix = _code_prefix(spec)
@@ -595,4 +626,4 @@ def extract_records(workbook: Workbook, spec: ExtractionSpec) -> List[Record]:
         return _extract_cross_tab(grid, spec, lineage, prefix)
     if spec.orientation == "matrix":
         return _extract_matrix(grid, spec, lineage, prefix)
-    return _extract_period_rows(grid, spec, lineage, prefix)
+    return _extract_period_rows(grid, spec, lineage, prefix, sin_anio)

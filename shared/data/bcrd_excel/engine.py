@@ -295,9 +295,13 @@ def ingest_excel(
     sheets = data_sheets(wb)
     spec = build_spec(wb, file_label, cache=cache, use_claude=use_claude, client=client)
     truncados: List[str] = []
+    #: Filas descartadas porque su columna de año traía algo que no es un año. Viajan al
+    #: reporte junto con los avisos de truncamiento: son la misma clase de hecho —el motor
+    #: no leyó todo lo que hay— y esconderlas haría ver el archivo más completo de lo que es.
+    sin_anio: List[str] = []
     if len(sheets) <= 1:
         _avisar_si_trunca(wb.grid(spec.sheet), spec, file_label, truncados)
-        records = extract_records(wb, spec)
+        records = extract_records(wb, spec, sin_anio)
         if use_claude:
             records = _resolve_ambiguous_names(wb, spec, records, cache=cache, client=client)
     else:
@@ -312,7 +316,7 @@ def ingest_excel(
                 base = sheet_spec.code_prefix or default_prefix(file_label)
                 sheet_spec.code_prefix = f"{base}.{_slug(grid.name)}"
                 _avisar_si_trunca(grid, sheet_spec, file_label, truncados)
-                sheet_records = extract_records(sub, sheet_spec)
+                sheet_records = extract_records(sub, sheet_spec, sin_anio)
                 if use_claude:
                     sheet_records = _resolve_ambiguous_names(
                         sub, sheet_spec, sheet_records, cache=cache, client=client)
@@ -324,7 +328,7 @@ def ingest_excel(
             spec = build_spec(wb, file_label, cache=cache, use_claude=use_claude,
                               client=client)
     report = validate(records, file=file_label, references=references, bands=bands)
-    report.avisos = truncados
+    report.avisos = truncados + [f"{file_label}: {x}" for x in sin_anio]
     logger.info(
         "[bcrd_excel] %s: %d obs, %d series, validación %s (%s, conf %.2f)",
         file_label, len(records), len(report.series),
