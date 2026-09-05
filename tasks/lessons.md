@@ -674,3 +674,52 @@ coincidir.
 «cuota», «margen») y la calculan cada uno por su lado, sobre todo si en algún punto se suman,
 se restan o se comparan. Preguntar de qué a qué mide cada uno, y sembrar el mismo dato en las
 dos para ver si sale el mismo número.
+
+---
+
+## Una frase computada afirmaba «dato real medido» en un informe de PRONÓSTICO
+
+**Síntoma.** §8 del informe de proyecciones del 2026-09-05, con cuatro líneas entre las dos y
+las dos COMPUTADAS:
+
+> **Cobertura:** 100% del índice se construye sobre dato real medido en la fuente.
+> **Procedencia por variable:** 0% del peso de este índice se sostiene en dato real…
+
+**Causa raíz: dos defectos, y el segundo es el interesante.**
+
+1. **El producto contestaba otra pregunta.** `coverage=1.0 if vig else 0.0` responde «¿hay
+   alguna proyección vigente?»; `DataHealth.coverage` declara responder «¿qué fracción del
+   peso de mi índice está anclada a dato real?». La única proyección vigente ni siquiera
+   pasaba el gate —el propio informe la rotula «¿ancla una afirmación? **no**»— y aun así el
+   eje puntuaba `cobertura=1.00`.
+
+2. **La superficie que se quedó atrás.** El mecanismo para esto YA EXISTÍA:
+   `provenance.coverage_sentence()` rutea por `coverage_kind`, y su comentario dice que la
+   frase de índice en el eje de leyes es «sencillamente falsa» y que «salía en la Metodología
+   del informe». El arreglo se hizo en `provenance.py` y **no** en
+   `report_sections._methodology_md`, que siguió con el literal cableado. Resultado: el eje de
+   leyes publicaba hoy, en su metodología, exactamente la frase que el repositorio ya había
+   declarado falsa para él. Nadie se enteró porque **arreglar una superficie hace desaparecer
+   el síntoma que uno estaba mirando**.
+
+**Y un tercero, que apareció al arreglar.** Cambiar solo la redacción dejaba el mismo defecto
+más chico: metodología 50% y procedencia 0%, dos números bajo la misma palabra en la misma
+página. La causa era que `coverage_real` es 0 por construcción en un eje de proyección. Hizo
+falta una cobertura con nombre propio (`coverage_anclada`) y que la cifra determinada del
+nowcast VIAJARA al registro.
+
+**Regla futura.** Cuando una prosa generada dependa de un discriminador (`coverage_kind`,
+`scope`, `nature`), **el discriminador se rutea con un MAPA, nunca con un `if` ni con un
+literal**, y hay un test que cruza el mapa contra el vocabulario entero. Un `.get()` con
+default sobre un vocabulario que crece convierte «me falta una frase» en «publico una frase
+falsa», en silencio. Y al arreglar una prosa que aparece en dos superficies, **buscar la otra
+antes de dar por cerrado**: `grep` de la frase, no del nombre de la función.
+
+**Lo que la prueba de rotura encontró y yo no.** Mi primer guard sobre la cobertura de
+procedencia **no falló** al romper el código: el caso que usaba tenía `coverage_real` y
+`coverage_anclada` iguales. Un test que no separa las dos ramas no prueba la rama. Faltaba el
+caso de una proyección ADMISIBLE, donde valen 0 y 1.
+
+**Disparador.** Cualquier frase de producto que se arme con un número más una plantilla. Dos
+preguntas: ¿el número contesta la pregunta que la plantilla hace?, y ¿esta plantilla vive en
+más de un lugar?

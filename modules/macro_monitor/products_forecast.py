@@ -41,6 +41,7 @@ from shared.products import (
 )
 from shared.products.contract import EstadoBacktest
 from shared.products.render import render_product_pdf
+from shared.registry.signals import COVERAGE_PROJECTION
 
 logger = logging.getLogger("sdq.products.macro_forecast")
 
@@ -169,8 +170,37 @@ class MacroForecastProduct:
         from modules.macro_monitor.forecasting.desempeno import filas
         return _seguro(self._db, lambda d: filas(d), [])
 
+    def _determinadas(self) -> int:
+        """Cuántas cifras determinadas hay hoy: 0 o 1.
+
+        No es un pronóstico. Con los tres meses del IMAE publicados, el promedio trimestral
+        del índice ES el índice de volumen del PIB por identidad de construcción del BCRD.
+        Cuenta como anclada porque lo está: es dato publicado, verificado en cada lectura.
+        """
+        from modules.macro_monitor.forecasting import nowcast
+        c = _seguro(self._db, lambda d: nowcast.cifra_determinada(d, date.today()), None)
+        return 1 if c is not None else 0
+
     def data_signals(self) -> DataHealth:
+        """La cobertura de este eje mide ADMISIBILIDAD, no dato medido.
+
+        Devolvía `1.0 if vig else 0.0`, que contesta «¿hay alguna proyección vigente?».
+        `DataHealth.coverage` declara contestar otra —«¿qué fracción del peso de mi índice
+        está anclada a dato real?»— y la prosa la publicaba con esa lectura: el informe del
+        2026-09-05 dijo «100% del índice se construye sobre dato real medido en la fuente»
+        cuatro líneas antes de declarar, computado, que el 0% se sostiene en dato real. Y la
+        única proyección que sostenía ese 100% ni siquiera pasaba el gate: la tabla del
+        propio informe la publica con «¿ancla una afirmación? no».
+
+        Acá el índice ES la proyección, así que la pregunta honesta es qué fracción de lo que
+        se publica está sostenida por un pronóstico ADMISIBLE o por una cifra determinada por
+        identidad. Va bajo `COVERAGE_PROJECTION` para que ninguna superficie la lea como peso
+        anclado a dato medido.
+        """
+        from modules.macro_monitor.forecasting.procedencia import es_publicable
+
         vig = self._vigentes()
+        determinadas = self._determinadas()
         frescura = None
         if vig:
             cortes = sorted(str(f.as_of) for f in vig)
@@ -178,13 +208,21 @@ class MacroForecastProduct:
                 frescura = (date.today() - date.fromisoformat(cortes[-1])).days
             except ValueError:
                 frescura = None
+        admisibles = sum(1 for m in vig if es_publicable(m)[0])
+        publicado = len(vig) + determinadas
+        cobertura = (admisibles + determinadas) / publicado if publicado else 0.0
+        if vig or determinadas:
+            detalle = (f"{admisibles} de {len(vig)} proyección(es) vigente(s) pasan el gate; "
+                       f"{determinadas} cifra(s) determinada(s) por identidad; "
+                       f"{len(self._puntuados())} conjunto(s) con backtest puntuado")
+        else:
+            detalle = "sin proyecciones emitidas todavía"
         return DataHealth(
-            coverage=1.0 if vig else 0.0, freshness_days=frescura, cadence="quarterly",
+            coverage=cobertura, coverage_kind=COVERAGE_PROJECTION,
+            freshness_days=frescura, cadence="quarterly",
             sources=("BCRD — IMAE, PIB por sectores de origen, TPM, tipo de cambio, tasas",
                      "SDQ — ledger de pronósticos (mm_forecast_log)"),
-            detail=(f"{len(vig)} proyección(es) vigente(s); "
-                    f"{len(self._puntuados())} conjunto(s) con backtest puntuado"
-                    if vig else "sin proyecciones emitidas todavía"))
+            detail=detalle)
 
     def has_engine(self) -> bool:
         return bool(self._vigentes())
@@ -325,17 +363,33 @@ class MacroForecastProduct:
         la cobertura real del índice—, acá el índice del eje **ES** la proyección. Por eso
         llevan peso, y por eso `coverage_projected` de este eje sí dice algo: mide cuánto del
         producto está sostenido por un pronóstico admisible.
+
+        Lleva además la cifra determinada del nowcast, que no es un pronóstico: con los
+        tres meses del IMAE publicados el promedio trimestral del índice ES el índice de
+        volumen del PIB, por identidad de construcción del BCRD. Es lo único real que
+        este eje sirve, y sin ella la procedencia publica un número distinto del de la
+        metodología.
         """
         from modules.macro_monitor.forecasting.procedencia import (
             es_publicable, proyeccion_por_serie,
         )
-        from shared.registry.signals import GAP, PROJECTED, VariableSignal
+        from shared.registry.signals import GAP, PROJECTED, REAL, VariableSignal
 
         db = self._db
         if db is None:
-            return {"period": None, "signals": []}
+            return {"period": None, "signals": [],
+                    "coverage_kind": COVERAGE_PROJECTION}
         metas = _seguro(db, lambda d: proyeccion_por_serie(d), {}) or {}
         señales = []
+        # La cifra determinada es lo ÚNICO de este eje que sí es dato real, y tiene que
+        # llegar al registro: si no, la procedencia la ignora y publica un número distinto
+        # del de la metodología. Es el defecto original en chico — dos cifras de cobertura
+        # en la misma página.
+        for _ in range(self._determinadas()):
+            señales.append(VariableSignal(
+                key="cifra_determinada_pib", label="PIB real · trimestre determinado",
+                state=REAL, weight=1.0, scope="national", cadence="quarterly",
+                source="BCRD — IMAE (identidad de construcción, verificada en cada lectura)"))
         for serie, meta in sorted(metas.items()):
             ok, motivo = es_publicable(meta)
             señales.append(VariableSignal(
@@ -349,7 +403,10 @@ class MacroForecastProduct:
                 projection=meta if ok else None,
                 note="" if ok else motivo,
             ))
-        return {"period": None, "signals": señales}
+        # La semántica viaja con las señales: sin ella el registro lee este eje como si
+        # armara un índice de dato real, que es exactamente lo que no hace.
+        return {"period": None, "signals": señales,
+                "coverage_kind": COVERAGE_PROJECTION}
 
     # ── Muestra curada ──
 
