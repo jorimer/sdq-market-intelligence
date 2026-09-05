@@ -39,7 +39,7 @@ def _sembrar_pib(db, valores) -> None:
     db.commit()
 
 
-def test_el_techo_se_MIDE_de_la_serie_y_no_se_escribe():
+def test_el_techo_se_MIDE_de_la_serie_y_no_se_escribe() -> None:
     """Una constante copiada envejece sin avisar."""
     eng = create_engine("sqlite://", connect_args={"check_same_thread": False},
                         poolclass=StaticPool)
@@ -52,7 +52,7 @@ def test_el_techo_se_MIDE_de_la_serie_y_no_se_escribe():
     s.close()
 
 
-def test_es_la_MEDIANA_y_no_la_media(db):
+def test_es_la_MEDIANA_y_no_la_media(db) -> None:
     """La serie trae la caída de 2020 y el rebote de 2021. Una media los arrastra a los dos;
     una perpetuidad necesita el centro de la serie larga, no el promedio de sus extremos."""
     _sembrar_pib(db, [8.0] * 13 + [-20.0, 40.0, 8.0])   # media ≈ 8,9 · mediana = 8,0
@@ -61,7 +61,7 @@ def test_es_la_MEDIANA_y_no_la_media(db):
         f"el techo dio {t.valor_pct}: con la caída y el rebote adentro, la media miente")
 
 
-def test_con_POCAS_observaciones_usa_el_respaldo_Y_LO_DECLARA(db):
+def test_con_POCAS_observaciones_usa_el_respaldo_Y_LO_DECLARA(db) -> None:
     """Un techo apoyado en tres trimestres queda a merced de un par de datos. El respaldo se
     usa y se dice — un valor de respaldo silencioso es una constante escrita a mano con otro
     nombre."""
@@ -72,7 +72,7 @@ def test_con_POCAS_observaciones_usa_el_respaldo_Y_LO_DECLARA(db):
     assert "RESPALDO" in t.evidencia and "envejece" in t.evidencia
 
 
-def test_el_techo_MUERDE_cuando_el_crecimiento_sostenible_lo_supera():
+def test_el_techo_MUERDE_cuando_el_crecimiento_sostenible_lo_supera() -> None:
     """El caso del BHD: retención 0,75 × ROE 22,57 % = 16,93 %, muy por encima del 9 %."""
     techo = cr.TechoDeCrecimiento(9.03, 29, True, "medido")
     g, aviso = cr.g_terminal(roe_pct=22.57, retencion=0.75, techo=techo)
@@ -82,7 +82,7 @@ def test_el_techo_MUERDE_cuando_el_crecimiento_sostenible_lo_supera():
     assert "más grande que el país" in aviso
 
 
-def test_NO_muerde_ni_avisa_cuando_el_crecimiento_ya_era_sostenible():
+def test_NO_muerde_ni_avisa_cuando_el_crecimiento_ya_era_sostenible() -> None:
     """El caso normal. Un aviso que aparece siempre no informa: se vuelve ruido y se ignora
     justo cuando importa."""
     techo = cr.TechoDeCrecimiento(9.03, 29, True, "medido")
@@ -91,7 +91,7 @@ def test_NO_muerde_ni_avisa_cuando_el_crecimiento_ya_era_sostenible():
     assert aviso is None
 
 
-def test_el_techo_NO_es_un_piso():
+def test_el_techo_NO_es_un_piso() -> None:
     """Solo acota hacia arriba. Una entidad que crece poco crece poco — subirla al techo
     sería inventarle crecimiento."""
     techo = cr.TechoDeCrecimiento(9.03, 29, True, "medido")

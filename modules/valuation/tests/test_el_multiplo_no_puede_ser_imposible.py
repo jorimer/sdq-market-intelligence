@@ -60,7 +60,7 @@ def db():
     s.close()
 
 
-def test_el_multiplo_de_una_entidad_MUY_rentable_queda_en_el_orden_del_panel(db):
+def test_el_multiplo_de_una_entidad_MUY_rentable_queda_en_el_orden_del_panel(db) -> None:
     lec = valuar_entidad(db, bank_id="bhd", nombre="Banco Múltiple BHD")
     assert lec is not None
     assert lec.roe_proyectado_pct > 20, "la fixture dejó de ser una entidad muy rentable"
@@ -72,42 +72,54 @@ def test_el_multiplo_de_una_entidad_MUY_rentable_queda_en_el_orden_del_panel(db)
         "todo el rango no puede valer menos que su libro")
 
 
-def test_el_techo_MORDIO_y_la_lectura_lo_declara(db):
+def test_el_techo_MORDIO_y_la_lectura_lo_declara(db) -> None:
     """El supuesto que cambia el valor de 12,23× a ~3× no puede viajar callado."""
     lec = valuar_entidad(db, bank_id="bhd", nombre="Banco Múltiple BHD")
+    assert lec is not None, "la fixture dejó de producir una valuación"
     assert lec.g_terminal_pct == pytest.approx(9.03, abs=0.01)
     unidos = " ".join(lec.advertencias)
     assert "supera el crecimiento nominal de la economía" in unidos
     assert "más grande que el país" in unidos
 
 
-def test_los_parametros_del_TIPO_viajan_con_la_lectura(db):
+def test_los_parametros_del_TIPO_viajan_con_la_lectura(db) -> None:
     """Dos valuaciones con distinto tipo de entidad no son comparables sin saberlo."""
     lec = valuar_entidad(db, bank_id="bhd", nombre="Banco Múltiple BHD")
+    assert lec is not None, "la fixture dejó de producir una valuación"
     assert lec.tipo_de_entidad == "banca_multiple"
     assert lec.retencion == pytest.approx(0.75), "no usó la retención MEDIDA de su tipo"
     assert "cotizados latinoamericanos" in lec.evidencia_del_tipo
 
 
-def test_SIN_el_techo_el_mismo_caso_explota(db):
-    """El contraejemplo que fija de qué tamaño era el defecto.
+def test_lo_que_ACOTA_el_terminal_es_la_PERSISTENCIA(db) -> None:
+    """Este test cambió de premisa, y el cambio es el hallazgo.
 
-    Se reproduce EXACTAMENTE el caso medido en producción: retención 0,60 —la rúbrica vieja—
-    y `Ke` en el extremo bajo de 14,28 %. Ahí `g = 13,54 %` y la perpetuidad converge por
-    0,74 pp: el terminal se dispara y el P/B da 12,23×, contra un panel observado que llega a
-    2,73×.
+    Cuando se escribió, medía que el techo de crecimiento contuviera la explosión: sin él, el
+    caso del BHD daba 12,23x. Pero el techo solo tapaba el lado de arriba — con la
+    perpetuidad creciente intacta, una asociación con ROE por debajo de su Ke seguía dando
+    0,16x, que es igual de indefendible.
 
-    El extremo ALTO de `Ke` no sirve para esto: ahí el defecto también existe pero es de un
-    40 %, y un test que lo midiera ahí no mostraría de qué tamaño era.
+    Ahora el terminal erosiona el exceso con la persistencia medida, y eso acota los DOS
+    lados por construcción: el denominador `1 + Ke − ω` es siempre positivo y mayor que `Ke`.
+    El techo de crecimiento sigue valiendo, pero para otra cosa — que el PATRIMONIO no crezca
+    más rápido que la economía durante el horizonte explícito.
     """
     from modules.valuation.engine.excess_return import valuar
-    bv0, roe, b_viejo = float(BHD[-1][1]), 22.57, 0.60
-    sin_techo = valuar(bv_inicial=bv0, ke_pct=14.28, roe_por_periodo=[roe] * 5,
-                       retencion=b_viejo, g_terminal_pct=None)
-    con_techo = valuar(bv_inicial=bv0, ke_pct=14.28, roe_por_periodo=[roe] * 5,
-                       retencion=b_viejo, g_terminal_pct=9.03)
-    pb_sin, pb_con = sin_techo.valor / bv0, con_techo.valor / bv0
-    assert pb_sin > 10.0, f"el caso dejó de explotar: P/B sin techo = {pb_sin:.2f}x"
-    assert pb_con < PANEL_MAXIMO + 0.5, f"el techo no lo contuvo: {pb_con:.2f}x"
-    assert pb_sin > pb_con * 3, (
-        f"{pb_sin:.2f}x contra {pb_con:.2f}x: el techo dejó de tener el efecto que se midió")
+    bv0, roe = float(BHD[-1][1]), 22.57
+    # El caso que antes explotaba: retención vieja de 0,60 y Ke en el extremo bajo.
+    v = valuar(bv_inicial=bv0, ke_pct=14.28, roe_por_periodo=[roe] * 5, retencion=0.60,
+               persistencia=0.902)
+    pb = v.valor / bv0
+    assert pb < 4.0, f"P/B = {pb:.2f}x: el terminal volvió a explotar"
+
+    # Y el límite: llevando ω a casi uno el terminal NO se dispara, se convierte en una
+    # perpetuidad PLANA. El denominador `1 + Ke − ω` tiende a `Ke`, nunca a cero, que es
+    # exactamente la propiedad que hace imposible la explosión — la vieja `(Ke − g)` sí
+    # tendía a cero, y de ahí salía el 12,23x.
+    v_casi_uno = valuar(bv_inicial=bv0, ke_pct=14.28, roe_por_periodo=[roe] * 5,
+                        retencion=0.60, persistencia=0.999)
+    pb_limite = v_casi_uno.valor / bv0
+    assert pb_limite > pb, "ω tiene que mover el resultado: más persistencia, más valor"
+    assert pb_limite < 4.0, (
+        f"P/B = {pb_limite:.2f}x con ω = 0,999. Ni en el límite puede explotar: el "
+        "denominador tiende a Ke, no a cero")

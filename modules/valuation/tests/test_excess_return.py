@@ -76,7 +76,11 @@ def test_con_ROE_un_punto_por_encima_el_exceso_es_EXACTAMENTE_el_VP_de_la_difere
     # Terminal: RI del año T+1 sobre el patrimonio de apertura de T+1 (= `bv`), en
     # perpetuidad, descontado por (1+Ke)^T.
     ri_terminal = 0.01 * bv
-    terminal = ri_terminal / ((KE - g) / 100.0)
+    # Terminal por PERSISTENCIA: el exceso se erosiona a `ω` por año, así que la suma es
+    # `ω·RI_T / (1 + Ke − ω)`. Antes era `RI_T / (Ke − g)`, una perpetuidad CRECIENTE que
+    # explotaba cuando `g` se acercaba a `Ke`.
+    w = er.PERSISTENCIA_POR_DEFECTO
+    terminal = (w * ri_terminal) / (1.0 + KE / 100.0 - w)
     vp_terminal = terminal / (1.0 + KE / 100.0) ** T
 
     v = er.valuar(bv_inicial=BV0, ke_pct=KE, roe_por_periodo=[roe] * T, retencion=b)
@@ -96,17 +100,53 @@ def test_el_terminal_se_descuenta_por_T_y_no_por_T_mas_uno():
 # ── convergencia ────────────────────────────────────────────────────────────────────
 
 
-def test_g_mayor_o_igual_a_Ke_LANZA_antes_de_calcular():
-    """Verificar después es tarde: la perpetuidad ya devolvió un número que parece resultado."""
-    with pytest.raises(er.HorizonteInvalidoError, match="no converge"):
-        er.valuar(bv_inicial=BV0, ke_pct=10.0, roe_por_periodo=[25.0] * 5, retencion=0.9)
+def test_el_terminal_esta_ACOTADO_para_cualquier_combinacion():
+    """Reemplaza a los dos tests de convergencia, y garantiza más que ellos.
+
+    Antes el terminal era `RI_{T+1} / (Ke − g)` y había que VETAR las combinaciones donde
+    `g >= Ke`, porque el denominador se anulaba o cambiaba de signo. Con la persistencia el
+    denominador es `1 + Ke − ω`, que con `ω < 1` es siempre mayor que `Ke` y siempre
+    positivo: **no hay combinación que haga explotar el terminal**, así que no hay nada que
+    vetar.
+
+    El caso que antes lanzaba —ROE 25 % con retención 0,9 contra un Ke de 10 %, o sea
+    `g = 22,5 %`— ahora devuelve un valor finito y razonable.
+    """
+    v = er.valuar(bv_inicial=BV0, ke_pct=10.0, roe_por_periodo=[25.0] * 5, retencion=0.9)
+    assert v.valor > BV0, "una entidad con ROE muy por encima de Ke tiene que valer más"
+    assert v.valor / BV0 < 6.0, f"P/B = {v.valor / BV0:.2f}x: el terminal sigue explotando"
 
 
-def test_el_caso_limite_g_igual_a_Ke_tambien_lanza():
-    """Estricto: con `g == Ke` el denominador es cero."""
-    with pytest.raises(er.HorizonteInvalidoError):
-        er.valuar(bv_inicial=BV0, ke_pct=12.0, roe_por_periodo=[24.0] * 3, retencion=0.5,
-                  g_terminal_pct=12.0)
+def test_el_terminal_es_SIMETRICO_entre_crear_y_destruir_valor():
+    """El defecto tenía dos caras y la segunda es la que no se ve.
+
+    Con la perpetuidad creciente, una entidad que destruía valor lo destruía CRECIENDO: una
+    asociación con ROE 11 % contra un Ke de 12,91 % daba un P/B de 0,16x —el 16 % de su
+    patrimonio— cuando el mínimo que registra el panel de transacciones es 0,77x, y fue una
+    venta post-crisis.
+
+    Con la erosión, el mismo spread en un sentido y en el otro produce desviaciones del libro
+    de la MISMA magnitud. Es la propiedad que hace defendible el modelo en los dos lados.
+    """
+    arriba = er.valuar(bv_inicial=BV0, ke_pct=13.0, roe_por_periodo=[15.0] * 5,
+                       retencion=0.5)
+    abajo = er.valuar(bv_inicial=BV0, ke_pct=13.0, roe_por_periodo=[11.0] * 5,
+                      retencion=0.5)
+    exceso = arriba.valor - BV0
+    defecto = BV0 - abajo.valor
+    assert exceso > 0 and defecto > 0
+    assert exceso == pytest.approx(defecto, rel=0.15), (
+        f"crear vale {exceso:,.0f} y destruir cuesta {defecto:,.0f}: el terminal trata "
+        "distinto a los dos signos del spread")
+
+
+def test_una_persistencia_FUERA_DE_RANGO_lanza():
+    """`ω = 1` devuelve la perpetuidad que este parámetro existe para cerrar, y `ω > 1` la
+    hace crecer. Se veta antes de calcular, no después."""
+    for w in (0.0, 1.0, 1.2, -0.3):
+        with pytest.raises(ValueError, match="persistencia"):
+            er.valuar(bv_inicial=BV0, ke_pct=12.0, roe_por_periodo=[15.0] * 3,
+                      retencion=0.5, persistencia=w)
 
 
 # ── ROE sobre apertura ──────────────────────────────────────────────────────────────

@@ -113,6 +113,9 @@ class Lectura:
     g_terminal_pct: float = 0.0
     #: Qué sostiene los parámetros de este tipo. Va al informe.
     evidencia_del_tipo: str = ""
+    #: La persistencia del exceso, MEDIDA por tipo. Gobierna el terminal: con ω < 1 el
+    #: exceso se erosiona y el terminal queda acotado por los dos lados.
+    persistencia: float = 0.0
 
     @property
     def destruye_valor(self) -> bool:
@@ -168,7 +171,8 @@ def valuar_entidad(db: Session, *, bank_id: str, nombre: str) -> Optional[Lectur
     for k in (ke.bajo, ke.alto):
         try:
             v = er.valuar(bv_inicial=bv0, ke_pct=k, roe_por_periodo=[roe] * HORIZONTE,
-                          retencion=retencion, g_terminal_pct=g)
+                          retencion=retencion, g_terminal_pct=g,
+                          persistencia=pt.persistencia_de(tipo), g_max_pct=techo.valor_pct)
             valores.append(v.valor)
         except er.HorizonteInvalidoError as e:
             # `g >= Ke` en este extremo: se acorta el horizonte y se DECLARA, que es lo que
@@ -197,6 +201,7 @@ def valuar_entidad(db: Session, *, bank_id: str, nombre: str) -> Optional[Lectur
         retencion=retencion,
         g_terminal_pct=g,
         evidencia_del_tipo=pt.evidencia_de(tipo),
+        persistencia=pt.persistencia_de(tipo),
     )
 
 
@@ -216,10 +221,18 @@ def a_payload(lec: Lectura) -> Dict[str, Any]:
             "rango": [lec.valor_bajo, lec.valor_alto],
             "pb_implicito": [lec.pb_bajo, lec.pb_alto],
         },
+        # Los parámetros del TIPO viajan en el payload. Sin esto se pierden al reconstruir
+        # la lectura, y el informe salía diciendo «entidad de intermediación» genérica, con
+        # una persistencia de 0,0 en la sección de metodología. Es el mismo desync que ya
+        # había entre las claves planas y las anidadas: dos lecturas del mismo hecho.
+        "tipo_de_entidad": lec.tipo_de_entidad,
         "procedencia": {
             "fraccion_de_rubrica": lec.fraccion_de_rubrica,
-            "retencion_supuesta": RETENCION,
+            "retencion_supuesta": lec.retencion,
             "retencion_evidencia": RETENCION_EVIDENCIA,
+            "persistencia": lec.persistencia,
+            "g_terminal_pct": lec.g_terminal_pct,
+            "evidencia_del_tipo": lec.evidencia_del_tipo,
             "horizonte_anios": HORIZONTE,
         },
         "serie_spread": [{"periodo": p, "roe_pct": r} for p, r in lec.serie_spread],

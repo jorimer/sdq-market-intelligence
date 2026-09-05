@@ -87,6 +87,51 @@ RETENCION_EVIDENCIA_POR_TIPO: Dict[str, str] = {
         "y el modelo la trataba con el mismo 60 % que a un banco."),
 }
 
+#: PERSISTENCIA del exceso de rentabilidad, medida con la regresión de Ohlson: el exceso de
+#: ROE de un año contra el del anterior, sobre 259 pares (entidad, año) de 2019 a 2025. La
+#: pendiente es cuánto sobrevive de la ventaja de un año al siguiente.
+#:
+#:     global   ω = 0,867   (R² = 0,776, 259 pares)
+#:     ────────────────────────────────────────────
+#:     banca múltiple              0,902   n = 93
+#:     bancos de ahorro y crédito  0,571   n = 79
+#:     corporaciones de crédito    0,569   n = 27
+#:     asociaciones                0,358   n = 60
+#:
+#: **Ordena igual que la dispersión**, y eso es corroboración y no casualidad: la clase cuyo
+#: ROE más se dispersa es también la que más conserva su ventaja de un año al otro. Los dos
+#: grupos del medio dan 0,571 y 0,569 — que compartan banda de beta deja de ser una decisión
+#: por falta de muestra y pasa a tener una segunda medición que la respalda.
+#:
+#: **Para qué sirve.** El terminal suponía que el spread se mantenía para siempre y encima
+#: CRECÍA. Con ω el exceso se erosiona, que es lo que dice el equilibrio competitivo y lo que
+#: los datos muestran. Y acota los dos lados: sin esto, una entidad que destruye valor lo
+#: destruye creciendo, y el modelo devolvía un P/B de 0,16x para una asociación con ROE de
+#: 11 % — tan indefendible como el 12,23x que devolvía para un banco muy rentable.
+PERSISTENCIA_POR_TIPO: Dict[str, float] = {
+    "banca_multiple": 0.902,
+    "banco_ahorro_credito": 0.571,
+    "corporacion_credito": 0.569,
+    "aap": 0.358,
+}
+
+PERSISTENCIA_EVIDENCIA_POR_TIPO: Dict[str, str] = {
+    "banca_multiple": (
+        "Pendiente de la regresión del exceso de ROE contra el del año anterior, 93 pares "
+        "(entidad, año) 2019-2025. Es la más alta del sistema: la ventaja de un banco "
+        "múltiple sobrevive de un año al otro, que es lo que se espera de una franquicia con "
+        "escala y base de depósitos."),
+    "banco_ahorro_credito": "79 pares (entidad, año) 2019-2025.",
+    "corporacion_credito": (
+        "27 pares (entidad, año) 2019-2025. Muestra chica —tres entidades— pero el resultado "
+        "coincide con el de los bancos de ahorro y crédito (0,569 contra 0,571), que es la "
+        "segunda medición independiente que respalda tratarlos juntos."),
+    "aap": (
+        "60 pares (entidad, año) 2019-2025, y la más baja del sistema: la ventaja de una "
+        "asociación se erosiona rápido. Coincide con que son las de ROE menos disperso — "
+        "negocio hipotecario, sin mucho espacio para diferenciarse."),
+}
+
 #: Cuando el tipo no se conoce. Se usa el de banca múltiple —la clase más grande y la de la
 #: beta original— y se DECLARA, porque un defecto silencioso acá cambia el valor.
 TIPO_POR_DEFECTO = "banca_multiple"
@@ -100,6 +145,10 @@ def retencion_de(tipo: str | None) -> float:
     return RETENCION_POR_TIPO.get(tipo or "", RETENCION_POR_TIPO[TIPO_POR_DEFECTO])
 
 
+def persistencia_de(tipo: str | None) -> float:
+    return PERSISTENCIA_POR_TIPO.get(tipo or "", PERSISTENCIA_POR_TIPO[TIPO_POR_DEFECTO])
+
+
 def evidencia_de(tipo: str | None) -> str:
     """Las dos evidencias juntas, más el aviso cuando el tipo no se reconoció."""
     t = tipo if tipo in BETA_POR_TIPO else None
@@ -108,4 +157,7 @@ def evidencia_de(tipo: str | None) -> str:
                 f"{TIPO_POR_DEFECTO}, que son los más exigentes en beta. Se declara porque "
                 "cambia el valor.\n\n"
                 + BETA_EVIDENCIA_POR_TIPO[TIPO_POR_DEFECTO])
-    return f"{BETA_EVIDENCIA_POR_TIPO[t]}\n\nRetención: {RETENCION_EVIDENCIA_POR_TIPO[t]}"
+    return (f"{BETA_EVIDENCIA_POR_TIPO[t]}\n\n"
+            f"Retención: {RETENCION_EVIDENCIA_POR_TIPO[t]}\n\n"
+            f"Persistencia del exceso (ω = {PERSISTENCIA_POR_TIPO[t]}): "
+            f"{PERSISTENCIA_EVIDENCIA_POR_TIPO[t]}")

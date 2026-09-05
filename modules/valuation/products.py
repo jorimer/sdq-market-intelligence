@@ -20,7 +20,7 @@ observa, se estima, y cincuenta puntos básicos mueven el resultado.
 from __future__ import annotations
 
 import logging
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Tuple
 
 from sqlalchemy.orm import Session
 
@@ -42,20 +42,44 @@ logger = logging.getLogger("sdq.products.valuation")
 SECTOR_KEY = "valuation"
 DISPLAY = "SDQ Valuación de Entidades"
 
+# ── La estructura del informe ────────────────────────────────────────────────────
+#
+# Sigue el orden de un informe de valuación profesional —resumen, propósito y alcance,
+# antecedentes, análisis financiero, metodología, conclusión, supuestos— con dos
+# adaptaciones que el sector impone y que conviene decir en voz alta:
+#
+# 1. **No hay EBITDA.** El estándar genérico de valuación de empresas lo pide, y en una
+#    entidad financiera no significa nada: no hay depreciación relevante, el interés no es
+#    un costo de financiamiento sino el negocio, y el apalancamiento es materia prima. El
+#    análisis financiero va sobre lo que SÍ mide a un banco — patrimonio, resultado, ROE
+#    sobre apertura, crecimiento del balance.
+# 2. **El resumen abre por el SPREAD y no por el valor.** Quien ve el spread entiende la
+#    palanca; quien ve solo el valor discute el supuesto. Es la decisión de diseño que ya
+#    estaba y se conserva.
+SECCION_RESUMEN = "resumen_ejecutivo"
+SECCION_PROPOSITO = "proposito_y_alcance"
+SECCION_ANTECEDENTES = "antecedentes_de_la_entidad"
+SECCION_FINANCIERO = "analisis_financiero"
 SECCION_SPREAD = "spread_roe_ke"
+SECCION_METODOLOGIA = "metodologia"
 SECCION_VALOR = "valor_y_rango"
 SECCION_DESCOMPOSICION = "libro_vs_exceso"
 SECCION_SUPUESTOS = "supuestos_y_sensibilidad"
 SECCION_LIMITACIONES = "limitations"
+SECCION_FUENTES = "fuentes_y_procedencia"
 
 _SECTION_TITLES = {
-    # El resumen abre por el SPREAD y no por el valor: quien ve el spread entiende la
-    # palanca; quien ve solo el valor discute el supuesto.
+    SECCION_RESUMEN: "Resumen ejecutivo",
+    SECCION_PROPOSITO: "Propósito y alcance",
+    SECCION_ANTECEDENTES: "La entidad y su posición",
+    SECCION_FINANCIERO: "Análisis financiero",
     SECCION_SPREAD: "Creación de valor · ROE − Ke",
-    SECCION_VALOR: "Valor estimado y su rango",
+    SECCION_METODOLOGIA: "Metodología de valuación",
+    SECCION_VALOR: "Conclusión de valor",
     SECCION_DESCOMPOSICION: "Descomposición: libro y exceso",
     SECCION_SUPUESTOS: "Supuestos y sensibilidad al costo de capital",
-    SECCION_LIMITACIONES: "Limitaciones",
+    SECCION_LIMITACIONES: "Limitaciones y condiciones",
+    SECCION_FUENTES: "Fuentes y procedencia",
 }
 
 #: Por qué el eje no puede entregar todavía. Se declara en una constante y no en un `if`
@@ -93,13 +117,19 @@ def valuation_manifest() -> SectorProductManifest:
                 watermark="Vista abierta · SDQMIP", price_band="abierto"),
             ProductTier.insight: TierLevelSpec(
                 tier=ProductTier.insight, granularity=Granularity.named_entity,
-                sections=(SECCION_SPREAD, SECCION_VALOR, SECCION_DESCOMPOSICION),
+                sections=(SECCION_RESUMEN, SECCION_PROPOSITO, SECCION_ANTECEDENTES,
+                          SECCION_FINANCIERO, SECCION_SPREAD, SECCION_VALOR,
+                          SECCION_DESCOMPOSICION, SECCION_LIMITACIONES),
                 narrative_templates=(), prosa_computada=True,
                 audience="cliente / comité", cadence="recurring", price_band="suscripción"),
+            # El Deep Dive agrega las dos que un comité de crédito o una contraparte piden
+            # para poder DISCUTIR el número: cómo se construyó y de dónde salió cada insumo.
             ProductTier.deep_dive: TierLevelSpec(
                 tier=ProductTier.deep_dive, granularity=Granularity.named_entity,
-                sections=(SECCION_SPREAD, SECCION_VALOR, SECCION_DESCOMPOSICION,
-                          SECCION_SUPUESTOS, SECCION_LIMITACIONES),
+                sections=(SECCION_RESUMEN, SECCION_PROPOSITO, SECCION_ANTECEDENTES,
+                          SECCION_FINANCIERO, SECCION_SPREAD, SECCION_METODOLOGIA,
+                          SECCION_VALOR, SECCION_DESCOMPOSICION, SECCION_SUPUESTOS,
+                          SECCION_LIMITACIONES, SECCION_FUENTES),
                 narrative_templates=(), prosa_computada=True,
                 audience="comité / contraparte", cadence="on_demand", price_band="on-demand"),
         })
@@ -334,14 +364,57 @@ class ValuationProduct:
 
         lec = _lectura_desde_payload(snapshot)
         secciones = self.product_manifest().require_level(tier).sections
+        posicion, cuota = self._posicion_en_su_tipo(lec)
+        # CORREGIDO. Dos de estas secciones se servían con la prosa de la MUESTRA, así que un
+        # informe real de una entidad real terminaba diciendo «cifras ilustrativas de una
+        # entidad ficticia» y publicando una fórmula de `Ke` con prima de riesgo país, que
+        # este modelo no tiene. Ahora las once salen del dato, como el resto.
         fijas = {
+            SECCION_RESUMEN: narrativa.resumen_ejecutivo(lec),
+            SECCION_PROPOSITO: narrativa.proposito_y_alcance(lec),
+            SECCION_ANTECEDENTES: narrativa.antecedentes(lec, posicion=posicion,
+                                                         cuota_pct=cuota),
+            SECCION_FINANCIERO: narrativa.analisis_financiero(lec),
             SECCION_SPREAD: narrativa.resumen_del_spread(lec),
+            SECCION_METODOLOGIA: narrativa.metodologia(lec),
             SECCION_VALOR: narrativa.resumen_del_valor(lec),
             SECCION_DESCOMPOSICION: narrativa.resumen_de_descomposicion(lec),
-            SECCION_SUPUESTOS: _SAMPLE_NARRATIVAS[SECCION_SUPUESTOS],
-            SECCION_LIMITACIONES: _SAMPLE_NARRATIVAS[SECCION_LIMITACIONES],
+            SECCION_SUPUESTOS: narrativa.metodologia(lec),
+            SECCION_LIMITACIONES: narrativa.limitaciones(lec),
+            SECCION_FUENTES: narrativa.fuentes_y_procedencia(lec),
         }
         return {sec: fijas[sec] for sec in secciones if sec in fijas}
+
+    def _posicion_en_su_tipo(self, lec: Any) -> Tuple[Optional[Tuple[int, int]],
+                                                      Optional[float]]:
+        """Puesto por patrimonio DENTRO de su clase, y cuota del patrimonio del grupo.
+
+        Se computa sobre el padrón completo de la clase al mismo corte. Una posición de
+        mercado afirmada sin computarla es una opinión, y comparar contra un subconjunto
+        elegido hace ver a cualquier entidad como se la quiera hacer ver.
+        """
+        from sqlalchemy import text as _sql
+        if self._db is None or not lec.tipo_de_entidad:
+            return None, None
+        try:
+            filas = self._db.execute(_sql(
+                "SELECT b.name, d.patrimonio_tecnico FROM banks b "
+                "JOIN banking_data d ON d.bank_id = b.id "
+                "WHERE b.bank_type = :t AND d.period_end = :p "
+                "AND d.patrimonio_tecnico IS NOT NULL "
+                "ORDER BY d.patrimonio_tecnico DESC"),
+                {"t": lec.tipo_de_entidad, "p": lec.periodo}).fetchall()
+        except Exception as e:  # noqa: BLE001 — la posición no puede costar el informe
+            logger.warning("no se pudo computar la posición de %s: %s", lec.entidad, e)
+            return None, None
+        if len(filas) < 2:
+            return None, None
+        nombres = [str(f[0]) for f in filas]
+        if lec.entidad not in nombres:
+            return None, None
+        total_grupo = sum(float(f[1]) for f in filas)
+        cuota = (100.0 * lec.patrimonio_libro / total_grupo) if total_grupo else None
+        return (nombres.index(lec.entidad) + 1, len(nombres)), cuota
 
     async def render(self, tier: ProductTier, snapshot: ProductSnapshot,
                      narratives: Dict[str, str], *, sample: bool = False,
@@ -357,24 +430,43 @@ class ValuationProduct:
         titulo = {"pulse": "Pulse · Valuación", "insight": "Insight · Valuación",
                   "deep_dive": "Deep Dive · Valuación"}.get(tier.value, DISPLAY)
         p = snapshot.payload
+        # CORREGIDO. Estas claves se leían PLANAS —`p["spread_pp"]`, `p["valor_rango"]`— y el
+        # payload las trae ANIDADAS bajo `spread` y `valor`. O sea que ni el titular ni la
+        # tabla se renderizaban nunca, en ningún informe, y nada fallaba: el `.get` devolvía
+        # `None` y el bloque se saltaba. `_lectura_desde_payload`, tres funciones más abajo,
+        # sí las leía anidadas — dos lecturas del mismo dato que se desincronizaron.
+        sp = p.get("spread") or {}
+        va = p.get("valor") or {}
         tablas: List = []
         titular = None
-        if p.get("spread_pp"):
-            alto, bajo = p["spread_pp"][0], p["spread_pp"][-1]
+        if sp.get("spread_pp"):
+            alto, bajo = sp["spread_pp"][0], sp["spread_pp"][-1]
             titular = f"ROE − Ke: {alto:+.1f} pp a {bajo:+.1f} pp"
-        if p.get("valor_rango") and p.get("pb_implicito"):
-            tablas.append(("Valor y múltiplo implícito", [
-                ["Valor estimado", f"RD$ {p['valor_rango'][1]:,.0f}",
-                 f"RD$ {p['valor_rango'][0]:,.0f}"],
-                ["P/B implícito (derivado)", f"{p['pb_implicito'][1]:.2f}x",
-                 f"{p['pb_implicito'][0]:.2f}x"],
-                ["Patrimonio libro", f"RD$ {p.get('patrimonio_libro', 0):,.0f}", ""],
+        if va.get("rango") and va.get("pb_implicito"):
+            libro = va.get("patrimonio_libro") or 0
+            tablas.append(("Conclusión de valor", [
+                ["", "Extremo favorable", "Extremo adverso"],
+                ["Valor estimado", f"RD$ {va['rango'][1]:,.0f}", f"RD$ {va['rango'][0]:,.0f}"],
+                ["P/B implícito (derivado)", f"{va['pb_implicito'][1]:.2f}x",
+                 f"{va['pb_implicito'][0]:.2f}x"],
+                ["Patrimonio libro", f"RD$ {libro:,.0f}", ""],
             ]))
+        if sp.get("ke_rango_pct"):
+            ke = sp["ke_rango_pct"]
+            tablas.append(("Costo de capital y retorno", [
+                ["", "Bajo", "Alto"],
+                ["Ke (RD$)", f"{ke[0]:.2f} %", f"{ke[1]:.2f} %"],
+                ["ROE proyectado", f"{sp.get('roe_proyectado_pct', 0):.2f} %", ""],
+                ["Spread ROE − Ke", f"{sp['spread_pp'][0]:+.2f} pp",
+                 f"{sp['spread_pp'][-1]:+.2f} pp"],
+            ]))
+        # La ENTIDAD va en la portada. Un informe de valuación cuya tapa no nombra al sujeto
+        # valuado no se puede archivar ni citar: decía solo «SDQ Valuación de Entidades».
         return render_product_pdf(
             sector_key=SECTOR_KEY, display_name=DISPLAY, title=titulo, period=snapshot.period,
             narratives=narratives, section_titles=_SECTION_TITLES, tables=tablas, charts=[],
-            headline=titular, subtitle=None, watermark=level.watermark, sample=sample,
-            output_dir=output_dir, fmt=fmt)
+            headline=titular, subtitle=(snapshot.entity_name or p.get("entidad") or None),
+            watermark=level.watermark, sample=sample, output_dir=output_dir, fmt=fmt)
 
     # ── Muestra CURADA ──
     #
@@ -396,8 +488,7 @@ class ValuationProduct:
                                             else _ENTIDAD_FICTICIA))
 
     def sample_narratives(self, tier: ProductTier) -> Dict[str, str]:
-        secciones = self.product_manifest().require_level(tier).sections
-        return {sec: _SAMPLE_NARRATIVAS[sec] for sec in secciones}
+        return _sample_narrativas_de(self.product_manifest().require_level(tier).sections)
 
     # ── Procedencia ──
 
@@ -435,75 +526,101 @@ def _lectura_desde_payload(snapshot: ProductSnapshot):
         pb_alto=float((va.get("pb_implicito") or [0, 0])[1]),
         fraccion_de_rubrica=float(pr.get("fraccion_de_rubrica") or 0.0),
         advertencias=tuple(p.get("advertencias") or ()),
+        serie_spread=tuple((str(x.get("periodo")), float(x.get("roe_pct") or 0.0))
+                           for x in (p.get("serie_spread") or [])),
+        tipo_de_entidad=str(p.get("tipo_de_entidad") or ""),
+        retencion=float(pr.get("retencion_supuesta") or 0.0),
+        g_terminal_pct=float(pr.get("g_terminal_pct") or 0.0),
+        evidencia_del_tipo=str(pr.get("evidencia_del_tipo") or ""),
+        persistencia=float(pr.get("persistencia") or 0.0),
     )
 
 
 #: Ficticia y que lo diga en el nombre. No es un banco real con los datos cambiados: es un
 #: ejemplo, y la diferencia importa porque una valuación atribuida a una entidad que existe
 #: es una afirmación sobre esa entidad.
+def _evidencia_de_muestra() -> str:
+    """La evidencia del tipo de la entidad ilustrativa, de la MISMA tabla que la real."""
+    from modules.valuation.engine import por_tipo
+    return por_tipo.evidencia_de("banca_multiple")
+
+
 _ENTIDAD_FICTICIA = "Banco Múltiple Ejemplo (entidad ilustrativa)"
 
+# CORREGIDO — la muestra usaba claves PLANAS y el payload real las trae ANIDADAS. Eran dos
+# formas del mismo dato, y de ahí salía el defecto del render: leía las planas, así que con
+# la muestra el titular y las tablas aparecían y en un informe REAL no aparecían nunca. La
+# muestra ahora tiene exactamente la forma que produce `a_payload`.
 _SAMPLE_PAYLOAD: Dict[str, Any] = {
     "entidad": _ENTIDAD_FICTICIA,
+    "periodo": "2025-12-31",
+    "moneda": "DOP",
     "es_ilustrativo": True,
-    "patrimonio_libro": 18_400_000_000.0,
-    "roe_proyectado_pct": 13.2,
-    "ke_rango_pct": [12.4, 14.9],
-    "spread_pp": [0.8, -1.7],
-    "valor_rango": [19_900_000_000.0, 16_800_000_000.0],
-    "pb_implicito": [1.08, 0.91],
-    "cambia_de_signo": True,
+    "tipo_de_entidad": "banca_multiple",
+    "spread": {
+        "roe_proyectado_pct": 13.2,
+        "ke_rango_pct": [12.4, 14.9],
+        "spread_pp": [0.8, -1.7],
+        "cambia_de_signo": True,
+        "destruye_valor": False,
+    },
+    "valor": {
+        "patrimonio_libro": 18_400_000_000.0,
+        "rango": [16_800_000_000.0, 19_900_000_000.0],
+        "pb_implicito": [0.91, 1.08],
+    },
+    "procedencia": {
+        "fraccion_de_rubrica": 0.37,
+        "retencion_supuesta": 0.75,
+        "persistencia": 0.902,
+        "g_terminal_pct": 9.03,
+        "evidencia_del_tipo": _evidencia_de_muestra(),
+        "horizonte_anios": 5,
+    },
+    # Horizonte explícito de cinco años, el mismo que usa el servicio.
+    "serie_spread": [{"periodo": f"{a}-12-31", "roe_pct": r} for a, r in
+                     ((2021, 12.1), (2022, 13.8), (2023, 12.9), (2024, 13.5), (2025, 13.2))],
+    "advertencias": [],
 }
 
-_SAMPLE_NARRATIVAS: Dict[str, str] = {
-    SECCION_SPREAD: (
-        "La entidad rinde un **ROE proyectado de 13,2 %** contra un costo de capital estimado "
-        "entre **12,4 % y 14,9 %**. El spread va de **+0,8 pp a −1,7 pp**: en el extremo "
-        "favorable del rango crea valor, y en el desfavorable lo destruye.\n\n"
-        "Esa ambigüedad **es el hallazgo**, no una debilidad del análisis. Una entidad cuyo "
-        "ROE cae dentro del rango de su propio costo de capital no tiene una respuesta única "
-        "sobre si vale más o menos que su libro — y quien decida sobre ella necesita saber "
-        "exactamente eso.\n\n"
-        "_Cifras ilustrativas de una entidad ficticia; el informe las computa del estado "
-        "publicado de la entidad real._"
-    ),
-    SECCION_VALOR: (
-        "Valor estimado entre **RD$ 16.800 y 19.900 millones**, contra un patrimonio libro de "
-        "**RD$ 18.400 millones**. El múltiplo P/B implícito va de **0,91× a 1,08×** — y es "
-        "**derivado**, no asumido: sale del valor, no lo produce.\n\n"
-        "El rango **cruza el libro**. No se publica un punto medio: promediar los dos extremos "
-        "daría una cifra que ningún supuesto sostiene.\n\n"
-        "_Cifras ilustrativas de una entidad ficticia._"
-    ),
-    SECCION_DESCOMPOSICION: (
-        "Del valor, **RD$ 18.400 millones son libro** y el resto es el valor presente del "
-        "exceso —lo que la entidad gana por encima de lo que su capital exige—. En el extremo "
-        "desfavorable del rango ese exceso es **negativo**: la entidad valdría menos que su "
-        "patrimonio contable.\n\n"
-        "_Cifras ilustrativas de una entidad ficticia._"
-    ),
-    SECCION_SUPUESTOS: (
-        "El costo de capital se estima como `Ke = Rf + β × ERP + CRP`. **La beta no se "
-        "desapalanca**: Hamada supone que la deuda es financiamiento y que existe un "
-        "apalancamiento óptimo separable de la operación, y en un banco los depósitos son "
-        "**materia prima** — esa premisa es falsa.\n\n"
-        "**β y ERP viajan como rúbrica**, no como dato real: son supuestos de comparables "
-        "latinoamericanos, no observaciones dominicanas. La sensibilidad se publica en pasos "
-        "de 50 puntos básicos porque es la escala a la que el resultado se mueve.\n\n"
-        "_Cifras ilustrativas de una entidad ficticia._"
-    ),
-    SECCION_LIMITACIONES: (
-        "Esta valuación **no está contrastada contra precios pagados**. El panel de "
-        "transacciones sí permite decir a cuánto sobre valor libro se ha pagado un banco del "
-        "Caribe, que es una referencia de mercado; contrastar este modelo es otra cosa y "
-        "exige valuar cada adquirida a la fecha de su operación, para lo que hace falta su "
-        "historia de balance. Mientras eso no exista, el eje no afirma que sus valores "
-        "predicen precios.\n\n"
-        "Un score de solidez **no es un proxy de precio**: una entidad sólida puede estar "
-        "destruyendo valor, y este informe responde cuánto vale, no qué tan sana está.\n\n"
-        "Nada de lo anterior es una recomendación de comprar o vender."
-    ),
-}
+#: El AVISO que convierte una muestra en una muestra. Va en la primera sección de cada nivel
+#: y no en una al final: quien lee dos párrafos tiene que haberlo visto.
+_AVISO_ILUSTRATIVO = (
+    "\n\n_Cifras ilustrativas de una entidad ficticia. El informe real las computa del "
+    "estado publicado por la Superintendencia para la entidad que se valúa._")
+
+
+def _sample_narrativas_de(secciones) -> Dict[str, str]:
+    """La prosa de la muestra sale de las MISMAS funciones que la real.
+
+    Antes era un diccionario escrito a mano y por eso se desincronizó: la muestra publicaba
+    una fórmula de `Ke` con prima de riesgo país que el modelo no usa, y ese texto además
+    terminó sirviéndose en informes reales. Con una sola fuente de prosa, la muestra no puede
+    decir algo que el producto no dice.
+    """
+    from modules.valuation import narrativa
+
+    snap = ProductSnapshot(tier=ProductTier.deep_dive, period="2025-12-31",
+                           payload=_SAMPLE_PAYLOAD, entity_name=_ENTIDAD_FICTICIA)
+    lec = _lectura_desde_payload(snap)
+    todas = {
+        SECCION_RESUMEN: narrativa.resumen_ejecutivo(lec),
+        SECCION_PROPOSITO: narrativa.proposito_y_alcance(lec),
+        SECCION_ANTECEDENTES: narrativa.antecedentes(lec),
+        SECCION_FINANCIERO: narrativa.analisis_financiero(lec),
+        SECCION_SPREAD: narrativa.resumen_del_spread(lec),
+        SECCION_METODOLOGIA: narrativa.metodologia(lec),
+        SECCION_VALOR: narrativa.resumen_del_valor(lec),
+        SECCION_DESCOMPOSICION: narrativa.resumen_de_descomposicion(lec),
+        SECCION_SUPUESTOS: narrativa.metodologia(lec),
+        SECCION_LIMITACIONES: narrativa.limitaciones(lec),
+        SECCION_FUENTES: narrativa.fuentes_y_procedencia(lec),
+    }
+    salida = {s: todas[s] for s in secciones if s in todas}
+    primera = next((s for s in secciones if s in salida), None)
+    if primera:
+        salida[primera] = salida[primera] + _AVISO_ILUSTRATIVO
+    return salida
 
 
 register_product(SECTOR_KEY, lambda db: ValuationProduct(db))

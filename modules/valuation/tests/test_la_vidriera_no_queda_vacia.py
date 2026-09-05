@@ -41,21 +41,21 @@ def _entidad(db, ident: str, nombre: str, cierres: int, tipo=None) -> None:
     db.commit()
 
 
-def test_una_entidad_con_UN_solo_cierre_no_se_ofrece(db):
+def test_una_entidad_con_UN_solo_cierre_no_se_ofrece(db) -> None:
     """El ROE va sobre patrimonio de APERTURA: con un cierre no hay con qué computarlo, y
     `snapshot` lo rechaza. Ofrecerla sería una opción que falla al elegirla."""
     _entidad(db, "b1", "Banco de Un Cierre", cierres=1)
     assert ValuationProduct(db).scope_options() == []
 
 
-def test_una_entidad_con_DOS_cierres_si_se_ofrece(db):
+def test_una_entidad_con_DOS_cierres_si_se_ofrece(db) -> None:
     _entidad(db, "b2", "Banco Valuable", cierres=2)
     opciones = ValuationProduct(db).scope_options()
     assert [o["value"] for o in opciones] == ["b2"]
     assert opciones[0]["label"] == "Banco Valuable"
 
 
-def test_los_periodos_NO_ofrecen_el_corte_mas_viejo(db):
+def test_los_periodos_NO_ofrecen_el_corte_mas_viejo(db) -> None:
     """Contra el primer corte ninguna entidad tiene apertura: ofrecerlo garantiza el error."""
     _entidad(db, "b3", "Banco Valuable", cierres=3)
     periodos = ValuationProduct(db).available_periods()
@@ -65,14 +65,14 @@ def test_los_periodos_NO_ofrecen_el_corte_mas_viejo(db):
     assert periodos[0] == "2024-12-31", f"el más reciente primero: {periodos}"
 
 
-def test_sin_NINGUN_dato_las_dos_listas_estan_vacias(db):
+def test_sin_NINGUN_dato_las_dos_listas_estan_vacias(db) -> None:
     """Vacío por ausencia de dato es correcto; lo que no puede ser es vacío por estar escrito
     a mano, que es de lo que se sale acá."""
     p = ValuationProduct(db)
     assert p.available_periods() == [] and p.scope_options() == []
 
 
-def test_las_listas_NO_estan_escritas_a_mano(db):
+def test_las_listas_NO_estan_escritas_a_mano(db) -> None:
     """El contraejemplo del defecto: con dato sembrado, las dos tienen que responder."""
     _entidad(db, "b4", "Banco Valuable", cierres=3)
     p = ValuationProduct(db)
@@ -80,7 +80,7 @@ def test_las_listas_NO_estan_escritas_a_mano(db):
     assert p.scope_options(), "`scope_options` volvió a devolver una lista fija"
 
 
-def test_una_CAMBIARIA_no_se_ofrece_aunque_tenga_todo_el_dato(db):
+def test_una_CAMBIARIA_no_se_ofrece_aunque_tenga_todo_el_dato(db) -> None:
     """El caso que el selector de producción destapó: 41 de las 92 entidades ofrecidas eran
     agentes de cambio y casas de remesas.
 
@@ -99,7 +99,7 @@ def test_una_CAMBIARIA_no_se_ofrece_aunque_tenga_todo_el_dato(db):
     assert ValuationProduct(db).scope_options() == []
 
 
-def test_una_ASOCIACION_de_ahorros_y_prestamos_SI_se_ofrece(db):
+def test_una_ASOCIACION_de_ahorros_y_prestamos_SI_se_ofrece(db) -> None:
     """El contraejemplo que impide filtrar de más. Son entidades de intermediación
     supervisadas; que sean mutuales —sin acciones que comprar— es un caveat del informe, no
     un motivo para no poder valuarlas."""
@@ -110,7 +110,7 @@ def test_una_ASOCIACION_de_ahorros_y_prestamos_SI_se_ofrece(db):
     assert [o["value"] for o in ValuationProduct(db).scope_options()] == ["aap1"]
 
 
-def test_el_TIPO_viaja_con_la_entidad_en_el_selector(db):
+def test_el_TIPO_viaja_con_la_entidad_en_el_selector(db) -> None:
     """El sujeto viaja con el número: quien elige tiene que ver de qué tipo es la entidad,
     porque un banco múltiple y una asociación no se leen igual."""
     from modules.banking_score.models.models import BankType

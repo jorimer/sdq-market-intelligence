@@ -48,6 +48,48 @@ quienes pagar dividendos**, así que retienen todo. Es la diferencia por tipo me
 de todas, y hoy el modelo usa un 0,60 igual para las cuatro — una rúbrica que el dato
 desmiente.
 
+## Y el segundo defecto, que apareció al pedir el informe de la asociación
+
+El techo tapó el lado de arriba y dejó intacto el de abajo. APAP, ROE 11,00 % contra un `Ke`
+de 12,91 %: ingreso residual negativo todos los años, creciendo al 9,03 % y dividido por un
+`(Ke − g)` de 3,88 pp. **P/B 0,16× – 0,47×** — la entidad valdría el 16 % de su patrimonio,
+cuando el mínimo del panel es 0,77× y fue una venta post-crisis.
+
+Es el mismo defecto con el signo cambiado, y el segundo es peor porque **no se ve raro**: un
+múltiplo bajo para una entidad que destruye valor parece razonable hasta que se mira cuánto.
+
+### La cura: el exceso se EROSIONA, y está medido
+
+`RI_{t+1} = ω · RI_t`, con terminal `ω·RI_T / (1 + Ke − ω)`. Con `ω < 1` el denominador es
+siempre mayor que `Ke` y siempre positivo: **acotado por construcción y simétrico entre los
+dos signos**. Ni en el límite `ω → 1` explota — tiende a una perpetuidad plana, no a cero.
+
+`ω` medida con la regresión de Ohlson sobre 259 pares (entidad, año) 2019-2025:
+
+| | ω | n |
+|---|---:|---:|
+| global | **0,867** (R² 0,776) | 259 |
+| banca múltiple | 0,902 | 93 |
+| bancos de ahorro y crédito | 0,571 | 79 |
+| corporaciones de crédito | 0,569 | 27 |
+| asociaciones | **0,358** | 60 |
+
+**Ordena igual que la dispersión**, y eso es corroboración: la clase cuyo ROE más se dispersa
+es la que más conserva su ventaja. Y los dos del medio dan 0,571 y 0,569 — que compartan
+banda de beta deja de ser una decisión por falta de muestra.
+
+### El efecto sobre los dos casos reales
+
+| | perpetuidad (antes) | con techo | **con persistencia** |
+|---|---:|---:|---:|
+| BHD (banca múltiple) | 1,40× – **12,23×** | 1,31× – 3,15× | **1,14× – 1,58×** |
+| APAP (asociación) | — | **0,16×** – 0,47× | **0,72× – 0,91×** |
+
+El panel observado es 0,77×–2,73×, mediana 1,73×. El modelo queda ahora **por debajo** de esa
+mediana, y es deliberado: se mide la erosión en vez de suponer la ventaja perpetua. Ajustarlo
+para que coincida con el panel sería calibrar contra ocho observaciones, que es justo lo que
+dijimos que el panel no sostiene.
+
 ## Qué se cambia
 
 1. **Tope de crecimiento terminal.** `g = min(b × ROE, crecimiento nominal de largo plazo)`,
@@ -56,6 +98,8 @@ desmiente.
 2. **Retención por tipo**, medida. Reemplaza el 0,60 de rúbrica.
 3. **Beta por tipo**, en tres grupos. El ORDEN está medido; la MAGNITUD del salto es rúbrica
    y se declara como tal.
+4. **Persistencia por tipo**, medida. Reemplaza la perpetuidad creciente del terminal, que
+   explotaba por los dos lados.
 
 ## Qué NO se cambia, y por qué
 
