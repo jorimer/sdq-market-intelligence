@@ -20,6 +20,7 @@ existe, un texto de muestra que se sirve como real — ninguno rompe un test de 
 aserción numérica. Se ven leyendo el PDF.
 """
 from datetime import date
+from typing import Any, Dict
 
 import pytest
 from sqlalchemy import create_engine
@@ -149,21 +150,39 @@ def test_el_analisis_financiero_NO_habla_de_EBITDA(db):
     assert "| Cierre | ROE |" in fin, "falta la serie histórica de ROE"
 
 
-def test_el_render_pone_la_ENTIDAD_en_la_portada_y_arma_las_tablas(db):
+def test_el_render_pone_la_ENTIDAD_en_la_portada_y_arma_las_tablas(db, monkeypatch):
     """El titular y las tablas leían claves PLANAS que el payload no tiene."""
     import asyncio
     prod, snap, narr = _narrativas(db)
     p = snap.payload
     assert (p.get("spread") or {}).get("spread_pp"), "el payload cambió de forma"
+    # Se espía lo que el producto le PASA al renderizador, no el snapshot.
+    #
+    # Afirmar que el snapshot trae el nombre no dice nada sobre la portada —el render podía
+    # tirarlo, y lo tiraba—. Y leer el PDF producido exigiría una librería de lectura que el
+    # proyecto no tiene: el primer intento usó `pypdf`, que estaba instalado en mi máquina y
+    # no en CI. Espiar los argumentos prueba lo mismo sin agregar una dependencia para un
+    # test: si `subtitle` no lleva la entidad, la portada no puede nombrarla.
+    capturado: Dict[str, Any] = {}
+    import modules.valuation.products as mod
+    real = mod.render_product_pdf
+
+    def espia(**kw):
+        capturado.update(kw)
+        return real(**kw)
+
+    monkeypatch.setattr(mod, "render_product_pdf", espia)
     ruta = asyncio.run(prod.render(ProductTier.deep_dive, snap, narr, output_dir="/tmp"))
     assert ruta.endswith(".pdf")
-    # Se comprueba en el PDF PRODUCIDO, no en el snapshot. Afirmar que el snapshot trae el
-    # nombre no dice nada sobre la portada: el render podía —y podía de verdad— tirarlo.
-    from pypdf import PdfReader
-    texto = "\n".join((pg.extract_text() or "") for pg in PdfReader(ruta).pages[:1])
-    assert "Asociación Grande" in texto, (
-        "la PORTADA no nombra a la entidad valuada; decía solo «SDQ Valuación de Entidades»")
-    completo = "\n".join((pg.extract_text() or "") for pg in PdfReader(ruta).pages)
-    assert "Conclusión de valor" in completo and "Costo de capital y retorno" in completo, (
-        "las tablas no se renderizaron: el render leía claves planas que el payload no tiene")
-    assert "ROE" in completo and "Ke" in completo
+    assert capturado.get("subtitle") == "Asociación Grande", (
+        "la PORTADA no recibe el nombre de la entidad valuada; decía solo «SDQ Valuación de "
+        f"Entidades». subtitle={capturado.get('subtitle')!r}")
+    titulos = [t for t, _f in (capturado.get("tables") or [])]
+    assert "Conclusión de valor" in titulos and "Costo de capital y retorno" in titulos, (
+        f"las tablas no se armaron: {titulos}. El render leía claves planas que el payload "
+        "no tiene")
+    for _titulo, filas in capturado["tables"]:
+        assert len(filas) >= 2, "una tabla sin al menos encabezado y una fila de datos"
+        assert filas[0][0] == "", (
+            "la primera fila de la tabla es DATO y el renderizador la pinta como encabezado: "
+            f"{filas[0]}")
