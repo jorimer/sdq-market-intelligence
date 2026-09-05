@@ -122,3 +122,34 @@ class TestElDiagnosticoDiceLoQueElEmisorDijo:
 
         fuente = inspect.getsource(service._test_cmf_connection)
         assert "use_proxy" in fuente and "X-Proxy-Secret" in fuente
+
+
+class TestLaCredencialNoSeFiltraNiSeEsconde:
+    def test_la_apikey_se_redacta_antes_de_mostrarse(self):
+        """Los cuerpos de error repiten la URL consultada, y esa URL lleva la clave."""
+        from shared.settings.service import _redactar
+
+        salido = _redactar("URL: api.cmfchile.cl/x?apikey=abc123secreto&formato=json")
+        assert "abc123secreto" not in salido
+        assert "REDACTADA" in salido
+
+    def test_un_error_sin_JSON_muestra_el_cuerpo_igual(self):
+        """Tres vueltas se perdieron mostrando solo el número de HTTP mientras la respuesta
+        traía la explicación. Un diagnóstico que descarta la evidencia no es diagnóstico."""
+        import inspect
+
+        from shared.settings import service
+
+        fuente = inspect.getsource(service._test_cmf_connection)
+        assert "_redactar(cuerpo_txt)" in fuente
+
+    def test_distingue_al_proxy_que_NO_reenvio(self):
+        """El Worker marca lo que reenvía con `X-Proxy-Status`: sin esa marca, un error es
+        del proxy y la petición nunca llegó al emisor."""
+        import inspect
+
+        from shared.settings import service
+
+        fuente = inspect.getsource(service._test_cmf_connection)
+        assert "_has_proxy_relay" in fuente
+        assert "api.cmfchile.cl" in service.MSG_PROXY_NO_REENVIO
