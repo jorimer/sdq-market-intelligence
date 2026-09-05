@@ -6,6 +6,7 @@ existing secrets when the client sends the masked placeholder. Resolution helper
 back to env-based defaults so a fresh deployment still works.
 """
 import logging
+import re
 import urllib.parse
 from datetime import datetime, timezone
 from typing import Any, Dict, Optional, Set, Tuple
@@ -449,20 +450,34 @@ def _provider(db: Session, provider: str) -> Optional[SectorApiConfig]:
     return db.query(SectorApiConfig).filter(SectorApiConfig.provider == provider).first()
 
 
-def _test_cmf_connection(db, cfg, base: str, api_key: str) -> TestConnectionOut:
+#: Lo que se le dice al operador cuando el bloqueo es del WAF y no del emisor. Vive acá y no
+#: incrustado en la llamada porque un literal largo se parte por ancho de línea y la frase
+#: deja de existir en el fuente: el test que la vigila fallaría sin que nada esté mal.
+MSG_WAF_BLOQUEO = ("Un WAF bloqueó la petición antes de llegar a la CMF{ip}. "
+                   "La credencial no se llegó a evaluar{consejo}")
+MSG_WAF_SIN_PROXY = "; configurá el proxy para esta fuente, como el SIB."
+
+
+def _test_cmf_connection(db, cfg, base: str, api_key: str,
+                         proxy_url: str = "", proxy_secret: str = "") -> TestConnectionOut:
     """Prueba contra la API de la CMF de Chile, que tiene un contrato propio.
 
     Nada del camino del SIB sirve acá: la CMF pide la credencial en la QUERY STRING
-    (`?apikey=…&formato=json`), no en un header de suscripción de Azure APIM, y no está
-    detrás de un WAF que exija proxy. Sin esta rama, la prueba armaba
+    (`?apikey=…&formato=json`), no en un header de suscripción de Azure APIM. Sin esta rama,
+    la prueba armaba
     `api.cmfchile.cl/indicadores/principales` —una ruta del emisor dominicano— y devolvía
     «HTTP 500 (SIB)»: un error que hace revisar la clave cuando lo que estaba mal era el
     emisor contra el que se probaba.
 
-    Se consulta la UF y no un reporte bancario a propósito. La cuota es de 100 llamadas
-    DIARIAS y 3.000 mensuales, así que la prueba tiene que costar lo mínimo; y la UF existe
-    todos los días, mientras que un cuadro de adecuación de capital de un mes concreto puede
-    no estar publicado todavía y haría fallar una credencial que está perfecta.
+    **Sí está detrás de un WAF**, contra lo que decía la primera versión de esta función.
+    Medido: desde una IP de escritorio el emisor responde con sus códigos propios —421 «API
+    key no valida», 422 «no suministrada»— y desde el datacenter devolvía 500 con una página
+    «Web Page Blocked!». Es el mismo obstáculo que el SIB, así que se reusa el mismo proxy.
+
+    Se consulta la UF y no un reporte bancario a propósito. La cuota es de 10.000 peticiones
+    MENSUALES (lo dice el emisor en «Uso de la API Key»), así que la prueba tiene que costar
+    lo mínimo; y un cuadro de adecuación de capital de un mes concreto puede no estar
+    publicado todavía y haría fallar una credencial que está perfecta.
     """
     import httpx
 
@@ -476,12 +491,30 @@ def _test_cmf_connection(db, cfg, base: str, api_key: str) -> TestConnectionOut:
     # la prueba mide la credencial y no la frescura de la fuente. Con el mes en curso, una
     # clave perfecta podría fallar un día 1.
     target = f"{base.rstrip('/')}/api-sbifv3/recursos_api/uf/2024/01"
+    url = f"{target}?apikey={api_key}&formato=json"
+    use_proxy = bool(proxy_url and proxy_secret)
     try:
-        resp = httpx.get(target, params={"apikey": api_key, "formato": "json"},
-                         timeout=25, follow_redirects=True)
+        if use_proxy:
+            resp = httpx.post(
+                f"{proxy_url.rstrip('/')}/proxy",
+                json={"url": url, "headers": {"Accept": "application/json"}, "method": "GET"},
+                headers={"X-Proxy-Secret": proxy_secret, "Content-Type": "application/json"},
+                timeout=30)
+        else:
+            resp = httpx.get(url, timeout=25, follow_redirects=True)
     except httpx.HTTPError as e:
         return _persist_test(db, cfg, "error",
                              f"No se pudo alcanzar {base} ({type(e).__name__}).", None)
+    cuerpo_txt = (resp.text or "")[:500]
+    if "Web Page Blocked" in cuerpo_txt or "has been blocked" in cuerpo_txt:
+        # El WAF, no la CMF. Distinguirlo importa: un «500» pelado manda a revisar la
+        # credencial, y acá la credencial ni siquiera llegó a evaluarse.
+        m = re.search(r"Client IP:\s*([0-9.]+)", cuerpo_txt)
+        ip = f" (IP vista por el WAF: {m.group(1)})" if m else ""
+        return _persist_test(
+            db, cfg, "error",
+            MSG_WAF_BLOQUEO.format(ip=ip, consejo="." if use_proxy else MSG_WAF_SIN_PROXY),
+            resp.status_code)
     if resp.status_code == 422:
         # El emisor usa 422 —no 401— para «API key no ha sido suministrada» y también para
         # una clave inválida. Se reporta lo que dice, sin adivinar cuál de las dos fue.
@@ -489,10 +522,18 @@ def _test_cmf_connection(db, cfg, base: str, api_key: str) -> TestConnectionOut:
                              "La CMF rechazó la credencial (422). Revisá que la clave esté "
                              "cargada y vigente.", 422)
     if resp.status_code >= 400:
-        return _persist_test(
-            db, cfg, "error",
-            f"La CMF respondió HTTP {resp.status_code}. Si es 500, la credencial pudo ser "
-            f"aceptada y el problema estar en la ruta consultada.", resp.status_code)
+        # Los códigos propios del emisor: 421 «API key no valida», 420 cuota superada. Se
+        # transcribe SU mensaje en vez de traducir un HTTP genérico a una conjetura nuestra.
+        detalle = ""
+        try:
+            j = resp.json()
+            if isinstance(j, dict) and j.get("Mensaje"):
+                detalle = f' — la CMF dice: "{str(j["Mensaje"])[:120]}"'
+        except ValueError:
+            pass
+        return _persist_test(db, cfg, "error",
+                             f"La CMF respondió HTTP {resp.status_code}{detalle}.",
+                             resp.status_code)
     try:
         cuerpo = resp.json()
     except ValueError:
@@ -726,7 +767,7 @@ def test_connection(db: Session, payload: TestConnectionIn) -> TestConnectionOut
     if payload.provider == "jurisai":
         return _test_jurisai_connection(db, cfg, base, api_key)
     if payload.provider == "cmf_chile":
-        return _test_cmf_connection(db, cfg, base, api_key)
+        return _test_cmf_connection(db, cfg, base, api_key, proxy_url, proxy_secret)
 
     # De acá para abajo es el contrato del SIB —Azure APIM con subscription-key + un WAF
     # de Sucuri que bloquea IPs de datacenter, de ahí la UA de Mozilla y el proxy en prod—.
