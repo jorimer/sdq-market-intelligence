@@ -233,7 +233,7 @@ PANEL: Tuple[Transaccion, ...] = (
     ),
 
     Transaccion(
-        anio=2019, comprador="OFG Bancorp (Oriental Bank)",
+        anio=2019, comprador="OFG Bancorp",
         adquirida="Scotiabank de Puerto Rico (100 % de las acciones)",
         pais="PR",
         precio=430_437_000.0, moneda_precio="USD",
@@ -357,6 +357,113 @@ PANEL: Tuple[Transaccion, ...] = (
             "precio del 100 % con el que contrastar.",
         ),
     ),
+    Transaccion(
+        anio=2012, comprador="OFG Bancorp",
+        adquirida="BBVA PR Holding Corporation y BBVA Securities of Puerto Rico",
+        pais="PR",
+        precio=500_000_000.0, moneda_precio="USD",
+        valor_libro=650_617_000.0, moneda_libro="USD", periodo_libro="2012-12",
+        pb=0.769, valor_razonable=438_680_000.0,
+        fuente_precio=("Form 10-K del ejercicio 2012 (SEC) —la sociedad se llamaba entonces "
+                       "Oriental Financial Group y pasó a OFG Bancorp en mayo de 2013; es la "
+                       "misma, y el panel la nombra igual en los dos casos para que agrupar "
+                       "por comprador no la parta en dos—, nota de combinaciones de "
+                       "negocios: «Cash consideration» US$500.000 miles, en efectivo, por el "
+                       "100 % de las dos sociedades. Cierre el 18 de diciembre de 2012."),
+        fuente_libro=("Misma tabla, epígrafe «Book Value of Net Assets Acquired»: "
+                      "«BBVAPR stockholder's equity» US$650.617 miles. El valor razonable de "
+                      "los activos netos es US$438.680 miles y el goodwill US$61.320 miles; "
+                      "438.680 + 61.320 = 500.000, la aritmética cierra exacta.\n\n"
+                      "VERIFICACIÓN CRUZADA CONTRA EL REGULADOR: el Call Report que el banco "
+                      "presentó al FDIC da un patrimonio de US$616.643 miles al 30 de "
+                      "septiembre de 2012. La cifra del 10-K es de la SOCIEDAD TENEDORA y "
+                      "dos meses y medio más tarde, y queda 5,5 % por encima — consistente "
+                      "con que la tenedora incluye además la casa de valores. Dos fuentes "
+                      "independientes, y el orden de magnitud coincide."),
+        caveats=(
+            "US-GAAP (ASC 805), no NIIF, y es la operación más vieja del panel: catorce años. "
+            "Se publica marcada.",
+            "ES EL CASO QUE MÁS ENSEÑA SOBRE LA BASE. El valor razonable queda 32,6 % POR "
+            "DEBAJO del libro —marcas de cartera por US$118,9 millones y el goodwill heredado "
+            "de US$116,4 millones que desaparece—, mientras que en la compra de Scotiabank PR "
+            "por la MISMA compradora, en el MISMO mercado y siete años después, queda 15,0 % "
+            "por ENCIMA. Cuarenta y ocho puntos de amplitud en las tablas de un mismo "
+            "comprador: no existe un ajuste fijo que convierta una base en la otra.",
+            "El múltiplo sobre libro es 0,77x —una compra POR DEBAJO del patrimonio— y sobre "
+            "valor razonable 1,14x. La prensa publicó «3 % de prima sobre el valor tangible en "
+            "libros», que es una TERCERA base: el libro de US$650,6 M incluye US$116,4 M de "
+            "goodwill heredado que el tangible no tiene.",
+            "El precio compró la tenedora y la casa de valores, no solo el banco. El "
+            "denominador del 10-K tiene ese mismo alcance, así que las dos puntas son "
+            "consistentes; el Call Report del FDIC, no —ése es solo el banco—.",
+        ),
+    ),
+    Transaccion(
+        anio=2019, comprador="Republic Financial Holdings",
+        adquirida="Cayman National Corporation Ltd. (74,99 % de las acciones)",
+        pais="KY",
+        precio=198_474_012.50, moneda_precio="USD",
+        valor_libro=117_389_759.0, moneda_libro="KYD", periodo_libro="2018-09",
+        pb=1.879, porcentaje=0.7499, tipo_de_cambio=0.8333333333333334,
+        fuente_precio=("Anuncio de cierre de RFHL, 13 de marzo de 2019: «the purchase of "
+                       "74.99% of the issued shares in CNC at an offering price of US$6.25 "
+                       "per share at an overall cost of US$198,474,012.50». Reproducido "
+                       "íntegro por el propio sitio de Cayman National y por Newsday "
+                       "(Trinidad)."),
+        fuente_libro=("Estados financieros consolidados AUDITADOS de Cayman National "
+                      "Corporation Ltd. al 30 de septiembre de 2018, dictaminados por PwC "
+                      "(19 de diciembre de 2018): «TOTAL EQUITY» CI$117.389.759 sobre activos "
+                      "de CI$1.463.023.918.\n\n"
+                      "ES LA ESTRUCTURA IDEAL DE UN CASO: el denominador NO sale del "
+                      "comprador. Sale de los estados auditados de la propia adquirida, que "
+                      "cotizaba en la Bolsa de las Islas Caimán y por eso los publicaba.\n\n"
+                      "Conversión al peg FIJO del dólar caimán, CI$1,00 = US$1,20 desde el 1 "
+                      "de abril de 1974. No es una cotización de mercado y por eso no tiene "
+                      "mes: es una paridad administrada."),
+        caveats=(
+            "Es el 74,99 %, no el 100 %. El múltiplo homogeneiza contra esa misma fracción "
+            "del patrimonio. Comprobación independiente: US$6,25 por acción contra un valor "
+            "libro por acción de CI$2,77 (US$3,33) da el mismo 1,88x.",
+            "El corte del patrimonio es el 30 de septiembre de 2018 —cierre del ejercicio de "
+            "CNC— y la operación cerró el 13 de marzo de 2019: cinco meses y medio de "
+            "distancia. Es el último balance auditado anterior al cierre, pero la distancia "
+            "es mayor que en los casos dominicanos.",
+            "CNC es un GRUPO, no un banco solo: además de Cayman National Bank tiene "
+            "fiduciaria, administración de fondos y casa de valores, y opera en la Isla de "
+            "Man y Dubái. El balance sí es de banco —CI$747 M de préstamos y CI$1.306 M de "
+            "depósitos sobre CI$1.463 M de activos—, pero el múltiplo incorpora negocios de "
+            "comisiones que un banco puro no tiene.",
+        ),
+    ),
+    Transaccion(
+        anio=2020, comprador="First BanCorp (FirstBank Puerto Rico)",
+        adquirida="Santander BanCorp y Banco Santander Puerto Rico",
+        pais="PR",
+        precio=1_277_626_000.0, moneda_precio="USD",
+        valor_libro=1_271_323_000.0, moneda_libro="USD", periodo_libro="2020-09",
+        pb=1.005, base=BASE_VALOR_RAZONABLE,
+        fuente_precio=("Form 10-Q de First BanCorp del 3T2020 (SEC), nota de combinación de "
+                       "negocios: «Total purchase price consideration (cash)» US$1.277.626 "
+                       "miles. Cierre el 1 de septiembre de 2020."),
+        fuente_libro=("Misma nota: «Fair value of net assets and identifiable intangible "
+                      "assets» US$1.271.323 miles, con goodwill de US$6.303 miles. "
+                      "1.271.323 + 6.303 = 1.277.626, cierra exacta.\n\n"
+                      "LA TABLA NO PUBLICA COLUMNA DE LIBRO, a diferencia de las dos de OFG. "
+                      "Por eso el caso queda sobre base valor razonable pese a venir del "
+                      "mismo tipo de documento: que un 10-Q traiga el libro es una elección "
+                      "de presentación del emisor, no una exigencia de la norma."),
+        caveats=(
+            "LA BASE NO ES VALOR LIBRO. Son activos netos identificables a valor razonable.",
+            "Y no alcanza con ir al regulador: el Call Report del FDIC da un patrimonio de "
+            "US$1.013.608 miles al 30 de junio de 2020, pero ése es el BANCO y el precio "
+            "compró la sociedad tenedora —que además tenía la financiera de consumo—. "
+            "Cruzarlos daría 1,26x, un múltiplo con el numerador y el denominador midiendo "
+            "cosas distintas. Es el error de ALCANCE, y produce un número plausible.",
+            "Las condiciones anunciadas hablaban de 117,5 % del «core tangible common "
+            "equity» más el capital excedente a la par: una tercera base, definida por el "
+            "contrato y no por un balance.",
+        ),
+    ),
 )
 
 #: Operaciones RELEVADAS y descartadas del panel, con el motivo. Se listan porque un panel
@@ -431,9 +538,10 @@ VIAS_ABIERTAS: Tuple[Tuple[str, str], ...] = (
      "Precio verificado: US$45 millones por el 100 %. Falta el patrimonio contable de la "
      "entidad al corte 2012, que publicaría el Central Bank of Barbados. Se conocen sus "
      "activos (US$308 M) y depósitos (US$270 M), que NO son patrimonio. El vendedor reportó "
-     "una ganancia de ~US$7 M, de la que se podría despejar un valor en libros de ~US$38 M: "
-     "eso es el carrying value CONSOLIDADO del vendedor, no el patrimonio de la entidad, y "
-     "es una derivación, no un dato."),
+     "una ganancia NETA de US$7,2 M sobre US$45 M brutos, de la que se despejaría un valor "
+     "en libros de ~US$37,8 M: eso es el carrying value CONSOLIDADO del vendedor —lo que la "
+     "matriz tenía registrado, con su goodwill asignado y sus diferencias de cambio "
+     "acumuladas—, no el patrimonio de la entidad. Es una derivación, no un dato."),
     ("NCB Financial Group / Clarien Group (Bermuda, 2017)",
      "Falta aclarar QUÉ FUE la operación, antes que cualquier cifra. NCBFG SUSCRIBIÓ el "
      "50,1 % —un aporte de capital que entra a la sociedad— y no está establecido que le "
@@ -446,6 +554,28 @@ VIAS_ABIERTAS: Tuple[Tuple[str, str], ...] = (
      "La nota 34 agrega siete territorios en una sola cifra. Si algún estado local o el "
      "regulador de un territorio publicara su parte, esa observación se desdoblaría en "
      "varias. Hoy es una."),
+    ("Sagicor Group Jamaica / RBC Royal Bank (Jamaica) (2014)",
+     "Las tres cifras aparecen y CIERRAN entre sí —consideración US$84.378 miles, activos "
+     "netos adquiridos US$113.429 miles, goodwill negativo US$29.051 miles— y reconcilian "
+     "con los J$9.500 millones que publicó la prensa al tipo de cambio de 2014. Falta abrir "
+     "el estado auditado: hasta acá vienen de un resumen y no del documento, y un caso cuya "
+     "fuente no se abrió es una brecha, no un dato. Ojo además con la base: «net assets "
+     "acquired» de la NIIF 3 es valor razonable, así que aun verificado NO contaría para la "
+     "meta salvo que la nota publique el libro. Sería el segundo caso relevado con COMPRA "
+     "VENTAJOSA: el valor razonable supera al precio."),
+    ("Caribbean Investment Holdings / Scotiabank (Belize) (cierre abril 2021)",
+     "Precio verificado y FINAL: US$20 millones al cierre, por debajo de los «hasta US$30,5 "
+     "millones» del acuerdo de junio 2020 — un recordatorio de que el monto del anuncio no es "
+     "el del cierre. El anuncio a la bolsa de Bermudas no divulga activos netos. Falta el "
+     "patrimonio de la entidad: la memoria 2021 de CIHL con su asignación del precio de "
+     "compra, o el Banco Central de Belice. Se conoce que SBL tenía US$389,9 millones de "
+     "activos al 31-oct-2019, que NO son patrimonio."),
+    ("Banco Santander Puerto Rico — el denominador sobre base CONTABLE",
+     "El caso ya está en el panel sobre valor razonable. Para pasarlo a base contable hace "
+     "falta el patrimonio consolidado de SANTANDER BANCORP, la sociedad tenedora, que es lo "
+     "que compró el precio. El Call Report del FDIC solo cubre el banco (US$1.013.608 miles "
+     "al 30-jun-2020) y usarlo cruzaría alcances. La vía es el FR Y-9C que la tenedora "
+     "presenta a la Reserva Federal."),
     ("JMMB / Bellbank — segundo denominador",
      "El PPA estaba «not yet finalized» al trimestre de diciembre 2022. La memoria auditada "
      "de JMMB Group del año fiscal a marzo 2023 debería traerlo, y con él este caso pasaría "
