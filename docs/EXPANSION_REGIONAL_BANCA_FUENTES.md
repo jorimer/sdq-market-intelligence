@@ -74,10 +74,16 @@ Verificado en vivo (HTTP real) salvo donde se indica. Fecha: 2026-09-04.
 |---|---|---|---|---|---|
 | **Colombia** | SFC vía Socrata `datos.gov.co` | REST JSON/CSV **sin token**; 99 datasets | **CC BY-SA 4.0**, redistribución explícita | **~2 meses** | Verificado: `x586-r5d2` da solvencia por entidad, `max(fecha)=2026-06-30`. Agregar a sistema es trivial |
 | **Brasil** | BCB IFDATA `olinda.bcb.gov.br` | **OData v4, sin key, sin rate limit** | **ODbL** | **~6 meses** ⚠️ | Verificado: R5 devuelve por `CodInst` Capital Principal, Nível I, Razão de Alavancagem, Exposição Total. Ruptura Res. CMN 4966: R8 vacío desde 202503, no empalmable con R16 |
-| **Chile** | CMF APIBEST + 2.087 XLSX | API con key (10/min · 3.000/mes); catálogo CSV de 34.051 series sin credencial | **CC BY 4.0 — "incluso con fines comerciales"** (act. 2026-08-06) | **~28 días — el mejor** | Los XLSX traen la fórmula en códigos contables en la fila 2: diccionario de datos incluido |
+| **Chile** | CMF APIBEST + 2.087 XLSX | API con key (10/min · 3.000/mes); catálogo CSV de 34.051 series sin credencial | **Autorización propia, no CC** — corregido 2026-09-04, ver ⚠️ abajo | **~28 días — el mejor** | Los XLSX traen la fórmula en códigos contables en la fila 2: diccionario de datos incluido |
 | **SECMCA / EMFA** | `secmca-api.secmca.org` | **REST `/public/v1/` sin auth**, verificado | No localizada ⚠️ | Mensual | **8 países: CRI, SLV, GTM, HND, NIC, DOM, PAN, BLZ.** Crédito, depósitos MN/ME, tasas, encaje, agregados — **armonizados**. **No prudencial** |
 
 El share-alike de Colombia y ODbL de Brasil **dejan de ser problema** bajo la premisa de divulgación: un boletín gratuito con atribución cumple ambas.
+
+⚠️ **Corrección sobre Chile (2026-09-04).** Este documento afirmaba que APIBEST es CC BY 4.0 "incluso con fines comerciales", actualizado el 2026-08-06. **No se verifica.** Los únicos términos publicados de la API son `https://api.cmfchile.cl/terminos-de-uso.html`, **actualizados el 01/06/2019**, y dicen otra cosa:
+
+> "Los derechos de autor sobre la API CMF Bancos son propiedad de esta institución. Todos los derechos reservados […] El uso y/o publicación de los contenidos entregados a través de la API CMF Bancos **está autorizado**, con la consecuente incorporación de una mención a la fuente más un enlace a la página principal del sitio web CMF Bancos (`www.sbif.cl`)."
+
+O sea: no es una licencia CC, no dice nada sobre uso comercial, y el permiso es una autorización propia de la CMF condicionada a atribución **con enlace**. Para un boletín gratuito con atribución **alcanza y sobra** — autoriza expresamente publicar. Pero la cadena de licencia debe decir lo que la fuente dice: registrarla como CC BY 4.0 sería declarar un permiso que nadie concedió. Se buscó si APIBEST tenía términos propios: su host raíz da 404 y solo responde la ruta del catálogo CSV. No hay otro documento.
 
 ### Tier B — viable, licencia ausente (zona gris de bajo riesgo en uso no comercial con atribución)
 
@@ -129,7 +135,7 @@ Expansión posterior por costo marginal creciente: El Salvador y Perú (Excel de
 **Fase 0 — Deuda de casa (1-2 semanas). Bloqueante: se publica dato de la SB a una lista de correo.**
 
 1. Registrar la SB dominicana en `shared/data/licenses.py` con `terminos_url` y `verificado_el` reales; hacer que los cinco clientes de banca hereden de `SourceClient` para que el gate AST los alcance.
-2. Registrar las licencias de las fuentes nuevas: Colombia (CC BY-SA 4.0), Brasil (ODbL), Chile (CC BY 4.0), SECMCA (pendiente de localizar). Cargar el texto exacto de atribución en el campo `atribucion` — Colombia exige citar fuente **y fecha de actualización**.
+2. Registrar las licencias de las fuentes nuevas: Colombia (CC BY-SA 4.0), Brasil (ODbL), Chile (autorización propia con atribución y enlace — **no** CC), SECMCA (pendiente de localizar). **El registro de cada una viaja con su conector**, no antes: el gate exige que la cadena esté declarada por código vivo, y una entrada sin conector queda muerta y rompe CI (comprobado 2026-09-04). Cargar el texto exacto de atribución en el campo `atribucion` — Colombia exige citar fuente **y fecha de actualización**.
 3. Implementar `variable_signals()` en `banking_score`, que hoy degrada a `_product_level_fallback`. Sin desglose por variable no hay forma honesta de reportar cobertura, y el boletín es precisamente donde eso se vuelve público.
 
 **Fase 1 — Almacén regional a nivel sistema (2-3 semanas)**

@@ -97,20 +97,33 @@ red, demostrado con un test. Todos los tests de `modules/banking_score/` siguen 
 
 ---
 
-### T-BR-3 · Registrar las licencias de las fuentes nuevas
+### T-BR-3 · Registrar las licencias de las fuentes nuevas — **DISUELTA (2026-09-04)**
 
-**Hacer:** cuatro entradas en `LICENCIAS`, con el texto de atribución exacto en el campo
-`atribucion`:
+**Por qué no es un paso propio.** El gate exige que registro y declaración entren JUNTOS:
+`test_el_registro_no_tiene_entradas_muertas` falla si una clave de `LICENCIAS` no la
+declara ningún código vivo. Los conectores son T-BR-5/6/7, así que registrar las cuatro
+licencias antes deja cuatro entradas muertas y CI en rojo. Comprobado registrando una
+entrada ficticia: el gate la nombra y falla. Las alternativas eran conectores vacíos con
+la cadena colgada —código muerto— o adelantar la Fase 1 entera.
 
-| Fuente | Licencia | Atención |
-|---|---|---|
-| SFC Colombia (Socrata) | CC BY-SA 4.0 | Exige citar fuente **y fecha de actualización**. El `-sa` lo detecta `license_restricts_redistribution` (`licenses.py:20-26`) — es correcto que lo detecte |
-| BCB Brasil (IFDATA) | ODbL | `odbl` también es marca detectada. Correcto |
-| CMF Chile (APIBEST) | CC BY 4.0, "incluso con fines comerciales" (act. 2026-08-06) | Citar **APIBEST**, no `datos.gob.cl`, que es CC BY-**NC** y está congelado en 2015 con recursos 404 |
-| SECMCA / EMFA | **Pendiente de localizar** | No se encontró página de términos. Entra como deuda declarada (`verificado_el=None` + `nota` explicando qué se buscó), no como permiso presunto |
+**Dónde vive ahora:** el registro de cada licencia viaja con su conector. Lo que sí se
+hizo el 2026-09-04, y es el trabajo real de esta tarea, fue **leer los términos en vivo**:
+el resultado está abajo, en la tarea de cada fuente, para que el día del conector sea
+copiar y pegar en vez de volver a investigar.
 
-**Aceptación:** el gate AST verde; `deuda_de_verificacion()` lista SECMCA y **solo**
-SECMCA de las cuatro.
+**Lo que aplica a las cuatro:**
+
+- `license_restricts_redistribution` vive en `shared/data_api/manifest.py:97`, **no** en
+  `licenses.py`. Detecta `-sa` y `odbl` por substring — en Colombia y Brasil no son falsos
+  positivos, son las cláusulas reales, y es correcto que las marque.
+- Esa cuarentena **no toca al boletín**: solo aplica a `DERIVATION_VERBATIM` («servir el
+  valor del emisor tal cual ES redistribuir; servir un cálculo propio, no») y vive en la
+  API de datos, que es otro producto. Queda una decisión para T-BR-6: agregar entidades
+  para obtener el sistema es cálculo propio, pero republicar el agregado tal como lo
+  publica el supervisor sería verbatim.
+- El techo del ratchet (`DEUDA_AL_2026_08_23 = 23`) está exactamente al límite. SECMCA
+  entra con `verificado_el=None` y **lo rompe a propósito**: hay que subirlo a 24 en el
+  mismo commit del conector, con el motivo escrito.
 
 ---
 
@@ -180,6 +193,12 @@ de EMFA son monetarios; el filtro de los 86 temas por
 balanza de pagos y finanzas públicas; EFPA es GFSM 2014 y ESEA es deuda externa. **Si
 encontrás un endpoint prudencial, es un hallazgo nuevo: paralo y reportalo, no lo asumas.**
 
+**Licencia (verificado en vivo el 2026-09-04):** SECMCA **no publica términos de uso ni
+copyright** — se recorrió `www.secmca.org` buscando aviso legal, términos, privacidad y
+pie de copyright, y no hay ninguno. Entra como **deuda declarada**: `verificado_el=None`
+con la `nota` diciendo qué se buscó y dónde, nunca como permiso presunto. Es la única de
+las cuatro que sube el techo del ratchet, de 23 a 24.
+
 **Aceptación:** trae ≥1 serie real para los 8 países; `norma_contable` = `"EMFA
 armonizado"`; fixture grabado para test offline.
 
@@ -203,6 +222,14 @@ timeoutean a 120 s → paginar con `$limit`/`$offset` o filtrar por `fecha` prim
 **Agregación a sistema:** sumar entidades de `tipo_entidad` bancos. Los ratios se computan
 sobre los agregados, **no se promedian los ratios de las entidades** — es la trampa
 clásica y da un número distinto.
+
+**Licencia (verificado en vivo el 2026-09-04):** el propio dataset la declara vía la API
+de Socrata — `GET https://www.datos.gov.co/api/views/x586-r5d2.json` devuelve
+`licenseId: "CC_40_BY_SA"`, «Creative Commons Attribution | Share Alike 4.0 International»,
+`termsLink` a `creativecommons.org/licenses/by-sa/4.0/legalcode`. Y trae el texto de
+atribución del emisor, que va literal al campo `atribucion`: **«Superintendencia Financiera
+de Colombia - SUPERFINANCIERA, Bogotá D.C.»**. El share-alike es real y la cuarentena de
+verbatim es correcta.
 
 **Aceptación:** solvencia, morosidad y cartera del sistema colombiano para ≥8 trimestres;
 `norma_contable` = `"CUIF Colombia (SFC)"`.
@@ -230,6 +257,19 @@ credencial para el catálogo: `https://best-sbif-api.azurewebsites.net/public/de
 (10,9 MB, 34.051 series, **leer como latin-1**). Los XLSX del canal `/626/` traen la
 fórmula en códigos contables en la **fila 2**: es un diccionario de datos, aprovecharlo
 para el mapeo en vez de adivinar. El canal `/617/` está obsoleto (404).
+
+**Licencias (verificado en vivo el 2026-09-04):**
+
+- **Brasil:** el dataset IFDATA en `dadosabertos.bcb.gov.br` declara `odc-odbl` — Open
+  Database License, con `license_url`. Confirmado por su API de catálogo.
+- **Chile — OJO, la spec estaba equivocada y se corrigió.** No es CC BY 4.0 ni menciona
+  uso comercial. Los únicos términos publicados son `https://api.cmfchile.cl/terminos-de-uso.html`,
+  **actualizados el 01/06/2019**: «Todos los derechos reservados […] El uso y/o publicación
+  de los contenidos […] **está autorizado**, con la consecuente incorporación de una
+  mención a la fuente más un enlace a la página principal del sitio web CMF Bancos
+  (`www.sbif.cl`)». Alcanza de sobra para el boletín, pero la cadena debe decir eso y no
+  CC BY 4.0 — y la atribución **exige el enlace**, no solo el nombre. APIBEST no tiene
+  términos propios: su host raíz da 404.
 
 **Aceptación:** ambos países con ≥8 trimestres; el test de Brasil demuestra que R8 y R16 no
 se concatenan.
@@ -293,14 +333,15 @@ explica su posición cuando no la explica.
 ## Orden de ejecución
 
 ```
-T-BR-1 → T-BR-2 → T-BR-3        (Fase 0, bloqueante)
-      ↓
+T-BR-1 → T-BR-2                 (Fase 0, bloqueante — CERRADAS 2026-09-04)
+      ↓                         T-BR-3 disuelta: cada licencia viaja con su conector
 T-BR-4 → T-BR-5 → T-BR-6 → T-BR-7   (Fase 1; T-BR-5 primero a propósito)
       ↓
 T-BR-8 (requiere D-1, D-2) → T-BR-9 → T-BR-10
 ```
 
-T-BR-10 puede adelantarse: no depende de nada de la Fase 1.
+T-BR-10 podría adelantarse —no depende de nada de la Fase 1—, pero **no se adelanta**:
+decisión del dueño (2026-09-04) de avanzar en orden sin dejar huecos entre fases.
 
 ## Gates que todo cambio debe pasar
 
