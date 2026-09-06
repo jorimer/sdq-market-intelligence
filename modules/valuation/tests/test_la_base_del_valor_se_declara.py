@@ -249,3 +249,14 @@ def test_las_frases_de_la_base_del_valor_son_CONSTANTES_de_modulo() -> None:
                for t in n.targets if isinstance(t, ast.Name)}
     for c in ("BASE_DEL_VALOR", "FRASE_PARTICIPACION_MINORITARIA", "FRASE_AAP_SIN_ACCIONES"):
         assert c in nombres, f"falta la constante {c} en narrativa.py"
+
+
+def test_SUPUESTOS_dice_MEDIANA_y_no_promedio_para_el_ROE_proyectado(db) -> None:
+    """`_roe_proyectado` es la MEDIANA de los últimos cuatro cortes —mediana y no promedio,
+    para que un trimestre atípico no arrastre la proyección— y la tabla de supuestos lo
+    rotulaba «del promedio de cierres publicados». Un informe real de Banco Popular lo publicó
+    así (2026-09-06). El rótulo dice lo que el motor hace."""
+    sup = _por_http(db, "aap1")[SECCION_SUPUESTOS]
+    fila = next(linea for linea in sup.splitlines() if linea.startswith("| ROE proyectado"))
+    assert "mediana" in fila.lower() and "cuatro" in fila, fila
+    assert "del promedio" not in fila.lower(), "el rótulo dice promedio y el motor toma la mediana"
