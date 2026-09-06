@@ -543,7 +543,8 @@ class MacroForecastProduct:
             sector_key=SECTOR_KEY, display_name=DISPLAY, title=titulo, period=snapshot.period,
             narratives=narratives, section_titles=_SECTION_TITLES, tables=tablas,
             charts=graficos, headline=titular, subtitle=None, watermark=level.watermark,
-            sample=sample, output_dir=output_dir, fmt=fmt)
+            sample=sample, output_dir=output_dir, fmt=fmt,
+            period_label=ROTULO_DEL_PERIODO)
 
 
 # ── Prosa determinista ──────────────────────────────────────────────────────────────
@@ -622,8 +623,31 @@ def _titular_de(cifra: Optional[Dict[str, Any]],
         return f"{cifra['trimestre']} determinado · índice {cifra['indice']:.3f}"
     if proys:
         d = proys[0]
-        return f"{d['serie']} {d['horizonte']} · {d['punto']:.2f}{_sufijo_de(d)}"
+        return (f"{_nombre_de_serie(d['serie'])} {d['horizonte']} · "
+                f"{d['punto']:.2f}{_sufijo_de(d)}")
     return None
+
+
+#: Cómo se llama en la portada lo que este eje pone en `period`. NO es un período: es la
+#: fecha hasta la que el modelo vio datos, y su propia sección de metodología ya la llamaba
+#: «Corte del informe». «Período: 2026-09-06» describía mal el producto.
+ROTULO_DEL_PERIODO = "Corte"
+
+
+def _nombre_de_serie(code: str) -> str:
+    """La etiqueta CURADA de una serie, nunca su ruta de hoja de cálculo.
+
+    `canonical.CURATED_LABELS` existe, dice el comentario que la define, «para que un informe
+    no lo cite por la ruta de la hoja de cálculo». Este informe la citaba igual: publicaba
+    `bcrd.xls.pib_2018.serie_original_indice` en la tabla que el cliente lee.
+
+    Sin etiqueta curada NO se inventa una legible a partir del código: se devuelve tal cual y
+    el guard de la prosa lo caza. Maquillar el código acá haría desaparecer el síntoma sin
+    que nadie curara la serie.
+    """
+    from shared.data.bcrd_excel.canonical import curated_label
+
+    return curated_label(code) or str(code)
 
 
 def _md_resumen_ejecutivo(p: Dict[str, Any]) -> str:
@@ -727,7 +751,7 @@ def _md_trayectoria(p: Dict[str, Any]) -> str:
               "|---|---|---:|---|---|"]
     for d in proys:
         ancla = "sí" if d.get("ancla") else f"no — {d.get('motivo', '')}"
-        lineas.append(f"| {d['serie']} | {d['horizonte']} | "
+        lineas.append(f"| {_nombre_de_serie(d['serie'])} | {d['horizonte']} | "
                       f"{d['punto']:.2f}{_sufijo_de(d)} | "
                       f"{_banda(d.get('intervalos'), 0.80)} | {ancla} |")
     lineas.append("")
@@ -830,7 +854,8 @@ def _md_desempeno(p: Dict[str, Any]) -> str:
         mae = f"{f['mae']:.3f}" if f.get("mae") is not None else "—"
         cal = "; ".join(f"el del {n:.0%} acertó el {c:.0%} (n={k})"
                         for n, c, k in (f.get("interval_coverage") or [])) or "sin puntuar"
-        lineas.append(f"| {f['modelo']} | {f['serie']} | {f['horizonte']} | {f['n_oos']} | "
+        lineas.append(f"| {f['modelo']} | {_nombre_de_serie(f['serie'])} | "
+                  f"{f['horizonte']} | {f['n_oos']} | "
                       f"{rmse} | {mae} | {cal} |")
     lineas.append("")
     lineas.append(

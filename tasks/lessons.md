@@ -933,3 +933,55 @@ declarar como cumplida la precondición que se está probando.
 **Y el hallazgo sobre el método.** Esto no lo encontró ningún test: lo encontró **generar el
 informe real en producción y leerlo**. Cuando el entregable es un documento, leer el
 documento no es una verificación de más — a veces es la única que mira lo que el cliente ve.
+
+---
+
+## Tres cosas que creía saber del entregable y las tres eran distintas al medirlas
+
+La pasada de forma del informe de proyecciones. Venía arrastrando tres descripciones de sus
+defectos, escritas de sesiones anteriores, y **ninguna sobrevivió a medirla**.
+
+**1. «Los glifos `BV₀`, `λ₁`, `λ₂` salen como cajas».** Falso a medias. Renderizando cada
+familia y leyendo el PDF: la `λ` sale perfecta, igual que el resto del griego, la matemática,
+las flechas y la tipografía. Lo que falla son los SUBÍNDICES —todos— y los superíndices salvo
+¹²³, que son Latin-1. `BV₀` fallaba por el subíndice y nunca por la letra griega.
+
+Y yo había planteado la decisión como «transliterar o cambiar la fuente», dos opciones malas,
+y se la había pasado al dueño. **Había una tercera**: ReportLab entiende `<sub>`/`<super>` y
+con la fuente que ya está dibuja un subíndice de verdad. Ni pierde la forma ni toca el aspecto
+de los demás informes. Presentar un dilema de dos opciones antes de buscar la tercera le pasa
+al dueño una decisión que no le correspondía.
+
+**2. «La portada dice Período sobre una fecha».** Cierto para UN eje, no en general.
+Consultados los 18 del catálogo en producción: cuatro pasan una fecha, pero tres son CIERRES
+de período (30-jun, 31-dic, 31-jul) que bajo ese rótulo se leen bien. Generalizar de un caso
+habría cambiado el rótulo a los otros tres sin motivo.
+
+**3. «La tabla publica el código interno `pib_real`».** Ya no: el arreglo del ledger lo
+resolvió al código real y ahora publica la ruta de Excel COMPLETA, que es peor. Un defecto de
+forma descrito hace días puede haber cambiado de forma.
+
+**Regla futura.** Una lista de defectos de forma **envejece**, y envejece distinto de una de
+lógica: el documento se sigue generando y cada cambio aguas arriba lo mueve. Antes de
+arreglarlos, **regenerar el entregable y volver a mirarlo**, uno por uno. Y cuando un defecto
+parezca exigir una decisión cara del dueño —cambiar una fuente, mover un umbral—, buscar la
+tercera opción antes de preguntar: en este repo casi siempre existe y suele estar en una
+capacidad que la herramienta ya tiene.
+
+**Y el guard: mi primer barrido miraba DOS funciones de prosa** y el defecto vivía en una
+tercera —la sección de Desempeño—. Lo encontró el PDF, no el test. Se reemplazó por un barrido
+de todas las `_md_*` del módulo, con su testigo de que encontró algo. Una lista escrita a mano
+protege lo que uno se acordó de poner.
+
+**Apéndice de la misma pasada — un test que depende de un binario de MI máquina.**
+Los dos tests de portada leían el PDF con `pdftotext`. Está en mi Mac por homebrew y **no en
+el runner**: pasaron en local y rompieron el build con `FileNotFoundError`. Es la segunda vez
+en la sesión —antes fue `pypdf`— y la forma es idéntica: instalé una herramienta para
+inspeccionar algo a mano y después la dejé dentro de un test.
+
+La distinción que faltaba: **inspeccionar a mano y verificar en CI son cosas distintas.** Leer
+el PDF con `pdftotext` y mirar la página con `pdftoppm` fue lo que encontró los tres defectos
+y hay que seguir haciéndolo. Lo que no puede es quedar comiteado. El test equivalente espía
+`_cover` desde `render_product_pdf` —la ruta real, que es donde estaba el defecto— y no
+necesita nada instalado. Regla: antes de comitear un test, preguntarse **qué instalé yo para
+que esto ande**.
