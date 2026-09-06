@@ -991,6 +991,18 @@ def _md_desempeno(p: Dict[str, Any]) -> str:
 # Cifras ilustrativas; el informe real las computa del ledger. Se elige a propósito un
 # cuadro con un resultado incómodo (un intervalo del 90 % que sobre-cubre) y una actividad
 # no proyectada: una muestra que solo enseña aciertos vende un producto que no existe.
+#
+# El bloque sectorial se RECONSTRUYÓ desde un corte real y sus identidades cierran solas —
+# `ajuste = brecha / Σpeso`, `Σ incidencia = agregado`, `incidencia = peso × reconciliado`—,
+# que es lo que exige `test_la_muestra_curada_cierra_sola.py`. Antes no cerraba ninguna de
+# las tres: publicaba `ajuste_pp = −0,4713` cuando la aritmética daba −0,8369, mostraba
+# cinco actividades que sumaban el 49,92 % del cuadro declarando `brechas: {}`, y su suma
+# ponderada quedaba 1,40 pp por debajo del agregado que el propio titular anuncia. Una
+# vidriera con un número que el motor no produce enseña a desconfiar del motor.
+#
+# Y la actividad no proyectada que este comentario prometía desde el principio ahora EXISTE:
+# Comunicaciones entra en `brechas`, así que la muestra enseña también cómo se declara una
+# ausencia y qué le hace al resto.
 class _NoSeDesagrega(Exception):
     """La lectura sectorial no procede, y el motivo ya está escrito. Excepción propia y no
     `Exception` a secas: el `except` genérico de abajo existe para lo que falla, y confundir
@@ -1030,10 +1042,14 @@ _CONSECUENCIA_DE_LA_AUSENCIA = (
     "**No proyectadas:** {faltan}. Una actividad con huecos no se estima: se lista con su "
     "motivo, y su contribución al agregado **se reparte por peso sobre las demás**, que es "
     "lo que el ajuste declara. Falta el **{peso_ausente:.2f} %** del peso del cuadro, así "
-    "que cada actividad mostrada sube **{exceso:+.3f} pp** más de lo que subiría si "
-    "estuvieran todas: ese exceso cubre a la que falta y no viene de ninguna señal sobre "
-    "ellas."
+    "que cada actividad mostrada recibe **{exceso:+.3f} pp** de ajuste adicional sobre el "
+    "que tendría si estuvieran todas: esa diferencia cubre a la que falta y no viene de "
+    "ninguna señal sobre ellas."
 )
+# El texto es NEUTRO respecto del signo a propósito. La primera versión decía «sube {exceso}
+# pp más», que con una brecha negativa publica «sube −0,008 pp» — la clase de frase que
+# afirma una dirección contraria a la del número que la acompaña. Lo destapó la propia
+# muestra curada al reconstruirla, no un test: los míos usaban una brecha positiva.
 
 _SIN_AGREGADO_QUE_DESAGREGAR = (
     "La lectura sectorial no está disponible para este corte: sin una proyección agregada "
@@ -1073,22 +1089,61 @@ _SAMPLE_PAYLOAD: Dict[str, Any] = {
                           "dlog_pct": 0.3809, "es_identidad": True,
                           "diferencia_maxima_historica": 0.0015},
     "sectorial": {
-        "horizonte": "2026-Q3", "brecha_pp": -0.4178, "ajuste_pp": -0.4713,
-        "brechas": {},
-        # Cada sector lleva su crudo Y su reconciliado, y el ajuste (-0,4713 pp) es la
-        # diferencia exacta entre las dos columnas. La muestra vieja traía solo el
-        # reconciliado, y por eso enseñaba una tabla que el pipeline no podía producir.
+        "horizonte": "2026-Q3", "brecha_pp": -0.8522,
+        "ajuste_pp": -0.8601,
+        "brechas": {"comunicaciones": "la serie tiene 2 trimestre(s) sin dato en el tramo común; un sector con huecos no se proyecta, se declara"},
         "sectores": [
-            {"etiqueta": "Construcción", "crecimiento": 5.40,
-             "crecimiento_sin_reconciliar": 5.87, "peso": 0.1226, "incidencia": 0.662},
-            {"etiqueta": "Comercio", "crecimiento": 2.04,
-             "crecimiento_sin_reconciliar": 2.51, "peso": 0.1173, "incidencia": 0.240},
-            {"etiqueta": "Hoteles, bares y restaurantes", "crecimiento": 6.77,
-             "crecimiento_sin_reconciliar": 7.24, "peso": 0.1000, "incidencia": 0.677},
-            {"etiqueta": "Manufactura local", "crecimiento": 2.39,
-             "crecimiento_sin_reconciliar": 2.86, "peso": 0.0906, "incidencia": 0.217},
-            {"etiqueta": "Impuestos a la producción netos de subsidios", "crecimiento": 3.10,
-             "crecimiento_sin_reconciliar": 3.57, "peso": 0.0687, "incidencia": 0.213},
+            {"etiqueta": "Construcción", "peso": 0.1226,
+             "crecimiento_sin_reconciliar": 5.87, "crecimiento": 5.01,
+             "incidencia": 0.614},
+            {"etiqueta": "Comercio", "peso": 0.1173,
+             "crecimiento_sin_reconciliar": 2.52, "crecimiento": 1.66,
+             "incidencia": 0.195},
+            {"etiqueta": "Hoteles, bares y restaurantes", "peso": 0.1,
+             "crecimiento_sin_reconciliar": 7.24, "crecimiento": 6.38,
+             "incidencia": 0.638},
+            {"etiqueta": "Manufactura local", "peso": 0.0906,
+             "crecimiento_sin_reconciliar": 2.86, "crecimiento": 2.0,
+             "incidencia": 0.181},
+            {"etiqueta": "Actividades inmobiliarias y de alquiler", "peso": 0.0758,
+             "crecimiento_sin_reconciliar": 3.83, "crecimiento": 2.97,
+             "incidencia": 0.225},
+            {"etiqueta": "Transporte y almacenamiento", "peso": 0.0738,
+             "crecimiento_sin_reconciliar": 4.46, "crecimiento": 3.6,
+             "incidencia": 0.266},
+            {"etiqueta": "Impuestos a la producción netos de subsidios", "peso": 0.0687,
+             "crecimiento_sin_reconciliar": 3.47, "crecimiento": 2.61,
+             "incidencia": 0.179},
+            {"etiqueta": "Agropecuario", "peso": 0.0479,
+             "crecimiento_sin_reconciliar": 2.93, "crecimiento": 2.07,
+             "incidencia": 0.099},
+            {"etiqueta": "Intermediación financiera, seguros y conexas", "peso": 0.0464,
+             "crecimiento_sin_reconciliar": 5.89, "crecimiento": 5.03,
+             "incidencia": 0.233},
+            {"etiqueta": "Administración pública y defensa", "peso": 0.0448,
+             "crecimiento_sin_reconciliar": 2.61, "crecimiento": 1.75,
+             "incidencia": 0.078},
+            {"etiqueta": "Enseñanza", "peso": 0.0408,
+             "crecimiento_sin_reconciliar": 4.93, "crecimiento": 4.07,
+             "incidencia": 0.166},
+            {"etiqueta": "Servicios profesionales", "peso": 0.0401,
+             "crecimiento_sin_reconciliar": 3.15, "crecimiento": 2.29,
+             "incidencia": 0.092},
+            {"etiqueta": "Salud", "peso": 0.0335,
+             "crecimiento_sin_reconciliar": 6.39, "crecimiento": 5.53,
+             "incidencia": 0.185},
+            {"etiqueta": "Manufactura zonas francas", "peso": 0.0295,
+             "crecimiento_sin_reconciliar": 4.3, "crecimiento": 3.44,
+             "incidencia": 0.101},
+            {"etiqueta": "Otras actividades de servicios de mercado", "peso": 0.0291,
+             "crecimiento_sin_reconciliar": 2.7, "crecimiento": 1.84,
+             "incidencia": 0.054},
+            {"etiqueta": "Energía y agua", "peso": 0.0155,
+             "crecimiento_sin_reconciliar": 4.01, "crecimiento": 3.15,
+             "incidencia": 0.049},
+            {"etiqueta": "Explotación de minas y canteras", "peso": 0.0144,
+             "crecimiento_sin_reconciliar": 4.56, "crecimiento": 3.7,
+             "incidencia": 0.053},
         ],
     },
     "escenarios": [
