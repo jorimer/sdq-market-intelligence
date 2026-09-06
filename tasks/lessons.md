@@ -873,3 +873,20 @@ ocupada? Si la respuesta es no, el instrumento está mal elegido.
 - **Causa raíz**: un guard con una lista explícita de funciones protege lo que había cuando se escribió. No es un defecto del guard: es su naturaleza, y por eso la lección escrita no alcanza.
 - **Regla**: cuando el guard es una lista de sujetos, la lista se AMPLÍA en cada merge y eso se dice en su docstring, con el caso que lo demuestra. Y el guard se escribe con `ast` sobre un hecho sintáctico preciso —una interpolación del punto seguida de un texto que arranca en «%»— y no con una regex por línea, que en este archivo marcaría «banda 80 %» y los pesos. Al lado van SUS DOS contra-pruebas: que ve el defecto en el código como estaba, y que no marca el porcentaje legítimo.
 - **Disparador**: todo guard parametrizado con una lista de funciones, archivos o módulos. Preguntarse qué queda afuera — y volver a preguntárselo después de cada merge.
+
+
+---
+
+### 2026-09-06 — Antes de rellenar un hueco, preguntar qué se vuelve POSIBLE al rellenarlo
+
+- **Síntoma**: había una fila del ledger sin medida, listada como impuntuable. La tarea era estamparla. Determiné la medida correcta con dos líneas de evidencia y estuve a punto de escribir la migración y terminar.
+- **Causa raíz**: el hueco estaba tapando otro defecto. El `backtest_id` no incluía la medida, así que en cuanto la fila se volviera puntuable iba a caer en el mismo conjunto que los pronósticos del mismo modelo en OTRA unidad —el bloque había cambiado de trimestral a interanual— y su RMSE se promediaría. Medido con errores de 0,50 y 4,00: **2,850**, que no es el error de ninguno de los dos. Estampar y nada más habría cambiado una brecha VISIBLE por una corrupción INVISIBLE.
+- **Regla**: cuando un dato faltante está bloqueando un camino, la pregunta no es solo «¿cuál es el valor correcto?» sino **«¿qué va a hacer el sistema en cuanto se lo dé, y está listo para hacerlo bien?»**. Recorrer el camino aguas abajo ANTES de escribir el valor: quién lo va a leer, con qué lo va a agrupar, contra qué lo va a comparar. Un hueco declarado es incómodo pero honesto; un hueco rellenado hacia un camino roto es un número malo que nadie va a volver a mirar.
+- **Disparador**: cualquier backfill, default o valor por defecto que habilite una rama de código que hasta ahora no corría.
+
+### 2026-09-06 — Cuando el dato no registra el hecho, lo registra el RELOJ
+
+- **Síntoma**: una fila no decía con qué versión del código se produjo, y las dos candidatas daban resultados que difieren en puntos porcentuales enteros. `as_of` era una fecha sin hora. Parecía indecidible, y por eso la había dejado en NULL.
+- **Causa raíz**: estaba buscando la respuesta solo DENTRO del registro. Pero el momento de escritura sí queda grabado en otros lados: el `last_run` de la operación que la escribió, el `%cd` del commit que introdujo el cambio, el `merged_at` del PR y la lista de despliegues. Cruzarlos dio una respuesta con margen de **cuatro horas y media** — la fila es anterior a que el commit existiera.
+- **Regla**: antes de declarar un dato indeterminable, cruzar los relojes que sí hay: `last_run` de la operación, fecha del commit (`git log --format='%cd'`), `merged_at` del PR, `railway deployment list`. Y corroborar con una segunda línea independiente —acá, reproducir el modelo con el dato real y ver que la trayectoria de la otra hipótesis ni se acerca—. Una sola línea es una inferencia; dos que no comparten supuesto son una determinación.
+- **Disparador**: «no se puede saber con qué versión se produjo esta fila». Casi siempre sí se puede: el hecho no está en la fila, está en el reloj.
