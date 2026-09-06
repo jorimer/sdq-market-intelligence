@@ -38,6 +38,7 @@ from shared.products.contract import EstadoBacktest
 from shared.products.render import render_product_pdf
 # La huella de la caché de informes se busca en el módulo del PRODUCTO. La lista vive en
 # `ai_context.py`; acá se re-exporta el MISMO objeto, no una copia — dos listas divergen.
+from modules.valuation import responsabilidad as resp
 from modules.valuation.ai_context import AI_CONTEXT_FILES  # noqa: F401,E402
 
 
@@ -75,6 +76,7 @@ SECCION_CONTRASTE = "contraste_de_mercado"
 SECCION_SUPUESTOS = "supuestos_y_sensibilidad"
 SECCION_LIMITACIONES = "limitations"
 SECCION_FUENTES = "fuentes_y_procedencia"
+SECCION_CIERRE = "conclusion_y_responsabilidad"
 #: Vías abiertas, descartes con motivo y lo que cada comparable NO permite afirmar. Un
 #: panel chico sin explicación se lee como falta de trabajo; el anexo es el trabajo.
 SECCION_ANEXO_PANEL = "anexo_panel_de_transacciones"
@@ -93,6 +95,7 @@ _SECTION_TITLES = {
     SECCION_SUPUESTOS: "Supuestos y sensibilidad al costo de capital",
     SECCION_LIMITACIONES: "Limitaciones y condiciones",
     SECCION_FUENTES: "Fuentes y procedencia",
+    SECCION_CIERRE: "Conclusión y responsabilidad",
     SECCION_ANEXO_PANEL: "Anexo · Panel de transacciones: vías abiertas y descartes",
 }
 
@@ -134,7 +137,7 @@ def valuation_manifest() -> SectorProductManifest:
                 sections=(SECCION_RESUMEN, SECCION_PROPOSITO, SECCION_ANTECEDENTES,
                           SECCION_ENTORNO, SECCION_FINANCIERO, SECCION_SPREAD, SECCION_VALOR,
                           SECCION_DESCOMPOSICION, SECCION_CONTRASTE,
-                          SECCION_LIMITACIONES),
+                          SECCION_LIMITACIONES, SECCION_CIERRE),
                 narrative_templates=(), prosa_computada=True,
                 audience="cliente / comité", cadence="recurring", price_band="suscripción"),
             # El Deep Dive agrega las dos que un comité de crédito o una contraparte piden
@@ -145,7 +148,7 @@ def valuation_manifest() -> SectorProductManifest:
                           SECCION_ENTORNO, SECCION_FINANCIERO, SECCION_SPREAD, SECCION_METODOLOGIA,
                           SECCION_VALOR, SECCION_DESCOMPOSICION, SECCION_CONTRASTE,
                           SECCION_SUPUESTOS, SECCION_LIMITACIONES, SECCION_FUENTES,
-                          SECCION_ANEXO_PANEL),
+                          SECCION_CIERRE, SECCION_ANEXO_PANEL),
                 narrative_templates=(), prosa_computada=True,
                 audience="comité / contraparte", cadence="on_demand", price_band="on-demand"),
         })
@@ -408,8 +411,18 @@ class ValuationProduct:
         # recomputa nada y el informe en caché dice el entorno con el que se valuó.
         payload["entorno"] = env.a_dict(env.leer_entorno(
             db, bank_id=str(fila[0]), tipo=lec.tipo_de_entidad, periodo=lec.periodo))
+        payload["cierre"] = resp.a_dict(self._cierre(entidad=str(fila[1]), bank_id=str(fila[0]),
+                                                     corte=lec.periodo))
         return ProductSnapshot(tier=tier, period=lec.periodo, payload=payload,
                                entity_name=str(fila[1]))
+
+    def _cierre(self, *, entidad: str, bank_id: str, corte: str):
+        """Quién responde, con qué versión del método y con qué estado de validación. Todo
+        computado al emitir; viaja en el payload."""
+        v = self.validation_state()
+        return resp.leer_cierre(entidad=entidad, bank_id=bank_id, corte=corte,
+                                validacion_aprobada=v.approved,
+                                desenlace=self.ESTADO_BACKTEST.desenlace or "")
 
     async def narratives(self, tier: ProductTier, snapshot: ProductSnapshot,
                          lang: str = "es") -> Dict[str, str]:
@@ -425,7 +438,13 @@ class ValuationProduct:
         from modules.valuation import entorno as env
         todas = _secciones_computadas(lec, posicion=posicion, cuota_pct=cuota,
                                       con_anexo=SECCION_ANEXO_PANEL in secciones,
-                                      entorno=env.desde_dict(snapshot.payload.get("entorno")))
+                                      entorno=env.desde_dict(snapshot.payload.get("entorno")),
+                                      # Un snapshot sin bloque de cierre —la muestra curada— lo
+                                      # computa acá: la versión del método y el estado de
+                                      # validación son los vigentes, nunca una copia escrita.
+                                      cierre=(resp.desde_dict(snapshot.payload.get("cierre"))
+                                              or self._cierre(entidad=lec.entidad, bank_id="",
+                                                              corte=lec.periodo)))
         return {sec: todas[sec] for sec in secciones if sec in todas}
 
     def _posicion_en_su_tipo(self, lec: Any) -> Tuple[Optional[Tuple[int, int]],
@@ -543,7 +562,8 @@ class ValuationProduct:
 
 def _secciones_computadas(lec: Any, *, posicion: Optional[Tuple[int, int]] = None,
                           cuota_pct: Optional[float] = None,
-                          con_anexo: bool = False, entorno: Any = None) -> Dict[str, str]:
+                          con_anexo: bool = False, entorno: Any = None,
+                          cierre: Any = None) -> Dict[str, str]:
     """TODA la prosa del eje, de una `Lectura`. Es la única fuente: la usan el informe
     real y la muestra curada.
 
@@ -575,6 +595,7 @@ def _secciones_computadas(lec: Any, *, posicion: Optional[Tuple[int, int]] = Non
         SECCION_SUPUESTOS: narrativa.supuestos_y_sensibilidad(lec),
         SECCION_LIMITACIONES: narrativa.limitaciones(lec),
         SECCION_FUENTES: narrativa.fuentes_y_procedencia(lec),
+        SECCION_CIERRE: narrativa.conclusion_y_responsabilidad(cierre, lec),
         SECCION_ANEXO_PANEL: narrativa.anexo_del_panel(),
     }
 
@@ -722,9 +743,13 @@ def _sample_narrativas_de(secciones) -> Dict[str, str]:
     snap = ProductSnapshot(tier=ProductTier.deep_dive, period="2025-12-31",
                            payload=_SAMPLE_PAYLOAD, entity_name=_ENTIDAD_FICTICIA)
     from modules.valuation import entorno as env
+    # El cierre de la muestra se COMPUTA como el real —versión del método y estado de
+    # validación vigentes—: una muestra con una versión escrita a mano se desincroniza.
+    cierre = ValuationProduct()._cierre(entidad=_ENTIDAD_FICTICIA, bank_id="", corte="2025-12-31")
     todas = _secciones_computadas(_lectura_desde_payload(snap),
                                   con_anexo=SECCION_ANEXO_PANEL in secciones,
-                                  entorno=env.desde_dict(_SAMPLE_PAYLOAD.get("entorno")))
+                                  entorno=env.desde_dict(_SAMPLE_PAYLOAD.get("entorno")),
+                                  cierre=cierre)
     salida = {s: todas[s] for s in secciones if s in todas}
     primera = next((s for s in secciones if s in salida), None)
     if primera:

@@ -1144,6 +1144,21 @@ declara `# solo-diciembre: <motivo>` — lo exige `test_el_roe_es_de_doce_meses.
 que cuenta filas para decidir si algo se puede valuar ofrece lo que después falla: se decide
 computando la misma ventana que el motor.
 
+---
+
+## Un cambio que mueve todas las cifras de un eje sin entrada en el changelog (2026-09-06)
+
+El eje de valuación no tenía NINGUNA entrada en `shared/doctrine/changelog.yaml` cuando el ROE
+de doce meses (#1141) cambió toda valuación real. Se vio al cablear la sección de cierre, que
+cita «la última entrada del registro del eje» y no tenía qué citar. Un cambio de metodología
+que no se registra deja «¿por qué cambió mi cifra?» sin respuesta, que es exactamente lo que
+el registro existe para responder.
+
+**Regla:** un PR que cambia una cifra publicada de un eje lleva su entrada en el changelog en
+el MISMO PR, con `pr` apuntando a sí mismo y el impacto medido al publicar — y si no se pudo
+medir sobre producción (el eje no estaba activo), se dice eso, no se estima. Lo vigila, para
+valuación, `test_la_conclusion_y_responsabilidad.py`; para los demás ejes, la regla sigue
+siendo escrita.
 
 ---
 

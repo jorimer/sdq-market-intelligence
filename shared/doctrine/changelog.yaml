@@ -31,6 +31,32 @@
 version: "1.0"
 
 cambios:
+  - id: 2026-09-06-valuacion-roe-de-doce-meses
+    fecha_efectiva: "2026-09-06"
+    sectores: [valuation]
+    titulo: "El ROE de la valuación es de doce meses sobre patrimonio de apertura"
+    que_cambio: >-
+      El retorno sobre patrimonio con el que se proyecta el residual income pasa a medirse
+      como la utilidad de los últimos doce meses cerrados en cada corte —la misma ventana
+      móvil que usa el Banking Score— sobre el patrimonio de doce meses antes. Antes se
+      dividía la utilidad acumulada del ejercicio, tal cual la publica la Superintendencia,
+      por el patrimonio del corte inmediato anterior, así que en los cortes de marzo, junio y
+      septiembre el «ROE» era el de tres, seis o nueve meses. Un corte sin utilidad publicada
+      deja de contar como cero: no tiene ROE y la serie lo declara con un corte menos. El
+      selector ofrece solo entidades y cortes con ventana de doce meses.
+    por_que: >-
+      La mediana de los últimos cuatro cortes mezclaba acumulados parciales con uno anual y
+      subestimaba el ROE proyectado de forma sistemática, y de ahí el spread contra el costo
+      de capital y el veredicto de creación de valor. Con cortes trimestrales cargados, toda
+      valuación real heredaba el defecto.
+    impacto:
+      medido_al_publicar: >-
+        Sobre una entidad de prueba con cortes trimestrales y ROE anual de doce por ciento
+        sobre apertura, el ROE proyectado publicado pasaba de 6,50 % a 11,97 %, y el veredicto
+        de «destruye valor en todo el rango» a «el spread cambia de signo dentro del rango de
+        Ke». No se midió sobre el padrón de producción porque al publicar ningún nivel del eje
+        estaba activado; el efecto real se lee en el panel al activarlo.
+    pr: 1141
   - id: 2026-09-06-proyeccion-del-pib-interanual-y-track-record-por-medida
     fecha_efectiva: "2026-09-06"
     sectores: [macro_forecast]
@@ -76,7 +102,6 @@ cambios:
         mezcladas publicaba, sobre errores de 0,50 y 4,00, un RMSE de 2,850 que no era el
         error de ninguno de los dos.
     pr: [1117, 1124, 1129]
-
   - id: 2026-09-01-costo-del-capital-en-el-iai
     fecha_efectiva: "2026-09-01"
     sectores: [agribusiness]

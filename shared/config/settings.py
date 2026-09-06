@@ -105,6 +105,10 @@ class Settings(BaseSettings):
 
     # SIB (Superintendencia de Bancos)
     SIB_API_KEY: str = ""
+    #: Entidades con las que SDQ Consulting mantiene una relación profesional (nombres o ids,
+    #: separados por coma). Para ellas la sección de cierre de una valuación DECLARA la
+    #: relación en vez de afirmar independencia. Vacío = ninguna. Decisión del dueño 2026-09-06.
+    VALUACION_ENTIDADES_CON_RELACION: str = ""
     SIB_API_BASE_URL: str = "https://apis.sb.gob.do/estadisticas/v2"
 
     # Redis (event bus + Celery broker/backend)
