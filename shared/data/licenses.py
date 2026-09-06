@@ -503,6 +503,32 @@ LICENCIAS: Dict[str, Licencia] = {
               "ACCESO (cuota, identificación del consumidor), no el régimen de uso del "
               "dato."),
     ),
+    ("CMF Chile — reportes financieros publicados para descarga en cmfchile.cl. El "
+     "emisor autoriza el uso y la publicación con mención de la fuente MÁS un enlace; "
+     "no es una licencia abierta."): Licencia(
+        terminos_url="https://api.cmfchile.cl/terminos-de-uso.html",
+        verificado_el="2026-09-05",
+        atribucion=("Fuente: Comisión para el Mercado Financiero de Chile (CMF) — "
+                    "https://www.cmfchile.cl"),
+        nota=("`cmf_client`. Leído el 2026-09-05. El emisor NO publica una licencia abierta: "
+              "sus términos abren con «Todos los derechos reservados ©» y conceden una "
+              "autorización acotada — «El uso y/o publicación de los contenidos entregados a "
+              "través de la API CMF Bancos está autorizado, con la consecuente incorporación "
+              "de una mención a la fuente más un enlace a la página principal del sitio web "
+              "CMF Bancos (www.sbif.cl)». Publicar está EXPLÍCITAMENTE autorizado; la "
+              "condición es la atribución, y la atribución exige fuente Y enlace, no solo el "
+              "nombre. Por eso `atribucion` lleva la URL adentro. "
+              "Dos cosas que el emisor deja sin resolver y NO se rellenan acá: (1) el enlace "
+              "que sus términos exigen apunta a `www.sbif.cl`, dominio de una institución "
+              "que dejó de existir cuando la SBIF fue absorbida por la CMF, y el emisor no "
+              "actualizó el texto: se atribuye a la CMF vigente y queda constancia de la "
+              "discrepancia; (2) sobre uso COMERCIAL, su FAQ tiene la pregunta y la "
+              "respuesta remite circularmente a estos términos, que no lo autorizan ni lo "
+              "prohíben. El boletín regional es gratuito, así que la condición que importa "
+              "es la atribución; para un producto vendido hay que preguntarle al emisor. "
+              "Nota aparte: la otra API de la CMF (APIBEST, `best.cmfchile.cl`) SÍ prohíbe "
+              "redistribuir, y por eso este conector no la usa."),
+    ),
     ("SECMCA / CMCA — cuadros EMFA publicados para descarga en secmca.org. Sin "
      "términos de uso localizados: deuda de verificación declarada, no permiso "
      "presunto."): Licencia(

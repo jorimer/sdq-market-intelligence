@@ -118,7 +118,9 @@ KNOWN_PROVIDERS = [
         "needs_proxy": True,
         "notes": ("Clave en el portal de la CMF (api.cmfchile.cl), cuota de 10.000 consultas "
                   "al mes. Requiere el proxy Cloudflare (WAF). La atribución que exige el "
-                  "emisor incluye fuente Y enlace: no es CC BY 4.0."),
+                  "emisor incluye fuente Y enlace: no es CC BY 4.0. OJO: el boletín regional "
+                  "NO lee esta API — lee los reportes mensuales del portal, que sí publican "
+                  "morosidad y capital bajo Basilea III; ver `shared/data/cmf_client.py`."),
     },
     {
         "provider": "comtrade",
