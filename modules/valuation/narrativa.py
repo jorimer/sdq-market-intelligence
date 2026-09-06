@@ -252,8 +252,9 @@ def analisis_financiero(lec: Lectura) -> str:
     serie = lec.serie_spread
     if not serie:
         return ("No hay serie de ROE publicada suficiente para el análisis histórico: hacen "
-                "falta al menos dos cierres con patrimonio para computar un retorno sobre "
-                "patrimonio de apertura. Se declara en vez de proyectar sobre un solo punto.")
+                "falta doce meses de historia —un corte y el mismo corte del año anterior, "
+                "con patrimonio y utilidad publicados— para computar un retorno de doce meses "
+                "sobre patrimonio de apertura. Se declara en vez de proyectar sobre un punto.")
     filas = "\n".join(f"| {p} | {r:.2f} % |" for p, r in serie)
     roes = [r for _p, r in serie]
     minimo, maximo = min(roes), max(roes)
@@ -266,9 +267,11 @@ def analisis_financiero(lec: Lectura) -> str:
         "proyecta el nivel reciente y la sección de sensibilidad muestra qué pasa si no se "
         "sostiene.")
     return (
-        "**Retorno sobre patrimonio de APERTURA**, que es el capital que efectivamente estuvo "
-        "disponible para ganar durante el período:\n\n"
-        f"| Cierre | ROE |\n|---|---|\n{filas}\n\n"
+        "**Retorno de DOCE MESES sobre patrimonio de APERTURA**: la utilidad de los últimos "
+        "doce meses cerrados en cada corte —la Superintendencia publica el acumulado del "
+        "ejercicio, y un trimestre no es un año— sobre el capital que estuvo disponible para "
+        "ganarla, el de doce meses antes:\n\n"
+        f"| Corte | ROE (12 meses) |\n|---|---|\n{filas}\n\n"
         f"{lectura}\n\n"
         f"El **ROE proyectado** para la valuación es **{lec.roe_proyectado_pct:.2f} %**.\n\n"
         "**Dos precisiones sobre esta tabla.** La primera: la Superintendencia publica el ROE "

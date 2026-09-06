@@ -29,7 +29,7 @@ from sqlalchemy.pool import StaticPool
 
 import shared.auth.models  # noqa: F401
 import shared.products.models  # noqa: F401 — la caché de informes, que el ensamblador consulta
-from modules.banking_score.models.models import Bank, BankingData, BankType, DataSource
+from modules.banking_score.models.models import Bank, BankType, DataSource
 from modules.macro_monitor.models.models import MacroSeries
 from modules.valuation.engine import crecimiento as cr
 from modules.valuation.engine.cost_of_capital import SERIE_RF
@@ -43,6 +43,7 @@ from modules.valuation.products import (
     ValuationProduct,
     valuation_manifest,
 )
+from modules.valuation.tests._siembra import sembrar_trimestres
 from shared.database.base import Base
 from shared.products.assembler import assemble_product_content, assemble_product_report
 from shared.products.tiers import ProductTier
@@ -62,10 +63,10 @@ def db():
     for ident, nombre, patr in (("aap1", "Asociación Grande", 30_000_000_000.0),
                                 ("aap2", "Asociación Chica", 10_000_000_000.0)):
         s.add(Bank(id=ident, name=nombre, bank_type=BankType.aap))
-        for j, anio in enumerate((2022, 2023, 2024, 2025)):
-            s.add(BankingData(bank_id=ident, period_end=date(anio, 12, 31),
-                              patrimonio_tecnico=patr * (1.05 ** j),
-                              utilidad_neta=patr * 0.10, source=DataSource.sib_api))
+        # Cuatro cortes por año con utilidad ACUMULADA, como publica la SIB: con solo
+        # diciembre el ROE de doce meses y el acumulado coinciden y el defecto no se ve.
+        sembrar_trimestres(s, ident, patrimonio_diciembre=[patr * (1.05 ** j) for j in range(4)],
+                           anios=(2022, 2023, 2024, 2025), roe_anual_pct=10.0)
     for p, v in CURVA:
         s.add(MacroSeries(series_code=SERIE_RF, period=p, value=v))
     for i in range(29):

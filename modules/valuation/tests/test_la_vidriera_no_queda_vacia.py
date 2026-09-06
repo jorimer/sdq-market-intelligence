@@ -8,6 +8,7 @@ la entrega—, así que un eje puede cruzar su umbral con la vidriera vacía.
 Y las dos listas tienen la misma regla: se ofrece lo que PRODUCE. Una opción que falla al
 elegirla es peor que no ofrecerla, porque el que la eligió ya pagó la vuelta.
 """
+# solo-diciembre: prueba el selector con cierres anuales; el ROE lo cubre test_el_roe_es_de_doce_meses
 from datetime import date
 
 import pytest

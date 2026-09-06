@@ -28,7 +28,7 @@ from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
 
 import shared.auth.models  # noqa: F401
-from modules.banking_score.models.models import Bank, BankingData, BankType, DataSource
+from modules.banking_score.models.models import Bank, BankType, DataSource
 from modules.macro_monitor.models.models import MacroSeries
 from modules.valuation.engine import crecimiento as cr
 from modules.valuation.engine.cost_of_capital import SERIE_RF
@@ -36,6 +36,7 @@ from modules.valuation.products import (
     SECCION_ANTECEDENTES, SECCION_FINANCIERO, SECCION_FUENTES, SECCION_LIMITACIONES,
     SECCION_METODOLOGIA, SECCION_PROPOSITO, SECCION_RESUMEN, ValuationProduct)
 from modules.valuation.service import a_payload, valuar_entidad
+from modules.valuation.tests._siembra import sembrar_trimestres
 from shared.database.base import Base
 from shared.products.tiers import ProductTier
 
@@ -54,10 +55,10 @@ def db():
             ("aap1", "Asociación Grande", 30_000_000_000.0),
             ("aap2", "Asociación Chica", 10_000_000_000.0))):
         s.add(Bank(id=ident, name=nombre, bank_type=BankType.aap))
-        for j, anio in enumerate((2022, 2023, 2024, 2025)):
-            s.add(BankingData(bank_id=ident, period_end=date(anio, 12, 31),
-                              patrimonio_tecnico=patr * (1.05 ** j),
-                              utilidad_neta=patr * 0.10, source=DataSource.sib_api))
+        # Cuatro cortes por año con utilidad ACUMULADA, como publica la SIB: con solo
+        # diciembre el ROE de doce meses y el acumulado coinciden y el defecto no se ve.
+        sembrar_trimestres(s, ident, patrimonio_diciembre=[patr * (1.05 ** j) for j in range(4)],
+                           anios=(2022, 2023, 2024, 2025), roe_anual_pct=10.0)
     for p, v in CURVA:
         s.add(MacroSeries(series_code=SERIE_RF, period=p, value=v))
     for i in range(29):
@@ -148,7 +149,7 @@ def test_el_analisis_financiero_NO_habla_de_EBITDA(db) -> None:
     fin = narr[SECCION_FINANCIERO]
     assert "EBITDA" in fin and "no mide nada" in fin, (
         "el informe no explica por qué no usa EBITDA")
-    assert "| Cierre | ROE |" in fin, "falta la serie histórica de ROE"
+    assert "| Corte | ROE (12 meses) |" in fin, "falta la serie histórica de ROE"
 
 
 def test_el_render_pone_la_ENTIDAD_en_la_portada_y_arma_las_tablas(db, monkeypatch) -> None:

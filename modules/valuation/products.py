@@ -266,8 +266,10 @@ class ValuationProduct:
         return ValidationState(approved=False, score=0.0,
                                notes=contraste_del_modelo().motivo)
 
-    #: Cierres con patrimonio que hacen falta para valuar. El ROE va sobre patrimonio de
-    #: APERTURA, así que el primer cierre no tiene con qué computarlo: hacen falta DOS.
+    #: Cierres con patrimonio que hacen falta, como mínimo, para valuar. El ROE es de doce
+    #: meses sobre patrimonio de APERTURA de doce meses antes: con cierres anuales son DOS;
+    #: con cortes trimestrales hacen falta cinco, y el filtro fino lo hace `_valuables()`,
+    #: que computa la ventana igual que `historia_de` en vez de contar filas.
     CIERRES_MINIMOS = 2
 
     def available_periods(self) -> List[str]:
@@ -293,8 +295,11 @@ class ValuationProduct:
             logger.warning("no se pudieron listar los períodos de valuación: %s", e)
             return []
         cortes = [str(f[0])[:10] for f in filas]
-        # El más viejo no se ofrece: contra él ninguna entidad tiene apertura.
-        return cortes[:-1] if len(cortes) > 1 else []
+        # Un corte se ofrece si ALGUNA entidad valuable tiene ROE de doce meses en él —el más
+        # viejo nunca, y con cortes trimestrales tampoco los del primer año—: ofrecer uno que
+        # falla al elegirlo es peor que no ofrecerlo.
+        con_roe = {c for cortes_e in self._valuables().values() for c in cortes_e}
+        return [c for c in cortes if c in con_roe]
 
     #: Los tipos que este eje puede valuar: entidades de INTERMEDIACIÓN. El modelo de Excess
     #: Return descuenta el exceso de ROE sobre el costo de capital de un negocio que toma
@@ -336,8 +341,33 @@ class ValuationProduct:
         except Exception as e:  # noqa: BLE001
             logger.warning("no se pudieron listar las entidades de valuación: %s", e)
             return []
+        valuables = self._valuables()
         return [{"value": str(f[0]), "label": str(f[1]), "group": str(f[2] or "")}
-                for f in filas]
+                for f in filas if str(f[0]) in valuables]
+
+    def _valuables(self) -> Dict[str, List[str]]:
+        """`{bank_id: [cortes con ROE de doce meses]}` para los tipos valuables.
+
+        Se computa con la MISMA ventana que `historia_de` —utilidad acumulada del ejercicio,
+        patrimonio de doce meses antes— y no contando filas: con cortes trimestrales, dos
+        filas son seis meses y no hay ROE. Contarlas ofrecía una entidad que fallaba al
+        elegirla.
+        """
+        from sqlalchemy import text as _sql
+
+        from modules.valuation.service import historia_de
+        if self._db is None:
+            return {}
+        marcadores = ", ".join(f":t{i}" for i in range(len(self.TIPOS_VALUABLES)))
+        params: Dict[str, object] = {f"t{i}": t for i, t in enumerate(self.TIPOS_VALUABLES)}
+        try:
+            ids = [str(f[0]) for f in self._db.execute(_sql(
+                f"SELECT id FROM banks WHERE bank_type IN ({marcadores})"), params).fetchall()]
+            historias = {b: historia_de(self._db, b) for b in ids}
+            return {b: list(h.periodos_con_roe) for b, h in historias.items() if h.roe_pct}
+        except Exception as e:  # noqa: BLE001
+            logger.warning("no se pudieron determinar las entidades valuables: %s", e)
+            return {}
 
     def scope_kind(self) -> str:
         return "entity"
@@ -367,8 +397,9 @@ class ValuationProduct:
             # Se DECLARA por qué, en vez de devolver ceros: un motor sin su entrada no
             # falla, desaparece.
             raise ValueError(
-                f"No hay con qué valuar «{fila[1]}»: hacen falta al menos dos cierres con "
-                "patrimonio publicado para computar un ROE sobre patrimonio de apertura.")
+                f"No hay con qué valuar «{fila[1]}»: hacen falta doce meses de historia —un "
+                "corte y el mismo corte del año anterior, con patrimonio y utilidad "
+                "publicados— para computar un ROE de doce meses sobre patrimonio de apertura.")
         return ProductSnapshot(tier=tier, period=lec.periodo, payload=a_payload(lec),
                                entity_name=str(fila[1]))
 

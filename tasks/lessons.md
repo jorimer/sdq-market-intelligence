@@ -1123,3 +1123,23 @@ motor: si publica `Ke`, cruzar `Ke = Rf + β × ERP` en los dos extremos. Los pa
 produjeron una cifra viajan en el payload (`rf_pct`, `beta`, `erp`, `n_observaciones_rf`),
 no se leen de constantes al renderizar: un informe en caché tiene que decir la beta con la que
 se valuó, no la que rige hoy.
+
+---
+
+## Un guard existe en un motor y falta en el otro — instancia 10, y ésta cambiaba el veredicto (2026-09-06)
+
+La SIB publica la utilidad ACUMULADA del ejercicio. Banking lo midió (71 banco-años: el primer
+trimestre concentra 9,9 % del año) y lo resolvió con una ventana móvil de doce meses en
+`banking_score/scoring/ttm.py`. Valuación reescribió el ROE desde cero: acumulado del corte
+sobre el patrimonio del corte ANTERIOR, corte a corte. Con los cortes trimestrales que prod
+tiene, la serie era `2.9, 5.8, 8.6, 11.3, …` y la mediana de los últimos cuatro publicaba
+**6,9 % para una entidad de 11,3 %**: «destruye valor en todo el rango» para entidades que no lo
+hacen. Catorce archivos de tests en verde, porque las catorce fixtures sembraban solo
+diciembre — donde el acumulado ya es anual y el defecto no existe.
+
+**Regla:** antes de computar una razón sobre un dato de la SIB, buscar en `banking_score` cómo
+lo trata: el estado de resultados es YTD, el patrimonio es de cierre, el ROE publicado es sobre
+promedio. Y toda fixture que siembre balances lleva cortes de marzo, junio y septiembre, o
+declara `# solo-diciembre: <motivo>` — lo exige `test_el_roe_es_de_doce_meses.py`. Un selector
+que cuenta filas para decidir si algo se puede valuar ofrece lo que después falla: se decide
+computando la misma ventana que el motor.

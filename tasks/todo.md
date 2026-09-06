@@ -33,6 +33,16 @@ fecha, insumos del Ke, tabla de la regresión P/B): es la cuarta brecha y se abr
 
 ---
 
+## Cierre 0 (apareció midiendo) · El ROE es de DOCE meses — HECHO
+
+Rama `claude/vl-9-roe-doce-meses`, apilada sobre el cierre 2. `historia_de` dividía la utilidad
+ACUMULADA del ejercicio por el patrimonio del corte anterior; con cortes trimestrales el ROE
+proyectado salía a ~60 % del real y el veredicto de creación de valor se invertía. Ahora: ventana
+de doce meses (la de `banking_score/scoring/ttm.py`) sobre el patrimonio de doce meses antes;
+un corte sin utilidad no vale cero; el selector ofrece solo entidades con ventana. Fixtures con
+cortes trimestrales en los cuatro archivos que valúan; tres exentos con motivo. **Cambia toda
+valuación real en prod** (decisión del dueño 2026-09-06: arreglar primero).
+
 ## Cierre 1 · Macro e industria (`SECCION_ENTORNO = "entorno_macro_e_industria"`)
 
 **Va entre §3 La entidad y §4 Análisis financiero** (insight y deep dive), que es donde un
