@@ -24,6 +24,8 @@ vigente el nivel queda inactivo, que es el comportamiento correcto y no un error
 from __future__ import annotations
 
 import logging
+
+from modules.macro_monitor.forecasting import bloque as _bloque
 from datetime import date
 from typing import Any, Dict, List, Optional
 
@@ -1075,15 +1077,21 @@ _FALLO_SECTORIAL = "La lectura sectorial no se pudo construir para este corte:"
 #: identificador roto enseña a escribirlo.
 _SERIE_PIB = "bcrd.xls.pib_2018.serie_original_indice"
 
+#: La medida de las proyecciones y escenarios de la MUESTRA se COMPUTA del bloque, no se
+#: escribe: la muestra declara `modelo: bvar_minnesota.5v.v1`, así que su medida es la que el
+#: bloque emite para su objetivo. Escrita a mano quedó en `dlog_pct` cuando #1117 pasó el PIB a
+#: interanual — una incoherencia de vocabulario que ningún test de aritmética ve.
+_MEDIDA_DEL_BVAR = _bloque.medida_del_punto("pib_real") or med.YOY_PCT
+
 _SAMPLE_PAYLOAD: Dict[str, Any] = {
     "proyecciones": [
         {"serie": _SERIE_PIB, "horizonte": "2026-Q3", "punto": 3.41,
-         "medida": med.YOY_PCT,
+         "medida": _MEDIDA_DEL_BVAR,
          "intervalos": [[0.80, 2.11, 4.71], [0.90, 1.62, 5.20]],
          "modelo": "bvar_minnesota.5v.v1", "as_of": "2026-08-20", "ancla": True,
          "motivo": "", "n_oos": 14},
         {"serie": _SERIE_PIB, "horizonte": "2026-Q4", "punto": 3.08,
-         "medida": med.YOY_PCT,
+         "medida": _MEDIDA_DEL_BVAR,
          "intervalos": [[0.80, 1.44, 4.72], [0.90, 0.82, 5.34]],
          "modelo": "bvar_minnesota.5v.v1", "as_of": "2026-08-20", "ancla": False,
          "motivo": "8 observaciones fuera de muestra: hacen falta al menos 12",
@@ -1151,9 +1159,9 @@ _SAMPLE_PAYLOAD: Dict[str, Any] = {
         ],
     },
     "escenarios": [
-        {"horizonte": "2027-Q1", "punto": 2.94, "medida": med.YOY_PCT,
+        {"horizonte": "2027-Q1", "punto": 2.94, "medida": _MEDIDA_DEL_BVAR,
          "intervalos": [[0.80, 0.71, 5.17]]},
-        {"horizonte": "2027-Q2", "punto": 2.81, "medida": med.YOY_PCT,
+        {"horizonte": "2027-Q2", "punto": 2.81, "medida": _MEDIDA_DEL_BVAR,
          "intervalos": [[0.80, 0.24, 5.38]]},
     ],
     "desempeno": [

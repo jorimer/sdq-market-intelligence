@@ -16,7 +16,8 @@ from shared.data import medida_de_pronostico as med
 
 
 def test_las_proyecciones_y_escenarios_de_la_muestra_llevan_la_MEDIDA_que_el_bloque_emite():
-    esperada = {"interanual": med.YOY_PCT, "dlog": med.DLOG_PCT}[bloque.medida_de("pib_real")]
+    esperada = bloque.medida_del_punto("pib_real")
+    assert esperada in (med.YOY_PCT, med.DLOG_PCT)
     filas = list(_SAMPLE_PAYLOAD["proyecciones"]) + list(_SAMPLE_PAYLOAD.get("escenarios") or [])
     assert filas
     for d in filas:
