@@ -886,11 +886,31 @@ def _md_sectorial(p: Dict[str, Any]) -> str:
         "sección existe para dar. Las dos columnas van juntas para que un cambio de signo "
         "entre una y otra se vea como lo que es —el ajuste— y no como una contracción "
         "proyectada.")
-    if sect.get("brechas"):
-        faltan = ", ".join(sorted(sect["brechas"]))
-        lineas.append(f"\n**No proyectadas:** {faltan}. Una actividad con huecos se declara, "
-                      "no se rellena.")
+    brechas = sect.get("brechas") or {}
+    if brechas:
+        # El exceso es `ajuste − brecha`: lo que cada actividad sube DE MÁS por cubrir a las
+        # ausentes. Con todas proyectables los dos coinciden y da cero, que es justo por qué
+        # esta frase solo aparece en esta rama.
+        exceso = float(sect.get("ajuste_pp", 0.0)) - float(sect.get("brecha_pp", 0.0))
+        # El peso ausente se computa por diferencia y es EXACTO: el cuadro nominal del BCRD
+        # cierra —las actividades más los impuestos suman el PIB— así que lo que no está en
+        # las mostradas es lo que falta. No se toma de `panel.pesos`: ahí no hay peso para
+        # una actividad cuya serie ni siquiera está persistida, y darlo para unas y no para
+        # otras invitaría a sumarlas y obtener un total equivocado.
+        peso_ausente = max(0.0, 1.0 - sum(float(x["peso"]) for x in sect["sectores"])) * 100
+        lineas.append("")
+        lineas.append(_CONSECUENCIA_DE_LA_AUSENCIA.format(
+            faltan=_faltantes(brechas), peso_ausente=peso_ausente, exceso=exceso))
     return "\n".join(lineas)
+
+
+def _faltantes(brechas: Dict[str, str]) -> str:
+    """Las ausentes con su ETIQUETA y su motivo. Se publicaba la clave cruda del componente
+    —`impuestos_produccion`—, que es un identificador interno y no dice nada al lector."""
+    from modules.macro_monitor.forecasting.sectoral import COMPONENTES
+
+    etiquetas = {c.clave: c.etiqueta for c in COMPONENTES}
+    return "; ".join(f"{etiquetas.get(k, k)} ({v})" for k, v in sorted(brechas.items()))
 
 
 def _md_escenarios(p: Dict[str, Any]) -> str:
@@ -997,6 +1017,22 @@ _HORIZONTE_AUSENTE_SIN_CAUSA = (
     "- **{rel}** no está en el ledger de este corte y su trimestre objetivo ({objetivo}) "
     "seguía abierto al {as_of}: la ausencia **no** se explica por el rezago del bloque. Se "
     "declara sin atribuirle una causa."
+)
+
+#: Lo que se dice cuando alguna actividad NO se pudo proyectar. `reconciliar` reparte la
+#: brecha entre el peso de las PROYECTABLES, no entre 1: las mostradas absorben la
+#: contribución de la que falta y suben más de lo que subirían si estuvieran todas. La
+#: sección declaraba la ausencia —bien— pero decía «se declara, no se rellena», que es lo
+#: contrario de lo que hace la aritmética. Medido sobre el panel real, el exceso va de
+#: +0,01 a +0,18 pp según el peso de la que falte: chico, y por eso la cura es DECLARARLO y
+#: no renormalizar. La contradicción de la prosa no dependía de la magnitud.
+_CONSECUENCIA_DE_LA_AUSENCIA = (
+    "**No proyectadas:** {faltan}. Una actividad con huecos no se estima: se lista con su "
+    "motivo, y su contribución al agregado **se reparte por peso sobre las demás**, que es "
+    "lo que el ajuste declara. Falta el **{peso_ausente:.2f} %** del peso del cuadro, así "
+    "que cada actividad mostrada sube **{exceso:+.3f} pp** más de lo que subiría si "
+    "estuvieran todas: ese exceso cubre a la que falta y no viene de ninguna señal sobre "
+    "ellas."
 )
 
 _SIN_AGREGADO_QUE_DESAGREGAR = (
