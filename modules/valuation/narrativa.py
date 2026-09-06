@@ -774,7 +774,8 @@ def supuestos_y_sensibilidad(lec: Lectura) -> str:
         ("Ke = Rf + β × ERP", f"{lec.ke_bajo_pct:.2f} % – {lec.ke_alto_pct:.2f} %",
          f"{lec.fraccion_de_rubrica * 100:.0f} % del Ke es rúbrica"),
         ("ROE proyectado", f"{lec.roe_proyectado_pct:.2f} %",
-         "sobre patrimonio de apertura, del promedio de cierres publicados"),
+         "mediana de los últimos cuatro cortes con ROE de doce meses sobre patrimonio de "
+         "apertura — mediana y no promedio, para que un corte atípico no arrastre la cifra"),
         ("Persistencia del exceso (ω)", f"{lec.persistencia:.3f}", "medida por tipo"),
         ("Retención de utilidades (b)", f"{lec.retencion:.2f}", "medida por tipo"),
         ("Crecimiento terminal (g)", f"{lec.g_terminal_pct:.2f} %",
