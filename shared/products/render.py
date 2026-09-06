@@ -195,6 +195,31 @@ def _md_is_sep(line: str) -> bool:
         re.fullmatch(r":?-{1,}:?", c) for c in _md_split_row(t))
 
 
+def anchos_de_columna(header: Sequence[str], rows: Sequence[Sequence[str]],
+                      total: float) -> List[float]:
+    """Anchos proporcionales al contenido, acotados: ni una columna de un año a lo ancho
+    de un nombre, ni un nombre partido a media palabra.
+
+    El reparto igualitario —`total / ncol`— salió en el PDF que se vende con la tabla de
+    siete columnas del panel de transacciones: «Intercommercia / l Bank Limited» partido a
+    media palabra en la columna de la adquirida mientras «Año» y «P/B» gastaban la misma
+    franja en blanco. Cada columna recibe la MITAD del reparto igualitario más la mitad de
+    un reparto por el largo de su contenido más largo (acotado entre 6 y 40 caracteres), con
+    un piso de medio reparto igualitario y un techo de dos y medio, normalizado al total. La
+    mezcla es lo que deja casi igual a una tabla de columnas parejas —la inmensa mayoría— y
+    solo mueve de verdad a la que tiene una columna de nombres al lado de una de años.
+    """
+    ncol = len(header) or 1
+    largos = [max([len(str(header[i]))] + [len(str(r[i])) for r in rows if i < len(r)])
+              for i in range(ncol)]
+    pesos = [max(6, min(largo, 40)) for largo in largos]
+    igual = total / ncol
+    crudos = [0.5 * igual + 0.5 * total * w / sum(pesos) for w in pesos]
+    acotados = [min(max(c, igual * 0.5), igual * 2.5) for c in crudos]
+    factor = total / sum(acotados)
+    return [a * factor for a in acotados]
+
+
 def _md_table_flowable(header: List[str], rows: Sequence[Sequence[str]], styles) -> Table:
     """Tabla markdown → tabla branded (mismo look que las tablas de datos del reporte)."""
     ncol = len(header) or 1
@@ -202,7 +227,8 @@ def _md_table_flowable(header: List[str], rows: Sequence[Sequence[str]], styles)
     for r in rows:
         cells = (list(r) + [""] * ncol)[:ncol]
         data.append([Paragraph(_inline(str(c)), styles["PSmall"]) for c in cells])
-    table = Table(data, colWidths=[(6.5 * inch) / ncol] * ncol, repeatRows=1)
+    table = Table(data, colWidths=anchos_de_columna(header, rows, 6.5 * inch),
+                  repeatRows=1)
     table.setStyle(TableStyle([
         ("BACKGROUND", (0, 0), (-1, 0), NAVY),
         ("TEXTCOLOR", (0, 0), (-1, 0), WHITE),

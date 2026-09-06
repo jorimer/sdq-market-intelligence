@@ -1029,3 +1029,18 @@ logo». Lo bajé y lo abrí yo: era la memoria auditada entera, con la nota que 
 el modelo pequeño dice que un documento no contiene algo, eso es una lectura de un modelo
 pequeño, no una propiedad del documento. Los archivos quedan guardados: abrirlos cuesta un
 `pdftotext`.
+
+---
+
+### 2026-09-06 — El panel de transacciones se computaba entero y el informe no lo pedía
+
+- **Síntoma**: `panel/transacciones.py` computa comparables, mediana, rango, gate, vías abiertas y descartes, y el informe de valuación decía «el panel dice a cuánto sobre libro se ha pagado» sin mostrar tabla, rango ni conteo. El único llamador era `validation_state()`.
+- **Causa raíz**: la de siempre en esta familia —«servir el dato no alcanza: hay que pedirlo»—. El motor estaba; la plantilla no. Y en la misma pasada aparecieron DOS cosas que ningún test veía: (1) `AI_CONTEXT_FILES` estaba declarado en `ai_context.py` y el ensamblador lo busca en el módulo del PRODUCTO, que no lo importaba, así que la huella de caché de valuación cubría un solo archivo y un arreglo de la prosa desplegado a prod no invalidaba ningún informe; (2) la muestra y el informe real tenían DOS diccionarios de prosa copiados a mano.
+- **Regla**: cuando un módulo declara «con N casos la vista se abre», buscá quién PIDE la vista. Y la huella de caché se comprueba desde el ensamblador (`_contexto_ia_version(type(product).__module__)`), no leyendo la constante: la constante puede existir donde nadie la lee.
+- **Disparador**: un `grep` del nombre de la función de resumen que solo encuentra al propio módulo y a un test.
+
+### 2026-09-06 — «La última fila» dejó de ser la última al agregar una fila
+
+- **Síntoma**: la tabla de procedencia de valuación decía «el 37 % del costo de capital descansa en la última fila» (beta y prima de riesgo). Al agregar el panel de transacciones al final de la tabla, la frase pasó a señalar al panel. Los 20 tests nuevos y los 8.700 viejos en verde; lo encontró leer el PDF.
+- **Regla**: la prosa nombra la fila por su CONTENIDO, nunca por su posición en una tabla que otro cambio puede alargar. Y leer el PDF después de cada sección nueva no es opcional: también salió de ahí que el renderizador repartía el ancho en partes iguales y partía «Intercommercial» a media palabra, y que el motivo del contraste publicaba códigos de país («BB, KY, PR, TT») en prosa de venta.
+- **Disparador**: cualquier frase que diga «arriba», «abajo», «la última», «la primera» sobre una tabla o lista computada.

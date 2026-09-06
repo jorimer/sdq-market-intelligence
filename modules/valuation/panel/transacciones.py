@@ -821,6 +821,19 @@ DISCREPANCIA_RFHL = (
 #: ROE y patrimonio que el Excess Return necesita para producir SU valuación.
 PAISES_CON_MOTOR: Tuple[str, ...] = ("DO",)
 
+#: Nombres legibles de los países del panel. El código viaja en el dato; lo que se publica
+#: —la tabla del informe, el motivo del contraste— no puede decir «KY». Vive acá y no en la
+#: plantilla porque el motivo se escribe acá, y dos mapas del mismo hecho divergen.
+NOMBRES_DE_PAIS = {
+    "DO": "República Dominicana", "PR": "Puerto Rico", "KY": "Islas Caimán",
+    "TT": "Trinidad y Tobago", "BB": "Barbados", "VGB": "Islas Vírgenes Británicas",
+    "BZ": "Belice", "LCA/VCT/KNA/DMA/GRD/AIA/SXM": "Caribe Oriental (7 territorios)",
+}
+
+
+def nombre_de_pais(codigo: str) -> str:
+    return NOMBRES_DE_PAIS.get(codigo, codigo)
+
 
 @dataclass(frozen=True)
 class ContrasteDelModelo:
@@ -851,7 +864,8 @@ def contraste_del_modelo(panel: Sequence[Transaccion] = PANEL) -> ContrasteDelMo
     comp = [t for t in panel if t.comparable]
     valuables = [t for t in comp if t.pais in PAISES_CON_MOTOR]
     n_v, n_c = len(valuables), len(comp)
-    faltan = sorted({t.pais for t in comp if t.pais not in PAISES_CON_MOTOR})
+    faltan = sorted({nombre_de_pais(t.pais) for t in comp if t.pais not in PAISES_CON_MOTOR})
+    con_motor = [nombre_de_pais(c) for c in PAISES_CON_MOTOR]
     return ContrasteDelModelo(
         n_v, n_c, False,
         (f"El panel tiene {n_c} múltiplo(s) comparable(s) y eso ABRE la vista de fusiones y "
@@ -859,7 +873,7 @@ def contraste_del_modelo(panel: Sequence[Transaccion] = PANEL) -> ContrasteDelMo
          f"NO contrasta el modelo. Para eso habría que valuar cada adquirida con el Excess "
          f"Return a la fecha de su operación, y eso exige su historia de ROE y patrimonio: "
          f"la tenemos para {n_v} de los {n_c}, porque el balance por entidad solo lo "
-         f"ingerimos de {', '.join(PAISES_CON_MOTOR)}"
+         f"ingerimos de {', '.join(con_motor)}"
          + (f" y las otras adquiridas son de {', '.join(faltan)}." if faltan else ".")
          + " El eje sigue declarando que sus valores NO están contrastados contra precios "
            "pagados."))

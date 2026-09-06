@@ -1831,7 +1831,19 @@
         "pension_assessment": "AFP soundness (ISA)",
         "system_overview": "System overview",
         "momentum": "Momentum (SGPS)",
-        "peer_positioning": "Panel position"
+        "peer_positioning": "Panel position",
+        "resumen_ejecutivo": "Executive summary",
+        "proposito_y_alcance": "Purpose and scope",
+        "antecedentes_de_la_entidad": "The entity and its position",
+        "analisis_financiero": "Financial analysis",
+        "spread_roe_ke": "Value creation · ROE − Ke",
+        "metodologia": "Valuation methodology",
+        "valor_y_rango": "Value conclusion",
+        "libro_vs_exceso": "Breakdown: book value and excess",
+        "contraste_de_mercado": "Market cross-check · Caribbean bank transactions",
+        "supuestos_y_sensibilidad": "Assumptions and sensitivity to the cost of capital",
+        "fuentes_y_procedencia": "Sources and provenance",
+        "anexo_panel_de_transacciones": "Annex · Transactions panel: open leads and exclusions"
       },
       "dimensionsTitle": "Dimensions (score 0–100)",
       "risk": {
