@@ -31,6 +31,52 @@
 version: "1.0"
 
 cambios:
+  - id: 2026-09-06-proyeccion-del-pib-interanual-y-track-record-por-medida
+    fecha_efectiva: "2026-09-06"
+    sectores: [macro_forecast]
+    titulo: "La proyección del PIB pasa a variación interanual, y el track record se
+      cuenta por trimestre y por medida"
+    que_cambio: >-
+      Tres reglas del mismo producto, que entraron el mismo día y se leen juntas.
+
+      El PIB entra al bloque del BVAR como variación INTERANUAL y ya no como variación entre
+      trimestres consecutivos: el índice que publica el BCRD es la serie ORIGINAL, sin
+      desestacionalizar, así que su variación trimestral depende de en qué trimestre cae el
+      horizonte. La proyección publicada cambia de unidad, y el informe la declara al lado de
+      cada cifra.
+
+      El conjunto sobre el que se computa el error de un modelo pasa a incluir la MEDIDA del
+      punto además del modelo, la serie y la distancia. Un motor que cambia de unidad ya no
+      promedia su historial viejo con el nuevo.
+
+      Y una observación fuera de muestra es un TRIMESTRE OBJETIVO por distancia, no una
+      emisión: la emisión se dispara en cascada tras cada ingesta y re-escribía el mismo
+      pronóstico con otro corte, de modo que el mínimo del gate se alcanzaba con re-emisiones
+      en vez de con trimestres cerrados. Se conserva la emisión más temprana, que es el
+      pronóstico como se publicó. En contrapartida, el solapamiento entre ventanas se declara
+      por la regla que corresponde —el paso entre cortes contra el salto entre horizontes— y
+      no por horizontes repetidos.
+    por_que: >-
+      La variación trimestral sobre una serie sin desestacionalizar hacía que el titular
+      dependiera del calendario, y no es la medida que la entrada canónica del PIB declara
+      citable. Las otras dos son la misma clase de defecto un paso más adelante: el ledger
+      existe para impedir que se fabrique track record, y contaba como evidencia
+      independiente lo que era el mismo pronóstico re-sellado, y como un solo conjunto lo que
+      eran dos unidades distintas. Ninguna de las dos fallaba: producían un número.
+    impacto:
+      medido_al_publicar: >-
+        La proyección vigente para 2026-Q3 del modelo bvar_minnesota.5v.v1 pasó de 0,7373 a
+        5,5672 sobre la misma serie y el mismo horizonte — es un cambio de unidad, no de
+        pronóstico. Sobre los 77 trimestres del índice del PIB, la variación trimestral
+        promedia 1,13 % y la interanual 4,54 %; en los trimestres Q3 la trimestral promedia
+        −1,13 %. El bloque pierde tres trimestres de arranque (76 a 73). Ninguna cifra de
+        track record se movió: el producto no tenía todavía ningún pronóstico puntuado. Con
+        las reglas anteriores, cuatro trimestres objetivo re-emitidos tres veces cada uno
+        daban n_oos = 12 y el gate —que exige 12— admitía; y un conjunto con dos medidas
+        mezcladas publicaba, sobre errores de 0,50 y 4,00, un RMSE de 2,850 que no era el
+        error de ninguno de los dos.
+    pr: [1117, 1124, 1129]
+
   - id: 2026-09-01-costo-del-capital-en-el-iai
     fecha_efectiva: "2026-09-01"
     sectores: [agribusiness]
