@@ -122,7 +122,10 @@ def test_la_tabla_trae_a_los_NUEVE_comparables_y_a_NINGUNO_de_valor_razonable(db
     assert "| Año | Comprador | Adquirida | País | P/B | Base | Corte del libro |" in tabla
     comparables = [t for t in tx.PANEL if t.comparable]
     otros = [t for t in tx.PANEL if t.verificable and not t.comparable]
-    assert len(comparables) == 9 and len(otros) == 4, "el panel cambió; revisar el test"
+    # Los conteos salen del PANEL, no se fijan a mano: el panel crece (#1134 sumó el quinto
+    # caso sobre valor razonable mientras esto se escribía) y un 4 fijo habría roto el test
+    # por la razón equivocada. Lo que se exige es que haya de los DOS lados.
+    assert len(comparables) >= tx.MINIMO_DE_CASOS and otros, "el panel cambió de forma"
     for t in comparables:
         assert t.adquirida[:18] in tabla, f"falta el comparable {t.adquirida[:40]}"
         assert f"{t.pb_recomputado:.2f}×" in tabla, (

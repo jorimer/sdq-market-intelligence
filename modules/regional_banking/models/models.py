@@ -25,7 +25,11 @@ class CountryBankingAggregate(UUIDMixin, Base):
 
     iso_code: Mapped[str] = mapped_column(String(3))          # ISO3: "DOM", "COL", "CHL"
     period_end: Mapped[dt.date] = mapped_column(Date)         # el CORTE, no una etiqueta
-    metric: Mapped[str] = mapped_column(String(60))
+    # 200 y no 60: la clave es `<cuadro>::<etiqueta de columna>` y las etiquetas de SECMCA son
+    # frases enteras —la más larga mide 104 caracteres—. Con 60, PostgreSQL rechazaba el
+    # INSERT y el sync de las siete plazas de EMFA falló un día entero; SQLite no aplica el
+    # largo, así que la batería no lo veía (ver la migración e1a7c9d4b620).
+    metric: Mapped[str] = mapped_column(String(200))
     value: Mapped[Optional[float]] = mapped_column(Float)     # None = ausente, jamás interpolado
 
     # ── Procedencia. Viaja POR FILA y no en una tabla aparte porque el boletín atribuye

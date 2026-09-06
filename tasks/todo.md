@@ -2,7 +2,7 @@
 
 ## El defecto
 
-`modules/valuation/panel/transacciones.py` computa el panel entero —13 casos verificables, 9
+`modules/valuation/panel/transacciones.py` computa el panel entero —14 casos verificables, 9
 comparables sobre base contable, `resumen()` con mediana/mínimo/máximo, `estado()`,
 `contraste_del_modelo()`, `VIAS_ABIERTAS`, `DESCARTADAS`— y el informe NO lo pide: la
 metodología y las limitaciones dicen que «el panel dice a cuánto sobre libro se ha pagado»

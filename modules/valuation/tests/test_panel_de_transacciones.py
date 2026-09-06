@@ -38,11 +38,11 @@ def test_el_minimo_son_OCHO_casos():
     assert tx.MINIMO_DE_CASOS == 8
 
 
-def test_hay_TRECE_verificables_y_NUEVE_COMPARABLES():
+def test_hay_CATORCE_verificables_y_NUEVE_COMPARABLES():
     """La distinción que decide si la vista de M&A se abre.
 
-    Las trece tienen las dos puntas publicadas. Nueve están sobre patrimonio CONTABLE, que
-    es la base contra la que valúa el Excess Return. Las otras CUATRO vienen de la NIIF 3,
+    Las catorce tienen las dos puntas publicadas. Nueve están sobre patrimonio CONTABLE, que
+    es la base contra la que valúa el Excess Return. Las otras CINCO vienen de la NIIF 3,
     cuyo denominador son activos netos a VALOR RAZONABLE — lo que el COMPRADOR reconoce, no
     lo que el vendedor tenía en libros.
 
@@ -52,7 +52,7 @@ def test_hay_TRECE_verificables_y_NUEVE_COMPARABLES():
     razonable a contable, porque apareció el balance de la propia adquirida al perímetro
     exacto del precio. Lo primero suma expediente; lo segundo suma tabla.
     """
-    assert len([t for t in tx.PANEL if t.verificable]) == 13
+    assert len([t for t in tx.PANEL if t.verificable]) == 14
     comparables = [t for t in tx.PANEL if t.comparable]
     assert len(comparables) == 9
     assert {t.pais for t in comparables} == {"DO", "PR", "KY", "TT", "BB"}
@@ -69,9 +69,9 @@ def test_el_gate_cuenta_COMPARABLES_y_no_verificables():
     equivocada o, peor, pasa por la razón equivocada.
     """
     e = tx.estado()
-    assert e.n_verificables == 13 and e.n_comparables == 9
+    assert e.n_verificables == 14 and e.n_comparables == 9
     excluidos = [t for t in tx.PANEL if t.verificable and not t.comparable]
-    assert len(excluidos) == e.n_verificables - e.n_comparables == 4
+    assert len(excluidos) == e.n_verificables - e.n_comparables == 5
     assert all(t.base == tx.BASE_VALOR_RAZONABLE for t in excluidos)
 
 
@@ -187,7 +187,7 @@ def test_OCHO_comparables_SI_abren_el_gate():
 def test_las_de_NIIF_3_declaran_su_base_y_su_aritmetica_CIERRA():
     """La validación interna del dato: precio = activos netos + goodwill, exacto."""
     niif = [t for t in tx.PANEL if t.base == tx.BASE_VALOR_RAZONABLE]
-    assert len(niif) == 4
+    assert len(niif) == 5
     for t in niif:
         assert "valor razonable" in " ".join(t.caveats).lower()
         assert "cierra" in t.fuente_libro.lower() or "aritmética" in t.fuente_libro.lower()
@@ -481,7 +481,7 @@ def test_RBTT_reconcilia_sus_DOS_formas_de_precio():
 
 
 def test_los_casos_de_COMPRA_VENTAJOSA_se_cuentan_y_se_declaran():
-    """Dos de las cinco operaciones sobre NIIF 3 se pagaron POR DEBAJO del valor razonable.
+    """Tres de las cinco operaciones sobre NIIF 3 se pagaron POR DEBAJO del valor razonable.
 
     No es una curiosidad contable: en una ola de desinversión, un comprador que reconoce una
     ganancia por compra ventajosa está diciendo que el vendedor aceptó menos que el valor
@@ -493,7 +493,7 @@ def test_los_casos_de_COMPRA_VENTAJOSA_se_cuentan_y_se_declaran():
     """
     niif = [t for t in tx.PANEL if t.base == tx.BASE_VALOR_RAZONABLE]
     ventajosas = [t for t in niif if t.pb_recomputado is not None and t.pb_recomputado < 1.0]
-    assert len(ventajosas) == 2, [t.adquirida for t in ventajosas]
+    assert len(ventajosas) == 3, [t.adquirida for t in ventajosas]
     for t in ventajosas:
         assert "COMPRA VENTAJOSA" in " ".join(t.caveats), (
             f"{t.adquirida} se pagó por debajo del valor razonable y no lo declara")
