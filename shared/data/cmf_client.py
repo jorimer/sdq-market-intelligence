@@ -338,6 +338,15 @@ class CMFClient(FixtureBackedClient):
     NORMA_CONTABLE = "CMF Chile — Compendio de Normas Contables 2022"
     COMPARABLE_ENTRE_PAISES: set = set()
 
+    #: `verbatim` y no `derived`, y la diferencia no es semántica: acá el EMISOR publica el
+    #: ratio ya calculado y nosotros lo copiamos, mientras que en Colombia el agregado del
+    #: sistema lo computamos sobre el dato por entidad. De esa distinción depende si la
+    #: cuarentena por licencia restrictiva alcanza a lo que publica el boletín — se aplica
+    #: solo a lo verbatim (`DERIVATION_VERBATIM` en `shared/data_api/manifest.py`). Acá no
+    #: retiene nada porque la CMF autoriza publicar, pero declararlo mal sería declarar de
+    #: menos una obligación, no de más.
+    DERIVACION = "verbatim"
+
     #: El emisor lo advierte en el propio archivo, así que viaja con el dato y no como nota
     #: al pie de un documento que nadie relee.
     NOTA_PROVISORIA = ("Información provisoria: el emisor declara que puede ser modificada "

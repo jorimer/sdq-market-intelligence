@@ -31,6 +31,15 @@ def _run_sfc_sync(params, user_id, set_phase) -> Dict:
         db.close()
 
 
+def _run_cmf_sync(params, user_id, set_phase) -> Dict:
+    from modules.regional_banking.cmf_sync import cmf_sync
+    db = SessionLocal()
+    try:
+        return cmf_sync(db, set_phase=set_phase)
+    finally:
+        db.close()
+
+
 def register() -> None:
     register_operation(Operation(
         "secmca-sync", "Sincronizar SECMCA / EMFA (7 plazas)",
@@ -49,6 +58,17 @@ def register() -> None:
         "(saldo menos vigente, sin sumar los buckets, que se solapan). Mensual, rezago "
         "~2 meses.",
         _run_sfc_sync, default_interval_hours=720,
+    ))
+    register_operation(Operation(
+        "cmf-chile-sync", "Sincronizar CMF Chile (sistema)",
+        "Lee el Reporte Mensual de Información Financiera del Sistema Bancario que la "
+        "Comisión para el Mercado Financiero publica en cmfchile.cl y persiste once "
+        "indicadores del sistema chileno: morosidad de 90 días o más y su composición por "
+        "cartera, cartera deteriorada, provisiones por riesgo de crédito, ROAE, ROAA, "
+        "eficiencia operativa y variación de colocaciones. NO usa la API de la CMF, que no "
+        "publica morosidad y cuya adecuación de capital es la del artículo 66 de la Ley "
+        "General de Bancos, anterior a Basilea III. Mensual, sin credencial ni cuota.",
+        _run_cmf_sync, default_interval_hours=720,
     ))
 
 
