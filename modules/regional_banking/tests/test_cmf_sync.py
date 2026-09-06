@@ -21,7 +21,7 @@ from modules.regional_banking.ai_context import (
 )
 from modules.regional_banking.cmf_sync import cmf_sync
 from modules.regional_banking.models.models import CountryBankingAggregate
-from shared.data.cmf_client import INDICADORES, CMFClient
+from shared.data.cmf_client import INDICADORES, SOLVENCIA, CMFClient
 from shared.database.base import Base
 
 
@@ -40,19 +40,36 @@ def _sync(db):
 
 
 # ── Persistencia ──────────────────────────────────────────────────
-def test_persiste_con_la_norma_chilena(db):
+def test_persiste_con_las_normas_chilenas(db):
+    """DOS normas en el mismo país, y es correcto: la solvencia se computa bajo la Ley General
+    de Bancos reformada (Basilea III) y el resto bajo el Compendio de Normas Contables. Una
+    sola etiqueta por país mentiría sobre la mitad de las cifras."""
     resumen = _sync(db)
     assert resumen["synced"] > 0 and not resumen["errors"]
     assert resumen["country"] == "CHL"
     normas = {f.norma_contable for f in db.query(CountryBankingAggregate).all()}
-    assert normas == {"CMF Chile — Compendio de Normas Contables 2022"}
+    assert normas == {"CMF Chile — Compendio de Normas Contables 2022",
+                      "CMF Chile — Basilea III (LGB Título VII, arts. 66 y ss.)"}
 
 
-def test_persiste_los_ONCE_indicadores(db):
+def test_cada_metrica_lleva_LA_norma_que_le_corresponde(db):
+    """Si las dos normas se asignaran al revés, el conjunto de arriba seguiría siendo el
+    mismo: hay que comprobar el emparejamiento, no la presencia."""
+    _sync(db)
+    por_metrica = {f.metric: f.norma_contable
+                   for f in db.query(CountryBankingAggregate).all()}
+    assert all("Basilea III" in por_metrica[m] for m in SOLVENCIA), \
+        "una métrica de solvencia quedó bajo el Compendio contable"
+    assert all("Compendio" in por_metrica[m] for m in INDICADORES.values()), \
+        "un indicador del reporte mensual quedó bajo Basilea III"
+
+
+def test_persiste_los_QUINCE_indicadores(db):
+    """Once del reporte mensual y cuatro de adecuación de capital."""
     _sync(db)
     metricas = {f.metric for f in db.query(CountryBankingAggregate)
                 .filter_by(iso_code="CHL").all()}
-    assert metricas == set(INDICADORES.values())
+    assert metricas == set(INDICADORES.values()) | set(SOLVENCIA)
 
 
 def test_resincronizar_actualiza_y_no_duplica(db):
@@ -83,8 +100,9 @@ def test_el_bloque_de_CHILE_llega_al_contexto_del_modelo(db):
         "y nadie vería un error, que es exactamente lo que pasó en T-BR-8")
     chile = bloques["CHL"]
     assert chile["pais"] == "Chile"
-    assert chile["norma_contable"] == ["CMF Chile — Compendio de Normas Contables 2022"]
-    assert {s["metrica"] for s in chile["series"]} == set(INDICADORES.values())
+    assert chile["norma_contable"] == ["CMF Chile — Basilea III (LGB Título VII, arts. 66 y ss.)",
+                                       "CMF Chile — Compendio de Normas Contables 2022"]
+    assert {s["metrica"] for s in chile["series"]} == set(INDICADORES.values()) | set(SOLVENCIA)
 
 
 def test_cada_cifra_de_chile_llega_con_su_NOMBRE(db):
@@ -141,3 +159,20 @@ def test_la_operacion_esta_REGISTRADA(db):
         "puede disparar ni agendar, y el conector queda escrito y muerto")
     op = OPERATIONS["cmf-chile-sync"]
     assert op.default_interval_hours == 720, "el reporte de la CMF es mensual"
+
+
+def test_el_bloque_declara_el_RANGO_de_cortes_y_no_uno_solo(db):
+    """En Chile la adecuación de capital va un mes atrás del reporte mensual. Con un corte
+    único el encabezado diría «julio» sobre una cifra de junio: número real, fecha falsa."""
+    _sync(db)
+    chile = next(b for b in contexto_por_sistema(db)["bloques_por_pais"]
+                 if b["iso3"] == "CHL")
+    assert chile["corte_mas_antiguo"] < chile["corte_mas_reciente"], (
+        "el bloque no distingue los cortes, y los datos de Chile SÍ difieren entre sí")
+    # Y cada serie sigue trayendo el suyo, que es lo que el modelo debe usar para fechar.
+    solvencia = next(s for s in chile["series"]
+                     if s["metrica"] == "solvencia_patrimonio_efectivo")
+    mora = next(s for s in chile["series"] if s["metrica"] == "mora_90_colocaciones")
+    assert solvencia["corte"] < max(s["corte"] for s in chile["series"]), (
+        "la solvencia debería ser el corte más viejo de Chile")
+    assert mora["corte"] == chile["corte_mas_reciente"]

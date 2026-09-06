@@ -16,6 +16,7 @@ import pytest
 from shared.data.cmf_client import (
     CMFClient,
     INDICADORES,
+    SOLVENCIA,
     LICENSE,
     CmfError,
     descubrir_ediciones,
@@ -189,7 +190,7 @@ def test_el_cliente_sirve_el_fixture_con_su_sujeto():
     assert records, "el fixture no devolvió nada"
     assert {r.dimension for r in records} == {"CHL"}
     assert {r.unit for r in records} == {"%"}
-    assert {r.series for r in records} == set(INDICADORES.values())
+    assert {r.series for r in records} == set(INDICADORES.values()) | set(SOLVENCIA)
     mora = next(r for r in records if r.series == "mora_90_colocaciones"
                 and r.period == "2026-07-31")
     # El valor del emisor para julio 2026, en escala 0-100. Si alguien "normalizara" a
@@ -222,3 +223,120 @@ def test_la_licencia_no_cae_en_cuarentena_por_accidente():
     from shared.data_api.manifest import license_restricts_redistribution
 
     assert not license_restricts_redistribution(LICENSE)
+
+
+# ── Adecuación de capital bajo Basilea III ────────────────────────
+def _hoja_solvencia(titulo="ADECUACIÓN DE CAPITAL CONSOLIDADA GLOBAL DEL SISTEMA BANCARIO "
+                           "CHILENO AL MES DE JUNIO DE 2026  (BASILEA III)",
+                    unidad="(Cifras en porcentaje)", sistema=True, ratios=None):
+    """Layout REAL de «INDICADORES CONSOLIDADO»: rótulo en B, los cuatro ratios en D-G."""
+    r = ratios or [16.9448, 13.2930, 12.2054, 8.1259]
+    filas = [_fila(largo=14), _fila(largo=14, c1=titulo), _fila(largo=14, c1="INDICADORES"),
+             _fila(largo=14, c1=unidad), _fila(largo=14), _fila(largo=14),
+             _fila(largo=14), _fila(largo=14),
+             _fila(largo=14, c1="Banco Bice", c3=16.27, c4=11.83, c5=11.83, c6=8.61),
+             _fila(largo=14, c1="Bank of China, Agencia en Chile",
+                   c3=288.52, c4=288.52, c5=288.52, c6=55.36)]
+    if sistema:
+        filas.append(_fila(largo=14, c1="Sistema Bancario",
+                           c3=r[0], c4=r[1], c5=r[2], c6=r[3]))
+    return filas
+
+
+def _hoja_componentes(cb=35227442.78, cn1=38366757.62, pe=48906660.19,
+                      atr=433522254.21, apr=288622818.89):
+    filas = [_fila(largo=22) for _ in range(9)]
+    filas.append(_fila(largo=22, c1="Sistema Bancario", c6=cb, c8=cn1, c13=pe,
+                       c15=atr, c19=apr))
+    return filas
+
+
+def test_lee_la_solvencia_del_SISTEMA_y_su_periodo():
+    from shared.data.cmf_client import SOLVENCIA, leer_solvencia_basilea3
+
+    d = leer_solvencia_basilea3(_hoja_solvencia(), _hoja_componentes())
+    assert d["periodo"] == "2026-06"        # el ARCHIVO lo declara, no el índice
+    assert set(d["series"]) == set(SOLVENCIA)
+    assert d["series"]["solvencia_patrimonio_efectivo"] == pytest.approx(16.9448)
+
+
+def test_sin_la_fila_del_SISTEMA_se_niega_a_promediar():
+    """Promediar los ratios por banco no da el ratio del sistema: con una sucursal en 288 %
+    el resultado no se parece a nada. Se prefiere no publicar."""
+    from shared.data.cmf_client import leer_solvencia_basilea3
+
+    with pytest.raises(CmfError, match="Sistema Bancario"):
+        leer_solvencia_basilea3(_hoja_solvencia(sistema=False), _hoja_componentes())
+
+
+def test_un_ratio_que_NO_cuadra_con_sus_componentes_se_detiene():
+    """El emisor publica el ratio Y sus dos términos. Si no coinciden, o leímos la columna
+    equivocada o el archivo cambió de forma — y las dos se ven igual: una tabla ordenada con
+    una columna que mide otra cosa."""
+    from shared.data.cmf_client import leer_solvencia_basilea3
+
+    with pytest.raises(CmfError, match="no cuadra con los componentes"):
+        leer_solvencia_basilea3(_hoja_solvencia(ratios=[11.11, 13.2930, 12.2054, 8.1259]),
+                                _hoja_componentes())
+
+
+def test_sin_la_declaracion_de_unidad_la_solvencia_se_detiene():
+    from shared.data.cmf_client import leer_solvencia_basilea3
+
+    with pytest.raises(CmfError, match="porcentaje"):
+        leer_solvencia_basilea3(_hoja_solvencia(unidad="Indicadores"), _hoja_componentes())
+
+
+def test_sin_periodo_declarado_la_solvencia_se_detiene():
+    """El identificador del archivo cambia cada mes; bajarse el equivocado no da error por sí
+    solo. Que el archivo diga su mes es lo que permite cruzarlo con el índice."""
+    from shared.data.cmf_client import leer_solvencia_basilea3
+
+    with pytest.raises(CmfError, match="a qué mes"):
+        leer_solvencia_basilea3(_hoja_solvencia(titulo="ADECUACIÓN DE CAPITAL"),
+                                _hoja_componentes())
+
+
+def test_las_dos_normas_no_se_confunden():
+    from shared.data.cmf_client import INDICADORES, SOLVENCIA
+
+    c = CMFClient(mode="fixture")
+    assert all("Basilea III" in c.norma_de(k) for k in SOLVENCIA)
+    assert all("Compendio" in c.norma_de(k) for k in INDICADORES.values())
+
+
+def test_los_cortes_de_los_dos_reportes_DIFIEREN():
+    """No es un defecto: la adecuación de capital va un mes atrás del reporte mensual, y el
+    boletín tiene que poder decirlo."""
+    from shared.data.cmf_client import SOLVENCIA
+
+    rs = CMFClient(mode="fixture").fetch()
+    corte_solv = {r.period for r in rs if r.series in SOLVENCIA}
+    corte_mens = {r.period for r in rs if r.series not in SOLVENCIA}
+    assert len(corte_solv) == 1
+    assert max(corte_solv) < max(corte_mens)
+
+
+# ── El descubridor, con los duplicados reales del emisor ──────────
+_PAGINA_DUPLICADOS_IGUALES = '''
+<h2 id="estadisticas_filtros_grupo_43980_Label">Adecuación Consolidada de Capital</h2>
+<a href="articles-113066_recurso_1.xlsx?ts=1" aria-label="Descargar Junio 2026 (xlsx)"></a>
+<h2 id="estadisticas_filtros_grupo_43981_Label">Adecuación Consolidada de Capital</h2>
+<a href="articles-113066_recurso_1.xlsx?ts=9" aria-label="Descargar Junio 2026 (xlsx)"></a>
+'''
+
+_PAGINA_DUPLICADOS_DISTINTOS = _PAGINA_DUPLICADOS_IGUALES.replace(
+    'articles-113066_recurso_1.xlsx?ts=9', 'articles-999999_recurso_1.xlsx?ts=9')
+
+
+def test_duplicados_IDENTICOS_no_son_ambiguedad():
+    """Los tres títulos repetidos de la página real resuelven a los mismos archivos: el
+    emisor renderiza el mismo contenido bajo dos taxonomías de filtro."""
+    ed = descubrir_ediciones(_PAGINA_DUPLICADOS_IGUALES, "Adecuación Consolidada de Capital")
+    assert ed == {"2026-06": "articles-113066_recurso_1.xlsx"}
+
+
+def test_duplicados_DISTINTOS_siguen_fallando():
+    """Lo que este guard cubre es elegir en silencio entre dos cosas que difieren."""
+    with pytest.raises(CmfError, match="archivos DISTINTOS"):
+        descubrir_ediciones(_PAGINA_DUPLICADOS_DISTINTOS, "Adecuación Consolidada de Capital")

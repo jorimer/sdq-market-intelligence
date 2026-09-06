@@ -116,13 +116,20 @@ def contexto_por_sistema(db: Session, limite_por_pais: int = 40) -> Dict[str, An
         bloques.append({
             "iso3": iso,
             "pais": NOMBRE_PAIS.get(iso, iso),
-            "corte": max(cortes).isoformat() if cortes else None,
+            # Un RANGO y no un corte único. Dentro de un mismo país los cortes difieren: en
+            # Chile la adecuación de capital va un mes atrás del reporte mensual. Servir solo
+            # el más reciente invitaba a escribir «al cierre de julio» sobre una cifra de
+            # junio — el número sería real y la fecha, falsa. Cada serie trae además el suyo.
+            "corte_mas_reciente": max(cortes).isoformat() if cortes else None,
+            "corte_mas_antiguo": min(cortes).isoformat() if cortes else None,
             "norma_contable": sorted({f.norma_contable for f in del_pais}),
             "series": [_valor(f) for f in del_pais],
         })
     return {
         "bloques_por_pais": bloques,
-        "regla": ("Cada país se lee DENTRO de su propio sistema. Estas cifras NO son "
+        "regla": ("Los cortes DIFIEREN entre métricas de un mismo país: usá el corte de cada "
+                  "serie, nunca el del bloque, al fechar una cifra. "
+                  "Cada país se lee DENTRO de su propio sistema. Estas cifras NO son "
                   "comparables entre países: cada supervisor las computa bajo su norma "
                   "contable. La comparación entre países vive en la sección armonizada."),
     }
