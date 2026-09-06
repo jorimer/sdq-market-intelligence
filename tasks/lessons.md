@@ -891,6 +891,100 @@ ocupada? Si la respuesta es no, el instrumento está mal elegido.
 - **Regla**: antes de declarar un dato indeterminable, cruzar los relojes que sí hay: `last_run` de la operación, fecha del commit (`git log --format='%cd'`), `merged_at` del PR, `railway deployment list`. Y corroborar con una segunda línea independiente —acá, reproducir el modelo con el dato real y ver que la trayectoria de la otra hipótesis ni se acerca—. Una sola línea es una inferencia; dos que no comparten supuesto son una determinación.
 - **Disparador**: «no se puede saber con qué versión se produjo esta fila». Casi siempre sí se puede: el hecho no está en la fila, está en el reloj.
 
+---
+
+## Probé la función y no la RUTA, y el informe real lo destapó en veinte minutos
+
+**Síntoma.** Un informe generado en producción publicó, en el mismo `std_methodology`:
+
+> **Cobertura:** 50% de lo que este eje publica está sostenido por un pronóstico admisible…
+> **Procedencia por variable:** 50% **del peso de este índice se sostiene en dato real**…
+
+La primera frase es la del eje de pronóstico —la que acababa de escribir— y la segunda es la
+de ÍNDICE, o sea exactamente la afirmación falsa que ese trabajo existía para eliminar. Las
+dos, en la misma página, sobre el mismo eje.
+
+**Causa raíz.** `report_sections._provenance_md` arma un `AxisRegistry` efímero desde
+`variable_signals()` y **no le pasaba el `coverage_kind` que ese mismo diccionario trae**.
+Caía al default de índice. Afectaba también al eje de leyes, que declara
+`COVERAGE_INSTRUMENT` y lo perdía igual.
+
+**Por qué mis tests no lo vieron, que es lo que importa.** Todos construían el `AxisRegistry`
+**a mano**, con la semántica ya puesta:
+
+```python
+eje = AxisRegistry(..., coverage_kind=raw.get("coverage_kind") or COVERAGE_INDEX)
+assert "50%" in coverage_sentence(eje)
+```
+
+Eso verifica `coverage_sentence`. **No verifica que alguien le pase la semántica**, que era el
+defecto. El test hacía a mano justamente el paso que el código de producción se salteaba —
+así que el arreglo de una superficie quedó probado mientras la otra publicaba lo falso.
+
+Es la regla que ya estaba escrita en el CLAUDE.md —«un test del motor NO es un test de la
+ruta», con cinco defectos previos de la misma forma— y la repetí en el mismo trabajo en el que
+estaba arreglando otra instancia de «un guard existe en un motor y falta en el otro».
+
+**Regla futura.** Cuando el arreglo consiste en que un dato VIAJE de un lado a otro, el test
+tiene que entrar por **el llamador más externo que exista** —acá `standard_sections`, que es
+por donde pasa el informe— y nunca construir el objeto intermedio. Construirlo a mano es
+declarar como cumplida la precondición que se está probando.
+
+**Y el hallazgo sobre el método.** Esto no lo encontró ningún test: lo encontró **generar el
+informe real en producción y leerlo**. Cuando el entregable es un documento, leer el
+documento no es una verificación de más — a veces es la única que mira lo que el cliente ve.
+
+---
+
+## Tres cosas que creía saber del entregable y las tres eran distintas al medirlas
+
+La pasada de forma del informe de proyecciones. Venía arrastrando tres descripciones de sus
+defectos, escritas de sesiones anteriores, y **ninguna sobrevivió a medirla**.
+
+**1. «Los glifos `BV₀`, `λ₁`, `λ₂` salen como cajas».** Falso a medias. Renderizando cada
+familia y leyendo el PDF: la `λ` sale perfecta, igual que el resto del griego, la matemática,
+las flechas y la tipografía. Lo que falla son los SUBÍNDICES —todos— y los superíndices salvo
+¹²³, que son Latin-1. `BV₀` fallaba por el subíndice y nunca por la letra griega.
+
+Y yo había planteado la decisión como «transliterar o cambiar la fuente», dos opciones malas,
+y se la había pasado al dueño. **Había una tercera**: ReportLab entiende `<sub>`/`<super>` y
+con la fuente que ya está dibuja un subíndice de verdad. Ni pierde la forma ni toca el aspecto
+de los demás informes. Presentar un dilema de dos opciones antes de buscar la tercera le pasa
+al dueño una decisión que no le correspondía.
+
+**2. «La portada dice Período sobre una fecha».** Cierto para UN eje, no en general.
+Consultados los 18 del catálogo en producción: cuatro pasan una fecha, pero tres son CIERRES
+de período (30-jun, 31-dic, 31-jul) que bajo ese rótulo se leen bien. Generalizar de un caso
+habría cambiado el rótulo a los otros tres sin motivo.
+
+**3. «La tabla publica el código interno `pib_real`».** Ya no: el arreglo del ledger lo
+resolvió al código real y ahora publica la ruta de Excel COMPLETA, que es peor. Un defecto de
+forma descrito hace días puede haber cambiado de forma.
+
+**Regla futura.** Una lista de defectos de forma **envejece**, y envejece distinto de una de
+lógica: el documento se sigue generando y cada cambio aguas arriba lo mueve. Antes de
+arreglarlos, **regenerar el entregable y volver a mirarlo**, uno por uno. Y cuando un defecto
+parezca exigir una decisión cara del dueño —cambiar una fuente, mover un umbral—, buscar la
+tercera opción antes de preguntar: en este repo casi siempre existe y suele estar en una
+capacidad que la herramienta ya tiene.
+
+**Y el guard: mi primer barrido miraba DOS funciones de prosa** y el defecto vivía en una
+tercera —la sección de Desempeño—. Lo encontró el PDF, no el test. Se reemplazó por un barrido
+de todas las `_md_*` del módulo, con su testigo de que encontró algo. Una lista escrita a mano
+protege lo que uno se acordó de poner.
+
+**Apéndice de la misma pasada — un test que depende de un binario de MI máquina.**
+Los dos tests de portada leían el PDF con `pdftotext`. Está en mi Mac por homebrew y **no en
+el runner**: pasaron en local y rompieron el build con `FileNotFoundError`. Es la segunda vez
+en la sesión —antes fue `pypdf`— y la forma es idéntica: instalé una herramienta para
+inspeccionar algo a mano y después la dejé dentro de un test.
+
+La distinción que faltaba: **inspeccionar a mano y verificar en CI son cosas distintas.** Leer
+el PDF con `pdftotext` y mirar la página con `pdftoppm` fue lo que encontró los tres defectos
+y hay que seguir haciéndolo. Lo que no puede es quedar comiteado. El test equivalente espía
+`_cover` desde `render_product_pdf` —la ruta real, que es donde estaba el defecto— y no
+necesita nada instalado. Regla: antes de comitear un test, preguntarse **qué instalé yo para
+que esto ande**.
 
 ---
 

@@ -127,6 +127,11 @@ CURATED_LABELS = {
     "remittances": "Remesas",
     "bcrd.xls.bpagos_6.1_cuenta_corriente":
         "Cuenta corriente de la balanza de pagos (MBP6)",
+    # El eje de proyecciones la CITA en su tabla de trayectoria. Antes viajaba como
+    # `pib_real` —el nombre de la variable del bloque, feo pero corto—; al resolverse a su
+    # código real quedó publicándose la ruta de la hoja de cálculo entera, que es lo que este
+    # mapa existe para impedir.
+    "bcrd.xls.pib_2018.serie_original_indice": "PIB real (índice de volumen, BCRD)",
 }
 
 

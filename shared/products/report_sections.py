@@ -243,9 +243,17 @@ def _provenance_md(product) -> str:
         signals = tuple(raw.get("signals", ()) if isinstance(raw, dict) else (raw or ()))
         if not signals:
             return ""
+        # La SEMÁNTICA viaja con las señales y hay que leerla: `variable_signals()` la trae
+        # en el mismo diccionario y esto la tiraba, así que el eje caía al default de índice
+        # y el párrafo publicaba «del peso de este índice se sostiene en dato real» en un eje
+        # de PRONÓSTICO —donde el índice ES la proyección— y en el de LEYES, que no arma un
+        # índice. La `Cobertura:` de más arriba ya ruteaba bien; esta ruta no, y las dos
+        # frases salían en la misma página diciendo cosas distintas del mismo eje.
+        kind = raw.get("coverage_kind") if isinstance(raw, dict) else None
         axis = AxisRegistry(
             sector_key=getattr(product, "sector_key", ""), display_name="",
             source="", implemented=True, signals=signals,
+            **({"coverage_kind": kind} if kind else {}),
         )
         return provenance_paragraph(axis)
     except Exception:  # noqa: BLE001 — sección informativa; jamás rompe el reporte
