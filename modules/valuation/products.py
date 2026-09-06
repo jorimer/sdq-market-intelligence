@@ -40,6 +40,7 @@ from shared.products.render import render_product_pdf
 # `ai_context.py`; acá se re-exporta el MISMO objeto, no una copia — dos listas divergen.
 from modules.valuation.ai_context import AI_CONTEXT_FILES  # noqa: F401,E402
 
+
 logger = logging.getLogger("sdq.products.valuation")
 
 SECTOR_KEY = "valuation"

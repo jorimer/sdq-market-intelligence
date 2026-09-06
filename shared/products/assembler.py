@@ -19,7 +19,7 @@ import json
 import logging
 import pathlib
 from dataclasses import dataclass
-from typing import Dict, Optional
+from typing import Dict, Optional, Tuple
 
 from shared.products.anonymization import AnonymizationError, enforce_anonymized
 from shared.products.contract import ProductSnapshot, SectorProduct
@@ -75,6 +75,48 @@ def ruta_de_contexto(rel: str, modulo: str) -> pathlib.Path:
     return repo / "modules" / modulo / rel
 
 
+def archivos_de_contexto(modulo_producto: Optional[str]) -> Tuple[pathlib.Path, ...]:
+    """Los archivos que ENTRAN en la huella de contexto de ese producto.
+
+    Se extrajo de `_contexto_ia_version` para que se pueda INSPECCIONAR: la huella era un
+    hash opaco y no había forma de preguntarle qué cubría. Un guard estructural la necesita —
+    ver `test_la_huella_CUBRE_el_archivo_donde_vive_la_prosa`—, y un hash que no se puede
+    interrogar solo se puede verificar cambiándole la entrada y mirando si se mueve, que es
+    justo lo que nadie hace.
+
+    Devuelve solo los que EXISTEN: un archivo declarado y ausente se hashea como nada, así
+    que incluirlo acá diría que está cubierto cuando no lo está. De que existan se ocupa otro
+    test.
+    """
+    if not modulo_producto:
+        return ()
+    partes = modulo_producto.split(".")
+    if len(partes) < 2 or partes[0] != "modules":
+        try:
+            import importlib
+            propio = pathlib.Path(importlib.import_module(modulo_producto).__file__ or "")
+            return (propio,) if propio.is_file() else ()
+        except Exception:  # noqa: BLE001 — la huella nunca debe tumbar la entrega
+            return ()
+    modulo = partes[1]
+    archivos = ("ai_context.py",)
+    try:
+        import importlib
+        archivos = tuple(getattr(importlib.import_module(modulo_producto),
+                                 "AI_CONTEXT_FILES", archivos))
+    except Exception:  # noqa: BLE001
+        pass
+    salida = []
+    for rel in archivos:
+        try:
+            ruta = ruta_de_contexto(rel, modulo)
+            if ruta.is_file():
+                salida.append(ruta)
+        except OSError:
+            continue
+    return tuple(salida)
+
+
 def _contexto_ia_version(modulo_producto: Optional[str]) -> str:
     """Huella del CONSTRUCTOR DE CONTEXTO del sector (``modules/<mod>/ai_context.py``).
 
@@ -94,53 +136,26 @@ def _contexto_ia_version(modulo_producto: Optional[str]) -> str:
     Se hashea SOLO el sector que se está rindiendo: invalidar el panel entero por tocar un
     módulo obliga a regenerar ~15-90s por informe sin motivo.
     """
-    if not modulo_producto:
+    # Un producto que NO vive bajo `modules/` —hoy `macro` y `monetary_policy`, en `app/`—
+    # hashea su propio archivo, que es donde arma su contexto. Los de `modules/` usan
+    # `AI_CONTEXT_FILES`, y por defecto `ai_context.py`: banca construye el contexto en
+    # `reports/narrative.py` y en su propio `products.py`, así que sin la declaración su
+    # huella quedaba vacía y un arreglo de contexto de banca no invalidaba nada.
+    #
+    # La resolución de rutas y la selección de archivos viven en `archivos_de_contexto`, que
+    # además se puede INSPECCIONAR: dos resoluciones del mismo hecho se desincronizan, y ya
+    # pasó — cuando el ensamblador empezó a admitir rutas `shared/`, los guards que resolvían
+    # por su cuenta siguieron buscando `modules/<mod>/shared/...`.
+    rutas = archivos_de_contexto(modulo_producto)
+    if not rutas:
         return ""
-    partes = modulo_producto.split(".")
-    if len(partes) < 2 or partes[0] != "modules":
-        # Un producto que NO vive bajo `modules/` —hoy `macro` y `monetary_policy`, en
-        # `app/`— devolvía "" y quedaba SIN huella de contexto: un arreglo de lo que el
-        # modelo lee no invalidaba nada, y esta caché no tiene TTL. Se hashea su propio
-        # archivo, que es exactamente donde arma su contexto.
-        #
-        # No es tan bueno como la lista declarada —no cubre los ayudantes que importe— pero
-        # es infinitamente mejor que la cadena vacía, que no cubre NADA y no avisa.
-        try:
-            import importlib
-            propio = pathlib.Path(importlib.import_module(modulo_producto).__file__ or "")
-            if propio.is_file():
-                return hashlib.sha256(propio.read_bytes()).hexdigest()[:12]
-        except Exception:  # noqa: BLE001 — la huella nunca debe tumbar la entrega
-            pass
-        return ""
-    modulo = partes[1]
-
-    # Por defecto `ai_context.py`. Un módulo que arma el contexto en otro lado lo DECLARA con
-    # `AI_CONTEXT_FILES`: banca lo construye en `reports/narrative.py` y en su propio
-    # `products.py`, así que sin la declaración su huella quedaba vacía y un arreglo de
-    # contexto de banca no invalidaba nada — el defecto que esto vino a cerrar, abierto justo
-    # en el módulo más grande.
-    archivos = ("ai_context.py",)
-    try:
-        import importlib
-        archivos = tuple(getattr(importlib.import_module(modulo_producto),
-                                 "AI_CONTEXT_FILES", archivos))
-    except Exception:  # noqa: BLE001 — la huella nunca debe tumbar la entrega
-        pass
-
     h = hashlib.sha256()
-    visto = False
-    for rel in archivos:
-        # La resolución vive en `ruta_de_contexto`: un constructor de contexto puede ser
-        # TRANSVERSAL —la capacidad de pago del hogar la leen cuatro ejes— y vivir en
-        # `shared/`. Sin admitir esa ruta, el archivo quedaba fuera de la huella de todos y
-        # un arreglo de lo que el modelo lee no invalidaba nada, con la caché sin TTL.
+    for ruta in rutas:
         try:
-            h.update(ruta_de_contexto(rel, modulo).read_bytes())
-            visto = True
+            h.update(ruta.read_bytes())
         except OSError:
-            continue          # archivo declarado que no existe: se ignora, no se falla
-    return h.hexdigest()[:12] if visto else ""
+            continue          # desapareció entre el listado y la lectura
+    return h.hexdigest()[:12]
 
 
 def _narrative_logic_version() -> str:
