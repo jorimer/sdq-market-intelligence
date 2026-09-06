@@ -40,6 +40,7 @@ from shared.products import (
     register_product,
 )
 from shared.data import medida_de_pronostico as med
+from shared.data.periodos import fin_del_periodo, periodo_anterior
 from shared.products.contract import EstadoBacktest
 from shared.products.render import render_product_pdf
 from shared.registry.signals import COVERAGE_PROJECTION
@@ -302,6 +303,10 @@ class MacroForecastProduct:
                 "punto": meta.point, "medida": meta.measure,
                 "intervalos": [list(t) for t in meta.intervals],
                 "modelo": meta.model_id, "as_of": meta.as_of,
+                # La DISTANCIA relativa. Es lo único que faltaba para reconstruir, desde el
+                # propio ledger, qué horizonte no se emitió y por qué — ver
+                # `_horizontes_ausentes`.
+                "h": None if f.h is None else int(f.h),
                 "ancla": ok, "motivo": motivo, "n_oos": meta.n_oos,
             })
         cifra = None
@@ -741,6 +746,79 @@ def _md_nowcast(p: Dict[str, Any]) -> str:
             "sección trae el punto y su banda; con los tres meses, la cifra determinada.")
 
 
+def _n_trimestres_atras(periodo: str, n: int) -> Optional[str]:
+    """*n* trimestres hacia atrás desde *periodo*, o ``None`` si alguno no resuelve."""
+    actual: Optional[str] = periodo
+    for _ in range(n):
+        actual = periodo_anterior(actual)
+        if actual is None:
+            return None
+    return actual
+
+
+def _horizontes_ausentes(proys: List[Dict[str, Any]]) -> List[str]:
+    """Los horizontes con track record que este corte NO publica, y por qué.
+
+    El modelo declara `HORIZONTES_CON_TRACK_RECORD` horizontes y la sección de escenarios se
+    toma tres párrafos en sostener que del siguiente en adelante NO son pronósticos: el
+    lector cuenta, y encontrar menos sin explicación se lee como una errata.
+
+    **La causa se reconstruye del ledger, no se persiste ni se copia de un texto.** Si el
+    horizonte presente más cercano es +2T y apunta a 2026-Q3, el bloque terminaba en 2026-Q1
+    y +1T apuntaba a 2026-Q2; y estaba vencido si su cierre no es posterior al `as_of` de la
+    fila — que es la condición de `emision._es_hacia_adelante`, reproducida.
+
+    Dos límites, declarados en vez de rellenados:
+
+    * Solo se mira un modelo que tenga al menos un horizonte con distancia ≥ 1. El nowcast
+      apunta al trimestre en curso (h = 0) y no publica una trayectoria: exigirle dos
+      horizontes diría que le faltan dos que nunca tuvo.
+    * Si el modelo no emitió NINGUNA fila, no hay de dónde derivar el fin del bloque y no se
+      declara nada. Adivinarlo sería inventar la causa de una ausencia.
+    """
+    from modules.macro_monitor.forecasting.bvar import HORIZONTES_CON_TRACK_RECORD
+
+    esperados = set(range(1, HORIZONTES_CON_TRACK_RECORD + 1))
+    por_modelo: Dict[str, List[Dict[str, Any]]] = {}
+    for d in proys:
+        if d.get("h") is None:
+            continue
+        por_modelo.setdefault(str(d.get("modelo") or ""), []).append(d)
+
+    lineas: List[str] = []
+    for _modelo, filas in sorted(por_modelo.items()):
+        presentes = {int(f["h"]) for f in filas}
+        if not (presentes & esperados):
+            continue                      # el nowcast (h = 0) no publica trayectoria
+        faltan = sorted(esperados - presentes)
+        if not faltan:
+            continue
+        ancla = min(filas, key=lambda f: int(f["h"]))
+        fin_bloque = _n_trimestres_atras(str(ancla["horizonte"]), int(ancla["h"]))
+        if fin_bloque is None:
+            continue                      # horizonte relativo: no resuelve a calendario
+        as_of = str(ancla.get("as_of") or "")
+        corte = fin_del_periodo(as_of)
+        bloque_lineas: List[str] = []
+        for h in faltan:
+            objetivo = _n_trimestres_atras(str(ancla["horizonte"]), int(ancla["h"]) - h)
+            if objetivo is None:
+                continue
+            cierre = fin_del_periodo(objetivo)
+            vencido = cierre is not None and corte is not None and cierre <= corte
+            plantilla = _HORIZONTE_VENCIDO if vencido else _HORIZONTE_AUSENTE_SIN_CAUSA
+            bloque_lineas.append(plantilla.format(rel=f"+{h}T", objetivo=objetivo,
+                                                  as_of=as_of))
+        if not bloque_lineas:
+            continue
+        lineas.append(_TRAYECTORIA_INCOMPLETA.format(
+            presentes=len(presentes & esperados), esperados=len(esperados),
+            fin_bloque=fin_bloque))
+        lineas.append("")
+        lineas.extend(bloque_lineas)
+    return lineas
+
+
 def _md_trayectoria(p: Dict[str, Any]) -> str:
     proys = p.get("proyecciones") or []
     if not proys:
@@ -759,6 +837,12 @@ def _md_trayectoria(p: Dict[str, Any]) -> str:
         "«Ancla una afirmación» no es un adorno: una proyección solo puede sostener una "
         "respuesta si tiene backtest suficiente detrás. Cuando dice que no, el motivo "
         "está escrito — no se publica a medias ni se calla.")
+    # Y el horizonte que NO está también se declara: el lector cuenta los que el modelo
+    # promete, y una diferencia sin explicación se lee como una errata.
+    ausentes = _horizontes_ausentes(proys)
+    if ausentes:
+        lineas.append("")
+        lineas.extend(ausentes)
     return "\n".join(lineas)
 
 
@@ -887,6 +971,26 @@ class _NoSeDesagrega(Exception):
 
 #: En CONSTANTES y no incrustadas: un literal se parte por ancho de línea y la frase deja de
 #: existir en el fuente aunque el valor sea correcto.
+_TRAYECTORIA_INCOMPLETA = (
+    "**Este corte publica {presentes} de los {esperados} horizontes con track record del "
+    "modelo.** El bloque terminaba en {fin_bloque} — hasta ahí llega el dato publicado de "
+    "todas sus variables."
+)
+
+_HORIZONTE_VENCIDO = (
+    "- **{rel}** apuntaba a {objetivo}, un trimestre que **ya había cerrado** al corte "
+    "{as_of}. No es un pronóstico que falte: es uno que se evitó. Evaluarlo contra un dato "
+    "que ya existía cuando se escribió infla el track record con retrospectiva, que es "
+    "justo la contaminación que la disciplina point-in-time existe para impedir. El "
+    "horizonte vuelve en cuanto el BCRD publique {objetivo} y el bloque avance."
+)
+
+_HORIZONTE_AUSENTE_SIN_CAUSA = (
+    "- **{rel}** no está en el ledger de este corte y su trimestre objetivo ({objetivo}) "
+    "seguía abierto al {as_of}: la ausencia **no** se explica por el rezago del bloque. Se "
+    "declara sin atribuirle una causa."
+)
+
 _SIN_AGREGADO_QUE_DESAGREGAR = (
     "La lectura sectorial no está disponible para este corte: sin una proyección agregada "
     "vigente no hay nada que desagregar.")
