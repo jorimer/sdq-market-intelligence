@@ -32,6 +32,7 @@ mide, en TODAS sus superficies**, y ningún `coverage_kind` puede caer al defaul
 """
 import pytest
 
+from shared.products import ProductTier
 from shared.products.contract import DataHealth
 from shared.products.report_sections import _methodology_md
 from shared.registry.signals import COVERAGE_INDEX, COVERAGE_INSTRUMENT, COVERAGE_KINDS
@@ -183,3 +184,78 @@ def test_una_proyeccion_ADMISIBLE_cuenta_en_la_frase_de_procedencia():
     assert eje.coverage_anclada == pytest.approx(1.0)
     assert "100%" in coverage_sentence(eje), (
         f"la frase lee la cobertura equivocada: {coverage_sentence(eje)!r}")
+
+
+# ── la RUTA que arma el informe, no solo el motor ───────────────────────────────────
+
+FUENTES_DE_PRUEBA = ("BCRD — IMAE, PIB por sectores de origen", "SDQ — ledger")
+
+
+class _EjeQueDeclaraSuSemantica:
+    """El mínimo que `standard_sections` necesita, declarando `coverage_kind` en LOS DOS
+    lugares donde los ejes reales lo declaran: `data_signals()` y `variable_signals()`."""
+
+    sector_key = "prueba"
+
+    def __init__(self, kind, señales):
+        self._kind = kind
+        self._señales = señales
+
+    def data_signals(self):
+        return DataHealth(coverage=0.5, coverage_kind=self._kind, freshness_days=0,
+                          cadence="quarterly", sources=FUENTES_DE_PRUEBA, detail="x")
+
+    def validation_state(self):
+        return None
+
+    def variable_signals(self):
+        return {"period": None, "coverage_kind": self._kind, "signals": self._señales}
+
+
+def _procedencia_de(kind):
+    from shared.products.report_sections import METHODOLOGY_KEY, standard_sections
+    from shared.registry.signals import GAP, REAL, VariableSignal
+
+    señales = [
+        VariableSignal(key="a", label="lo que sí hay", state=REAL, weight=1.0, source="x"),
+        VariableSignal(key="b", label="lo que falta", state=GAP, weight=1.0, source="y"),
+    ]
+    metodo = standard_sections(_EjeQueDeclaraSuSemantica(kind, señales),
+                               ProductTier.deep_dive, as_of="2026-09-06")[METHODOLOGY_KEY]
+    partes = metodo.split("**Procedencia por variable:**", 1)
+    assert len(partes) == 2, f"no hay párrafo de procedencia:\n{metodo}"
+    return partes[1]
+
+
+def test_la_PROCEDENCIA_del_informe_respeta_la_semantica_del_eje():
+    """El producto declara `coverage_kind` y el ensamblador del informe lo tiraba.
+
+    `_provenance_md` arma un `AxisRegistry` efímero desde `variable_signals()` y NO le pasaba
+    el `coverage_kind` que ese mismo diccionario trae, así que caía al default de índice: el
+    párrafo de procedencia publicaba «del peso de este índice se sostiene en dato real» en un
+    eje de PRONÓSTICO — la frase exacta que este archivo existe para no publicar.
+
+    **Lo destapó un informe REAL de producción, no un test.** Los de más arriba construyen el
+    `AxisRegistry` a mano con la semántica ya puesta, así que verificaban `coverage_sentence`
+    y nunca la ruta que arma el documento. Es «un test del motor NO es un test de la ruta»,
+    y por eso éste entra por `standard_sections`.
+    """
+    from shared.registry.signals import COVERAGE_PROJECTION
+
+    parrafo = _procedencia_de(COVERAGE_PROJECTION)
+    assert "del peso de este índice se sostiene en dato real" not in parrafo, (
+        f"la procedencia publica la frase de ÍNDICE en un eje de pronóstico:\n{parrafo[:300]}")
+    assert "el índice ES la proyección" in parrafo, parrafo[:300]
+
+
+def test_la_PROCEDENCIA_respeta_tambien_la_semantica_de_INSTRUMENTO():
+    """El eje de leyes declara `COVERAGE_INSTRUMENT` y la misma ruta lo perdía igual."""
+    parrafo = _procedencia_de(COVERAGE_INSTRUMENT)
+    assert "del peso de este índice" not in parrafo, parrafo[:300]
+    assert "el propio instrumento se fijó" in parrafo, parrafo[:300]
+
+
+def test_un_eje_de_INDICE_conserva_su_parrafo_de_procedencia():
+    """El arreglo no puede cambiarle el texto a los ejes que sí arman un índice."""
+    parrafo = _procedencia_de(COVERAGE_INDEX)
+    assert "del peso de este índice se sostiene en dato real" in parrafo, parrafo[:300]
