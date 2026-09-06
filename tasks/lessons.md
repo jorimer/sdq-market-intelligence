@@ -985,3 +985,31 @@ y hay que seguir haciéndolo. Lo que no puede es quedar comiteado. El test equiv
 `_cover` desde `render_product_pdf` —la ruta real, que es donde estaba el defecto— y no
 necesita nada instalado. Regla: antes de comitear un test, preguntarse **qué instalé yo para
 que esto ande**.
+
+---
+
+## La vía abierta apuntaba al regulador equivocado, y el documento estaba en la SEC hace un año
+
+**Síntoma.** La vía abierta de Santander Puerto Rico decía: «la vía es el FR Y-9C que la
+tenedora presenta a la Reserva Federal». Escrita en una sesión anterior, con seguridad, y sin
+verificar. El FR Y-9C lo presentan las tenedoras de PRIMER nivel; Santander BanCorp colgaba
+de Santander Holdings USA. Probablemente no existe.
+
+**Lo que sí existía.** Un 8-K/A del comprador a ~70 días del cierre: la Regla 3-05 de la S-X
+obliga a archivar los estados financieros históricos de la ADQUIRIDA. Ahí estaban la memoria
+auditada de Santander BanCorp a diciembre 2019 y el interino a junio 2020 — la tenedora
+consolidada, en sus propios libros, al perímetro exacto que el precio compró. Un `efts.sec.gov`
+de una línea lo encontró.
+
+**Regla futura.** Cuando una operación la compró un registrante de la SEC y la adquirida era
+material, **buscar primero el 8-K/A del comprador**: los estados de la adquirida están
+archivados por obligación, no por cortesía. Y una vía abierta que nombra un documento
+concreto es una HIPÓTESIS hasta que alguien lo abre — tres de las cuatro vías de este panel
+que se abrieron esta semana tenían la premisa mal (Trinidad: la homogeneización; Belize: el
+precio; Santander: el documento).
+
+**Y el instrumento.** El resumidor de `WebFetch` me dijo que un PDF de 64 páginas era «un
+logo». Lo bajé y lo abrí yo: era la memoria auditada entera, con la nota que buscaba. Cuando
+el modelo pequeño dice que un documento no contiene algo, eso es una lectura de un modelo
+pequeño, no una propiedad del documento. Los archivos quedan guardados: abrirlos cuesta un
+`pdftotext`.
