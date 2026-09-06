@@ -111,6 +111,42 @@ def _italicize(text: str) -> str:
 _UNIDAD_PEGADA_RE = re.compile(r"(\d)\s+(%|pp\b|p\.p\.|RD\$|US\$)")
 
 
+#: Subíndices y superíndices Unicode → el dígito y su POSICIÓN. La fuente del renderer
+#: (Helvetica, con encoding WinAnsi) no tiene los subíndices ni los superíndices distintos de
+#: ¹²³, así que los dibujaba como CAJAS NEGRAS en el PDF que se vende: «BV■», «λ■».
+#:
+#: Medido renderizando cada familia y leyendo el PDF: los subíndices fallan TODOS, los
+#: superíndices salvo ¹²³ (que son Latin-1), y el griego, la matemática, las flechas y la
+#: tipografía renderizan bien. O sea que `BV₀` y `λ₁` fallaban por el subíndice y NO por la
+#: letra griega — la λ nunca tuvo problema.
+#:
+#: Se convierte a marcado `<sub>`/`<super>`, que ReportLab dibuja con la fuente que ya hay,
+#: en vez de transliterar a `BV0` (pierde la forma) o de registrar una fuente Unicode (que
+#: cambiaría el aspecto de TODOS los informes). Verificado en el PDF y mirando la imagen.
+_SUB = {"₀": "0", "₁": "1", "₂": "2", "₃": "3", "₄": "4", "₅": "5", "₆": "6", "₇": "7",
+        "₈": "8", "₉": "9", "₊": "+", "₋": "-", "₌": "=", "₍": "(", "₎": ")",
+        "ₐ": "a", "ₑ": "e", "ₒ": "o", "ₓ": "x", "ₕ": "h", "ₖ": "k", "ₗ": "l", "ₘ": "m",
+        "ₙ": "n", "ₚ": "p", "ₛ": "s", "ₜ": "t"}
+_SUPER = {"⁰": "0", "¹": "1", "²": "2", "³": "3", "⁴": "4", "⁵": "5", "⁶": "6", "⁷": "7",
+          "⁸": "8", "⁹": "9", "⁺": "+", "⁻": "-", "⁼": "=", "⁽": "(", "⁾": ")", "ⁿ": "n"}
+_INDICES_RE = re.compile(
+    "([" + "".join(_SUB) + "]+)|([" + "".join(_SUPER) + "]+)")
+
+
+def _marcar_indices(text: str, envolver) -> str:
+    """Convierte corridas de sub/superíndices con *envolver(texto, clase)*.
+
+    Se procesan en CORRIDAS y no carácter por carácter: `BV₋₁` tiene que dar un solo
+    `<sub>-1</sub>` y no dos marcas pegadas, que ReportLab dibuja separadas.
+    """
+    def _uno(m):
+        if m.group(1):
+            return envolver("".join(_SUB[c] for c in m.group(1)), "sub")
+        return envolver("".join(_SUPER[c] for c in m.group(2)), "super")
+
+    return _INDICES_RE.sub(_uno, text)
+
+
 def _pegar_unidad(text: str) -> str:
     """Une el número con su unidad para que el salto de línea no los separe."""
     return _UNIDAD_PEGADA_RE.sub(r"\1&nbsp;\2", text)
@@ -128,6 +164,9 @@ def _inline(text: str) -> str:
     # DESPUÉS del escape, nunca antes: insertada antes, la entidad quedaría `&amp;nbsp;` y el
     # cliente leería «0.38&nbsp;%» literal, que es peor que el defecto que vino a arreglar.
     text = _pegar_unidad(text)
+    # También DESPUÉS del escape: `<sub>` insertado antes quedaría `&lt;sub&gt;`
+    # y el cliente leería el marcado literal en el PDF.
+    text = _marcar_indices(text, lambda t, k: f"<{k}>{t}</{k}>")
     text = re.sub(r"\*\*(.+?)\*\*", lambda m: "<b>" + _italicize(m.group(1)) + "</b>", text)
     return _italicize(text).strip()
 
@@ -302,7 +341,7 @@ def _furniture(header_line: str, watermark: Optional[str], sample: bool, *, firs
 
 
 def _cover(title: str, display_name: str, period: str, subtitle: Optional[str],
-           headline: Optional[str], styles) -> List:
+           period_label: str, headline: Optional[str], styles) -> List:
     """Portada de marca: banda navy con 'MARKET INTELLIGENCE REPORT' + título, y metadatos."""
     band = Table(
         [[Paragraph("SDQ·MIP · MARKET INTELLIGENCE REPORT", styles["CoverKicker"])],
@@ -329,7 +368,7 @@ def _cover(title: str, display_name: str, period: str, subtitle: Optional[str],
         out.append(Spacer(1, 0.1 * inch))
         out.append(_pull_quote(headline, styles))
     out += [Spacer(1, 0.4 * inch),
-            Paragraph(f"<b>Período:</b> {period}", styles["CoverMeta"]),
+            Paragraph(f"<b>{period_label}:</b> {period}", styles["CoverMeta"]),
             Paragraph(f"<b>Fecha:</b> {datetime.now().strftime('%d/%m/%Y')}", styles["CoverMeta"]),
             PageBreak()]
     return out
@@ -379,6 +418,7 @@ def build_branded_pdf(
     watermark: Optional[str] = None,
     sample: bool = False,
     add_disclaimer: bool = True,
+    period_label: str = "Período",
 ) -> str:
     """Shell de documento de marca: portada (banda navy + logo Arco + sujeto + headline) →
     *body* (flowables ya armados por el llamador) → disclaimer opcional; cada página con
@@ -388,7 +428,8 @@ def build_branded_pdf(
     que arma su radar y tablas con estilos propios) sin duplicar el chrome de ``render.py``.
     Devuelve *path*."""
     styles = _styles()
-    el: List = _cover(title, display_name, period, subtitle, headline, styles)
+    el: List = _cover(title, display_name, period, subtitle, period_label,
+                      headline, styles)
     el += list(body or [])
     if add_disclaimer:
         el += [Spacer(1, 0.4 * inch), Paragraph("Disclaimer", styles["PSub"]),
@@ -441,6 +482,14 @@ def render_product_pdf(
     output_dir: Optional[str] = None,
     fmt: str = "pdf",
     tables_last: bool = False,
+    #: Cómo se llama lo que va en `period`. «Período» describe mal un CORTE DE
+    #: INFORMACIÓN: el eje de proyecciones publicaba «Período: 2026-09-06», que no es un
+    #: período sino la fecha hasta la que el modelo vio datos — y su propia metodología
+    #: ya lo llamaba «Corte del informe». Medido sobre los 18 ejes del catálogo, es el
+    #: único mal rotulado: `banking` (2026-06-30), `macro` (2025-12-31) y
+    #: `monetary_policy` (2026-07-31) pasan CIERRES de período, que bajo «Período» se
+    #: leen bien. Por eso el default no cambia.
+    period_label: str = "Período",
 ) -> str:
     """Renderiza el reporte de marca de un producto y devuelve el path (docs/REPORT_STANDARD.md).
 
@@ -459,7 +508,7 @@ def render_product_pdf(
             sector_key=sector_key, display_name=display_name, title=title, period=period,
             narratives=narratives, section_titles=section_titles, tables=tables, charts=charts,
             subtitle=subtitle, headline=headline, watermark=watermark, sample=sample,
-            output_dir=output_dir, tables_last=tables_last)
+            output_dir=output_dir, tables_last=tables_last, period_label=period_label)
     out_dir = output_dir or settings.REPORTS_DIR
     os.makedirs(out_dir, exist_ok=True)
     ts = datetime.now().strftime("%Y%m%d_%H%M%S")
@@ -500,4 +549,5 @@ def render_product_pdf(
 
     return build_branded_pdf(
         path=path, title=title, display_name=display_name, period=period, body=body,
-        subtitle=subtitle, headline=headline, watermark=watermark, sample=sample)
+        subtitle=subtitle, headline=headline, watermark=watermark, sample=sample,
+        period_label=period_label)
