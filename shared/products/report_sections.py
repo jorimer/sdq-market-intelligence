@@ -17,6 +17,7 @@ from typing import Dict, Optional
 
 from shared.products.tiers import ProductTier
 from shared.registry.signals import (
+    COVERAGE_INPUTS,
     COVERAGE_INDEX,
     COVERAGE_INSTRUMENT,
     COVERAGE_PROJECTION,
@@ -167,6 +168,11 @@ FRASE_COBERTURA_METODOLOGIA = {
         "{pct} de lo que este eje publica está sostenido por un pronóstico admisible o por "
         "una cifra determinada por identidad. Acá el índice ES la proyección: lo que se "
         "mide es la admisibilidad del pronóstico, no peso anclado a dato medido."),
+    COVERAGE_INPUTS: (
+        "{pct} de los insumos del modelo están presentes en la fuente al corte. Acá la "
+        "cobertura mide insumos, no peso anclado a dato real: la parte del costo de capital "
+        "que es supuesto declarado —beta y prima de riesgo de mercado— se cuantifica como "
+        "rúbrica en «Supuestos y sensibilidad»."),
 }
 
 

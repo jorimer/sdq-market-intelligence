@@ -39,6 +39,7 @@ from shared.products.render import render_product_pdf
 # La huella de la caché de informes se busca en el módulo del PRODUCTO. La lista vive en
 # `ai_context.py`; acá se re-exporta el MISMO objeto, no una copia — dos listas divergen.
 from modules.valuation import responsabilidad as resp
+from shared.registry.signals import COVERAGE_INPUTS
 from modules.valuation.ai_context import AI_CONTEXT_FILES  # noqa: F401,E402
 
 
@@ -201,6 +202,10 @@ class ValuationProduct:
         presentes = sum(1 for ok in insumos.values() if ok)
         return DataHealth(
             coverage=presentes / len(insumos), freshness_days=self._dias_del_ultimo_corte(),
+            # La semántica: INSUMOS presentes, no peso anclado a dato real. Con la de índice
+            # el framework escribía «100 % dato real» en el mismo informe que declaraba el
+            # 37 % del Ke como rúbrica.
+            coverage_kind=COVERAGE_INPUTS,
             cadence="quarterly",
             sources=("SIB · estados de situación y resultados por entidad",
                      "SIMBAD · Superset público de la Superintendencia",
@@ -637,7 +642,15 @@ def _lectura_desde_payload(snapshot: ProductSnapshot):
         persistencia=float(pr.get("persistencia") or 0.0),
         rf_pct=_par(pr.get("rf_pct")), beta=_par(pr.get("beta")), erp=_par(pr.get("erp")),
         n_observaciones_rf=int(pr.get("n_observaciones_rf") or 0),
+        rf_ventana=_ventana(pr.get("rf_ventana")),
     )
+
+
+def _ventana(v: Any) -> Tuple[str, str]:
+    try:
+        return (str(v[0] or ""), str(v[1] or ""))
+    except (TypeError, IndexError):
+        return ("", "")
 
 
 def _par(v: Any) -> Tuple[float, float]:
@@ -698,6 +711,7 @@ _SAMPLE_PAYLOAD: Dict[str, Any] = {
         "beta": [0.85, 1.15],
         "erp": [5.5, 7.0],
         "n_observaciones_rf": 8,
+        "rf_ventana": ["2025-05", "2025-12"],
     },
     # Horizonte explícito de cinco años, el mismo que usa el servicio.
     "serie_spread": [{"periodo": f"{a}-12-31", "roe_pct": r} for a, r in

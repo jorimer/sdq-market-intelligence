@@ -276,6 +276,35 @@ _TYPOS: List[Tuple[re.Pattern, str]] = [
 ]
 
 
+def _huella_del_saneador() -> str:
+    """Huella del FUENTE de este módulo, para la clave de caché de narrativas.
+
+    Todo lo que hay acá post-procesa CADA narrativa: se quita el meta-comentario, se unifica
+    el formato numérico, se marca el registro impropio. Es receta, no pregunta — y la clave de
+    caché hashea la receta justamente para que un arreglo de cara al cliente no quede sin
+    efecto en silencio.
+
+    Faltaba. El 2026-09-06 se agregó la corrección del punto de miles («6.823.5», ilegible con
+    punto decimal), se desplegó, se regeneró el boletín y las ocho cifras seguían ahí: el texto
+    vino de la caché, porque ni el contexto ni el prompt ni el guard habían cambiado. La prueba
+    de que era eso y no otra cosa: §1 SÍ se arregló en la misma corrida, porque a esa sección
+    le habíamos cambiado el CONTEXTO —y eso sí rota su clave—.
+
+    Se hashea el archivo ENTERO y no una lista de reglas: una lista es lo que alguien olvida
+    ampliar al agregar la regla siguiente. El costo es que editar un comentario acá rota las
+    entradas afectadas; es el lado barato del error.
+    """
+    import hashlib
+    import pathlib as _p
+
+    return hashlib.sha256(_p.Path(__file__).read_bytes()).hexdigest()[:16]
+
+
+#: Se calcula UNA vez al importar: va en cada clave de caché y no puede costar una lectura de
+#: disco por narrativa.
+FINGERPRINT = _huella_del_saneador()
+
+
 def normalize_number_format(text: str) -> Tuple[str, List[str]]:
     """Unifica el formato numérico de la prosa con el de las tablas y corrige tipeos.
 

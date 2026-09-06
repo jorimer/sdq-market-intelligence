@@ -24,6 +24,7 @@ del modelo — **es el hallazgo**, y va en el resumen ejecutivo.
 from __future__ import annotations
 
 from dataclasses import dataclass
+from datetime import date
 from typing import Dict, List, Optional, Sequence, Tuple
 
 from sqlalchemy.orm import Session
@@ -94,6 +95,9 @@ class CostoDeCapital:
     sensibilidad: Tuple[Tuple[float, str], ...]
     n_observaciones_rf: int
     advertencias: Tuple[str, ...] = ()
+    #: Primer y último período de las observaciones que armaron la `Rf`. Va al informe: un
+    #: rango de tasa sin sus fechas no se puede juzgar.
+    ventana_rf: Tuple[str, str] = ("", "")
 
     @property
     def punto_medio(self) -> float:
@@ -116,17 +120,37 @@ class CostoDeCapital:
         return round(rub / total, 4)
 
 
+def observaciones_al_corte(db: Session, *, serie: str = SERIE_RF,
+                           hasta: Optional[date] = None) -> List[Tuple[str, float]]:
+    """Las observaciones de la curva PUBLICADAS al corte, en orden cronológico.
+
+    El corte manda: un informe «al 2026-06-30» no puede usar una tasa subastada en julio.
+    Un Deep Dive real lo hizo —emitido en septiembre, tomó las últimas ocho vivas sin mirar
+    el corte— y el lector no tenía cómo saberlo. Sin `hasta` se devuelve todo, que es lo
+    que el readiness y las herramientas de diagnóstico necesitan.
+    """
+    from modules.macro_monitor.forecasting.panel import observaciones
+
+    from shared.data.periodos import fin_del_periodo
+    pares = observaciones(db, serie)
+    if hasta is None:
+        return pares
+    return [(p, v) for p, v in pares if (fin_del_periodo(p) or date.max) <= hasta]
+
+
 def rf_de_la_curva(db: Session, *, serie: str = SERIE_RF,
-                   ventana: int = VENTANA_RF) -> Tuple[float, float, int, List[str]]:
+                   ventana: int = VENTANA_RF,
+                   hasta: Optional[date] = None) -> Tuple[float, float, int, List[str]]:
     """``(bajo, alto, n, advertencias)`` de la tasa libre de riesgo en pesos.
+
+    *hasta* es el corte del informe: solo entran observaciones publicadas hasta esa fecha.
+    Para las fechas de la ventana usada, ver `calcular(...).ventana_rf`.
 
     El rango sale de la DISPERSIÓN observada en la ventana, no de un criterio: la `Rf` es el
     único término real de `Ke`, y darle un punto cuando el dato tiene dispersión escondería
     la única incertidumbre que sí se puede medir.
     """
-    from modules.macro_monitor.forecasting.panel import observaciones
-
-    pares = observaciones(db, serie)
+    pares = observaciones_al_corte(db, serie=serie, hasta=hasta)
     avisos: List[str] = []
     # `observaciones` ya excluye nulos; los ceros hay que excluirlos acá porque son una
     # forma de nulo que el emisor escribe como NÚMERO. El cuadro anota 0 cuando el plazo no
@@ -174,19 +198,27 @@ def _sensibilidad(bajo: float, alto: float,
 
 def calcular(db: Session, *, beta: Tuple[float, float] = BETA,
              erp: Tuple[float, float] = ERP,
-             serie_rf: str = SERIE_RF) -> CostoDeCapital:
+             serie_rf: str = SERIE_RF, hasta: Optional[date] = None) -> CostoDeCapital:
     """`Ke = Rf + β × ERP`, en pesos, como rango.
 
     **No hay término de riesgo país.** Ver el docstring del módulo: con una `Rf` en pesos,
     sumarlo lo contaría dos veces.
+
+    *hasta* es el CORTE del informe: la `Rf` se arma solo con observaciones publicadas hasta
+    esa fecha, y `ventana_rf` dice cuáles.
     """
-    rf_bajo, rf_alto, n, avisos = rf_de_la_curva(db, serie=serie_rf)
+    rf_bajo, rf_alto, n, avisos = rf_de_la_curva(db, serie=serie_rf, hasta=hasta)
+    vivos = [(p, v) for p, v in observaciones_al_corte(db, serie=serie_rf, hasta=hasta)
+             if float(v) != 0.0][-VENTANA_RF:]
+    ventana = (vivos[0][0], vivos[-1][0]) if vivos else ("", "")
     prima_baja = beta[0] * erp[0]
     prima_alta = beta[1] * erp[1]
     terminos = (
         Termino("Rf (curva en pesos, >2 años)", rf_bajo, rf_alto, "real",
                 f"Valores subastados del Banco Central, plazo de más de dos años; "
-                f"{n} observación(es) en la ventana. Es la Rf más larga que el emisor "
+                f"{n} observación(es) en la ventana"
+                + (f" ({ventana[0]} a {ventana[1]})" if ventana[0] else "")
+                + ". Es la Rf más larga que el emisor "
                 "publica en moneda nacional: «más de dos años» no es un punto a diez años, "
                 "y esa limitación se declara."),
         Termino("β × ERP", prima_baja, prima_alta, "rubric",
@@ -198,7 +230,7 @@ def calcular(db: Session, *, beta: Tuple[float, float] = BETA,
     return CostoDeCapital(
         moneda=MONEDA, bajo=round(bajo, 4), alto=round(alto, 4), terminos=terminos,
         sensibilidad=_sensibilidad(bajo, alto), n_observaciones_rf=n,
-        advertencias=tuple(avisos))
+        advertencias=tuple(avisos), ventana_rf=ventana)
 
 
 class MonedaCruzadaError(ValueError):
@@ -240,6 +272,7 @@ def a_dict(ke: CostoDeCapital) -> Dict[str, object]:
         "amplitud_pp": round(ke.amplitud, 4),
         "fraccion_de_rubrica": ke.fraccion_de_rubrica,
         "n_observaciones_rf": ke.n_observaciones_rf,
+        "ventana_rf": list(ke.ventana_rf),
         "terminos": [
             {"nombre": t.nombre, "bajo": t.bajo, "alto": t.alto, "estado": t.estado,
              "evidencia": t.evidencia}

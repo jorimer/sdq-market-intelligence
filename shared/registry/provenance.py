@@ -26,6 +26,7 @@ from typing import Iterable, List, Optional, Sequence
 
 from shared.data.medida_de_pronostico import COMO_SE_LEE
 from shared.registry.signals import (
+    COVERAGE_INPUTS,
     COVERAGE_INDEX,
     COVERAGE_INSTRUMENT,
     COVERAGE_PROJECTION,
@@ -81,6 +82,14 @@ FRASE_COBERTURA_PROYECCION = (
     "del pronóstico, no peso anclado a dato medido."
 )
 
+FRASE_COBERTURA_INSUMOS = (
+    "{pct} de los insumos del modelo están presentes en la fuente al corte; el que falte se "
+    "declara con su motivo y no se completa con un valor parecido. Esta cobertura no es "
+    "comparable con la de un índice de la plataforma: mide insumos, no peso anclado a dato "
+    "real — la parte del costo de capital que es supuesto declarado (beta y prima de riesgo "
+    "de mercado) se cuantifica como rúbrica en la sección de supuestos del informe."
+)
+
 #: `coverage_kind` → su frase de PROCEDENCIA. Es un mapa y no una cadena de `if` para que
 #: agregar una semántica sin su frase FALLE en vez de heredar la de índice en silencio. Lo
 #: vigila `shared/products/tests/test_la_frase_de_cobertura_dice_lo_que_el_eje_mide.py`, que
@@ -89,6 +98,7 @@ FRASES_COBERTURA_PROCEDENCIA = {
     COVERAGE_INDEX: FRASE_COBERTURA_INDICE,
     COVERAGE_INSTRUMENT: FRASE_COBERTURA_INSTRUMENTO,
     COVERAGE_PROJECTION: FRASE_COBERTURA_PROYECCION,
+    COVERAGE_INPUTS: FRASE_COBERTURA_INSUMOS,
 }
 
 
