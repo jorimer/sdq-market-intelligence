@@ -70,27 +70,55 @@ def test_en_el_WORD_va_FORMATO_de_run_y_no_marcado():
 
 # ── A · el rótulo de la portada ─────────────────────────────────────────────────────
 
+def _rotulo_que_llega_a_la_portada(tmp_path, **kw) -> str:
+    """El rótulo que `render_product_pdf` le hace llegar a la portada, por la RUTA real.
+
+    Se espía `_cover` en vez de leer el PDF con `pdftotext`: ese binario está en mi máquina y
+    NO en el runner de CI, así que un test que lo use pasa en local y rompe el build de
+    cualquiera. Es el mismo error que ya costó una corrida con `pypdf`.
+
+    Y se entra por `render_product_pdf`, no por `_cover`: el defecto era justamente que el
+    rótulo NO viajaba —había que pasarlo por tres funciones y faltaba en las tres—, así que
+    llamar al constructor de portada directamente no habría probado nada.
+    """
+    from unittest.mock import patch
+
+    from shared.products import render as R
+
+    visto = {}
+    original = R._cover
+
+    def _espia(title, display_name, period, subtitle, period_label, headline, styles):
+        visto["rotulo"] = period_label
+        return original(title, display_name, period, subtitle, period_label, headline, styles)
+
+    with patch.object(R, "_cover", _espia):
+        R.render_product_pdf(sector_key="x", display_name="X", title="X",
+                             narratives={"s": "cuerpo"}, section_titles={"s": "S"},
+                             output_dir=str(tmp_path), **kw)
+    assert "rotulo" in visto, "la portada no se armó"
+    return visto["rotulo"]
+
+
 def test_la_portada_puede_rotular_su_periodo_por_lo_que_ES(tmp_path):
     """«Período: 2026-09-06» describe mal un corte de información."""
-    from shared.products.render import render_product_pdf
-
-    p = render_product_pdf(
-        sector_key="x", display_name="X", title="X", period="2026-09-06",
-        period_label="Corte", narratives={"s": "cuerpo"}, section_titles={"s": "S"},
-        output_dir=str(tmp_path))
-    texto = _texto_del_pdf(p)
-    assert "Corte: 2026-09-06" in texto, texto[:400]
-    assert "Período: 2026-09-06" not in texto, texto[:400]
+    assert _rotulo_que_llega_a_la_portada(
+        tmp_path, period="2026-09-06", period_label="Corte") == "Corte"
 
 
 def test_el_rotulo_por_defecto_NO_cambia(tmp_path):
     """Los ejes que pasan un período de verdad tienen que seguir diciendo «Período»."""
-    from shared.products.render import render_product_pdf
+    assert _rotulo_que_llega_a_la_portada(tmp_path, period="2026-Q2") == "Período"
 
-    p = render_product_pdf(
-        sector_key="x", display_name="X", title="X", period="2026-Q2",
-        narratives={"s": "cuerpo"}, section_titles={"s": "S"}, output_dir=str(tmp_path))
-    assert "Período: 2026-Q2" in _texto_del_pdf(p)
+
+def test_la_portada_ESCRIBE_el_rotulo_que_recibe():
+    """Que viaje no alcanza: la portada tiene que imprimirlo. Sin PDF ni binarios."""
+    from shared.products.render import _cover, _styles
+
+    textos = " ".join(getattr(f, "text", "") for f in
+                      _cover("X", "X", "2026-09-06", None, "Corte", None, _styles()))
+    assert "Corte:" in textos, textos[:300]
+    assert "Período:" not in textos, textos[:300]
 
 
 def test_el_eje_de_proyecciones_rotula_su_corte():
@@ -99,13 +127,6 @@ def test_el_eje_de_proyecciones_rotula_su_corte():
     from modules.macro_monitor import products_forecast as pf
 
     assert pf.ROTULO_DEL_PERIODO == "Corte"
-
-
-def _texto_del_pdf(path: str) -> str:
-    import subprocess
-
-    return subprocess.run(["pdftotext", "-layout", path, "-"],
-                          capture_output=True, text=True).stdout
 
 
 # ── B · nunca la ruta de la hoja de cálculo ─────────────────────────────────────────

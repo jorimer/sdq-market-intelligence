@@ -972,3 +972,16 @@ capacidad que la herramienta ya tiene.
 tercera —la sección de Desempeño—. Lo encontró el PDF, no el test. Se reemplazó por un barrido
 de todas las `_md_*` del módulo, con su testigo de que encontró algo. Una lista escrita a mano
 protege lo que uno se acordó de poner.
+
+**Apéndice de la misma pasada — un test que depende de un binario de MI máquina.**
+Los dos tests de portada leían el PDF con `pdftotext`. Está en mi Mac por homebrew y **no en
+el runner**: pasaron en local y rompieron el build con `FileNotFoundError`. Es la segunda vez
+en la sesión —antes fue `pypdf`— y la forma es idéntica: instalé una herramienta para
+inspeccionar algo a mano y después la dejé dentro de un test.
+
+La distinción que faltaba: **inspeccionar a mano y verificar en CI son cosas distintas.** Leer
+el PDF con `pdftotext` y mirar la página con `pdftoppm` fue lo que encontró los tres defectos
+y hay que seguir haciéndolo. Lo que no puede es quedar comiteado. El test equivalente espía
+`_cover` desde `render_product_pdf` —la ruta real, que es donde estaba el defecto— y no
+necesita nada instalado. Regla: antes de comitear un test, preguntarse **qué instalé yo para
+que esto ande**.
