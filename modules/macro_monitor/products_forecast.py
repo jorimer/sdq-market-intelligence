@@ -322,6 +322,7 @@ class MacroForecastProduct:
             c = nowcast.cifra_determinada(db, hoy)
             if c is not None:
                 cifra = {"trimestre": c.horizon, "indice": c.indice, "dlog_pct": c.dlog_pct,
+                         "interanual_pct": c.interanual_pct,
                          "es_identidad": True,
                          "diferencia_maxima_historica": c.diferencia_maxima_historica}
         except Exception:  # noqa: BLE001
@@ -633,6 +634,10 @@ def _titular_de(cifra: Optional[Dict[str, Any]],
     """El titular de portada. El «%» salía escrito a mano al lado del punto — la misma
     suposición que en las tablas, en el lugar más visible del documento."""
     if cifra:
+        # El titular cita la INTERANUAL, que es la medida citable del PIB; el índice solo
+        # cuando no hay con qué computarla.
+        if cifra.get("interanual_pct") is not None:
+            return f"{cifra['trimestre']} determinado · {cifra['interanual_pct']:.2f} % interanual"
         return f"{cifra['trimestre']} determinado · índice {cifra['indice']:.3f}"
     if proys:
         d = proys[0]
@@ -674,8 +679,7 @@ def _md_resumen_ejecutivo(p: Dict[str, Any]) -> str:
     partes: List[str] = []
     cif = p.get("cifra_determinada")
     if cif:
-        var = (f", una variación de {cif['dlog_pct']:.2f} % contra el trimestre anterior"
-               if cif.get("dlog_pct") is not None else "")
+        var = _variaciones_del_determinado(cif, decimales=2)
         partes.append(
             f"El trimestre {cif['trimestre']} ya está **determinado**: el índice de volumen "
             f"del PIB es {cif['indice']:.3f}{var}. No es una estimación —es una identidad de "
@@ -733,11 +737,27 @@ _PROPOSITO = (
 )
 
 
+def _variaciones_del_determinado(cif: Dict[str, Any], *, decimales: int,
+                                 negrita: bool = False) -> str:
+    """La interanual primero —la medida citable— y la trimestral al lado, rotulada: es la
+    de la serie ORIGINAL sin desestacionalizar y depende del calendario. El informe del
+    2026-09-06 publicaba solo la trimestral (0,38 %) como si fuera la lectura del trimestre."""
+    b = "**" if negrita else ""
+    partes = []
+    if cif.get("interanual_pct") is not None:
+        partes.append(f"una variación interanual de {b}{cif['interanual_pct']:.{decimales}f} %{b} "
+                      "contra el mismo trimestre del año anterior —la medida citable—")
+    if cif.get("dlog_pct") is not None:
+        partes.append(f"{'y ' if partes else ''}{b}{cif['dlog_pct']:.{decimales}f} %{b} contra "
+                      "el trimestre anterior, que en la serie original sin desestacionalizar "
+                      "depende del calendario y no se lee como crecimiento")
+    return (", " + " ".join(partes)) if partes else ""
+
+
 def _md_nowcast(p: Dict[str, Any]) -> str:
     cif = p.get("cifra_determinada")
     if cif:
-        var = (f", una variación de **{cif['dlog_pct']:.4f} %** contra el trimestre anterior"
-               if cif.get("dlog_pct") is not None else "")
+        var = _variaciones_del_determinado(cif, decimales=4, negrita=True)
         return (
             f"El índice de volumen del PIB de **{cif['trimestre']}** ya está **determinado**: "
             f"**{cif['indice']:.6f}**{var}.\n\n"
