@@ -22,9 +22,10 @@ que espera el trimestre son cosas distintas, y confundirlos es mentir con el ins
 from __future__ import annotations
 
 import math
+import re
 from dataclasses import dataclass
 from datetime import datetime, timezone
-from typing import Any, Dict, List, Optional, Sequence
+from typing import Any, Dict, List, Optional, Sequence, Tuple
 
 from sqlalchemy.orm import Session
 
@@ -236,7 +237,43 @@ def _del_conjunto(db: Session, bt_id: str) -> List[ForecastLog]:
         q = q.filter(ForecastLog.h == paso)
     else:
         q = q.filter(ForecastLog.h.isnot(None))
-    return q.all()
+    return _una_por_horizonte(q.all())
+
+
+def _una_por_horizonte(filas: Sequence[ForecastLog]) -> List[ForecastLog]:
+    """Un trimestre OBJETIVO cuenta una sola vez POR DISTANCIA, con su emisión más TEMPRANA.
+
+    `n_oos` contaba emisiones, no trimestres — y la emisión se dispara en cascada tras cada
+    ingesta canónica, así que un mismo trimestre se re-emite varias veces antes de cerrar:
+    cada corrida en otra fecha escribe una fila, porque `as_of` está en la clave de cinco
+    campos. Medido: cuatro trimestres de evidencia real daban `n_oos = 12`, y el gate —que
+    exige doce— ADMITÍA. Es fabricar track record, que es lo único que este ledger existe
+    para impedir.
+
+    **Y no era solo el conteo.** Con tres filas del mismo trimestre, el error de ESE trimestre
+    pesaba el triple en el RMSE: el promedio quedaba inclinado por cuántas veces corrió una
+    operación.
+
+    **Una re-emisión no es evidencia nueva.** Si viene del mismo bloque es el mismo pronóstico
+    re-sellado: el conjunto de información no cambió. Y si el bloque avanzó, el horizonte
+    RELATIVO cambia —2026-Q3 pasa de h=2 a h=1— y la fila se va sola a otro conjunto. O sea
+    que varias `as_of` para el mismo horizonte dentro de un conjunto implican el mismo bloque.
+
+    Se conserva la MÁS TEMPRANA: el pronóstico como se publicó por primera vez, que es la
+    misma doctrina que ya rige para las revisiones.
+
+    **La clave es (horizonte, distancia), no el horizonte solo.** En el conjunto comodín
+    conviven varias distancias, y 2026-Q3 pronosticado a un trimestre vista y a dos son dos
+    pronósticos DISTINTOS —el segundo se hizo con un bloque que terminaba un trimestre
+    antes—: sí son evidencia separada. Lo que no lo es son dos cortes de la misma distancia.
+    """
+    mejor: Dict[Tuple[str, Optional[int]], ForecastLog] = {}
+    for f in filas:
+        clave = (str(f.horizon), None if f.h is None else int(f.h))
+        previa = mejor.get(clave)
+        if previa is None or str(f.as_of) < str(previa.as_of):
+            mejor[clave] = f
+    return list(mejor.values())
 
 
 def track_record(db: Session, bt_id: str) -> Dict[str, Any]:
@@ -262,10 +299,39 @@ def track_record(db: Session, bt_id: str) -> Dict[str, Any]:
             "overlapping": _se_solapan(filas)}
 
 
-def _se_solapan(filas: Sequence[ForecastLog]) -> bool:
-    """¿Las ventanas de evaluación se solapan? Es ``True`` cuando dos pronósticos del
-    conjunto comparten horizonte con cortes distintos, o cuando el paso entre cortes es menor
-    que el salto entre horizontes. No se corrige el conteo con una fórmula inventada: se
-    DECLARA, que es lo que la casa hace con toda limitación."""
-    horizontes = [f.horizon for f in filas]
-    return len(set(horizontes)) < len(horizontes)
+def _trimestre_ordinal(period: str) -> Optional[int]:
+    """``2026-Q3`` → un entero comparable en trimestres. ``None`` si no es un trimestre."""
+    m = re.fullmatch(r"(\d{4})-Q([1-4])", str(period).strip().upper())
+    return None if m is None else int(m.group(1)) * 4 + int(m.group(2))
+
+
+def _se_solapan(filas: Sequence[ForecastLog]) -> Optional[bool]:
+    """¿Las ventanas de evaluación se solapan? ``None`` cuando no se puede saber.
+
+    La regla es la que el docstring anterior ya declaraba y **nunca se había escrito**: se
+    solapan cuando *el paso entre cortes es menor que el salto entre horizontes*. Es el
+    resultado estándar — pronósticos a `h` pasos emitidos cada `paso` períodos comparten
+    información cuando ``paso < h``, y sus errores quedan autocorrelacionados, así que el `n`
+    no son `n` observaciones independientes.
+
+    Lo único implementado antes era «dos filas comparten horizonte», y eso lo resuelve ahora
+    `_una_por_horizonte` deduplicando: dejar la comprobación vieja habría hecho que esta
+    función devolviera ``False`` siempre y el informe dejara de declarar un caveat que sí
+    declaraba. Apagar un aviso en silencio es peor que el defecto que la deduplicación cura.
+
+    No se corrige el conteo con una fórmula inventada: se DECLARA, que es lo que la casa hace
+    con toda limitación. Y ``None`` no es ``False``: un horizonte que no resuelve a un
+    trimestre no se puede juzgar, y el gate ya rechaza el ``None`` con su motivo — decir que
+    no se solapan afirmaría que se comprobó.
+    """
+    if len(filas) <= 1:
+        return False                      # con una sola fila no hay con qué solaparse
+    pasos = {int(f.h) for f in filas if f.h is not None}
+    if not pasos:
+        return None
+    crudos = [_trimestre_ordinal(str(f.horizon)) for f in filas]
+    if any(o is None for o in crudos):
+        return None
+    ordinales = sorted(o for o in crudos if o is not None)
+    salto = min(b - a for a, b in zip(ordinales, ordinales[1:]))
+    return salto < max(pasos)

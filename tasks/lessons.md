@@ -988,6 +988,22 @@ que esto ande**.
 
 ---
 
+### 2026-09-06 — `n_oos` contaba EMISIONES, no evidencia
+
+- **Síntoma**: un compañero me pasó su proyección de plazos —«el eje vuelve a publicar con 12 pronósticos puntuados, o sea 3 años a emisión trimestral»— y al ir a confirmarla medí otra cosa: **cuatro trimestres de evidencia real dan `n_oos = 12` y el gate admite**. La emisión se dispara en cascada tras cada ingesta y `as_of` está en la clave de cinco campos, así que cada corrida en otra fecha escribe una fila nueva del mismo trimestre objetivo.
+- **Causa raíz**: el conjunto se definió sobre el supuesto de que «un trimestre se pronostica una sola vez a cada distancia» —lo dice el docstring del `backtest_id`— y nadie comprobó que la cadencia de emisión lo respetara. El contador no estaba mal: estaba contando otra cosa que la que el gate creía. Y no era solo el conteo: con tres filas del mismo trimestre, su error pesaba el triple en el RMSE, así que el promedio quedaba inclinado por cuántas veces corrió una operación.
+- **Regla**: un umbral sobre un contador («hacen falta 12 observaciones») exige verificar **qué incrementa ese contador en la operación real**, no en el diseño. Preguntarse: ¿cuántas filas escribe un ciclo completo del sistema, y son todas evidencia independiente? Si el proceso puede re-escribir el mismo hecho con otra clave, el umbral se alcanza sin evidencia.
+- **Disparador**: cualquier gate de la forma `if n >= N`. Simular el ciclo real de la operación que produce `n` —no un caso de test— y contar.
+
+### 2026-09-06 — Deduplicar apagó un aviso que sí se daba
+
+- **Síntoma**: al deduplicar por horizonte, la única regla implementada de `_se_solapan` («dos filas comparten horizonte») se volvió inalcanzable. La función habría devuelto `False` siempre y el informe habría dejado de declarar un solapamiento que hoy declara — sin que ningún test fallara, porque el test que lo cubría estaba escrito sobre el caso que la deduplicación elimina.
+- **Causa raíz**: el arreglo eliminaba la CAUSA que el aviso detectaba, y el aviso quedaba mudo aunque el fenómeno que nombra siga existiendo por otra vía. Su propio docstring declaraba la regla real —«cuando el paso entre cortes es menor que el salto entre horizontes»— y nunca se había escrito.
+- **Regla**: cuando un arreglo hace inalcanzable la condición de un guard, no basta con dejarlo: hay que preguntarse si el FENÓMENO que declara sigue ocurriendo. Si sigue, se codifica la regla que de verdad lo detecta; si no, el guard se borra y se dice por qué. Un guard que no puede dispararse nunca es peor que ninguno: se lee como que el fenómeno no ocurre.
+- **Disparador**: todo arreglo que elimine, filtre o deduplique lo que un guard existente inspecciona. Y la señal barata: un test de guard que hay que reescribir porque su caso ya no se puede construir.
+
+---
+
 ## La vía abierta apuntaba al regulador equivocado, y el documento estaba en la SEC hace un año
 
 **Síntoma.** La vía abierta de Santander Puerto Rico decía: «la vía es el FR Y-9C que la
