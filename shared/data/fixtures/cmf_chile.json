@@ -1,67 +1,81 @@
 {
-  "_nota": "Reporte Mensual de Información Financiera del Sistema Bancario de la CMF de Chile, edición julio 2026, hoja «Indicadores Sistema». Capturado el 2026-09-05 del archivo publicado por el emisor. Los valores están en PORCENTAJE (escala 0-100) tal como la hoja lo declara; el fixture NO los transforma, así que un lector que dejara de normalizar seguiría dando lo mismo — por eso la escala la vigila un test de estructura y no este archivo.",
-  "url": "https://www.cmfchile.cl/portal/estadisticas/617/articles-113057_recurso_1.xlsx",
-  "cncb": "2022",
-  "periodos": [
-    "2025-07-31",
-    "2026-06-30",
-    "2026-07-31"
-  ],
-  "series": {
-    "cartera_deteriorada": [
-      6.086001085772439,
-      5.952954257925226,
-      5.889729083379329
-    ],
-    "colocaciones_var_12m": [
-      0.47716151194939077,
-      0.7801078770204602,
-      -0.17676211600163694
-    ],
-    "eficiencia_operativa": [
-      44.28582064834394,
-      41.08186251479327,
-      43.10207330571235
-    ],
-    "mora_90_colocaciones": [
-      2.2971810158528676,
-      2.402970457483403,
-      2.339895878975645
-    ],
-    "mora_90_comercial": [
-      2.2267961059922756,
-      2.2908509881427137,
-      2.1968812164354663
-    ],
-    "mora_90_consumo": [
-      2.39901259076357,
-      2.4972328030246898,
-      2.3901303044923856
-    ],
-    "mora_90_personas": [
-      2.4310559953818025,
-      2.583315855039137,
-      2.531972950831273
-    ],
-    "mora_90_vivienda": [
-      2.4418688051196007,
-      2.612422328302597,
-      2.579790821415651
-    ],
-    "provisiones_colocaciones": [
-      2.569335698947897,
-      2.527530885071251,
-      2.5276708803312524
-    ],
-    "roaa": [
-      1.344172509365975,
-      1.3978221770452506,
-      1.378923716851748
-    ],
-    "roae": [
-      15.529966768064055,
-      15.743393278304627,
-      15.526495202557916
-    ]
+  "_nota": "Dos reportes de la CMF de Chile, capturados el 2026-09-05 de los archivos publicados por el emisor. Los cortes NO coinciden y eso es real: el reporte mensual va a julio 2026 y la adecuación de capital a junio 2026. Los valores están en PORCENTAJE (escala 0-100) tal como cada hoja lo declara; el fixture no los transforma, así que la escala la vigilan tests de comportamiento y no este archivo.",
+  "reportes": {
+    "indicadores_sistema": {
+      "url": "https://www.cmfchile.cl/portal/estadisticas/617/articles-113057_recurso_1.xlsx",
+      "cncb": "2022",
+      "periodos": [
+        "2025-07-31",
+        "2026-06-30",
+        "2026-07-31"
+      ],
+      "series": {
+        "cartera_deteriorada": [
+          6.086001085772439,
+          5.952954257925226,
+          5.889729083379329
+        ],
+        "colocaciones_var_12m": [
+          0.47716151194939077,
+          0.7801078770204602,
+          -0.17676211600163694
+        ],
+        "eficiencia_operativa": [
+          44.28582064834394,
+          41.08186251479327,
+          43.10207330571235
+        ],
+        "mora_90_colocaciones": [
+          2.2971810158528676,
+          2.402970457483403,
+          2.339895878975645
+        ],
+        "mora_90_comercial": [
+          2.2267961059922756,
+          2.2908509881427137,
+          2.1968812164354663
+        ],
+        "mora_90_consumo": [
+          2.39901259076357,
+          2.4972328030246898,
+          2.3901303044923856
+        ],
+        "mora_90_personas": [
+          2.4310559953818025,
+          2.583315855039137,
+          2.531972950831273
+        ],
+        "mora_90_vivienda": [
+          2.4418688051196007,
+          2.612422328302597,
+          2.579790821415651
+        ],
+        "provisiones_colocaciones": [
+          2.569335698947897,
+          2.527530885071251,
+          2.5276708803312524
+        ],
+        "roaa": [
+          1.344172509365975,
+          1.3978221770452506,
+          1.378923716851748
+        ],
+        "roae": [
+          15.529966768064055,
+          15.743393278304627,
+          15.526495202557916
+        ]
+      }
+    },
+    "solvencia_basilea3": {
+      "url": "https://www.cmfchile.cl/portal/estadisticas/617/articles-113066_recurso_1.xlsx",
+      "periodo": "2026-06",
+      "series": {
+        "apalancamiento_capital_basico": 8.12586722818968,
+        "capital_basico_cet1": 12.2053560828871,
+        "capital_nivel_1": 13.2930437613862,
+        "solvencia_patrimonio_efectivo": 16.944834916122
+      }
+    }
   }
 }

@@ -160,9 +160,11 @@ def descubrir_ediciones(html: str, titulo: str = REPORTE_MENSUAL) -> Dict[str, s
     mes, cuyo ``aria-label`` dice «Descargar Julio 2026 (xlsx…)». De ahí sale el período: es
     la única marca de mes que traen los enlaces.
 
-    **Falla si el título coincide con más de un grupo**, y no es hipotético: la página trae
-    trece reportes y TRES títulos están duplicados —cartera vencida, provisiones y Basilea
-    III aparecen dos veces cada uno—. Elegir el primero sería elegir en silencio.
+    **Un título duplicado falla solo si los grupos apuntan a archivos DISTINTOS.** La página
+    trae trece reportes y tres títulos repetidos —cartera vencida, provisiones y Basilea III—,
+    pero se comprobó edición por edición que los pares resuelven a mapas IDÉNTICOS: el emisor
+    renderiza el mismo contenido bajo dos taxonomías de filtro. Ahí no hay nada que elegir. El
+    peligro que este guard cubre es elegir en silencio entre dos cosas que difieren.
     """
     cabeceras = [
         (m.start(), " ".join(re.sub("<[^>]+>", "", m.group(1)).split()))
@@ -180,12 +182,15 @@ def descubrir_ediciones(html: str, titulo: str = REPORTE_MENSUAL) -> Dict[str, s
     if not elegidos:
         disponibles = [_html.unescape(t) for _, t in cabeceras]
         raise CmfError(f"no hay un reporte titulado {titulo!r}; hay {disponibles}")
-    if len(elegidos) > 1:
+    mapas = [_ediciones_del_bloque(html[cabeceras[k][0]:cortes[k + 1]]) for k in elegidos]
+    if any(m != mapas[0] for m in mapas[1:]):
         raise CmfError(
-            f"{len(elegidos)} reportes se titulan {titulo!r} en la página: no se puede elegir "
-            "sin criterio, y elegir el primero sería elegir en silencio")
+            f"{len(elegidos)} reportes se titulan {titulo!r} y apuntan a archivos DISTINTOS: "
+            "no se puede elegir sin criterio, y elegir el primero sería elegir en silencio")
+    return mapas[0]
 
-    bloque = html[cabeceras[elegidos[0]][0]:cortes[elegidos[0] + 1]]
+
+def _ediciones_del_bloque(bloque: str) -> Dict[str, str]:
     fuera: Dict[str, str] = {}
     for m in re.finditer(
             r'<a\s+href="(articles-\d+_recurso_1\.xlsx)[^"]*"[^>]*'
@@ -317,6 +322,128 @@ def leer_indicadores_sistema(filas: List[List]) -> Dict[str, object]:
     return {"cncb": cncb, "periodos": periodos, "series": series}
 
 
+# ── Adecuación de capital bajo Basilea III ────────────────────────────────────────────
+#: El otro reporte del mismo emisor. Va aparte del mensual porque publica UN MES ATRÁS y
+#: bajo otra norma: el mensual computa sobre el Compendio de Normas Contables y este sobre
+#: la Ley General de Bancos reformada.
+REPORTE_SOLVENCIA = "Adecuación Consolidada de Capital (acorde con lineamientos Basilea III)"
+
+HOJA_SOLVENCIA = "INDICADORES CONSOLIDADO"
+HOJA_COMPONENTES = "CAPITAL REGULATORIO Y ACTIVOS"
+
+#: La fila del SISTEMA. El archivo trae una fila por banco y esas NO se tocan: el boletín
+#: publica agregados nacionales para todo país que no sea RD. Y aunque quisiéramos el
+#: agregado, promediar los ratios por banco daría cualquier cosa —el Bank of China figura
+#: con 288%—: lo correcto es Σ patrimonio / Σ APR, que es justo lo que el emisor ya publica.
+FILA_SISTEMA = "sistema bancario"
+
+#: clave → (columna del ratio publicado, columna del numerador, columna del denominador).
+#: Las dos últimas son de la hoja de componentes y existen para VERIFICAR el ratio, no para
+#: recalcularlo: se publica el número del emisor, y si no coincide con sus propios
+#: componentes el conector se detiene.
+SOLVENCIA: Dict[str, Tuple[int, int, int]] = {
+    "solvencia_patrimonio_efectivo": (3, 13, 19),   # Patrimonio Efectivo / APR
+    "capital_nivel_1": (4, 8, 19),                  # Capital Nivel 1 / APR
+    "capital_basico_cet1": (5, 6, 19),              # Capital Básico / APR
+    "apalancamiento_capital_basico": (6, 6, 15),    # Capital Básico / Activos Totales Reg.
+}
+
+#: Se fusiona con `NOMBRES` más abajo: quien consume el conector busca en UN solo mapa.
+NOMBRES_SOLVENCIA: Dict[str, str] = {
+    "solvencia_patrimonio_efectivo":
+        "Patrimonio efectivo sobre activos ponderados por riesgo (índice de solvencia)",
+    "capital_nivel_1": "Capital nivel 1 sobre activos ponderados por riesgo",
+    "capital_basico_cet1": "Capital básico sobre activos ponderados por riesgo (CET1)",
+    "apalancamiento_capital_basico":
+        "Capital básico sobre activos totales regulatorios (apalancamiento)",
+}
+
+#: Cuánto puede alejarse el ratio publicado de su recómputo, en puntos porcentuales. Los
+#: cuatro coincidieron EXACTO sobre el archivo real (diferencia 0,0000), así que el margen
+#: cubre redondeo del emisor y nada más.
+TOLERANCIA_PP = 0.01
+
+NOMBRES.update(NOMBRES_SOLVENCIA)
+
+_MES_EN_TITULO = re.compile(
+    r"AL\s+MES\s+(?:DE\s+)?(" + "|".join(_MESES) + r")\s+DE\s+(\d{4})", re.I)
+
+
+def periodo_declarado(filas: List[List]) -> Optional[str]:
+    """El período que el ARCHIVO declara en su título («AL MES DE JUNIO DE 2026»).
+
+    Vale más que la etiqueta del índice: el identificador del archivo cambia todos los meses
+    y bajarse el mes equivocado no da ningún error. Cruzar las dos fuentes convierte ese
+    accidente silencioso en una excepción.
+    """
+    txt = " ".join(str(c) for fila in filas[:8] for c in fila if c is not None)
+    m = _MES_EN_TITULO.search(txt)
+    if not m:
+        return None
+    return f"{int(m.group(2)):04d}-{_MESES[m.group(1).lower()]:02d}"
+
+
+def _fin_de_mes(periodo: str) -> str:
+    """``"2026-06"`` → ``"2026-06-30"``. El corte es una FECHA; el mes es una etiqueta."""
+    import calendar
+    anio, mes = (int(x) for x in periodo.split("-"))
+    return f"{anio:04d}-{mes:02d}-{calendar.monthrange(anio, mes)[1]:02d}"
+
+
+def _fila_del_sistema(filas: List[List], hoja: str) -> List:
+    for fila in filas:
+        if len(fila) > 1 and _norm(fila[1]) == FILA_SISTEMA:
+            return fila
+    raise CmfError(
+        f"la hoja «{hoja}» no trae la fila «Sistema Bancario». No se sustituye por un "
+        "promedio de los bancos: promediar ratios no da el ratio del sistema, y con una "
+        "sucursal en 288% el resultado no se parece a nada")
+
+
+def leer_solvencia_basilea3(filas_ind: List[List],
+                            filas_comp: List[List]) -> Dict[str, object]:
+    """Los cuatro indicadores de solvencia del SISTEMA, verificados contra sus componentes.
+
+    Forma: ``{"periodo": "2026-06", "series": {clave: valor}}``.
+
+    La verificación no es de trámite. El emisor publica el ratio y también sus dos términos
+    en millones de pesos, así que se puede comprobar que la cifra que vamos a publicar es la
+    que sale de los números del propio emisor. Si no coincide, o leímos la columna
+    equivocada o el archivo cambió de forma — y las dos cosas se ven igual: una tabla
+    ordenada con una columna que mide otra cosa.
+    """
+    cabecera = " ".join(_norm(c) for fila in filas_ind[:8] for c in fila if c is not None)
+    if "porcentaje" not in cabecera:
+        raise CmfError("la hoja de solvencia dejó de declarar que sus cifras son porcentajes")
+    periodo = periodo_declarado(filas_ind)
+    if not periodo:
+        raise CmfError("la hoja de solvencia no declara a qué mes corresponde")
+
+    sistema = _fila_del_sistema(filas_ind, HOJA_SOLVENCIA)
+    comp = _fila_del_sistema(filas_comp, HOJA_COMPONENTES)
+
+    series: Dict[str, Optional[float]] = {}
+    for clave, (col_ratio, col_num, col_den) in SOLVENCIA.items():
+        publicado = parse_valor(sistema[col_ratio]) if col_ratio < len(sistema) else None
+        if publicado is None:
+            raise CmfError(f"el emisor no publicó {clave} para el sistema en {periodo}")
+        num = parse_valor(comp[col_num]) if col_num < len(comp) else None
+        den = parse_valor(comp[col_den]) if col_den < len(comp) else None
+        if not num or not den:
+            raise CmfError(
+                f"no se pudo verificar {clave}: faltan sus componentes en la hoja "
+                f"«{HOJA_COMPONENTES}»")
+        recomputado = 100.0 * num / den
+        if abs(recomputado - publicado) > TOLERANCIA_PP:
+            raise CmfError(
+                f"{clave} no cuadra con los componentes del propio emisor: publica "
+                f"{publicado:.4f}% y sus términos dan {recomputado:.4f}%. O se leyó la "
+                "columna equivocada o el archivo cambió de forma; en los dos casos publicar "
+                "sería publicar otra cosa con la etiqueta correcta")
+        series[clave] = publicado
+    return {"periodo": periodo, "series": series}
+
+
 # ── El conector ───────────────────────────────────────────────────────────────────────
 LICENSE = ("CMF Chile — reportes financieros publicados para descarga en cmfchile.cl. El "
            "emisor autoriza el uso y la publicación con mención de la fuente MÁS un enlace; "
@@ -352,62 +479,111 @@ class CMFClient(FixtureBackedClient):
     NOTA_PROVISORIA = ("Información provisoria: el emisor declara que puede ser modificada "
                        "en cualquier momento.")
 
+    #: Los indicadores de solvencia se computan bajo OTRA norma que el resto: la Ley General
+    #: de Bancos reformada, que es como Chile implementó Basilea III (el emisor cita «Título
+    #: VII artículos 66, 66 bis, ter, quáter, quinquies y 67», y su APR suma riesgo de
+    #: crédito, de mercado y operacional). No es el artículo 66 original que sirve la API,
+    #: cuyo APRC es solo de crédito. Chile viaja con DOS normas y eso es correcto.
+    NORMA_SOLVENCIA = "CMF Chile — Basilea III (LGB Título VII, arts. 66 y ss.)"
+
+    def norma_de(self, series: str) -> str:
+        """La norma bajo la que se computó ESA serie. Sin esto, una sola etiqueta por país
+        mentiría sobre la mitad de las cifras."""
+        return self.NORMA_SOLVENCIA if series in SOLVENCIA else self.NORMA_CONTABLE
+
     def fetch(self, series: Optional[str] = None, period: Optional[str] = None) -> List[Record]:
         self.check_license()
         datos = self._fetch_live() if self.mode == "live" else self._fetch_fixture()
         return _filtrar(datos, series, period)
 
     # ── Live ──────────────────────────────────────────────────────
-    def _fetch_live(self, edicion: Optional[str] = None) -> List[Record]:  # pragma: no cover
+    def _fetch_live(self) -> List[Record]:  # pragma: no cover - network I/O
         import httpx
-        import openpyxl
 
         cab = {"User-Agent": "Mozilla/5.0 (compatible; sdq-mip/1.0)"}
         # `follow_redirects` no es cosmético: el portal responde 302 y sin seguirlo se baja un
         # HTML de 261 bytes que openpyxl rechaza con un error que no nombra la causa.
         resp = httpx.get(INDICE_REPORTES, timeout=120, follow_redirects=True, headers=cab)
         resp.raise_for_status()
-        ediciones = descubrir_ediciones(resp.text)
-        if not ediciones:
-            raise CmfError(f"ninguna edición de «{REPORTE_MENSUAL}» en {INDICE_REPORTES}")
-        elegida = edicion or max(ediciones)
-        if elegida not in ediciones:
-            raise CmfError(f"no está publicada la edición {elegida}; hay {max(ediciones)}")
+        pagina = resp.text
 
+        mensual = self._libro(pagina, REPORTE_MENSUAL, cab)
+        filas = self._filas(mensual["libro"], HOJA_SISTEMA, 9)
+        indicadores = leer_indicadores_sistema(filas)
+
+        solv = self._libro(pagina, REPORTE_SOLVENCIA, cab)
+        datos_solv = leer_solvencia_basilea3(
+            self._filas(solv["libro"], HOJA_SOLVENCIA, 14),
+            self._filas(solv["libro"], HOJA_COMPONENTES, 22))
+        # El archivo declara su propio mes. Si no coincide con la etiqueta del índice, se
+        # bajó el mes equivocado —el identificador cambia todos los meses y ese accidente no
+        # da ningún error por sí solo—.
+        if datos_solv["periodo"] != solv["edicion"]:
+            raise CmfError(
+                f"el índice ofrecía la edición {solv['edicion']} y el archivo declara "
+                f"{datos_solv['periodo']}: se descargó un mes distinto del pedido")
+
+        return (self._records_indicadores(indicadores, mensual["url"])
+                + self._records_solvencia(datos_solv, solv["url"]))
+
+    def _libro(self, pagina: str, titulo: str, cab: Dict) -> Dict:  # pragma: no cover
+        import io
+
+        import httpx
+        import openpyxl
+
+        ediciones = descubrir_ediciones(pagina, titulo)
+        if not ediciones:
+            raise CmfError(f"ninguna edición de «{titulo}» en {INDICE_REPORTES}")
+        elegida = max(ediciones)
         url = f"https://www.cmfchile.cl/portal/estadisticas/617/{ediciones[elegida]}"
         bruto = httpx.get(url, timeout=300, follow_redirects=True, headers=cab)
         bruto.raise_for_status()
-        import io
-        libro = openpyxl.load_workbook(io.BytesIO(bruto.content), read_only=True,
-                                       data_only=True)
-        if HOJA_SISTEMA not in libro.sheetnames:
-            raise CmfError(f"el libro no trae la hoja «{HOJA_SISTEMA}»: "
-                           f"tiene {libro.sheetnames}")
-        filas = [list(f) for f in libro[HOJA_SISTEMA].iter_rows(max_col=9, values_only=True)]
-        return self._records_de(leer_indicadores_sistema(filas), url)
+        return {"libro": openpyxl.load_workbook(io.BytesIO(bruto.content), read_only=True,
+                                                data_only=True),
+                "url": url, "edicion": elegida}
+
+    @staticmethod
+    def _filas(libro, hoja: str, ncols: int) -> List[List]:  # pragma: no cover
+        if hoja not in libro.sheetnames:
+            raise CmfError(f"el libro no trae la hoja «{hoja}»: tiene {libro.sheetnames}")
+        return [list(f) for f in libro[hoja].iter_rows(max_col=ncols, values_only=True)]
 
     # ── Fixture (offline) ─────────────────────────────────────────
     def _fetch_fixture(self) -> List[Record]:
         fixture = self._load_fixture(self.fixture_file)
-        return self._records_de(fixture, fixture.get("url", ""))
+        reportes = fixture["reportes"]
+        ind = reportes["indicadores_sistema"]
+        solv = reportes["solvencia_basilea3"]
+        return (self._records_indicadores(ind, ind.get("url", ""))
+                + self._records_solvencia(solv, solv.get("url", "")))
 
-    def _records_de(self, datos: Dict, url: str) -> List[Record]:
-        lineage = Lineage(source=self.source, license=self.license, fetched_at=date.today(),
-                          url=url, note=self.NOTA_PROVISORIA)
+    def _lineage(self, url: str) -> Lineage:
+        return Lineage(source=self.source, license=self.license, fetched_at=date.today(),
+                       url=url, note=self.NOTA_PROVISORIA)
+
+    def _records_indicadores(self, datos: Dict, url: str) -> List[Record]:
+        lineage = self._lineage(url)
         periodos = list(datos["periodos"])
         fuera: List[Record] = []
         for clave, valores in sorted(datos["series"].items()):
             for periodo, valor in zip(periodos, valores):
                 fuera.append(Record(
-                    series=clave,
-                    period=periodo,
-                    value=valor,
-                    lineage=lineage,
-                    unit="%",
-                    dimension="CHL",
+                    series=clave, period=periodo, value=valor, lineage=lineage,
+                    unit="%", dimension="CHL",
                     reason=None if valor is not None else "el emisor no publica el dato",
                 ))
         return fuera
+
+    def _records_solvencia(self, datos: Dict, url: str) -> List[Record]:
+        lineage = self._lineage(url)
+        corte = _fin_de_mes(str(datos["periodo"]))
+        return [
+            Record(series=clave, period=corte, value=valor, lineage=lineage,
+                   unit="%", dimension="CHL",
+                   reason=None if valor is not None else "el emisor no publica el dato")
+            for clave, valor in sorted(datos["series"].items())
+        ]
 
 
 def _filtrar(records: List[Record], series: Optional[str],
