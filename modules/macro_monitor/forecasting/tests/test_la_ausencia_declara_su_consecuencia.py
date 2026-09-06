@@ -116,3 +116,24 @@ def test_la_prosa_ya_no_dice_que_el_hueco_NO_se_rellena(p):
     """Decía «se declara, no se rellena». El hueco sí se rellena: se reparte. Que la prosa
     diga lo que hace la aritmética, en la rama que corre y en la que no."""
     assert "no se rellena" not in pf._md_sectorial(p).lower()
+
+
+# ── El signo ────────────────────────────────────────────────────────────────────────
+
+
+def test_la_frase_es_NEUTRA_respecto_del_signo():
+    """Con una brecha negativa el ajuste baja, y la primera versión decía «sube −0,008 pp»:
+    una frase que afirma una dirección contraria a la del número que la acompaña. Lo destapó
+    la muestra curada al reconstruirla —todos mis casos usaban brecha positiva—, que es por
+    qué la muestra tiene que cerrar sola y no ser cifras de adorno.
+    """
+    negativo = _payload(
+        brechas={"comunicaciones": "la serie tiene 2 trimestre(s) sin dato"},
+        sectores=[_sector("comercio", "Comercio", 0.5774, 2.52, 1.66),
+                  _sector("hoteles", "Hoteles, bares y restaurantes", 0.4133, 7.24, 6.38)],
+        brecha_pp=-0.8522, ajuste_pp=-0.8601)
+    md = pf._md_sectorial(negativo)
+    assert "-0.009" in md or "-0.008" in md, md
+    for direccion in ("sube", "subiría", "baja", "bajaría"):
+        assert f"{direccion} **-" not in md and f"{direccion} **+" not in md, (
+            f"la frase afirma una dirección al lado de un número con signo:\n{md}")
