@@ -35,6 +35,8 @@ from typing import List, Optional, Sequence, Tuple
 
 import numpy as np
 
+from shared.registry.signals import backtest_id as clave_de_conjunto
+
 #: Impuesto por el prior conjugado: no se puede tener verosimilitud marginal en forma
 #: cerrada y λ₂ libre a la vez. Se DECLARA en la metodología del reporte.
 LAMBDA2 = 1.0
@@ -302,9 +304,6 @@ class ProyeccionBVAR:
     serie_objetivo: Optional[str] = None
     medida: Optional[str] = None
 
-    def _backtest_id(self) -> str:
-        return f"{self.model_id}|{self._serie()}"
-
     def _serie(self) -> str:
         if not self.serie_objetivo:
             raise ValueError(
@@ -331,10 +330,11 @@ class ProyeccionBVAR:
             Pronostico(h=k + 1, horizonte=self.horizontes[k], punto=self.puntos[k],
                        intervalos=self.intervalos[k], model_id=self.model_id,
                        target_series=serie, measure=self.medida,
-                       # RELATIVO (`+1T`), no el trimestre calendario: el conjunto que
-                       # sostiene el error son los pronósticos a la misma distancia, no los
-                       # de un trimestre concreto — que serían uno solo.
-                       backtest_id=f"{self._backtest_id()}|+{k + 1}T")
+                       # La clave la arma `signals.backtest_id` y no este módulo: acá había
+                       # una copia a mano, y el día que difiriera de la del ledger la meta
+                       # apuntaría a un conjunto vacío y la proyección no anclaría nunca.
+                       backtest_id=clave_de_conjunto(
+                           self.model_id, serie, self.medida, k + 1))
             for k in range(min(HORIZONTES_CON_TRACK_RECORD, len(self.horizontes)))
         ]
 

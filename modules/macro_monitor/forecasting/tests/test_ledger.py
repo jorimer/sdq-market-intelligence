@@ -88,7 +88,7 @@ def test_la_revision_0_sigue_contando_en_el_track_record(db):
     _registrar(db, revision=1, point=101.0)
     _observado(db, "2026-Q1", 99.0)
     ledger.puntuar_pendientes(db)
-    tr = ledger.track_record(db, ledger.backtest_id(MODELO, SERIE, 1))
+    tr = ledger.track_record(db, ledger.backtest_id(MODELO, SERIE, 1, med.LEVEL))
     assert tr["n_oos"] == 1, (
         "la revisión 0 desapareció del track record al aparecer una corrección")
 
@@ -165,7 +165,7 @@ def test_el_track_record_trae_error_y_cobertura_de_LOS_DOS_niveles(db):
         _registrar(db, as_of=as_of, horizon=f"2025-Q{i + 1}")
         _observado(db, f"2025-Q{i + 1}", obs)
     ledger.puntuar_pendientes(db)
-    tr = ledger.track_record(db, ledger.backtest_id(MODELO, SERIE, None))
+    tr = ledger.track_record(db, ledger.backtest_id(MODELO, SERIE, None, med.LEVEL))
     assert tr["n_oos"] == 3
     assert tr["rmse"] > 0
     cobertura = dict((lv, c) for lv, c, _n in tr["interval_coverage"])
@@ -178,7 +178,7 @@ def test_el_track_record_ignora_las_correcciones(db):
     _registrar(db, revision=1, point=99.0)
     _observado(db, "2026-Q1", 99.0)
     ledger.puntuar_pendientes(db)
-    tr = ledger.track_record(db, ledger.backtest_id(MODELO, SERIE, 1))
+    tr = ledger.track_record(db, ledger.backtest_id(MODELO, SERIE, 1, med.LEVEL))
     assert tr["n_oos"] == 1, "una corrección infló el track record"
     assert tr["rmse"] == pytest.approx(1.0), (
         "el track record usó la corrección: mide el pronóstico como se PUBLICÓ")

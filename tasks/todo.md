@@ -1,94 +1,92 @@
-# Que la medida viaje con la proyección, y desplegar — plan
+# La fila del BVAR sin medida — plan
 
-Dos trabajos, en este orden: primero el código, después UN despliegue con las dos cosas.
+## Qué es esa fila, determinado y no supuesto
 
----
+`bvar_minnesota.5v.v1` · `bcrd.xls.pib_2018.serie_original_indice` · horizonte 2026-Q3 ·
+h=2 · as_of 2026-09-05 · revisión 0 · **punto 0,7373** · `measure` NULL.
 
-## 1 · La medida se pierde al salir del ledger
+El punto se leyó de `GET /api/v1/registry/macro_forecast` (la señal proyectada del eje), sin
+generar ningún informe.
 
-`ForecastLog.measure` ya existe (commit `7e9f7328`), pero **muere en la puerta del ledger**.
-`procedencia.meta_de` no la copia y `ProjectionMeta` no tiene dónde ponerla, así que todo lo
-que lee una proyección vuelve a adivinar la unidad. Es el mismo defecto que acabo de cerrar,
-un salto más adelante en la cadena.
+### Evidencia 1 — CRONOLOGÍA (la que cierra el caso)
 
-### Lo que está publicando hoy
+| hecho | UTC |
+|---|---|
+| la cascada de `macro-canonical-sync` escribió la fila | **2026-09-05 11:19:55** |
+| se ESCRIBIÓ el commit que pasa `pib_real` a interanual (`0d5ce2d6`) | 2026-09-05 15:53:40 |
+| se mergeó a main (PR #1117) | 2026-09-05 20:07:51 |
+| primer despliegue posterior al merge | ~2026-09-05 20:30 |
 
-Medido leyendo cada superficie, no supuesto:
+La fila es **4 h 34 min anterior a que el commit existiera**. No hubo ninguna corrida de
+`macro-canonical-sync` entre el despliegue del cambio y mi emisión manual de las 21:52 —el
+`last_run` del sync era el de las 11:19:55—, y mi emisión reportó `skipped_duplicate: 1`, o
+sea que la fila ya estaba. Se produjo con el bloque en **DLOG**: su punto es un `dlog_pct`.
 
-| dónde | qué publica | por qué está mal |
-|---|---|---|
-| `app/products_macro.variable_signals` | `«bcrd.xls.pib_2018.serie_original_indice · proyección 2026-Q3» = 0,38` | el valor es una TASA y la etiqueta nombra una serie que es un ÍNDICE (~133) |
-| `shared/registry/provenance.projection_sentence` | «…con intervalo de 80 % entre 3.1 y 4.7» | dos números sin unidad, y el punto ni aparece |
-| `products_forecast._md_trayectoria` | `f"{d['punto']:.2f} %"` | el «%» está **hardcodeado**: acierta por casualidad, es la misma suposición |
-| `products_forecast._md_escenarios` | ídem | ídem |
-| `_SAMPLE_PAYLOAD` (muestra curada) | `"serie": "pib_real"` | la vidriera del producto enseña el identificador ROTO |
+### Evidencia 2 — la magnitud, computada sobre el dato real de prod
 
-### Dónde tiene que vivir el vocabulario
+Reproduje el modelo con las cinco series de producción, en las dos medidas:
 
-**En `shared/`, no en el módulo.** La prosa (`shared/registry/provenance.py`) y el gate
-(`shared/registry/projection.py`) tienen que interpretarlo, y `shared/` no puede importar de
-un módulo sin invertir la dependencia que el repo declara. Se mueve
-`modules/macro_monitor/forecasting/medida.py` → `shared/data/medida_de_pronostico.py`, al
-lado de `series_nature.py`, que es el mismo concepto un nivel más arriba (la naturaleza de la
-SERIE) y ya justificó vivir ahí.
+| bloque | trimestres | 2026-Q3 | trayectoria |
+|---|---:|---:|---|
+| TRIMESTRAL (`dlog` ×100) | 76 (hasta 2026-Q1) | **1,6892** | −0,87 · 1,69 · 1,14 · 1,08 |
+| INTERANUAL (`yoy` %) | 73 (hasta 2026-Q1) | **5,5672** | 5,32 · 5,57 · 5,37 · 5,11 |
 
-Sin alias de compatibilidad en la ubicación vieja: dos nombres para una cosa es cómo
-empiezan las dos definiciones que se contradicen.
+Ninguna reproduce 0,7373 EXACTO —el dato se movió desde entonces, y los 76 vs 73 trimestres
+confirman el costo de arranque que el propio commit declaró—, pero la separación no admite
+duda: la trayectoria interanual **no baja de 5,11** en ningún horizonte. Y sobre el
+observado, el QoQ promedia +1,13 % (rango reciente −1,60 … +3,08) contra +4,54 % del YoY.
 
-### El arreglo
+## Lo que apareció al ir a estamparla, y es peor
 
-1. **Mover el módulo** y actualizar los cinco importadores.
-2. **`ProjectionMeta.measure`, REQUERIDO**, justo después de `point` — es lo que califica a
-   ese número. Sin default, por la misma razón que en `ledger.registrar`: un default
-   reintroduce la suposición. Rompe los constructores de los tests, y eso es la presión
-   correcta.
-3. **El gate lo exige.** Igual que `n_oos_overlapping is None` es rechazo porque «el
-   solapamiento se declara, no se supone», una proyección cuya unidad no se declaró no puede
-   anclar una afirmación. Rechaza también un valor fuera del vocabulario.
-4. **`procedencia.meta_de` la copia** de `fila.measure`.
-5. **Las cinco superficies**, todas, o el documento se contradice según por dónde salga:
-   la prosa compartida, la etiqueta del registro, las dos tablas del producto (que dejan de
-   hardcodear «%») y el titular. Y la muestra curada deja de enseñar `pib_real`.
+**El `backtest_id` NO incluye la medida.** Es
+`{model_id}|{target_series}|+{h}T`, y `_del_conjunto` filtra por model_id, serie, revisión,
+estado y `h`. Comprobado: la fila vieja (trimestral) y las que el BVAR emite hoy
+(interanuales) caen en **el mismo conjunto**.
 
-### Tests, contra el código viejo primero
+O sea que estampar la medida y no tocar nada más cambia una brecha VISIBLE —una fila listada
+como impuntuable— por una corrupción INVISIBLE: un RMSE que promedia el error de una tasa
+trimestral con el de tasas interanuales, publicado en la sección de desempeño como si fuera
+un solo número. Es «solo se ordena lo comparable» exactamente: un score armado sobre otra
+unidad no rankea contra el resto.
 
-- La etiqueta del registro y la frase de procedencia NOMBRAN la unidad (fallan hoy).
-- El gate rechaza una proyección sin medida y una con medida inventada (falla hoy: admite).
-- **Paridad de unidad**: ninguna superficie escribe `%` por su cuenta — se computa de la
-  medida. Estructural, con `getsource`, porque es un literal y un literal vuelve.
-- El `_SAMPLE_PAYLOAD` declara la medida y una serie que EXISTE, verificado contra el mismo
-  código que resuelve la del bloque.
+**No es hipotético y no depende de esta fila.** Cualquier motor que cambie su transformación
+—que es lo que acaba de pasar— parte su propio track record en dos poblaciones y las promedia
+sin que nada avise.
 
----
+## El arreglo
 
-## 2 · Desplegar y verificar en prod
+### 1 · La medida entra en la identidad del conjunto
 
-Va DESPUÉS del punto 1: dos despliegues para el mismo arreglo es un despliegue de más, y
-cada uno dispara ~30 syncs.
+`backtest_id` pasa a `{model_id}|{target_series}|{measure}|+{h}T`. La definición se muda a
+`shared/registry/signals.py`, al lado del campo que documenta el formato, porque hoy hay DOS
+constructores —`ledger.backtest_id` y `bvar.ProyeccionBVAR._backtest_id`— y una copia a mano
+de un serializador ya borró la tasa de 38 entidades en este repo. Consumidores:
+`_del_conjunto` (que además filtra por medida), `desempeno.filas` (que agrupa por ella) y
+`procedencia.meta_de`.
 
-1. `git push -u origin claude/heuristic-payne-083d13` + `gh pr create --base main`.
-2. Esperar los TRES checks (`backend-test`, `frontend-build`, `docker-build`) y
-   `gh pr merge <n> --merge`. Si falla con «3 of 3 required status checks are expected»
-   estando en verde, la rama quedó atrás de main → actualizar y reintentar.
-3. **Comprobar QUÉ COMMIT sirve antes de verificar nada**, y por CONTENENCIA, no por
-   igualdad — otra sesión puede mergear en paralelo y ganar el deploy:
-   ```
-   c=$(curl -s $PROD/api/v1/health | jq -r .deployment.commit)
-   git merge-base --is-ancestor <mi-sha> "$c"
-   ```
-   Tres estados, no dos: clave `deployment` ausente = código viejo; presente con `null` =
-   nuevo sin sello; con SHA = cotejable.
-4. La migración `d1e6f3a9c7b2` corre en el arranque del contenedor y aplica el backfill.
-   **Ojo**: un deploy atascado YA migró la base aunque no sirva tráfico.
-5. Verificar el CAMBIO DE ESTADO, no la ausencia de error. Línea base de HOY, tomada antes
-   de tocar nada, en `GET /api/v1/products/readiness` → `macro_forecast` → `pulse` → `g1`:
-   **«1 proyección(es) vigente(s); 0 conjunto(s) con backtest puntuado»**. Después del
-   despliegue, la fila del BVAR tiene que dejar de ser huérfana: se comprueba pidiendo la
-   serie a la que apunta y viendo que existe.
-6. Correr `macro-canonical-sync` (que encadena la puntuación) y leer `forecasts_scored`.
-   **No va a subir de 0 hasta que el BCRD publique 2026-Q3** —el trimestre cierra el 30 de
-   septiembre y el PIB tiene 60 días de rezago—, así que lo que se verifica hoy es que las
-   filas dejaron de ser IMPUNTUABLES, no que se puntuaron. Decirlo así y no confundir las dos.
+Con esto, la fila vieja forma su propio conjunto de n=1: no ancla —correcto, el modelo
+cambió— y **no contamina** el del modelo vigente.
+
+### 2 · Recién entonces, la fila se estampa
+
+Migración con la evidencia adentro, acotada a lo que se probó:
+`measure is null` **y** `model_id like 'bvar_minnesota.%'` **y** la serie del PIB **y**
+`as_of <= '2026-09-05'`. El `measure is null` ya implica «escrita antes de que el arreglo se
+desplegara»; la cota de `as_of` está para que la afirmación quede verificable y para que la
+migración no diga nada sobre una fila que alguien inserte después.
+
+### 3 · Verificar en prod
+
+Que la señal del registro deje de decir «unidad sin declarar» y que el readiness deje de
+contar `1 SIN PODER PUNTUARSE`. Recomputar readiness ANTES de leerlo.
+
+## Tests, contra el código viejo primero
+
+- **El que importa**: dos filas del mismo modelo, mismo horizonte relativo y misma serie, con
+  MEDIDAS distintas, no caen en el mismo `track_record`. Hoy caen, y el RMSE las promedia.
+- Los dos constructores de `backtest_id` (ledger y bvar) dan la MISMA cadena.
+- `desempeno` publica un renglón por medida, no uno mezclado.
+- La migración estampa esa fila y no toca ninguna otra.
 
 ## Los tres gates
 

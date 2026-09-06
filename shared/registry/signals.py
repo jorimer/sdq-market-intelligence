@@ -122,7 +122,9 @@ class ProjectionMeta:
     measure: str
     #: ``((nivel, lo, hi), …)`` — p.ej. ``((0.80, 3.1, 4.7), (0.90, 2.6, 5.2))``
     intervals: Tuple[Tuple[float, float, float], ...]
-    backtest_id: str         # "{model_id}|{target_series}|{horizon}"
+    #: La clave del CONJUNTO de pronósticos comparables. La arma `backtest_id()`, unas
+    #: líneas más abajo — no se compone a mano en ningún lado.
+    backtest_id: str
     oos_error: float         # error fuera de muestra del backtest citado
     error_metric: str        # "rmse" | "mae" — nombrada, nunca inferida
     n_oos: int               # observaciones fuera de muestra que sostienen ese error
@@ -133,6 +135,42 @@ class ProjectionMeta:
     n_oos_overlapping: Optional[bool]
     #: ``((nivel, cobertura_observada, n), …)`` — la calibración empírica del intervalo.
     interval_coverage: Tuple[Tuple[float, float, int], ...] = ()
+
+
+def backtest_id(model_id: str, target_series: str, measure: str,
+                h: Optional[int]) -> str:
+    """La clave del conjunto sobre el que se computa el error de un modelo.
+
+    **Un solo constructor, y vive acá.** Había dos —el ledger y el motor del BVAR— armando la
+    misma cadena por su cuenta; una copia a mano de un serializador ya borró la tasa de 38
+    entidades en este repo, y si estas dos divergen la meta apunta a un conjunto vacío y la
+    proyección no ancla nunca. Vive en `shared/` y no en el módulo porque `ProjectionMeta`
+    —el tipo que la transporta— vive acá.
+
+    Los cuatro campos, y cada uno está porque su ausencia rompió algo:
+
+    * **`h` es el horizonte RELATIVO**, no el trimestre calendario. Con el calendario, cada
+      conjunto tiene UNA observación —un trimestre se pronostica una vez a cada distancia— y
+      `n_oos` nunca llega al mínimo del gate. Medido: doce trimestres emitidos a un trimestre
+      vista y puntuados dan `n_oos = 1` con el calendario y **12** con el relativo.
+    * **`measure`**, porque un modelo puede cambiar de unidad y partir su propio track record
+      en dos poblaciones. Pasó: el bloque del BVAR pasó de variación trimestral a interanual
+      el 2026-09-05, y sin este campo el pronóstico de esa mañana (trimestral) y los de esa
+      tarde (interanuales) caían en el mismo conjunto. Medido sobre dos filas con errores de
+      0,50 y 4,00, el RMSE publicado era **2,850** — que no es el error de ninguno de los
+      dos. Es «solo se ordena lo comparable» sobre el eje del tiempo.
+
+    Con *h* en ``None`` abarca TODOS los horizontes de ese modelo y esa medida, que mezcla
+    pronósticos de dificultad distinta: sirve para un total, no para juzgar calibración.
+    Mezclar dificultades es una decisión declarada; mezclar unidades es un error, y por eso
+    la medida NO tiene comodín.
+
+    ``h is not None``, no ``if h``: el nowcast apunta al trimestre EN CURSO y su horizonte
+    relativo es CERO, que es falsy. Con ``if h`` habría caído al comodín y su track record se
+    habría mezclado con el de los horizontes largos.
+    """
+    paso = f"+{h}T" if h is not None else "*"
+    return f"{model_id}|{target_series}|{measure}|{paso}"
 
 
 @dataclass(frozen=True)
