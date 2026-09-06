@@ -1,5 +1,19 @@
 # Encargo de investigación · Panel de transacciones bancarias RD/Caribe
 
+> **Séptima actualización. SANTANDER PUERTO RICO PASA A BASE CONTABLE: NUEVE COMPARABLES.**
+> No hizo falta el FR Y-9C —esa premisa no estaba verificada y era dudosa: lo presentan las
+> tenedoras de primer nivel, y Santander BanCorp colgaba de Santander Holdings USA—. El
+> documento estaba en la SEC desde noviembre de 2020: el comprador archivó como exhibits del
+> 8-K/A los estados de la **propia adquirida**, auditados a diciembre 2019 e interinos a
+> junio 2020. Patrimonio consolidado de la tenedora al 30-jun-2020: **US$1.190.926 miles**,
+> literal, con el comparativo de diciembre idéntico al auditado. Múltiplo sobre libro:
+> **1,07×** (era 1,005× sobre valor razonable). Los dos carve-outs que el contrato exigía ya
+> estaban fuera de ese balance. Y queda medida, aproximada, una segunda cuña entre bases:
+> **+6,75 %**, contra el +15,0 % de OFG.
+>
+> El error de alcance que la vía anterior advertía se confirma con número: sobre el banco
+> solo (Call Report, US$1.013.608 miles) el múltiplo daría 1,26×.
+
 > **Sexta actualización. DOS VÍAS ABIERTAS SE CERRARON, Y EL CONTADOR NO SE MOVIÓ.**
 > El panel pasó de once casos verificables a **trece**: entraron Intercommercial Bank
 > (Trinidad y Tobago, 2013) y Scotiabank Belize (2021), los dos con nota auditada y con las
