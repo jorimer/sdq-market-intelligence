@@ -52,7 +52,10 @@ def cmf_sync(db: Session, set_phase: Optional[Callable[[str], None]] = None,
         fila.value = r.value
         fila.license = r.lineage.license if r.lineage else client.license
         fila.fetched_at = r.lineage.fetched_at if r.lineage else date.today()
-        fila.norma_contable = client.NORMA_CONTABLE
+        # DOS normas en el mismo país, y a propósito: la solvencia se computa bajo la Ley
+        # General de Bancos reformada (Basilea III) y el resto bajo el Compendio de Normas
+        # Contables. Una sola etiqueta por país mentiría sobre la mitad de las cifras.
+        fila.norma_contable = client.norma_de(r.series)
         fila.meta = {
             "unit": r.unit,
             # El SUJETO viaja con el número. Sin esto el modelo lee «consumo: 2,39 %» y no

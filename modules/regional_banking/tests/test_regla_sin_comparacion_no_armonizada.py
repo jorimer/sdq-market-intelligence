@@ -123,7 +123,11 @@ class TestContraElBoletinReal:
         # Cada bloque declara su norma: el sujeto viaja con el número.
         for bloque in contexto["bloques_por_pais"]:
             assert bloque["norma_contable"]
-            assert bloque["corte"]
+            # Un RANGO, no un corte único: dentro de un país los cortes difieren (en Chile la
+            # adecuación de capital va un mes atrás del reporte mensual) y un valor solo
+            # invitaba a fechar todas las cifras con el más reciente.
+            assert bloque["corte_mas_reciente"] and bloque["corte_mas_antiguo"]
+            assert bloque["corte_mas_antiguo"] <= bloque["corte_mas_reciente"]
 
     def test_la_seccion_armonizada_solo_trae_EMFA(self, db_regional):
         contexto = contexto_armonizado(db_regional)
