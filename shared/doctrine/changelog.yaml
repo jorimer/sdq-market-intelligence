@@ -57,6 +57,31 @@ cambios:
         Ke». No se midió sobre el padrón de producción porque al publicar ningún nivel del eje
         estaba activado; el efecto real se lee en el panel al activarlo.
     pr: 1141
+  - id: 2026-09-05-reconciliacion-sectorial-en-la-misma-medida
+    fecha_efectiva: "2026-09-05"
+    sectores: [macro_forecast]
+    titulo: "La reconciliación sectorial resta crecimientos en la misma medida"
+    que_cambio: >-
+      La lectura sectorial del informe de proyecciones reconcilia el agregado de los sectores
+      contra la proyección del PIB restando dos cifras en la MISMA medida: variación
+      interanual contra variación interanual. Antes restaba la variación trimestral del
+      bloque a los crecimientos interanuales del panel sectorial, y publicaba la diferencia
+      como «brecha de reconciliación». La medida del agregado viaja ahora con la cifra y la
+      reconciliación rechaza dos medidas distintas en vez de restarlas.
+    por_que: >-
+      Una magnitud que se resta viaja con su medida. La conversión de unidades entre una tasa
+      trimestral y una interanual se publicaba como si fuera un hallazgo sobre los sectores,
+      y ese hallazgo daba vuelta el signo del ajuste de la mayoría de ellos. Fue lo que
+      destapó, el mismo día, el cambio de unidad de la proyección del PIB que registra la
+      entrada 2026-09-06-proyeccion-del-pib-interanual-y-track-record-por-medida.
+    impacto:
+      medido_al_publicar: >-
+        Sobre el informe vigente al 2026-09-05, la «brecha de reconciliación» publicada era de
+        −3,536 puntos porcentuales y era íntegramente conversión de unidades; con la misma
+        medida en las dos puntas, ocho de los dieciocho sectores cambian el signo de su ajuste
+        reconciliado y ninguno de los dieciocho queda con crecimiento reconciliado negativo
+        con la proyección de 5,5672 % interanual para 2026-Q3.
+    pr: 1117
   - id: 2026-09-06-proyeccion-del-pib-interanual-y-track-record-por-medida
     fecha_efectiva: "2026-09-06"
     sectores: [macro_forecast]
