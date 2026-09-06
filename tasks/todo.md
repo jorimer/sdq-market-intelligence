@@ -43,7 +43,14 @@ un corte sin utilidad no vale cero; el selector ofrece solo entidades con ventan
 cortes trimestrales en los cuatro archivos que valúan; tres exentos con motivo. **Cambia toda
 valuación real en prod** (decisión del dueño 2026-09-06: arreglar primero).
 
-## Cierre 1 · Macro e industria (`SECCION_ENTORNO = "entorno_macro_e_industria"`)
+## Cierre 1 · Macro e industria (`SECCION_ENTORNO = "entorno_macro_e_industria"`) — HECHO
+
+Rama `claude/vl-10-entorno-macro-e-industria`, apilada sobre el cierre 0. Dos cambios respecto
+del plan: (a) el comparador de industria es el **RESTO del tipo**, no el total — una entidad que
+es el 75 % de su tipo contra el total siempre sale «en línea» (`comparar contra el resto, no
+contra el total`); (b) el bloque viaja en el PAYLOAD (`entorno.a_dict`) para que la prosa no
+recompute y el informe en caché diga el entorno con el que se valuó. La Rf que se cita es la de
+la lectura, no una relectura de la curva.
 
 **Va entre §3 La entidad y §4 Análisis financiero** (insight y deep dive), que es donde un
 lector espera el contexto antes de los números de la entidad.
