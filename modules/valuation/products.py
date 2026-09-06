@@ -37,6 +37,15 @@ from shared.products import (
 from shared.products.contract import EstadoBacktest
 from shared.products.render import render_product_pdf
 
+
+#: Los archivos que entran en la HUELLA de la caché de narrativas. Este producto redacta con
+#: CÓDIGO (`prosa_computada`), así que su «contexto» no es solo `ai_context.py`: es también
+#: el archivo que arma el texto. Sin declararlo, cambiar la prosa dejaba el fingerprint
+#: IDÉNTICO —medido— y la caché, que no tiene TTL, seguía sirviendo el texto viejo
+#: indefinidamente. Lo vigila
+#: `shared/products/tests/test_ningun_producto_sin_huella_de_contexto.py`.
+AI_CONTEXT_FILES = ("ai_context.py", "products.py")
+
 logger = logging.getLogger("sdq.products.valuation")
 
 SECTOR_KEY = "valuation"
