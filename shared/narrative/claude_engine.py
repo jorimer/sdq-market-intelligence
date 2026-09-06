@@ -586,6 +586,14 @@ THIN_TEMPLATES = {
         "Titulá con lo que cambió en el trimestre, no con el nivel. Declará el corte que "
         "estás leyendo.\n\n"
         "No recalcules ninguna cifra: todas vienen resueltas."
+        "**Copiá las cifras COMO VIENEN ESCRITAS.** Donde el contexto trae un bloque de "
+        "cifras ya escritas —`promedios_sistema_texto`, `grupos_de_pares_texto`— usá esa "
+        "forma literal: el separador de miles y los decimales ya están resueltos en la "
+        "convención del documento. No la reformatees ni la redondees por tu cuenta.\n\n"
+        "**NO cites umbrales de memoria.** Si el contexto trae `como_leer_el_hhi` u otro "
+        "bloque de interpretación, usá SOLO esos cortes. Un umbral recordado es un umbral "
+        "que nadie verificó, y las bandas de uso general pueden no ser las que esta "
+        "plataforma usa.\n\n"
     ),
     "boletin_sistemas": (
         "Escribí el recorrido por los sistemas bancarios de la región.\n"
