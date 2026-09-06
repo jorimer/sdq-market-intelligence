@@ -118,7 +118,7 @@ def resumen_del_valor(lec: Lectura) -> str:
         f"{lec.moneda}, contra un patrimonio libro de **{lec.patrimonio_libro:,.0f}**. El "
         f"múltiplo P/B implícito va de **{lec.pb_bajo:.2f}× a {lec.pb_alto:.2f}×**, y es "
         f"**derivado**: sale del valor, no lo produce.{cruza}\n\n"
-        f"El **{lec.fraccion_de_rubrica:.0%}** del costo de capital descansa en supuestos de "
+        f"El **{lec.fraccion_de_rubrica * 100:.0f} %** del costo de capital descansa en supuestos de "
         "comparables —la beta y la prima de riesgo de mercado— y no en dato dominicano "
         "observado. Se dice porque cambia cuánto pesa la conclusión.")
 
@@ -458,7 +458,7 @@ def fuentes_y_procedencia(lec: Lectura) -> str:
         # La fila se NOMBRA, no se señala por posición: decía «la última fila» y al entrar el
         # panel de transacciones al final de la tabla la frase pasó a señalar otra cosa. Lo
         # encontró leer el PDF, no un test.
-        f"El **{lec.fraccion_de_rubrica:.0%}** del costo de capital descansa en la fila de "
+        f"El **{lec.fraccion_de_rubrica * 100:.0f} %** del costo de capital descansa en la fila de "
         "beta y prima de riesgo de mercado. Es la parte del resultado que no se apoya en dato "
         "dominicano observado, y por "
         "eso se publica el rango completo en vez de un punto.\n\n"
