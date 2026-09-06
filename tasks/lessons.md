@@ -890,3 +890,46 @@ ocupada? Si la respuesta es no, el instrumento está mal elegido.
 - **Causa raíz**: estaba buscando la respuesta solo DENTRO del registro. Pero el momento de escritura sí queda grabado en otros lados: el `last_run` de la operación que la escribió, el `%cd` del commit que introdujo el cambio, el `merged_at` del PR y la lista de despliegues. Cruzarlos dio una respuesta con margen de **cuatro horas y media** — la fila es anterior a que el commit existiera.
 - **Regla**: antes de declarar un dato indeterminable, cruzar los relojes que sí hay: `last_run` de la operación, fecha del commit (`git log --format='%cd'`), `merged_at` del PR, `railway deployment list`. Y corroborar con una segunda línea independiente —acá, reproducir el modelo con el dato real y ver que la trayectoria de la otra hipótesis ni se acerca—. Una sola línea es una inferencia; dos que no comparten supuesto son una determinación.
 - **Disparador**: «no se puede saber con qué versión se produjo esta fila». Casi siempre sí se puede: el hecho no está en la fila, está en el reloj.
+
+---
+
+## Probé la función y no la RUTA, y el informe real lo destapó en veinte minutos
+
+**Síntoma.** Un informe generado en producción publicó, en el mismo `std_methodology`:
+
+> **Cobertura:** 50% de lo que este eje publica está sostenido por un pronóstico admisible…
+> **Procedencia por variable:** 50% **del peso de este índice se sostiene en dato real**…
+
+La primera frase es la del eje de pronóstico —la que acababa de escribir— y la segunda es la
+de ÍNDICE, o sea exactamente la afirmación falsa que ese trabajo existía para eliminar. Las
+dos, en la misma página, sobre el mismo eje.
+
+**Causa raíz.** `report_sections._provenance_md` arma un `AxisRegistry` efímero desde
+`variable_signals()` y **no le pasaba el `coverage_kind` que ese mismo diccionario trae**.
+Caía al default de índice. Afectaba también al eje de leyes, que declara
+`COVERAGE_INSTRUMENT` y lo perdía igual.
+
+**Por qué mis tests no lo vieron, que es lo que importa.** Todos construían el `AxisRegistry`
+**a mano**, con la semántica ya puesta:
+
+```python
+eje = AxisRegistry(..., coverage_kind=raw.get("coverage_kind") or COVERAGE_INDEX)
+assert "50%" in coverage_sentence(eje)
+```
+
+Eso verifica `coverage_sentence`. **No verifica que alguien le pase la semántica**, que era el
+defecto. El test hacía a mano justamente el paso que el código de producción se salteaba —
+así que el arreglo de una superficie quedó probado mientras la otra publicaba lo falso.
+
+Es la regla que ya estaba escrita en el CLAUDE.md —«un test del motor NO es un test de la
+ruta», con cinco defectos previos de la misma forma— y la repetí en el mismo trabajo en el que
+estaba arreglando otra instancia de «un guard existe en un motor y falta en el otro».
+
+**Regla futura.** Cuando el arreglo consiste en que un dato VIAJE de un lado a otro, el test
+tiene que entrar por **el llamador más externo que exista** —acá `standard_sections`, que es
+por donde pasa el informe— y nunca construir el objeto intermedio. Construirlo a mano es
+declarar como cumplida la precondición que se está probando.
+
+**Y el hallazgo sobre el método.** Esto no lo encontró ningún test: lo encontró **generar el
+informe real en producción y leerlo**. Cuando el entregable es un documento, leer el
+documento no es una verificación de más — a veces es la única que mira lo que el cliente ve.
