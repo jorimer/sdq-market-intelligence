@@ -631,6 +631,10 @@ THIN_TEMPLATES = {
         "'nombre' dice QUÉ mide: usalo, porque una clave como 'mora_90_consumo' sin su "
         "nombre se lee como «consumo» a secas y el lector no sabe si es el saldo, la mora o "
         "la provisión de esa cartera.\n\n"
+        "**Copiá las cifras COMO VIENEN ESCRITAS.** Donde el contexto trae `valor_texto` "
+        "—o un bloque de promedios ya escritos— usá esa forma literal: el separador de "
+        "miles y los decimales ya están resueltos en la convención del documento. No la "
+        "reformatees ni la redondees por tu cuenta.\n\n"
         "No recalcules ninguna cifra: todas vienen resueltas."
     ),
     "boletin_armonizado": (
@@ -646,6 +650,10 @@ THIN_TEMPLATES = {
         "'comparable_entre_paises': si dice falso, no la compares.\n\n"
         "Decí de dónde sale la comparabilidad —una frase basta— para que el lector entienda "
         "por qué acá sí y en la sección anterior no.\n\n"
+        "**Copiá las cifras COMO VIENEN ESCRITAS.** Donde el contexto trae `valor_texto` "
+        "—o un bloque de promedios ya escritos— usá esa forma literal: el separador de "
+        "miles y los decimales ya están resueltos en la convención del documento. No la "
+        "reformatees ni la redondees por tu cuenta.\n\n"
         "No recalcules ninguna cifra: todas vienen resueltas."
     ),
     "anio_del_sistema": (
