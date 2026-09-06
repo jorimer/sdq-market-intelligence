@@ -1103,3 +1103,23 @@ adquirente —J$110,54/US$ al centavo—. Tres cocientes iguales identifican la 
 - **Regla**: cuando un mecanismo de invalidación se diseñó alrededor de un supuesto («el texto lo escribe el modelo, con este contexto»), verificar qué pasa con los casos que NO cumplen ese supuesto. Acá se cierra declarando el propio archivo en `AI_CONTEXT_FILES` —el mecanismo ya existía— y con un guard que lo exige para todo producto de prosa computada. Con dos instancias, la lección escrita no alcanza.
 - **Disparador**: agregar un producto con `prosa_computada=True`, o cualquier caché cuya huella se arme a partir de una lista de archivos declarada. Preguntar: ¿qué archivo, si lo cambio, debería invalidarla y no está en la lista?
 - **Coda del mismo día**: otra sesión encontró el defecto en su producto por su cuenta y lo resolvió MEJOR — lista canónica en `ai_context.py` re-exportada desde `products.py`, cubriendo cuatro archivos en vez de dos. Al mergear, mi literal quedó DEBAJO de su import y lo tapaba, dejando dos archivos fuera de la huella: un merge sin conflicto que empeoraba el estado, detectado solo porque su test falló. Cuando dos ramas arreglan lo mismo, la que llega segunda borra lo suyo y adopta lo otro — no lo mergea al lado.
+
+---
+
+## Dos secciones con el MISMO texto no fallan: se leen como dos secciones (2026-09-06)
+
+El Deep Dive de valuación traía trece secciones y dos eran idénticas: `SECCION_SUPUESTOS:
+metodologia` en `_secciones_computadas`, un alias puesto el día que se creó el nivel y que
+nadie volvió a mirar. El test de completitud exigía que cada sección EXISTIERA y tuviera más de
+200 caracteres — y una copia cumple las dos cosas. Se vio solo leyendo el PDF real de punta a
+punta contra una estructura externa (las diez secciones que se pidieron), no corriendo tests.
+
+Y la muestra publicaba un Ke de 12,4–14,9 %: 2,5 pp de ancho, que el motor no puede producir
+porque solo β × ERP abre 3,375 pp. Nadie cruzó la muestra contra la identidad del método.
+
+**Regla:** en un informe con N secciones, un test que exige `narr[a] != narr[b]` para cada
+par cuesta una línea y caza el alias. Y una muestra curada tiene que ser PRODUCIBLE por el
+motor: si publica `Ke`, cruzar `Ke = Rf + β × ERP` en los dos extremos. Los parámetros que
+produjeron una cifra viajan en el payload (`rf_pct`, `beta`, `erp`, `n_observaciones_rf`),
+no se leen de constantes al renderizar: un informe en caché tiene que decir la beta con la que
+se valuó, no la que rige hoy.

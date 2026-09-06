@@ -116,6 +116,13 @@ class Lectura:
     #: La persistencia del exceso, MEDIDA por tipo. Gobierna el terminal: con ω < 1 el
     #: exceso se erosiona y el terminal queda acotado por los dos lados.
     persistencia: float = 0.0
+    #: Los TÉRMINOS del Ke que produjeron esta cifra, para que la sección de supuestos los
+    #: publique tal cual fueron y no como constantes leídas al renderizar: un informe en
+    #: caché tiene que decir la beta con la que se valuó, no la que rige hoy.
+    rf_pct: Tuple[float, float] = (0.0, 0.0)
+    beta: Tuple[float, float] = (0.0, 0.0)
+    erp: Tuple[float, float] = (0.0, 0.0)
+    n_observaciones_rf: int = 0
 
     @property
     def destruye_valor(self) -> bool:
@@ -150,7 +157,8 @@ def valuar_entidad(db: Session, *, bank_id: str, nombre: str) -> Optional[Lectur
     if roe is None or not historia.patrimonio:
         return None
     tipo = _tipo_de(db, bank_id)
-    ke = cc.calcular(db, beta=pt.beta_de(tipo))
+    beta = pt.beta_de(tipo)
+    ke = cc.calcular(db, beta=beta)
     if ke.alto <= 0:
         return None
     retencion = pt.retencion_de(tipo)
@@ -198,11 +206,21 @@ def valuar_entidad(db: Session, *, bank_id: str, nombre: str) -> Optional[Lectur
         advertencias=tuple(avisos),
         serie_spread=serie,
         tipo_de_entidad=tipo or "",
+        rf_pct=_rf_de(ke), beta=beta, erp=cc.ERP, n_observaciones_rf=ke.n_observaciones_rf,
         retencion=retencion,
         g_terminal_pct=g,
         evidencia_del_tipo=pt.evidencia_de(tipo),
         persistencia=pt.persistencia_de(tipo),
     )
+
+
+def _rf_de(ke: cc.CostoDeCapital) -> Tuple[float, float]:
+    """El único término REAL del Ke, con su rango. Se lee de la descomposición y no se
+    recomputa: dos cálculos del mismo hecho se desincronizan."""
+    for t in ke.terminos:
+        if not t.es_rubrica:
+            return (t.bajo, t.alto)
+    return (0.0, 0.0)
 
 
 def a_payload(lec: Lectura) -> Dict[str, Any]:
@@ -234,6 +252,10 @@ def a_payload(lec: Lectura) -> Dict[str, Any]:
             "g_terminal_pct": lec.g_terminal_pct,
             "evidencia_del_tipo": lec.evidencia_del_tipo,
             "horizonte_anios": HORIZONTE,
+            "rf_pct": [lec.rf_pct[0], lec.rf_pct[1]],
+            "beta": [lec.beta[0], lec.beta[1]],
+            "erp": [lec.erp[0], lec.erp[1]],
+            "n_observaciones_rf": lec.n_observaciones_rf,
         },
         "serie_spread": [{"periodo": p, "roe_pct": r} for p, r in lec.serie_spread],
         "advertencias": list(lec.advertencias),
