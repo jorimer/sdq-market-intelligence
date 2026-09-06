@@ -1059,3 +1059,13 @@ adquirente —J$110,54/US$ al centavo—. Tres cocientes iguales identifican la 
 - **Causa raíz**: aserción sobre un fragmento demasiado corto para ser distintivo. Los otros cuatro tests del mismo archivo fallaron correctamente, así que el verde de éste se leía como «esa parte ya estaba» en vez de «este test no mide nada».
 - **Regla**: una aserción de contenido sobre un número suelto o una palabra corta casi nunca tiene dientes en un texto que ya contiene fechas y cifras. Se compara contra la frase RENDERIZADA de la constante (`plantilla.format(...) in md`), que además ata el test al texto real y lo hace fallar si la constante cambia de forma. Y la señal barata: en una tanda de tests nuevos escritos contra código que no existe, **el que pasa es el sospechoso**.
 - **Disparador**: cualquier `assert "x" in texto` donde `x` tenga menos de ~8 caracteres o sea un número.
+
+
+---
+
+### 2026-09-06 — El informe se pide por HTTP, y el nivel importa
+
+- **Síntoma**: verifiqué la sección nueva generando el informe `pulse` en producción. Volvió con una sola sección —`nowcast`— y la que yo había cambiado no estaba. Por un momento pareció que el cambio no había llegado.
+- **Causa raíz**: `pulse` no incluye la sección de trayectoria; está en `insight` y `deep_dive`. El manifiesto lo declara y yo pedí el nivel más barato por reflejo. Un informe que vuelve sin la sección se ve idéntico a un despliegue que no tomó.
+- **Regla**: al verificar un cambio de sección por HTTP, mirar primero el MANIFIESTO para saber qué nivel la incluye. Y antes de dudar del despliegue, comprobar si la sección estaba entre las que ese nivel publica: `list(d['narratives'])` cuesta nada y distingue «no llegó el código» de «pedí el nivel equivocado». Dato útil de este producto: sus narrativas son TODAS deterministas, así que generar el informe real no cuesta IA — no hay excusa para verificar contra el motor en vez de contra la ruta.
+- **Disparador**: cualquier verificación de una sección de informe en producción.
