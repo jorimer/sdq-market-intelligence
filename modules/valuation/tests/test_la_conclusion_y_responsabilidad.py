@@ -44,10 +44,12 @@ def test_la_seccion_de_CIERRE_llega_por_HTTP_y_es_la_ultima_antes_del_anexo(db, 
     # El framework agrega sus secciones estándar (`std_*`) después de las del producto; lo
     # que se juzga acá es el orden de las del producto.
     orden = [s for s in cuerpo["commercial"]["sections"] if not s.startswith("std_")]
-    resto = [s for s in orden if s != SECCION_ANEXO_PANEL]
-    assert resto[-1] == SECCION_CIERRE, f"{tier}: el cierre no es la última sección: {orden}"
+    # Los ANEXOS (panel, planillas) van después del cierre: el cierre es la última sección
+    # del cuerpo del informe.
+    cuerpo_sin_anexos = [s for s in orden if not s.startswith("anexo_")]
+    assert cuerpo_sin_anexos[-1] == SECCION_CIERRE, f"{tier}: el cierre no es la última: {orden}"
     if tier == "deep_dive":
-        assert orden[-1] == SECCION_ANEXO_PANEL, "el anexo va después del cierre"
+        assert orden.index(SECCION_ANEXO_PANEL) > orden.index(SECCION_CIERRE), "el anexo va después"
 
 
 def test_el_cierre_trae_EMISION_corte_VERSION_del_metodo_y_estado_de_VALIDACION(db) -> None:

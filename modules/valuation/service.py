@@ -11,7 +11,7 @@ se construye sobre la curva en pesos. El cruce de monedas lo veta `cost_of_capit
 """
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import date
 from typing import Any, Dict, List, Optional, Sequence, Tuple
 
@@ -183,6 +183,12 @@ class Lectura:
     n_observaciones_rf: int = 0
     #: Primer y último período de la ventana de la Rf. Sin fechas, un rango no se juzga.
     rf_ventana: Tuple[str, str] = ("", "")
+    #: Las PLANILLAS del modelo: la historia con la que se computó cada ROE, las
+    #: observaciones de la curva, el flujo del Excess Return en los dos extremos y el estado
+    #: de la regresión P/B. Viajan en el payload para que un tercero reproduzca la cifra sin
+    #: ir a buscar el dato — y para que el anexo cierre contra la misma valuación, no contra
+    #: una recomputada al renderizar.
+    planillas: Dict[str, Any] = field(default_factory=dict)
 
     @property
     def destruye_valor(self) -> bool:
@@ -232,6 +238,7 @@ def valuar_entidad(db: Session, *, bank_id: str, nombre: str) -> Optional[Lectur
 
     # Dos valuaciones, una por extremo de Ke. El extremo BAJO de Ke da el valor ALTO.
     valores: List[float] = []
+    flujos: List[Dict[str, Any]] = []
     avisos: List[str] = list(ke.advertencias)
     if aviso_g:
         avisos.append(aviso_g)
@@ -243,11 +250,15 @@ def valuar_entidad(db: Session, *, bank_id: str, nombre: str) -> Optional[Lectur
                           retencion=retencion, g_terminal_pct=g,
                           persistencia=pt.persistencia_de(tipo), g_max_pct=techo.valor_pct)
             valores.append(v.valor)
+            flujos.append(_flujo(v))
         except er.HorizonteInvalidoError as e:
             # `g >= Ke` en este extremo: se acorta el horizonte y se DECLARA, que es lo que
             # el plan pide en vez de forzar el cálculo.
             avisos.append(f"Ke = {k:.2f} %: {e}")
             valores.append(bv0)
+            flujos.append({"ke_pct": k, "bv_inicial": bv0, "periodos": [], "g_pct": g,
+                           "terminal_en_T": 0.0, "terminal_descontado": 0.0, "valor": bv0,
+                           "ajuste_clean_surplus_total": 0.0, "error": str(e)})
     valor_alto, valor_bajo = max(valores), min(valores)
 
     spread_alto = roe - ke.bajo      # el extremo favorable
@@ -269,11 +280,50 @@ def valuar_entidad(db: Session, *, bank_id: str, nombre: str) -> Optional[Lectur
         tipo_de_entidad=tipo or "",
         rf_pct=_rf_de(ke), beta=beta, erp=cc.ERP, n_observaciones_rf=ke.n_observaciones_rf,
         rf_ventana=ke.ventana_rf,
+        planillas=_planillas(historia, ke, flujos),
         retencion=retencion,
         g_terminal_pct=g,
         evidencia_del_tipo=pt.evidencia_de(tipo),
         persistencia=pt.persistencia_de(tipo),
     )
+
+
+def _flujo(v: er.Valuacion) -> Dict[str, Any]:
+    """El Excess Return año a año, tal cual lo computó el motor, para el anexo."""
+    return {
+        "ke_pct": v.ke_pct, "bv_inicial": v.bv_inicial, "g_pct": v.g_pct,
+        "periodos": [{"t": p.t, "bv_apertura": p.bv_apertura, "roe_pct": p.roe_pct,
+                      "residual_income": p.residual_income,
+                      "factor_descuento": p.factor_descuento,
+                      "vp_residual_income": p.vp_residual_income,
+                      "ajuste_clean_surplus": p.ajuste_clean_surplus} for p in v.periodos],
+        "terminal_en_T": v.terminal_en_T, "terminal_descontado": v.terminal_descontado,
+        "ajuste_clean_surplus_total": v.ajuste_clean_surplus_total, "valor": v.valor,
+    }
+
+
+def _planillas(historia: Historia, ke: cc.CostoDeCapital,
+               flujos: List[Dict[str, Any]]) -> Dict[str, Any]:
+    """Las cuatro planillas. Nada se recomputa al renderizar: lo que el anexo publica es lo
+    que produjo la cifra."""
+    from modules.valuation.panel import latam_comparables as lc
+    cortes = [_como_fecha(p) for p in historia.periodos]
+    ytd: Dict[date, Optional[float]] = dict(zip(cortes, historia.utilidad))
+    roe_por_corte = dict(zip(historia.periodos_con_roe, historia.roe_pct))
+    filas = []
+    for corte, patr, util in zip(cortes, historia.patrimonio, historia.utilidad):
+        doce = utilidad_de_doce_meses(ytd, corte)
+        filas.append({"corte": corte.isoformat(), "patrimonio": patr,
+                      "utilidad_acumulada": util, "utilidad_12m": doce,
+                      "roe_12m_pct": roe_por_corte.get(corte.isoformat())})
+    est = lc.estado()
+    return {
+        "historia": filas,
+        "curva_rf": [{"periodo": p, "tasa_pct": v} for p, v in ke.observaciones_rf],
+        "flujos": flujos,
+        "regresion_pb": {"n": est.n, "minimo": est.minimo, "suficiente": est.suficiente,
+                         "motivo": est.motivo},
+    }
 
 
 def _rf_de(ke: cc.CostoDeCapital) -> Tuple[float, float]:
@@ -322,4 +372,5 @@ def a_payload(lec: Lectura) -> Dict[str, Any]:
         },
         "serie_spread": [{"periodo": p, "roe_pct": r} for p, r in lec.serie_spread],
         "advertencias": list(lec.advertencias),
+        "planillas": lec.planillas,
     }
