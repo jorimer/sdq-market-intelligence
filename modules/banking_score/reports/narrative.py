@@ -863,24 +863,74 @@ async def _narrar_pais_por_pais(context: Dict, mode: str) -> str:
         _exigir_texto_entero(f"boletin_sistemas::{bloque.get('iso3')}", result)
         return result.text.strip()
 
-    textos = await asyncio.gather(*(_uno(b) for b in bloques))
-    _exigir_que_no_falte_ningun_pais(bloques, textos)
-    return "\n\n".join(t for t in textos if t)
+    cuerpos = await asyncio.gather(*(_uno(b) for b in bloques))
+    _exigir_un_cuerpo_POR_PAIS(bloques, cuerpos)
+    return "\n\n".join(f"{encabezado_de_pais(b)}\n{c}"
+                        for b, c in zip(bloques, cuerpos) if c)
 
 
-def _exigir_que_no_falte_ningun_pais(bloques: list, textos: list) -> None:
-    """Todo país servido tiene que quedar NOMBRADO en el texto.
+#: Meses en español para el encabezado. La fecha se escribe, no se delega.
+_MESES_ES = ("enero", "febrero", "marzo", "abril", "mayo", "junio", "julio", "agosto",
+             "septiembre", "octubre", "noviembre", "diciembre")
+
+
+def encabezado_de_pais(bloque: Dict) -> str:
+    """El encabezado de un país se COMPUTA; el modelo escribe solo el análisis.
+
+    Lo escribía el modelo, y eso puso dos cosas en riesgo a la vez. Una es el hecho: el corte,
+    la fuente y la norma contable son datos del bloque y no hay motivo para que los redacte
+    quien puede equivocarse al copiarlos. La otra apareció el 2026-09-06: el guard que exige
+    que cada país quede nombrado rechazó un boletín porque el modelo escribió «RD» donde el
+    contexto decía «República Dominicana» — y tenía razón en escribirlo así, porque el
+    boletín se llama «RD en contexto regional». El problema no era el modelo ni el guard: era
+    delegar un dato que podíamos poner nosotros.
+
+    Va con el corte MÁS RECIENTE del país. Cada cifra lleva además el suyo dentro del texto:
+    dentro de un mismo país las métricas se publican con rezagos distintos.
+    """
+    pais = str(bloque.get("pais") or bloque.get("iso3") or "").strip()
+    corte = str(bloque.get("corte_mas_reciente") or "")
+    fecha = ""
+    if len(corte) >= 7:
+        anio, mes = corte[:4], int(corte[5:7])
+        fecha = f" — corte {_MESES_ES[mes - 1]} {anio}"
+    fuentes = sorted({str(s.get("fuente")) for s in (bloque.get("series") or [])
+                      if s.get("fuente")})
+    # Las normas suelen venir prefijadas por su emisor («CMF Chile — Basilea III»). Si la
+    # fuente ya se nombró al lado, repetirla tres veces en un encabezado no informa: estorba.
+    normas = []
+    for n in (bloque.get("norma_contable") or []):
+        texto = str(n)
+        for f in fuentes:
+            if texto.startswith(f"{f} — "):
+                texto = texto[len(f) + 3:]
+                break
+        normas.append(texto)
+    partes = [", ".join(fuentes)] if fuentes else []
+    if normas:
+        partes.append(" y ".join(normas))
+    detalle = f" ({'; '.join(partes)})" if partes else ""
+    return f"{pais}{fecha}{detalle}"
+
+
+def _exigir_un_cuerpo_POR_PAIS(bloques: list, cuerpos: list) -> None:
+    """Todo país servido tiene que producir texto.
 
     Servir el dato no alcanza: hay que pedirlo, y hay que comprobar que salió. Un país que
-    llega al contexto y no aparece en la prosa no rompe nada — el boletín promete «los
-    sistemas de la región, uno por uno» y entrega uno menos, sin decir cuál ni por qué.
+    llega al contexto y no produce bloque no rompe nada — el boletín promete «los sistemas de
+    la región, uno por uno» y entrega uno menos, sin decir cuál ni por qué. Es lo que pasó con
+    El Salvador, que llegó con 22 series y desapareció del PDF.
+
+    Se comprueba que haya CUERPO, no que el texto nombre al país: el nombre lo pone
+    `encabezado_de_pais`, así que exigirlo también acá sería medir nuestra propia cadena.
     """
-    faltan = [b.get("pais") for b, t in zip(bloques, textos)
-              if not t or str(b.get("pais", "")).lower() not in t.lower()]
+    faltan = [b.get("pais") or b.get("iso3") for b, c in zip(bloques, cuerpos)
+              if not (c or "").strip()]
     if faltan:
         raise NarrativaTruncada(
-            f"§2 recibió {len(bloques)} países y no nombró a {faltan}. El boletín promete "
-            "recorrerlos uno por uno: entregar uno menos sin decirlo es peor que no salir")
+            f"§2 recibió {len(bloques)} países y {faltan} no produjo texto. El boletín "
+            "promete recorrerlos uno por uno: entregar uno menos sin decirlo es peor que "
+            "no salir")
 
 
 async def generate_named_narratives(
