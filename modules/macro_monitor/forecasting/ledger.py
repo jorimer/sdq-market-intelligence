@@ -282,13 +282,18 @@ def track_record(db: Session, bt_id: str) -> Dict[str, Any]:
     La cobertura de intervalos se devuelve junto al error y no aparte: un intervalo del 80%
     que acierta el 45% de las veces se ve ahí y en ningún otro lado.
     """
-    filas = _del_conjunto(db, bt_id)
+    todas = _del_conjunto(db, bt_id)
+    # Una fila `scored` SIN error no vale cero: entraba al RMSE como un acierto perfecto y
+    # sumaba al `n_oos` (`sq_error or 0.0`). Es rellenar la brecha. Se veta y se LISTA.
+    sin_error = sorted(str(f.horizon) for f in todas
+                       if f.sq_error is None or f.abs_error is None)
+    filas = [f for f in todas if f.sq_error is not None and f.abs_error is not None]
     n = len(filas)
     if not n:
         return {"backtest_id": bt_id, "n_oos": 0, "rmse": None, "mae": None,
-                "interval_coverage": (), "overlapping": None}
-    rmse = math.sqrt(sum(float(f.sq_error or 0.0) for f in filas) / n)
-    mae = sum(float(f.abs_error or 0.0) for f in filas) / n
+                "interval_coverage": (), "overlapping": None, "sin_error": sin_error}
+    rmse = math.sqrt(sum(float(f.sq_error) for f in filas) / n)
+    mae = sum(float(f.abs_error) for f in filas) / n
     cobertura = []
     for nivel, campo in ((0.80, "interval_hit_80"), (0.90, "interval_hit_90")):
         hits = [getattr(f, campo) for f in filas if getattr(f, campo) is not None]
@@ -296,7 +301,7 @@ def track_record(db: Session, bt_id: str) -> Dict[str, Any]:
             cobertura.append((nivel, sum(1 for h in hits if h) / len(hits), len(hits)))
     return {"backtest_id": bt_id, "n_oos": n, "rmse": round(rmse, 6),
             "mae": round(mae, 6), "interval_coverage": tuple(cobertura),
-            "overlapping": _se_solapan(filas)}
+            "overlapping": _se_solapan(filas), "sin_error": sin_error}
 
 
 def _trimestre_ordinal(period: str) -> Optional[int]:
