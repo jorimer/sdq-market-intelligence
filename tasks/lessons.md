@@ -1046,6 +1046,21 @@ discontinuada**. Una nota de pérdida por disposición dice cuánto perdió, no 
 matriz (SFC, Cloudflare; el Wayback guardó solo el primer MiB). No hizo falta: consideración,
 activos netos y goodwill negativo dan **el mismo tipo implícito** contra la nota en J$ del
 adquirente —J$110,54/US$ al centavo—. Tres cocientes iguales identifican la misma operación.
+### 2026-09-06 — El motor sabía por qué faltaba; el informe no se enteraba
+
+- **Síntoma**: la sección de trayectoria publicaba UNA fila donde el modelo declara dos horizontes con track record. La causa estaba computada y escrita —`emision` la registra en sus `motivos`: «el período ya había cerrado al corte; el bloque va atrasado»— pero eso vive en el resultado de la operación, que no llega a ningún informe.
+- **Causa raíz**: el dato de la ausencia se producía en el motor y se consumía en un log. Es la misma forma que el mapa sectorial que desaparecía del Deep Dive: prometer diecisiete secciones y entregar dieciséis sin decir nada. Nada falla — el informe sale, con una fila menos.
+- **Regla**: cuando un motor DESCARTA algo, preguntarse dónde se entera el lector. Y antes de persistir el motivo o inventar una tabla nueva, mirar si la superficie puede **reconstruirlo** de lo que ya lee: acá bastó con llevar `h` en el payload —si +2T apunta a 2026-Q3, el bloque terminaba en 2026-Q1 y +1T apuntaba a 2026-Q2— y reproducir la condición del descarte en vez de copiar su texto. Un motivo reconstruido no se desincroniza con la regla que lo produce; uno copiado, sí.
+- **Disparador**: todo `continue` / `motivos.append(...)` en un motor cuyo resultado alimenta un entregable. Preguntar: ¿el documento cuenta lo que promete, y si entrega menos, lo dice?
+
+### 2026-09-06 — «2» estaba dentro de «2026-Q3»
+
+- **Síntoma**: escribí `assert str(HORIZONTES_CON_TRACK_RECORD) in md` para exigir que el informe contara los horizontes esperados. Pasó en verde contra el código que no declaraba nada: el texto ya contenía «2026-Q3».
+- **Causa raíz**: aserción sobre un fragmento demasiado corto para ser distintivo. Los otros cuatro tests del mismo archivo fallaron correctamente, así que el verde de éste se leía como «esa parte ya estaba» en vez de «este test no mide nada».
+- **Regla**: una aserción de contenido sobre un número suelto o una palabra corta casi nunca tiene dientes en un texto que ya contiene fechas y cifras. Se compara contra la frase RENDERIZADA de la constante (`plantilla.format(...) in md`), que además ata el test al texto real y lo hace fallar si la constante cambia de forma. Y la señal barata: en una tanda de tests nuevos escritos contra código que no existe, **el que pasa es el sospechoso**.
+- **Disparador**: cualquier `assert "x" in texto` donde `x` tenga menos de ~8 caracteres o sea un número.
+
+---
 
 ---
 

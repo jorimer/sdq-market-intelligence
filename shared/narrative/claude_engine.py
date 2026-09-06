@@ -605,6 +605,32 @@ THIN_TEMPLATES = {
         "país cuya serie termina antes se dice, no se disimula acortando el gráfico.\n\n"
         "No recalcules ninguna cifra: todas vienen resueltas."
     ),
+    # Un país por llamada. La plantilla de arriba narra TODOS los sistemas en una sola
+    # generación, y eso se rompió el 2026-09-06: nueve países no entran en un presupuesto
+    # fijo, el texto se cortó a mitad de la palabra «unidades» y El Salvador —último en
+    # orden ISO3— desapareció del boletín sin que nada fallara. Con una llamada por país,
+    # agregar un país no puede tirar a otro por la borda.
+    "boletin_sistema_pais": (
+        "Escribí el bloque de UN solo sistema bancario: el del país que nombra el "
+        "contexto en su campo 'pais'.\n"
+        "Contexto:\n{context}\n\n"
+        "Máximo 320 palabras. Este país DENTRO DE SU PROPIO SISTEMA: qué hizo su crédito, "
+        "su morosidad o su solvencia respecto de SU historia.\n\n"
+        "Abrí con un encabezado en esta forma exacta: «<país> — corte <mes año> "
+        "(<fuente>, <norma contable>)». Si el bloque trae más de un corte, usá el más "
+        "reciente en el encabezado y **fechá cada cifra con el corte de SU serie**: dentro "
+        "de un mismo país las métricas se publican con rezagos distintos, y escribir «al "
+        "cierre de julio» sobre una cifra de junio es dar por real una fecha falsa.\n\n"
+        "**PROHIBIDO COMPARAR CON OTROS PAÍSES.** Nada de «más que», ni rankings, ni «el "
+        "más alto de la región». Cada supervisor computa bajo su propia norma contable y la "
+        "propia SECMCA declara por escrito que los indicadores bancarios de su región no "
+        "están armonizados. Lo comparable va en otra sección y sale de otra fuente.\n\n"
+        "El campo 'norma_contable' de cada cifra dice bajo qué regla se computó. El campo "
+        "'nombre' dice QUÉ mide: usalo, porque una clave como 'mora_90_consumo' sin su "
+        "nombre se lee como «consumo» a secas y el lector no sabe si es el saldo, la mora o "
+        "la provisión de esa cartera.\n\n"
+        "No recalcules ninguna cifra: todas vienen resueltas."
+    ),
     "boletin_armonizado": (
         "Escribí la sección de crédito y tasas comparables entre países.\n"
         "Contexto:\n{context}\n\n"
