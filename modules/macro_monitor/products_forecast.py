@@ -355,7 +355,11 @@ class MacroForecastProduct:
                 sect = {
                     "horizonte": pr.horizonte, "brecha_pp": pr.brecha_pp,
                     "ajuste_pp": pr.ajuste_pp, "brechas": pr.brechas,
-                    "sectores": [{"etiqueta": s.etiqueta, "crecimiento": s.crecimiento,
+                    # La CLAVE viaja con la fila: es el identificador con el que `brechas`
+                    # nombra a las ausentes, y sin ella la muestra y el payload real no
+                    # podían tener la misma forma.
+                    "sectores": [{"clave": s.clave, "etiqueta": s.etiqueta,
+                                  "crecimiento": s.crecimiento,
                                   "crecimiento_sin_reconciliar":
                                       s.crecimiento_sin_reconciliar,
                                   "peso": s.peso, "incidencia": s.incidencia}
@@ -991,6 +995,18 @@ def _md_desempeno(p: Dict[str, Any]) -> str:
 # Cifras ilustrativas; el informe real las computa del ledger. Se elige a propósito un
 # cuadro con un resultado incómodo (un intervalo del 90 % que sobre-cubre) y una actividad
 # no proyectada: una muestra que solo enseña aciertos vende un producto que no existe.
+#
+# El bloque sectorial se RECONSTRUYÓ desde un corte real y sus identidades cierran solas —
+# `ajuste = brecha / Σpeso`, `Σ incidencia = agregado`, `incidencia = peso × reconciliado`—,
+# que es lo que exige `test_la_muestra_curada_cierra_sola.py`. Antes no cerraba ninguna de
+# las tres: publicaba `ajuste_pp = −0,4713` cuando la aritmética daba −0,8369, mostraba
+# cinco actividades que sumaban el 49,92 % del cuadro declarando `brechas: {}`, y su suma
+# ponderada quedaba 1,40 pp por debajo del agregado que el propio titular anuncia. Una
+# vidriera con un número que el motor no produce enseña a desconfiar del motor.
+#
+# Y la actividad no proyectada que este comentario prometía desde el principio ahora EXISTE:
+# Comunicaciones entra en `brechas`, así que la muestra enseña también cómo se declara una
+# ausencia y qué le hace al resto.
 class _NoSeDesagrega(Exception):
     """La lectura sectorial no procede, y el motivo ya está escrito. Excepción propia y no
     `Exception` a secas: el `except` genérico de abajo existe para lo que falla, y confundir
@@ -1030,10 +1046,14 @@ _CONSECUENCIA_DE_LA_AUSENCIA = (
     "**No proyectadas:** {faltan}. Una actividad con huecos no se estima: se lista con su "
     "motivo, y su contribución al agregado **se reparte por peso sobre las demás**, que es "
     "lo que el ajuste declara. Falta el **{peso_ausente:.2f} %** del peso del cuadro, así "
-    "que cada actividad mostrada sube **{exceso:+.3f} pp** más de lo que subiría si "
-    "estuvieran todas: ese exceso cubre a la que falta y no viene de ninguna señal sobre "
-    "ellas."
+    "que cada actividad mostrada recibe **{exceso:+.3f} pp** de ajuste adicional sobre el "
+    "que tendría si estuvieran todas: esa diferencia cubre a la que falta y no viene de "
+    "ninguna señal sobre ellas."
 )
+# El texto es NEUTRO respecto del signo a propósito. La primera versión decía «sube {exceso}
+# pp más», que con una brecha negativa publica «sube −0,008 pp» — la clase de frase que
+# afirma una dirección contraria a la del número que la acompaña. Lo destapó la propia
+# muestra curada al reconstruirla, no un test: los míos usaban una brecha positiva.
 
 _SIN_AGREGADO_QUE_DESAGREGAR = (
     "La lectura sectorial no está disponible para este corte: sin una proyección agregada "
@@ -1058,43 +1078,82 @@ _SERIE_PIB = "bcrd.xls.pib_2018.serie_original_indice"
 _SAMPLE_PAYLOAD: Dict[str, Any] = {
     "proyecciones": [
         {"serie": _SERIE_PIB, "horizonte": "2026-Q3", "punto": 3.41,
-         "medida": med.DLOG_PCT,
+         "medida": med.YOY_PCT,
          "intervalos": [[0.80, 2.11, 4.71], [0.90, 1.62, 5.20]],
          "modelo": "bvar_minnesota.5v.v1", "as_of": "2026-08-20", "ancla": True,
          "motivo": "", "n_oos": 14},
         {"serie": _SERIE_PIB, "horizonte": "2026-Q4", "punto": 3.08,
-         "medida": med.DLOG_PCT,
+         "medida": med.YOY_PCT,
          "intervalos": [[0.80, 1.44, 4.72], [0.90, 0.82, 5.34]],
          "modelo": "bvar_minnesota.5v.v1", "as_of": "2026-08-20", "ancla": False,
          "motivo": "8 observaciones fuera de muestra: hacen falta al menos 12",
          "n_oos": 8},
     ],
     "cifra_determinada": {"trimestre": "2026-Q2", "indice": 133.133185,
-                          "dlog_pct": 0.3809, "es_identidad": True,
+                          "dlog_pct": 0.3809, "interanual_pct": 4.62, "es_identidad": True,
                           "diferencia_maxima_historica": 0.0015},
     "sectorial": {
-        "horizonte": "2026-Q3", "brecha_pp": -0.4178, "ajuste_pp": -0.4713,
-        "brechas": {},
-        # Cada sector lleva su crudo Y su reconciliado, y el ajuste (-0,4713 pp) es la
-        # diferencia exacta entre las dos columnas. La muestra vieja traía solo el
-        # reconciliado, y por eso enseñaba una tabla que el pipeline no podía producir.
+        "horizonte": "2026-Q3", "brecha_pp": -0.8522,
+        "ajuste_pp": -0.8601,
+        "brechas": {"comunicaciones": "la serie tiene 2 trimestre(s) sin dato en el tramo común; un sector con huecos no se proyecta, se declara"},
         "sectores": [
-            {"etiqueta": "Construcción", "crecimiento": 5.40,
-             "crecimiento_sin_reconciliar": 5.87, "peso": 0.1226, "incidencia": 0.662},
-            {"etiqueta": "Comercio", "crecimiento": 2.04,
-             "crecimiento_sin_reconciliar": 2.51, "peso": 0.1173, "incidencia": 0.240},
-            {"etiqueta": "Hoteles, bares y restaurantes", "crecimiento": 6.77,
-             "crecimiento_sin_reconciliar": 7.24, "peso": 0.1000, "incidencia": 0.677},
-            {"etiqueta": "Manufactura local", "crecimiento": 2.39,
-             "crecimiento_sin_reconciliar": 2.86, "peso": 0.0906, "incidencia": 0.217},
-            {"etiqueta": "Impuestos a la producción netos de subsidios", "crecimiento": 3.10,
-             "crecimiento_sin_reconciliar": 3.57, "peso": 0.0687, "incidencia": 0.213},
+            {"clave": "construccion", "etiqueta": "Construcción", "peso": 0.1226,
+             "crecimiento_sin_reconciliar": 5.87, "crecimiento": 5.01,
+             "incidencia": 0.614},
+            {"clave": "comercio", "etiqueta": "Comercio", "peso": 0.1173,
+             "crecimiento_sin_reconciliar": 2.52, "crecimiento": 1.66,
+             "incidencia": 0.195},
+            {"clave": "hoteles", "etiqueta": "Hoteles, bares y restaurantes", "peso": 0.1,
+             "crecimiento_sin_reconciliar": 7.24, "crecimiento": 6.38,
+             "incidencia": 0.638},
+            {"clave": "manufactura_local", "etiqueta": "Manufactura local", "peso": 0.0906,
+             "crecimiento_sin_reconciliar": 2.86, "crecimiento": 2.0,
+             "incidencia": 0.181},
+            {"clave": "inmobiliarias", "etiqueta": "Actividades inmobiliarias y de alquiler", "peso": 0.0758,
+             "crecimiento_sin_reconciliar": 3.83, "crecimiento": 2.97,
+             "incidencia": 0.225},
+            {"clave": "transporte", "etiqueta": "Transporte y almacenamiento", "peso": 0.0738,
+             "crecimiento_sin_reconciliar": 4.46, "crecimiento": 3.6,
+             "incidencia": 0.266},
+            {"clave": "impuestos", "etiqueta": "Impuestos a la producción netos de subsidios", "peso": 0.0687,
+             "crecimiento_sin_reconciliar": 3.47, "crecimiento": 2.61,
+             "incidencia": 0.179},
+            {"clave": "agropecuario", "etiqueta": "Agropecuario", "peso": 0.0479,
+             "crecimiento_sin_reconciliar": 2.93, "crecimiento": 2.07,
+             "incidencia": 0.099},
+            {"clave": "financiera", "etiqueta": "Intermediación financiera, seguros y conexas", "peso": 0.0464,
+             "crecimiento_sin_reconciliar": 5.89, "crecimiento": 5.03,
+             "incidencia": 0.233},
+            {"clave": "administracion_publica", "etiqueta": "Administración pública y defensa", "peso": 0.0448,
+             "crecimiento_sin_reconciliar": 2.61, "crecimiento": 1.75,
+             "incidencia": 0.078},
+            {"clave": "ensenanza", "etiqueta": "Enseñanza", "peso": 0.0408,
+             "crecimiento_sin_reconciliar": 4.93, "crecimiento": 4.07,
+             "incidencia": 0.166},
+            {"clave": "servicios_profesionales", "etiqueta": "Servicios profesionales", "peso": 0.0401,
+             "crecimiento_sin_reconciliar": 3.15, "crecimiento": 2.29,
+             "incidencia": 0.092},
+            {"clave": "salud", "etiqueta": "Salud", "peso": 0.0335,
+             "crecimiento_sin_reconciliar": 6.39, "crecimiento": 5.53,
+             "incidencia": 0.185},
+            {"clave": "zonas_francas", "etiqueta": "Manufactura zonas francas", "peso": 0.0295,
+             "crecimiento_sin_reconciliar": 4.3, "crecimiento": 3.44,
+             "incidencia": 0.101},
+            {"clave": "otros_servicios", "etiqueta": "Otras actividades de servicios de mercado", "peso": 0.0291,
+             "crecimiento_sin_reconciliar": 2.7, "crecimiento": 1.84,
+             "incidencia": 0.054},
+            {"clave": "energia", "etiqueta": "Energía y agua", "peso": 0.0155,
+             "crecimiento_sin_reconciliar": 4.01, "crecimiento": 3.15,
+             "incidencia": 0.049},
+            {"clave": "minas", "etiqueta": "Explotación de minas y canteras", "peso": 0.0144,
+             "crecimiento_sin_reconciliar": 4.56, "crecimiento": 3.7,
+             "incidencia": 0.053},
         ],
     },
     "escenarios": [
-        {"horizonte": "2027-Q1", "punto": 2.94, "medida": med.DLOG_PCT,
+        {"horizonte": "2027-Q1", "punto": 2.94, "medida": med.YOY_PCT,
          "intervalos": [[0.80, 0.71, 5.17]]},
-        {"horizonte": "2027-Q2", "punto": 2.81, "medida": med.DLOG_PCT,
+        {"horizonte": "2027-Q2", "punto": 2.81, "medida": med.YOY_PCT,
          "intervalos": [[0.80, 0.24, 5.38]]},
     ],
     "desempeno": [
