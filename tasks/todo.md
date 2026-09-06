@@ -1,93 +1,85 @@
-# La pasada de FORMA del informe
+# `n_oos` cuenta EMISIONES, no trimestres — plan
 
-Tres defectos, los tres medidos sobre el PDF y no deducidos del código.
+## El defecto, medido
 
-## A · La portada rotula «Período» sobre un corte de información
-
-`render.py:332` imprime `**Período:** {period}` con lo que el producto declare en
-`available_periods()`.
-
-**Medido contra producción, los 18 ejes del catálogo.** Cuatro pasan una fecha completa:
+Simulé cuatro trimestres objetivo con tres emisiones cada uno —la cadencia real: el sync
+dispara la emisión en cascada y cada corrida en otra fecha escribe una fila nueva, porque
+`as_of` está en la clave de cinco campos—:
 
 ```
-banking          → 2026-06-30     cierre de trimestre
-macro            → 2025-12-31     cierre de año
-monetary_policy  → 2026-07-31     cierre de mes
-macro_forecast   → 2026-09-06     ← NO es un cierre: es el corte de información
+trimestres OBJETIVO distintos: 4
+n_oos que reporta el ledger:   12
+¿declara solapamiento?         True
+mínimo que exige el gate:      12
+¿el gate la deja anclar?       True
 ```
 
-Los tres primeros **se leen bien**: una fecha de cierre bajo «Período» es una forma legítima
-de nombrar el período. El único mal rotulado es el de proyecciones, y su propio
-`std_methodology` ya lo llama por su nombre: *«Corte del informe: 2026-09-06»*.
+**Cuatro trimestres de evidencia real abren el gate que exige doce.** Y no es hipotético:
+hoy ya hay DOS filas para 2026-Q3 a h=2, con `as_of` 2026-09-05 y 2026-09-06. Están en
+conjuntos distintos solo porque entre medias cambió la medida; con la medida estable, la
+próxima emisión suma una fila al mismo conjunto.
 
-Corrijo mi encuadre anterior: dije «la portada dice Período sobre una fecha» como si fuera
-general. Es de un eje.
+Es exactamente lo que este ledger existe para impedir. El `backtest_id` fue diseñado para que
+«un trimestre se pronostica una sola vez a cada distancia» —lo dice su propio docstring— y la
+re-emisión rompe ese supuesto sin que nada avise.
 
-## B · El informe cita una serie por la ruta de la hoja de cálculo
+**El error también se distorsiona, no solo el conteo.** Con tres filas del mismo trimestre, el
+error de ESE trimestre pesa el triple en el RMSE. El promedio queda sesgado hacia los
+trimestres que más veces se re-emitieron, que es un criterio sin ningún sentido.
 
-La tabla de trayectoria publica el `serie` crudo:
+## Por qué la re-emisión no es evidencia nueva
 
-```
-| bcrd.xls.pib_2018.serie_original_indice | 2026-Q3 | 5.57% | … |
-```
+Una fila re-emitida desde el MISMO bloque es el mismo pronóstico re-sellado con otra fecha: el
+conjunto de información no cambió, el punto es idéntico. Y si el bloque SÍ avanzó, el
+horizonte relativo cambia —2026-Q3 pasa de h=2 a h=1— y la fila cae en otro conjunto sola.
+O sea: **dentro de un conjunto, varias `as_of` para el mismo horizonte implican el mismo
+bloque, y por tanto el mismo pronóstico.**
 
-El mecanismo para esto **ya existe y la doctrina ya está escrita**, en el comentario de
-`canonical.CURATED_LABELS`:
+## El arreglo
 
-> *«Todo lo demás que sale del motor de Excel es extracción masiva —dato real, pero con el
-> nombre que la planilla dejó—, y se declara como no-curado **para que un informe no lo cite
-> por la ruta de la hoja de cálculo**.»*
+### 1 · Un horizonte cuenta UNA vez
 
-`is_curated("bcrd.xls.pib_2018.serie_original_indice")` da **False**, y el informe lo cita
-igual. Nada lo vigila.
+`_del_conjunto` se queda, por horizonte, con la emisión de `as_of` más TEMPRANO — el
+pronóstico como se publicó por primera vez. Es la misma doctrina que ya rige para las
+revisiones: «el track record mide el pronóstico como se PUBLICÓ, no como se corrigió después».
 
-Ojo: esto EMPEORÓ con el arreglo del ledger. Antes la fila decía `pib_real` —feo pero
-corto—; ahora dice el código completo, que es lo correcto para el ledger y lo peor posible
-para un informe que se vende.
+### 2 · Y entonces hay que codificar el solapamiento que el docstring ya declaraba
 
-## C · Los subíndices salen como cajas negras
+La única regla implementada en `_se_solapan` es «dos filas comparten horizonte». Con la
+deduplicación eso no puede pasar nunca, así que la función pasaría a devolver `False`
+siempre y el informe **dejaría de declarar un caveat que hoy declara**. Apagar un aviso en
+silencio es peor que el defecto que estoy arreglando.
 
-**Medido**, renderizando cada familia y leyendo el PDF:
+Su docstring ya nombra la regla real y nunca se escribió: «cuando el paso entre cortes es
+menor que el salto entre horizontes». Es el resultado estándar: pronósticos a `h` pasos
+emitidos cada `paso` períodos comparten información cuando `paso < h`, y sus errores quedan
+autocorrelacionados. Se computa: `min(gap entre horizontes consecutivos) < h`.
 
-```
-subíndices    ₀₁₂₃₄₅₆₇₈₉ₜ  →  ■■■■■■■■■■■     TODOS fallan
-superíndices  ⁰¹²³⁴⁵⁶⁷⁸⁹   →  ■¹²³■■■■■■      solo ¹²³ (que son Latin-1)
-griego        αβγδλμσωΣΔΩ  →  αβγδλµσωΣ∆Ω     bien
-matemática    ± × ÷ ≈ ≤ ≥ ≠ ∑ √ ∞ ·          bien
-flechas       → ← ↑ ↓ ⇒                       bien
-tipografía    — – … « » “ ” ¡ ¿ § † € $       bien
-```
+- `h = 1` con emisión trimestral → `1 < 1` es falso → no solapan. (Conserva lo que el test
+  vigente ya afirma.)
+- `h = 2` con emisión trimestral → `1 < 2` → **solapan**, y hoy eso no se declaraba.
+- un conjunto de una sola fila no solapa con nada → `False`.
+- si algún horizonte no resuelve a un trimestre, **`None`**: «no sé» no es «no solapan», y el
+  gate ya rechaza el `None` con su motivo.
 
-**Corrijo lo que venía diciendo**: la `λ` renderiza perfecto. Lo que falla son los subíndices
-y los superíndices distintos de ¹²³. `BV₀` y `λ₁` salían mal por el subíndice, no por la
-letra griega.
+### 3 · El test que hoy afirma lo contrario
 
-**Y esto NO necesita decisión del dueño.** Yo había planteado «transliterar o cambiar la
-fuente», y hay una tercera que es mejor que las dos: ReportLab entiende marcado `<sub>` y
-`<super>`, y con la fuente que ya tenemos dibuja un subíndice de verdad. Verificado en PDF y
-mirando la imagen renderizada:
+`test_re_emitir_el_mismo_trimestre_si_solapa` afirma que re-emitir el mismo trimestre marca
+solapamiento. Con la deduplicación esa fila ya no entra al conjunto, así que la afirmación
+cambia — y por una MÁS fuerte: re-emitir no infla `n_oos` ni cambia el error. Se reescribe
+para exigir eso, que es la garantía que de verdad protege el track record.
 
-```
-Con marcado: BV₀  λ₁  x⁴   → subíndice y superíndice reales
-Sin marcado: BV■  λ■  x■   → cajas negras
-```
+## Tests, contra el código viejo primero
 
-Ni transliteración (que pierde la forma) ni fuente nueva (que cambia el aspecto de TODOS los
-informes).
+- N emisiones del mismo trimestre objetivo dan `n_oos = 1`, no N. **Falla hoy con 12 vs 4.**
+- El RMSE no se sesga hacia el trimestre más re-emitido.
+- `h = 2` con emisión trimestral DECLARA solapamiento; `h = 1` no. Falla hoy: h=2 no lo
+  declaraba.
+- Un horizonte que no resuelve a trimestre da `None`, no `False`.
+- El contraejemplo: trimestres objetivo DISTINTOS sí suman a `n_oos` — sin él, un
+  `_del_conjunto` que devuelva una sola fila siempre pasaría todo lo de arriba.
 
----
+## Los tres gates
 
-## Plan
-
-1. **`period_label`** en los dos renderers, con default «Período». Solo `macro_forecast` lo
-   pisa con «Corte», que es como su propia metodología ya lo llama.
-2. **Etiqueta curada** para la serie del PIB, y que el informe use `curated_label()`. Más un
-   guard: ninguna prosa de informe puede imprimir un código `bcrd.xls.` crudo.
-3. **Sub/superíndices → marcado** en el PDF; en el Word, formato de run (`font.subscript`),
-   que es lo que Word entiende. La REGLA en una constante compartida, como el espacio duro.
-
-## Verificación
-- [ ] Los tests contra el código VIEJO tienen que FALLAR
-- [ ] Leer el PDF: ningún `■`, ningún `bcrd.xls.` en la prosa
-- [ ] Mirar la imagen renderizada, no solo el texto extraído
-- [ ] Los tres gates
+`pytest modules/ shared/ -q` · `ruff check modules/ shared/ app/` ·
+`mypy shared/ modules/ app/ --no-incremental | mypy-baseline filter` (exit code del FILTRO).

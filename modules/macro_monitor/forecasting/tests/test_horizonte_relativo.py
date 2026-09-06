@@ -142,17 +142,29 @@ def test_una_sola_emision_por_trimestre_no_solapa(db):
     assert led.track_record(db, led.backtest_id(MODELO, SERIE, 1, med.DLOG_PCT))["overlapping"] is False
 
 
-def test_re_emitir_el_mismo_trimestre_si_solapa(db):
-    """La emisión se dispara en cascada tras cada ingesta canónica, que es MENSUAL: el mismo
-    trimestre puede pronosticarse a la misma distancia desde cortes distintos. Son
-    observaciones que comparten información y el conteo lo DECLARA."""
+def test_re_emitir_el_mismo_trimestre_NO_INFLA_el_conteo(db):
+    """La emisión se dispara en cascada tras cada ingesta canónica: el mismo trimestre se
+    pronostica a la misma distancia desde cortes distintos, y cada corrida escribe una fila
+    porque `as_of` está en la clave.
+
+    Antes esto SUMABA a `n_oos` y se declaraba como solapamiento. Declararlo no alcanzaba:
+    medido, cuatro trimestres de evidencia real daban `n_oos = 12` y el gate —que exige
+    doce— admitía. Una re-emisión desde el mismo bloque es el mismo pronóstico re-sellado,
+    no una observación más; ahora cuenta UNA vez. Ver
+    `test_un_trimestre_cuenta_una_vez.py`.
+    """
     _operar(db, pasos=(1,))
+    antes = led.track_record(db, led.backtest_id(MODELO, SERIE, 1, med.DLOG_PCT))
     f = led.registrar(db, model_id=MODELO, target_series=SERIE, horizon="2025-Q4",
                       as_of="2025-08-15", point=3.1, intervals=INTERVALOS, h=1,
                       measure=med.DLOG_PCT)
     f.status, f.abs_error, f.sq_error = "scored", 0.1, 0.01
     db.commit()
-    assert led.track_record(db, led.backtest_id(MODELO, SERIE, 1, med.DLOG_PCT))["overlapping"] is True
+    despues = led.track_record(db, led.backtest_id(MODELO, SERIE, 1, med.DLOG_PCT))
+    assert despues["n_oos"] == antes["n_oos"], (
+        f"re-emitir el mismo trimestre subió `n_oos` de {antes['n_oos']} a "
+        f"{despues['n_oos']}: el gate se abre con emisiones, no con evidencia")
+    assert despues["rmse"] == antes["rmse"], "la re-emisión movió el error del conjunto"
 
 
 # ── la meta que se sirve al lector ──────────────────────────────────────────────────
