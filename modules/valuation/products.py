@@ -36,6 +36,9 @@ from shared.products import (
 )
 from shared.products.contract import EstadoBacktest
 from shared.products.render import render_product_pdf
+# La huella de la caché de informes se busca en el módulo del PRODUCTO. La lista vive en
+# `ai_context.py`; acá se re-exporta el MISMO objeto, no una copia — dos listas divergen.
+from modules.valuation.ai_context import AI_CONTEXT_FILES  # noqa: F401,E402
 
 logger = logging.getLogger("sdq.products.valuation")
 
@@ -64,9 +67,15 @@ SECCION_SPREAD = "spread_roe_ke"
 SECCION_METODOLOGIA = "metodologia"
 SECCION_VALOR = "valor_y_rango"
 SECCION_DESCOMPOSICION = "libro_vs_exceso"
+#: El panel de transacciones LLEGA al informe: tabla de comparables, mediana y rango,
+#: y la posición del rango de salida contra ellos. Contraste, no método.
+SECCION_CONTRASTE = "contraste_de_mercado"
 SECCION_SUPUESTOS = "supuestos_y_sensibilidad"
 SECCION_LIMITACIONES = "limitations"
 SECCION_FUENTES = "fuentes_y_procedencia"
+#: Vías abiertas, descartes con motivo y lo que cada comparable NO permite afirmar. Un
+#: panel chico sin explicación se lee como falta de trabajo; el anexo es el trabajo.
+SECCION_ANEXO_PANEL = "anexo_panel_de_transacciones"
 
 _SECTION_TITLES = {
     SECCION_RESUMEN: "Resumen ejecutivo",
@@ -77,9 +86,11 @@ _SECTION_TITLES = {
     SECCION_METODOLOGIA: "Metodología de valuación",
     SECCION_VALOR: "Conclusión de valor",
     SECCION_DESCOMPOSICION: "Descomposición: libro y exceso",
+    SECCION_CONTRASTE: "Contraste de mercado · transacciones bancarias del Caribe",
     SECCION_SUPUESTOS: "Supuestos y sensibilidad al costo de capital",
     SECCION_LIMITACIONES: "Limitaciones y condiciones",
     SECCION_FUENTES: "Fuentes y procedencia",
+    SECCION_ANEXO_PANEL: "Anexo · Panel de transacciones: vías abiertas y descartes",
 }
 
 #: Por qué el eje no puede entregar todavía. Se declara en una constante y no en un `if`
@@ -119,7 +130,8 @@ def valuation_manifest() -> SectorProductManifest:
                 tier=ProductTier.insight, granularity=Granularity.named_entity,
                 sections=(SECCION_RESUMEN, SECCION_PROPOSITO, SECCION_ANTECEDENTES,
                           SECCION_FINANCIERO, SECCION_SPREAD, SECCION_VALOR,
-                          SECCION_DESCOMPOSICION, SECCION_LIMITACIONES),
+                          SECCION_DESCOMPOSICION, SECCION_CONTRASTE,
+                          SECCION_LIMITACIONES),
                 narrative_templates=(), prosa_computada=True,
                 audience="cliente / comité", cadence="recurring", price_band="suscripción"),
             # El Deep Dive agrega las dos que un comité de crédito o una contraparte piden
@@ -128,8 +140,9 @@ def valuation_manifest() -> SectorProductManifest:
                 tier=ProductTier.deep_dive, granularity=Granularity.named_entity,
                 sections=(SECCION_RESUMEN, SECCION_PROPOSITO, SECCION_ANTECEDENTES,
                           SECCION_FINANCIERO, SECCION_SPREAD, SECCION_METODOLOGIA,
-                          SECCION_VALOR, SECCION_DESCOMPOSICION, SECCION_SUPUESTOS,
-                          SECCION_LIMITACIONES, SECCION_FUENTES),
+                          SECCION_VALOR, SECCION_DESCOMPOSICION, SECCION_CONTRASTE,
+                          SECCION_SUPUESTOS, SECCION_LIMITACIONES, SECCION_FUENTES,
+                          SECCION_ANEXO_PANEL),
                 narrative_templates=(), prosa_computada=True,
                 audience="comité / contraparte", cadence="on_demand", price_band="on-demand"),
         })
@@ -185,7 +198,9 @@ class ValuationProduct:
             cadence="quarterly",
             sources=("SIB · estados de situación y resultados por entidad",
                      "SIMBAD · Superset público de la Superintendencia",
-                     "BCRD · cuadro V.1, valores subastados en moneda nacional"),
+                     "BCRD · cuadro V.1, valores subastados en moneda nacional",
+                     "Panel de transacciones bancarias RD/Caribe · relevamiento propio sobre "
+                     "anuncios, memorias auditadas y filings ante la SEC"),
             detail=FALTA_LA_CURVA if not insumos[
                 "curva soberana en pesos (BCRD, cuadro V.1)"] else "")
 
@@ -359,31 +374,17 @@ class ValuationProduct:
     async def narratives(self, tier: ProductTier, snapshot: ProductSnapshot,
                          lang: str = "es") -> Dict[str, str]:
         """Prosa COMPUTADA. No pasa por el motor de IA — ver el docstring del módulo."""
-        from modules.valuation import narrativa
-        from modules.valuation.service import Lectura
-
         lec = _lectura_desde_payload(snapshot)
         secciones = self.product_manifest().require_level(tier).sections
         posicion, cuota = self._posicion_en_su_tipo(lec)
         # CORREGIDO. Dos de estas secciones se servían con la prosa de la MUESTRA, así que un
         # informe real de una entidad real terminaba diciendo «cifras ilustrativas de una
         # entidad ficticia» y publicando una fórmula de `Ke` con prima de riesgo país, que
-        # este modelo no tiene. Ahora las once salen del dato, como el resto.
-        fijas = {
-            SECCION_RESUMEN: narrativa.resumen_ejecutivo(lec),
-            SECCION_PROPOSITO: narrativa.proposito_y_alcance(lec),
-            SECCION_ANTECEDENTES: narrativa.antecedentes(lec, posicion=posicion,
-                                                         cuota_pct=cuota),
-            SECCION_FINANCIERO: narrativa.analisis_financiero(lec),
-            SECCION_SPREAD: narrativa.resumen_del_spread(lec),
-            SECCION_METODOLOGIA: narrativa.metodologia(lec),
-            SECCION_VALOR: narrativa.resumen_del_valor(lec),
-            SECCION_DESCOMPOSICION: narrativa.resumen_de_descomposicion(lec),
-            SECCION_SUPUESTOS: narrativa.metodologia(lec),
-            SECCION_LIMITACIONES: narrativa.limitaciones(lec),
-            SECCION_FUENTES: narrativa.fuentes_y_procedencia(lec),
-        }
-        return {sec: fijas[sec] for sec in secciones if sec in fijas}
+        # este modelo no tiene. Ahora todas salen del dato, y del MISMO constructor que la
+        # muestra: `_secciones_computadas`. Eran dos diccionarios copiados a mano.
+        todas = _secciones_computadas(lec, posicion=posicion, cuota_pct=cuota,
+                                      con_anexo=SECCION_ANEXO_PANEL in secciones)
+        return {sec: todas[sec] for sec in secciones if sec in todas}
 
     def _posicion_en_su_tipo(self, lec: Any) -> Tuple[Optional[Tuple[int, int]],
                                                       Optional[float]]:
@@ -498,6 +499,41 @@ class ValuationProduct:
         return {"period": None, "signals": []}
 
 
+def _secciones_computadas(lec: Any, *, posicion: Optional[Tuple[int, int]] = None,
+                          cuota_pct: Optional[float] = None,
+                          con_anexo: bool = False) -> Dict[str, str]:
+    """TODA la prosa del eje, de una `Lectura`. Es la única fuente: la usan el informe
+    real y la muestra curada.
+
+    Eran dos diccionarios copiados a mano —uno en `narratives()` y otro en la muestra— y
+    dos copias del mismo mapa se desincronizan: esta misma semana una muestra escrita
+    aparte tapó un defecto de unidades en otro eje. Con un solo constructor, la muestra
+    no puede decir algo que el producto no dice, ni callar una sección que el producto
+    sí trae.
+    """
+    from modules.valuation import narrativa
+
+    metodologia = narrativa.metodologia(lec)
+    return {
+        SECCION_RESUMEN: narrativa.resumen_ejecutivo(lec),
+        SECCION_PROPOSITO: narrativa.proposito_y_alcance(lec),
+        SECCION_ANTECEDENTES: narrativa.antecedentes(lec, posicion=posicion,
+                                                     cuota_pct=cuota_pct),
+        SECCION_FINANCIERO: narrativa.analisis_financiero(lec),
+        SECCION_SPREAD: narrativa.resumen_del_spread(lec),
+        SECCION_METODOLOGIA: metodologia,
+        SECCION_VALOR: narrativa.resumen_del_valor(lec),
+        SECCION_DESCOMPOSICION: narrativa.resumen_de_descomposicion(lec),
+        # `con_anexo` lo decide el llamador leyendo el manifiesto del nivel: el insight no
+        # trae el anexo y su puntero apunta al Deep Dive.
+        SECCION_CONTRASTE: narrativa.contraste_de_mercado(lec, con_anexo=con_anexo),
+        SECCION_SUPUESTOS: metodologia,
+        SECCION_LIMITACIONES: narrativa.limitaciones(lec),
+        SECCION_FUENTES: narrativa.fuentes_y_procedencia(lec),
+        SECCION_ANEXO_PANEL: narrativa.anexo_del_panel(),
+    }
+
+
 def _lectura_desde_payload(snapshot: ProductSnapshot):
     """Reconstruye la `Lectura` desde el payload, para que la prosa no recompute nada.
 
@@ -598,24 +634,10 @@ def _sample_narrativas_de(secciones) -> Dict[str, str]:
     terminó sirviéndose en informes reales. Con una sola fuente de prosa, la muestra no puede
     decir algo que el producto no dice.
     """
-    from modules.valuation import narrativa
-
     snap = ProductSnapshot(tier=ProductTier.deep_dive, period="2025-12-31",
                            payload=_SAMPLE_PAYLOAD, entity_name=_ENTIDAD_FICTICIA)
-    lec = _lectura_desde_payload(snap)
-    todas = {
-        SECCION_RESUMEN: narrativa.resumen_ejecutivo(lec),
-        SECCION_PROPOSITO: narrativa.proposito_y_alcance(lec),
-        SECCION_ANTECEDENTES: narrativa.antecedentes(lec),
-        SECCION_FINANCIERO: narrativa.analisis_financiero(lec),
-        SECCION_SPREAD: narrativa.resumen_del_spread(lec),
-        SECCION_METODOLOGIA: narrativa.metodologia(lec),
-        SECCION_VALOR: narrativa.resumen_del_valor(lec),
-        SECCION_DESCOMPOSICION: narrativa.resumen_de_descomposicion(lec),
-        SECCION_SUPUESTOS: narrativa.metodologia(lec),
-        SECCION_LIMITACIONES: narrativa.limitaciones(lec),
-        SECCION_FUENTES: narrativa.fuentes_y_procedencia(lec),
-    }
+    todas = _secciones_computadas(_lectura_desde_payload(snap),
+                                  con_anexo=SECCION_ANEXO_PANEL in secciones)
     salida = {s: todas[s] for s in secciones if s in todas}
     primera = next((s for s in secciones if s in salida), None)
     if primera:

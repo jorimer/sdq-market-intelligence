@@ -1831,7 +1831,19 @@
         "pension_assessment": "Solidez por AFP (ISA)",
         "system_overview": "Panorama del sistema",
         "momentum": "Momentum (SGPS)",
-        "peer_positioning": "Posición en el panel"
+        "peer_positioning": "Posición en el panel",
+        "resumen_ejecutivo": "Resumen ejecutivo",
+        "proposito_y_alcance": "Propósito y alcance",
+        "antecedentes_de_la_entidad": "La entidad y su posición",
+        "analisis_financiero": "Análisis financiero",
+        "spread_roe_ke": "Creación de valor · ROE − Ke",
+        "metodologia": "Metodología de valuación",
+        "valor_y_rango": "Conclusión de valor",
+        "libro_vs_exceso": "Descomposición: libro y exceso",
+        "contraste_de_mercado": "Contraste de mercado · transacciones bancarias del Caribe",
+        "supuestos_y_sensibilidad": "Supuestos y sensibilidad al costo de capital",
+        "fuentes_y_procedencia": "Fuentes y procedencia",
+        "anexo_panel_de_transacciones": "Anexo · Panel de transacciones: vías abiertas y descartes"
       },
       "dimensionsTitle": "Dimensiones (score 0–100)",
       "risk": {
