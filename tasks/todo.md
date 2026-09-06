@@ -1,83 +1,70 @@
-# `n_oos` cuenta EMISIONES, no trimestres — plan
+# El horizonte que falta en la trayectoria — plan
 
-## El defecto, medido
+## Qué se ve hoy en el informe
 
-Simulé cuatro trimestres objetivo con tres emisiones cada uno —la cadencia real: el sync
-dispara la emisión en cascada y cada corrida en otra fecha escribe una fila nueva, porque
-`as_of` está en la clave de cinco campos—:
+La sección de trayectoria publica **una** fila. El modelo declara
+`bvar.HORIZONTES_CON_TRACK_RECORD = 2` —dos horizontes con track record, y la sección de
+escenarios se toma tres párrafos en explicar que del tercero en adelante NO son pronósticos—,
+así que el lector cuenta dos y encuentra uno. Nada dice por qué.
 
-```
-trimestres OBJETIVO distintos: 4
-n_oos que reporta el ledger:   12
-¿declara solapamiento?         True
-mínimo que exige el gate:      12
-¿el gate la deja anclar?       True
-```
+La causa está computada y escrita, pero en el lugar equivocado: `emision` la registra en sus
+`motivos` —«bvar 2026-Q2: el período ya había cerrado al corte 2026-09-06; el bloque va
+atrasado respecto de la fecha de emisión»— y eso vive en el resultado de la operación, que no
+llega a ningún informe. Es «servir el dato NO alcanza: hay que pedirlo», y del lado de la
+ausencia: el motor sabe por qué falta y la superficie no se entera.
 
-**Cuatro trimestres de evidencia real abren el gate que exige doce.** Y no es hipotético:
-hoy ya hay DOS filas para 2026-Q3 a h=2, con `as_of` 2026-09-05 y 2026-09-06. Están en
-conjuntos distintos solo porque entre medias cambió la medida; con la medida estable, la
-próxima emisión suma una fila al mismo conjunto.
+Es la misma forma que el mapa sectorial que desaparecía del Deep Dive: prometer diecisiete
+secciones y entregar dieciséis sin decir nada.
 
-Es exactamente lo que este ledger existe para impedir. El `backtest_id` fue diseñado para que
-«un trimestre se pronostica una sola vez a cada distancia» —lo dice su propio docstring— y la
-re-emisión rompe ese supuesto sin que nada avise.
+## Que no haga falta persistir nada
 
-**El error también se distorsiona, no solo el conteo.** Con tres filas del mismo trimestre, el
-error de ESE trimestre pesa el triple en el RMSE. El promedio queda sesgado hacia los
-trimestres que más veces se re-emitieron, que es un criterio sin ningún sentido.
+El informe NO necesita el resultado de la emisión: la causa se reconstruye del propio ledger,
+que es lo que ya lee.
 
-## Por qué la re-emisión no es evidencia nueva
-
-Una fila re-emitida desde el MISMO bloque es el mismo pronóstico re-sellado con otra fecha: el
-conjunto de información no cambió, el punto es idéntico. Y si el bloque SÍ avanzó, el
-horizonte relativo cambia —2026-Q3 pasa de h=2 a h=1— y la fila cae en otro conjunto sola.
-O sea: **dentro de un conjunto, varias `as_of` para el mismo horizonte implican el mismo
-bloque, y por tanto el mismo pronóstico.**
+* El bloque terminaba en el trimestre que resulta de correr el horizonte presente `h` pasos
+  hacia atrás. Si +2T apunta a 2026-Q3, el bloque terminaba en **2026-Q1**.
+* El horizonte que falta apunta al trimestre que resulta de correr hacia atrás la diferencia.
+  +1T apunta a **2026-Q2**.
+* Y estaba vencido si su cierre es anterior o igual al `as_of` de la fila — que es
+  exactamente la condición de `emision._es_hacia_adelante`, reproducida y no copiada de un
+  texto.
 
 ## El arreglo
 
-### 1 · Un horizonte cuenta UNA vez
+1. El payload lleva `h` por proyección. Hoy no lo lleva y es lo único que falta para saber
+   qué distancia está presente y cuál no.
+2. `_horizontes_ausentes(proys)` computa, por modelo, los horizontes relativos de
+   `1..HORIZONTES_CON_TRACK_RECORD` que no están, su trimestre objetivo y si ya había cerrado.
+3. `_md_trayectoria` lo declara. La prosa en CONSTANTES, y **solo cuando aplica**: una sección
+   que siempre avisa es ruido y deja de leerse.
 
-`_del_conjunto` se queda, por horizonte, con la emisión de `as_of` más TEMPRANO — el
-pronóstico como se publicó por primera vez. Es la misma doctrina que ya rige para las
-revisiones: «el track record mide el pronóstico como se PUBLICÓ, no como se corrigió después».
+Qué tiene que decir la declaración, y por qué cada pieza:
 
-### 2 · Y entonces hay que codificar el solapamiento que el docstring ya declaraba
+* **cuántos horizontes se esperan y cuántos hay** — el lector cuenta, y si el informe no
+  cuenta primero, la diferencia parece un error de impresión;
+* **la causa nombrada**: el bloque terminaba en X, así que +1T apuntaba a Y, cerrado al corte;
+* **por qué eso es correcto y no una falla**: un pronóstico de un período ya cerrado se
+  evaluaría contra un dato que existía cuando se escribió, y eso infla el track record con
+  retrospectiva. No falta un pronóstico: se evitó uno que habría sido mentira;
+* **cuándo vuelve**: en cuanto el BCRD publique Y.
 
-La única regla implementada en `_se_solapan` es «dos filas comparten horizonte». Con la
-deduplicación eso no puede pasar nunca, así que la función pasaría a devolver `False`
-siempre y el informe **dejaría de declarar un caveat que hoy declara**. Apagar un aviso en
-silencio es peor que el defecto que estoy arreglando.
+## Lo que NO se hace
 
-Su docstring ya nombra la regla real y nunca se escribió: «cuando el paso entre cortes es
-menor que el salto entre horizontes». Es el resultado estándar: pronósticos a `h` pasos
-emitidos cada `paso` períodos comparten información cuando `paso < h`, y sus errores quedan
-autocorrelacionados. Se computa: `min(gap entre horizontes consecutivos) < h`.
-
-- `h = 1` con emisión trimestral → `1 < 1` es falso → no solapan. (Conserva lo que el test
-  vigente ya afirma.)
-- `h = 2` con emisión trimestral → `1 < 2` → **solapan**, y hoy eso no se declaraba.
-- un conjunto de una sola fila no solapa con nada → `False`.
-- si algún horizonte no resuelve a un trimestre, **`None`**: «no sé» no es «no solapan», y el
-  gate ya rechaza el `None` con su motivo.
-
-### 3 · El test que hoy afirma lo contrario
-
-`test_re_emitir_el_mismo_trimestre_si_solapa` afirma que re-emitir el mismo trimestre marca
-solapamiento. Con la deduplicación esa fila ya no entra al conjunto, así que la afirmación
-cambia — y por una MÁS fuerte: re-emitir no infla `n_oos` ni cambia el error. Se reescribe
-para exigir eso, que es la garantía que de verdad protege el track record.
+No se inventa una causa cuando no la hay. Si el horizonte falta y su trimestre **no** estaba
+cerrado al corte, se dice que falta y nada más — «no sé por qué» es una respuesta, y
+atribuirlo al rezago del bloque sería adivinar. Y si las filas no traen `h`, no se declara
+nada: sin la distancia no se puede computar el trimestre objetivo.
 
 ## Tests, contra el código viejo primero
 
-- N emisiones del mismo trimestre objetivo dan `n_oos = 1`, no N. **Falla hoy con 12 vs 4.**
-- El RMSE no se sesga hacia el trimestre más re-emitido.
-- `h = 2` con emisión trimestral DECLARA solapamiento; `h = 1` no. Falla hoy: h=2 no lo
-  declaraba.
-- Un horizonte que no resuelve a trimestre da `None`, no `False`.
-- El contraejemplo: trimestres objetivo DISTINTOS sí suman a `n_oos` — sin él, un
-  `_del_conjunto` que devuelva una sola fila siempre pasaría todo lo de arriba.
+- Con solo +2T y el trimestre de +1T cerrado al corte: la sección lo declara, nombra `+1T`,
+  el trimestre objetivo, el fin del bloque y la causa. **Falla hoy: no dice nada.**
+- **El contraejemplo**: con +1T y +2T presentes NO declara nada. Sin él, un aviso que se
+  imprime siempre pasaría el test de arriba.
+- Un horizonte ausente cuyo trimestre NO había cerrado: se declara la ausencia sin atribuirle
+  el rezago del bloque.
+- Filas sin `h`: no se declara nada.
+- El payload real lleva `h`.
 
 ## Los tres gates
 
