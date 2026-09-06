@@ -65,6 +65,9 @@ def exigir_comparable(filas: List[CountryBankingAggregate]) -> List[CountryBanki
 
 
 def _valor(fila: CountryBankingAggregate) -> Dict[str, Any]:
+    from shared.narrative.formato import numero_para_prosa
+
+    unidad = (fila.meta or {}).get("unit")
     return {
         "metrica": fila.metric,
         # La clave es un identificador; el nombre es lo que el modelo puede escribir. Sin
@@ -73,7 +76,12 @@ def _valor(fila: CountryBankingAggregate) -> Dict[str, Any]:
         # lo declara: se prefiere el hueco a inventarle un nombre a la métrica de otro.
         "nombre": (fila.meta or {}).get("nombre"),
         "valor": fila.value,
-        "unidad": (fila.meta or {}).get("unit"),
+        # El número YA ESCRITO, en la convención de casa. El flotante pelado dejaba el formato
+        # a criterio de cada generación y en un boletín real convivieron tres convenciones de
+        # miles; «6.823.5» además es ilegible con punto decimal. Se sirve escrito por la misma
+        # razón que el encabezado de cada país: un hecho computable no se delega.
+        "valor_texto": numero_para_prosa(fila.value, unidad),
+        "unidad": unidad,
         "corte": fila.period_end.isoformat() if fila.period_end else None,
         # El SUJETO viaja con el número: sin la norma, una cifra de solvencia es solo «una
         # solvencia», y el modelo la va a poner al lado de la de otro país.
