@@ -39,6 +39,7 @@ from shared.products.render import render_product_pdf
 # La huella de la caché de informes se busca en el módulo del PRODUCTO. La lista vive en
 # `ai_context.py`; acá se re-exporta el MISMO objeto, no una copia — dos listas divergen.
 from modules.valuation import responsabilidad as resp
+from shared.registry.signals import COVERAGE_INPUTS
 from modules.valuation.ai_context import AI_CONTEXT_FILES  # noqa: F401,E402
 
 
@@ -201,6 +202,10 @@ class ValuationProduct:
         presentes = sum(1 for ok in insumos.values() if ok)
         return DataHealth(
             coverage=presentes / len(insumos), freshness_days=self._dias_del_ultimo_corte(),
+            # La semántica: INSUMOS presentes, no peso anclado a dato real. Con la de índice
+            # el framework escribía «100 % dato real» en el mismo informe que declaraba el
+            # 37 % del Ke como rúbrica.
+            coverage_kind=COVERAGE_INPUTS,
             cadence="quarterly",
             sources=("SIB · estados de situación y resultados por entidad",
                      "SIMBAD · Superset público de la Superintendencia",
