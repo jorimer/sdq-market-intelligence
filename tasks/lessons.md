@@ -1143,3 +1143,20 @@ promedio. Y toda fixture que siembre balances lleva cortes de marzo, junio y sep
 declara `# solo-diciembre: <motivo>` — lo exige `test_el_roe_es_de_doce_meses.py`. Un selector
 que cuenta filas para decidir si algo se puede valuar ofrece lo que después falla: se decide
 computando la misma ventana que el motor.
+
+
+---
+
+### 2026-09-06 — Una regla que me pasa un tercero se aplica a la SUPERFICIE, no a mi diff
+
+- **Síntoma**: otra sesión me avisó que su eje no tenía entradas en el changelog de metodología y que la regla es «la entrada va en el PR que mueve las cifras». Fui a revisar si alguno de MIS PRs movía cifras publicadas. Ninguno: el producto nunca había puntuado un pronóstico, así que `n_oos` y el RMSE jamás estuvieron en un informe. Casi contesto «no aplica».
+- **Causa raíz**: leí la regla como una pregunta sobre mi diff. La pregunta correcta era sobre el PRODUCTO. Ampliando la mirada apareció que la cifra de portada de `macro_forecast` se había movido de 0,7373 a 5,5672 —misma serie, mismo modelo, mismo horizonte, cambio de UNIDAD— por un PR de otra rama que tampoco estaba registrado, y que el eje no tenía ninguna entrada.
+- **Regla**: cuando alguien te pasa una regla de higiene, corré la comprobación sobre toda la superficie que tocás, no sobre lo que acabás de escribir. Y si el hallazgo cae en el trabajo de otro, la entrada se escribe igual —con `pr` en lista, que el formato lo admite— y se le avisa para que revise su mitad ANTES de mergear, porque después la regla del archivo obliga a corregir con una entrada nueva enlazada en vez de editar.
+- **Disparador**: cualquier «esta regla también te aplica» que llegue de otra sesión. Preguntarse de qué es dueño uno, no qué escribió uno.
+
+### 2026-09-06 — «No movió ninguna cifra» no es «no hace falta registrarlo»
+
+- **Síntoma**: mis cambios al ledger alteraron cómo se computan `n_oos` y el RMSE, pero ninguna cifra se movió porque el producto todavía no tenía nada puntuado. El reflejo fue: sin cifra movida, no hay nada que explicarle a nadie.
+- **Causa raíz**: el changelog se lee como un registro reactivo —«esta cifra cambió porque…»— cuando su propio encabezado lo llama documento de CONTROL. Una regla que cambia hoy y cuyo primer resultado se publica en tres meses es el caso donde el registro vale más, no menos: para entonces nadie va a recordar que la vara se movió, y el número saldrá sin contexto.
+- **Regla**: la pregunta no es «¿se movió una cifra?» sino «¿alguien va a tener que explicar una cifra futura con una regla que hoy cambió?». Si la respuesta es sí, la entrada va ahora, con `que_cambio` describiendo la regla —que es lo que el formato pide— y el impacto declarando explícitamente que no hubo movimiento todavía.
+- **Disparador**: un cambio de metodología en un producto que aún no publicó el resultado de esa metodología. Es exactamente cuando parece que no hace falta.
