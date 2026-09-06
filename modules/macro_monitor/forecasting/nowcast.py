@@ -112,8 +112,14 @@ class CifraDeterminada:
     horizon: str
     as_of: str
     indice: float                # el índice de volumen del trimestre
-    dlog_pct: Optional[float]    # su variación contra el trimestre anterior, en %
+    #: Su variación contra el trimestre anterior, en %. Es la de la serie ORIGINAL sin
+    #: desestacionalizar: depende de en qué trimestre cae, y por eso NO es la cifra citable.
+    dlog_pct: Optional[float]
     es_identidad: bool = True
+    #: La variación contra el MISMO trimestre del año anterior, en %: la medida que la
+    #: entrada canónica del PIB declara citable. `None` si ese trimestre no está publicado —
+    #: nunca cero.
+    interanual_pct: Optional[float] = None
     #: Qué tan bien se cumplió la identidad en la historia disponible, para que quien lea la
     #: cifra pueda juzgar la afirmación en vez de creerla.
     diferencia_maxima_historica: float = 0.0
@@ -164,9 +170,14 @@ def cifra_determinada(db: Session, as_of: date) -> Optional[CifraDeterminada]:
     anterior = pib[-1][1] if pib else None
     dlog = (round((math.log(indice) - math.log(anterior)) * 100, 4)
             if anterior and anterior > 0 else None)
+    # La interanual: contra el índice PUBLICADO del mismo trimestre del año anterior. Es la
+    # medida citable; la trimestral de la serie original depende del calendario.
+    mismo_del_anio_anterior = dict(pib).get(f"{int(t[:4]) - 1}{t[4:]}")
+    interanual = (round((indice / mismo_del_anio_anterior - 1) * 100, 4)
+                  if mismo_del_anio_anterior and mismo_del_anio_anterior > 0 else None)
     return CifraDeterminada(
         target_series=panel_mod.PIB_CODE, horizon=t, as_of=as_of.isoformat(),
-        indice=round(indice, 6), dlog_pct=dlog,
+        indice=round(indice, 6), dlog_pct=dlog, interanual_pct=interanual,
         diferencia_maxima_historica=round(float(verificacion["diferencia_maxima"]), 8),
         n_trimestres_verificados=int(verificacion["n"]),
     )

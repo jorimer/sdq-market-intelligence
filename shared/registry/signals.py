@@ -58,7 +58,13 @@ COVERAGE_INSTRUMENT = "indicadores_medidos_del_instrumento"
 #: 2026-09-05 publicó «100% del índice se construye sobre dato real medido en la fuente»
 #: cuatro líneas antes de declarar, computado, que el 0% se sostiene en dato real.
 COVERAGE_PROJECTION = "fraccion_proyectada_admisible"
-COVERAGE_KINDS = (COVERAGE_INDEX, COVERAGE_INSTRUMENT, COVERAGE_PROJECTION)
+#: El eje de VALUACIÓN responde una cuarta: «¿qué fracción de los insumos del modelo está
+#: presente en la fuente al corte?». No arma un índice —arma un valor— y su insumo central,
+#: el costo de capital, es en parte supuesto declarado (beta y prima de riesgo). La frase de
+#: índice le hacía decir «100 % dato real» en la misma página en que declaraba, computado, que
+#: el 37 % del Ke es rúbrica (Deep Dive de Banco Popular, 2026-09-06).
+COVERAGE_INPUTS = "insumos_presentes_del_modelo"
+COVERAGE_KINDS = (COVERAGE_INDEX, COVERAGE_INSTRUMENT, COVERAGE_PROJECTION, COVERAGE_INPUTS)
 
 _STATE_ALIASES = {
     "live": REAL, "real": REAL,
