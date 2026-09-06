@@ -158,6 +158,24 @@ def _semantica_del_sistema(promedios: Dict) -> Dict:
     return _semantica_indicadores(claves, blobs)
 
 
+def _promedios_escritos(promedios: Dict, semantica: Dict) -> Dict:
+    """Cada promedio del sistema, escrito en la convención de casa y con su unidad.
+
+    La unidad sale de `semantica`, que ya la resuelve del registro de indicadores: sin ella un
+    136,48 se escribe igual sea un porcentaje o un múltiplo, y el modelo tiene que adivinar.
+    """
+    from shared.narrative.formato import numero_para_prosa
+
+    fuera: Dict = {}
+    for clave, valor in promedios.items():
+        base = str(clave)[:-4] if str(clave).endswith("_avg") else str(clave)
+        unidad = (semantica.get(base) or {}).get("unidad")
+        texto = numero_para_prosa(valor, unidad)
+        if texto is not None:
+            fuera[clave] = f"{texto}{unidad}" if unidad == "%" else texto
+    return fuera
+
+
 def _build_system_context(report_type: str, scope_name: str, period: str,
                           benchmarks: Optional[Dict],
                           anuario: Optional[Dict] = None) -> Dict:
@@ -188,6 +206,11 @@ def _build_system_context(report_type: str, scope_name: str, period: str,
             # mecanismo que ya resolvía esto en el otro motor.
             ctx["semantica_indicadores"] = _semantica_del_sistema(
                 benchmarks["sector_averages"])
+            # Y los mismos promedios YA ESCRITOS. Va aparte y no reemplaza a
+            # `promedios_sistema`: ese dict lo consumen otras superficies y el guard numérico
+            # necesita el valor crudo para respaldar la cita.
+            ctx["promedios_sistema_texto"] = _promedios_escritos(
+                benchmarks["sector_averages"], ctx["semantica_indicadores"])
         if benchmarks.get("peer_groups"):
             ctx["grupos_de_pares"] = benchmarks["peer_groups"]
         if benchmarks.get("regulatory_limits"):
