@@ -145,6 +145,37 @@ def _section_mode(section: str, base_mode: str) -> str:
 _SYSTEM_REPORT_TYPES = frozenset({"wire", "datawatch", "sector_outlook", "anuario"})
 
 
+def _semantica_del_sistema(promedios: Dict) -> Dict:
+    """Qué mide y en qué unidad cada promedio del sistema.
+
+    Las claves llegan como `{indicador}_avg`; el registro las conoce sin el sufijo. Se reusa
+    `_semantica_indicadores` en vez de escribir otro mapa: dos fuentes para el mismo hecho es
+    exactamente como una se queda atrás.
+    """
+    claves = [str(k)[:-4] for k in promedios if str(k).endswith("_avg")]
+    # `_semantica_indicadores` espera un blob por indicador; acá el valor es el promedio.
+    blobs = {k: {"raw": promedios.get(f"{k}_avg")} for k in claves}
+    return _semantica_indicadores(claves, blobs)
+
+
+def _promedios_escritos(promedios: Dict, semantica: Dict) -> Dict:
+    """Cada promedio del sistema, escrito en la convención de casa y con su unidad.
+
+    La unidad sale de `semantica`, que ya la resuelve del registro de indicadores: sin ella un
+    136,48 se escribe igual sea un porcentaje o un múltiplo, y el modelo tiene que adivinar.
+    """
+    from shared.narrative.formato import numero_para_prosa
+
+    fuera: Dict = {}
+    for clave, valor in promedios.items():
+        base = str(clave)[:-4] if str(clave).endswith("_avg") else str(clave)
+        unidad = (semantica.get(base) or {}).get("unidad")
+        texto = numero_para_prosa(valor, unidad)
+        if texto is not None:
+            fuera[clave] = f"{texto}{unidad}" if unidad == "%" else texto
+    return fuera
+
+
 def _build_system_context(report_type: str, scope_name: str, period: str,
                           benchmarks: Optional[Dict],
                           anuario: Optional[Dict] = None) -> Dict:
@@ -168,6 +199,18 @@ def _build_system_context(report_type: str, scope_name: str, period: str,
     if benchmarks and isinstance(benchmarks, dict):
         if benchmarks.get("sector_averages"):
             ctx["promedios_sistema"] = benchmarks["sector_averages"]
+            # QUÉ MIDE Y EN QUÉ UNIDAD, también acá. `_semantica_indicadores` existía y solo
+            # alimentaba los contextos de ENTIDAD: el de sistema servía los promedios pelados.
+            # Sin la unidad, una cobertura de 136,48 % se narró como «136,48 veces el uno» en
+            # un boletín de distribución — la cifra era real y su forma, falsa. Es el mismo
+            # mecanismo que ya resolvía esto en el otro motor.
+            ctx["semantica_indicadores"] = _semantica_del_sistema(
+                benchmarks["sector_averages"])
+            # Y los mismos promedios YA ESCRITOS. Va aparte y no reemplaza a
+            # `promedios_sistema`: ese dict lo consumen otras superficies y el guard numérico
+            # necesita el valor crudo para respaldar la cita.
+            ctx["promedios_sistema_texto"] = _promedios_escritos(
+                benchmarks["sector_averages"], ctx["semantica_indicadores"])
         if benchmarks.get("peer_groups"):
             ctx["grupos_de_pares"] = benchmarks["peer_groups"]
         if benchmarks.get("regulatory_limits"):

@@ -1175,3 +1175,37 @@ siendo escrita.
 - **Causa raíz**: el changelog se lee como un registro reactivo —«esta cifra cambió porque…»— cuando su propio encabezado lo llama documento de CONTROL. Una regla que cambia hoy y cuyo primer resultado se publica en tres meses es el caso donde el registro vale más, no menos: para entonces nadie va a recordar que la vara se movió, y el número saldrá sin contexto.
 - **Regla**: la pregunta no es «¿se movió una cifra?» sino «¿alguien va a tener que explicar una cifra futura con una regla que hoy cambió?». Si la respuesta es sí, la entrada va ahora, con `que_cambio` describiendo la regla —que es lo que el formato pide— y el impacto declarando explícitamente que no hubo movimiento todavía.
 - **Disparador**: un cambio de metodología en un producto que aún no publicó el resultado de esa metodología. Es exactamente cuando parece que no hace falta.
+
+
+---
+
+### 2026-09-06 — Una ausencia se declara, y también su CONSECUENCIA
+
+- **Síntoma**: la sección sectorial listaba las actividades que no se pueden proyectar —bien— y decía «una actividad con huecos se declara, **no se rellena**». La aritmética hace lo contrario: `reconciliar` reparte la brecha entre el peso de las PROYECTABLES, así que el hueco sí se rellena, repartiéndolo sobre las mostradas, que suben más de lo que subirían si estuvieran todas.
+- **Causa raíz**: declarar la ausencia se sintió como cerrar el tema. Pero una ausencia tiene dos mitades —qué falta, y qué le hace a lo que queda— y la segunda no se veía por ningún lado. Peor: la frase de arriba, «la suma ponderada reconcilia exactamente con el agregado», seguía siendo cierta sobre las filas mostradas justamente PORQUE se las había inflado.
+- **Regla**: cuando se declara que algo no se pudo computar, preguntar **qué hicieron los demás con su parte**. Si se redistribuyó, se dice cuánto y sobre quién, computado; si se descartó, se dice que el total ya no cierra. «Lo declaramos» sin la consecuencia deja al lector creyendo que el resto está intacto.
+- **Disparador**: toda reconciliación, prorrateo o normalización sobre un subconjunto. La pregunta: ¿el denominador es el universo o lo que sobrevivió al filtro? Si es lo segundo, hay una consecuencia que declarar.
+
+### 2026-09-06 — Medir antes de mandar el ejemplo, no después
+
+- **Síntoma**: le pasé a otra sesión un caso de juguete —tres actividades, la faltante pesando 20 %— que daba **+1,38 pp** de distorsión. Al medirlo después contra su panel real (18 actividades, la mayor 12,26 %) el daño verdadero iba de **+0,01 a +0,18 pp**: un orden de magnitud menos.
+- **Causa raíz**: construí el contraejemplo con números redondos para que el mecanismo se viera, y lo mandé como si dimensionara el problema. Un ejemplo ilustra un mecanismo; una medición dimensiona un riesgo. Los confundí en un mensaje donde el otro tenía que DECIDIR, y la cifra inflada empujaba hacia renormalizar o negarse a reconciliar —ambas sobre-ingeniería para +0,18 pp—.
+- **Regla**: si un hallazgo va a alimentar la decisión de otro, la magnitud se mide contra SU dato antes de mandarlo. Y si ya salió, la corrección se manda enseguida y sola, sin esperar a que pregunten: llegó a tiempo y eligieron la opción mínima, que era la correcta.
+- **Disparador**: cualquier caso construido a mano que se cite como evidencia de severidad. Preguntarse: ¿esto muestra que PASA, o cuánto pasa? No es lo mismo.
+
+
+---
+
+### 2026-09-06 — La muestra curada encontró el defecto que mis tests no
+
+- **Síntoma**: reconstruí la muestra del producto para que sus identidades cerraran, y al renderizarla salió «cada actividad mostrada **sube** −0,008 pp». La frase la había escrito yo unas horas antes y todos mis tests la daban por buena: los había construido con una brecha POSITIVA.
+- **Causa raíz**: elegí el signo del caso de prueba sin pensarlo, y con brecha positiva la palabra «sube» concuerda con el número. La muestra, que sale de un corte real, trajo el signo que a mí no se me ocurrió. Es la familia «verificar contra el caso NO representativo», pero al revés: el caso representativo estaba en el dato real y mi fixture lo evitó.
+- **Regla**: toda prosa que acompañe una magnitud con signo se escribe NEUTRA —«recibe X de ajuste adicional», no «sube X»— y se prueba con los dos signos. Y una muestra curada que cierra sola no es cosmética: es un caso de prueba con datos reales que ejercita ramas que las fixtures a mano no eligen.
+- **Disparador**: cualquier frase con `{x:+.Nf}` al lado de un verbo direccional. Y todo test cuyo caso lleve un número que elegí yo: preguntarme por qué ese signo y no el otro.
+
+### 2026-09-06 — Una vidriera con un número que el motor no produce
+
+- **Síntoma**: otra sesión señaló que la muestra curada publicaba un `ajuste_pp` incoherente. Al medirlo había TRES violaciones, no una: el ajuste no era `brecha/Σpeso` ni `brecha`; cinco actividades sumaban el 49,92 % del cuadro con `brechas: {}`; y la suma ponderada quedaba 1,40 pp por debajo del agregado que el propio titular anuncia — mientras la sección abre afirmando que «reconcilia exactamente».
+- **Causa raíz**: la muestra se escribió a mano como cifras «ilustrativas» y el único test que la tocaba comprobaba que el PDF pesara más de 5 KB. Que renderice no dice nada de si los números cierran entre sí. Y su propio comentario prometía «una actividad no proyectada» que nunca se implementó: el texto describía una intención, no el contenido.
+- **Regla**: una muestra curada tiene que satisfacer las identidades del método que exhibe, y eso se vigila con un test que las compruebe una por una — no con uno que verifique que el archivo existe. Reconstruirla desde un corte real es la forma barata de que sea producible por el motor. Y si el comentario de la muestra promete un caso, el test lo exige.
+- **Disparador**: toda muestra, fixture de demo o payload de ejemplo que un cliente vaya a ver. Preguntar: ¿estas cifras salen de correr el método, o las escribió alguien para que se vieran bien?

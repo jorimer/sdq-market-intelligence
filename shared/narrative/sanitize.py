@@ -251,6 +251,21 @@ _DECIMAL_COMMA = re.compile(r"(?<=\d),(\d{1,2})(?!\d)")
 # ciento. Las tablas escriben "50.9%"; la prosa alternaba "50,9 %".
 _PCT_SPACE = re.compile(r"(\d)[\s   ]+%")
 
+# PUNTO como separador de MILES, con decimal de 1-2 dígitos: «6.823.5». Bajo la convención
+# de casa —punto decimal— esa cifra no se puede leer: parece seis coma ochocientos veintitrés.
+# Salió impresa en el boletín regional del 2026-09-06, en las cifras de crédito de Nicaragua,
+# conviviendo con «21,594» y «2 891.62» en el mismo documento: tres convenciones de miles.
+#
+# La restricción a 1-2 dígitos de fracción es lo que hace la regla SEGURA, por la misma razón
+# que en `_DECIMAL_COMMA`: «12.345.678» —tres dígitos finales— es un miles-miles legítimo de
+# otra convención y reescribirlo cambiaría la magnitud por mil. Ese caso NO se toca.
+_MILES_CON_PUNTO = re.compile(r"\b(\d{1,3})\.(\d{3})\.(\d{1,2})(?!\d)")
+
+# ESPACIO como separador de miles: «2 891.62». Se MARCA y no se reescribe. Un espacio entre
+# dígitos aparece también en prosa legítima («en 2026 100 entidades») y una sustitución
+# automática ahí inventaría una cifra. Marcar deja la deriva observable sin arriesgar el dato.
+_MILES_CON_ESPACIO = re.compile(r"\b\d{1,3}[\s ]\d{3}(?=[.,]\d|\b)")
+
 # Tipeos del modelo vistos en material entregado. Deliberadamente CORTO y anclado a
 # palabra completa: no es un corrector ortográfico —eso mordería terminología legítima—,
 # es una lista de errores observados. "exceptcionalmente" salió en el Rating Completo §2.
@@ -259,6 +274,35 @@ _TYPOS: List[Tuple[re.Pattern, str]] = [
     # tocar "excepto" ni "excepción", que son palabras legítimas.
     (re.compile(r"\bexcept(cional\w*)\b", re.I), r"excep\1"),
 ]
+
+
+def _huella_del_saneador() -> str:
+    """Huella del FUENTE de este módulo, para la clave de caché de narrativas.
+
+    Todo lo que hay acá post-procesa CADA narrativa: se quita el meta-comentario, se unifica
+    el formato numérico, se marca el registro impropio. Es receta, no pregunta — y la clave de
+    caché hashea la receta justamente para que un arreglo de cara al cliente no quede sin
+    efecto en silencio.
+
+    Faltaba. El 2026-09-06 se agregó la corrección del punto de miles («6.823.5», ilegible con
+    punto decimal), se desplegó, se regeneró el boletín y las ocho cifras seguían ahí: el texto
+    vino de la caché, porque ni el contexto ni el prompt ni el guard habían cambiado. La prueba
+    de que era eso y no otra cosa: §1 SÍ se arregló en la misma corrida, porque a esa sección
+    le habíamos cambiado el CONTEXTO —y eso sí rota su clave—.
+
+    Se hashea el archivo ENTERO y no una lista de reglas: una lista es lo que alguien olvida
+    ampliar al agregar la regla siguiente. El costo es que editar un comentario acá rota las
+    entradas afectadas; es el lado barato del error.
+    """
+    import hashlib
+    import pathlib as _p
+
+    return hashlib.sha256(_p.Path(__file__).read_bytes()).hexdigest()[:16]
+
+
+#: Se calcula UNA vez al importar: va en cada clave de caché y no puede costar una lectura de
+#: disco por narrativa.
+FINGERPRINT = _huella_del_saneador()
 
 
 def normalize_number_format(text: str) -> Tuple[str, List[str]]:
@@ -274,10 +318,18 @@ def normalize_number_format(text: str) -> Tuple[str, List[str]]:
     if n_dec:
         text = _DECIMAL_COMMA.sub(r".\1", text)
         cambios.append(f"{n_dec} coma(s) decimal(es) → punto")
+    n_mil = len(_MILES_CON_PUNTO.findall(text))
+    if n_mil:
+        text = _MILES_CON_PUNTO.sub(r"\1,\2.\3", text)
+        cambios.append(f"{n_mil} punto(s) de miles → coma")
     n_pct = len(_PCT_SPACE.findall(text))
     if n_pct:
         text = _PCT_SPACE.sub(r"\1%", text)
         cambios.append(f"{n_pct} espacio(s) antes de %")
+    espacios = _MILES_CON_ESPACIO.findall(text)
+    if espacios:
+        # No se sustituye: se declara. Ver `_MILES_CON_ESPACIO`.
+        cambios.append(f"{len(espacios)} miles con ESPACIO sin unificar (no se reescriben)")
     for patron, reemplazo in _TYPOS:
         vistos = [m.group(0) for m in patron.finditer(text)]
         nuevo = patron.sub(reemplazo, text)

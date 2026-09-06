@@ -72,6 +72,20 @@ DISCLAIMER_ES = (
     "derivadas del uso de esta información."
 )
 
+#: Para los documentos que NO califican a nadie. El pie de arriba habla de «calificaciones»
+#: —correcto en un informe de rating— y salió impreso en el boletín regional, que es
+#: divulgación gratuita y no califica ninguna entidad: un descargo que se descarga de algo
+#: que el documento no hizo confunde sobre qué es el documento.
+#:
+#: Se elige por la PRESENCIA de calificación, no por una lista de tipos de informe: una
+#: lista es lo que alguien olvida actualizar, y este repo ya tiene el antecedente.
+DISCLAIMER_SIN_CALIFICACION_ES = (
+    "Las opiniones expresadas en este documento son las de SDQ Consulting y no constituyen "
+    "una recomendación para comprar, vender o mantener valores. Este documento no contiene "
+    "calificaciones de riesgo. SDQ Consulting no asume responsabilidad por pérdidas "
+    "derivadas del uso de esta información."
+)
+
 REPORT_TYPE_LABELS = {
     "full_rating": "Informe de Calificación Completa",
     "scorecard": "Scorecard",
@@ -1135,12 +1149,17 @@ def _build_narrative_sections(narratives: Dict[str, str], styles,
     return elements
 
 
-def _build_disclaimer(styles, con_nota_de_metodo: bool = False) -> List:
+def _build_disclaimer(styles, con_nota_de_metodo: bool = False,
+                     califica: bool = True) -> List:
     """El pie del documento. `con_nota_de_metodo` lo enciende quien publicó el índice.
 
     Se ata a la PRESENCIA de la tabla de indicadores y no a una lista de tipos de informe:
     una lista es lo que alguien olvida actualizar al agregar un tipo, y este repo ya tiene
     el antecedente —al anuario le faltaron cuatro registros de a uno y ninguno falló—.
+
+    `califica` sigue el mismo criterio: un documento que no emite calificación no puede
+    descargarse de las suyas. El boletín regional salió a distribución con un pie que hablaba
+    de «las calificaciones expresadas en este informe» sin calificar a nadie.
     """
     elements: List = []
     if con_nota_de_metodo:
@@ -1148,7 +1167,9 @@ def _build_disclaimer(styles, con_nota_de_metodo: bool = False) -> List:
         elements.append(Paragraph(NOTA_DE_METODO_DEL_INDICE, styles["SDQSmall"]))
     elements.append(Spacer(1, 0.5 * inch))
     elements.append(Paragraph("Disclaimer", styles["SDQSubHeading"]))
-    elements.append(Paragraph(DISCLAIMER_ES, styles["SDQSmall"]))
+    elements.append(Paragraph(
+        DISCLAIMER_ES if califica else DISCLAIMER_SIN_CALIFICACION_ES,
+        styles["SDQSmall"]))
     return elements
 
 
@@ -1710,7 +1731,12 @@ async def generate_pdf_report(
             _order_narratives(narratives, sections), styles, tablas_en_linea))
 
     # 5. Disclaimer (texto propio de banking; el shell no lo añade).
-    body.extend(_build_disclaimer(styles, con_nota_de_metodo=_publico_el_indice))
+    # Por PRESENCIA de calificación, no por lista de tipos: un boletín de sistema no
+    # califica a nadie —su `scoring_result` es el stub sin score— y no puede descargarse de
+    # calificaciones que no emitió.
+    body.extend(_build_disclaimer(
+        styles, con_nota_de_metodo=_publico_el_indice,
+        califica=bool(scoring_result.get("overall_score"))))
 
     # Portada + chrome de marca compartidos (banda navy + logo Arco + encabezado corrido +
     # nº de página + watermark/estampa) vía el shell de render.py — la calificación va como
