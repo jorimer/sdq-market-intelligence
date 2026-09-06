@@ -132,7 +132,14 @@ de participación minoritaria (con DLOM estimado), es otro producto; este plan s
 
 ---
 
-## Cierre 3 · Conclusión y responsabilidad (`SECCION_CIERRE = "conclusion_y_responsabilidad"`)
+## Cierre 3 · Conclusión y responsabilidad (`SECCION_CIERRE = "conclusion_y_responsabilidad"`) — HECHO
+
+Rama `claude/vl-11-conclusion-y-responsabilidad`. Decisiones del dueño (2026-09-06): firma
+INSTITUCIONAL (SDQ Consulting, sin firmante personal); independencia AFIRMADA con excepción por
+entidad (`settings.VALUACION_ENTIDADES_CON_RELACION`, nombres o ids separados por coma — vacío en
+prod hasta que se cargue); en insight y deep dive. Todo computado: emisión = snapshot, versión =
+última entrada del changelog del eje (se agregó la del ROE de doce meses, #1141, que faltaba),
+validación = `validation_state()`. La muestra computa el cierre igual que el informe real.
 
 Última sección, en insight y deep dive. **Todo computado de la plataforma**; nada escrito
 a mano, porque un número o una fecha copiada se desincroniza:

@@ -26,6 +26,10 @@ AI_CONTEXT_FILES = (
     "products.py",
     "narrativa.py",
     "panel/transacciones.py",
+    # El entorno decide qué relaciones se publican (umbral de «en línea», qué series) y el
+    # cierre trae prosa propia (la relación declarada): los dos son receta del informe.
+    "entorno.py",
+    "responsabilidad.py",
 )
 
 #: Las advertencias que acompañan a cualquier cifra de este eje. Van al contexto y no a la
