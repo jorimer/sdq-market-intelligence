@@ -13,9 +13,19 @@ from typing import Any, Dict
 
 #: Archivos cuyo contenido forma la huella del contexto de este eje. Se declara explícito
 #: para que un cambio en el motor —cuando exista— invalide la caché de narrativas.
+#: Rutas RELATIVAS al módulo: así las resuelven igual el ensamblador (`ruta_de_contexto`) y
+#: la regla estructural del sujeto, que lee esta tupla con `ast` y la ancla a la carpeta.
+#: Con rutas desde la raíz, la regla buscaba `modules/valuation/modules/valuation/...` y
+#: dejaba a `products.py` fuera sin avisar.
+#:
+#: Este eje no usa el motor de IA, pero su informe SÍ pasa por `ProductReportCache`, que no
+#: tiene TTL: lo que invalida un informe ya generado es exactamente esta lista. La prosa y
+#: el panel de transacciones están porque son lo que el informe publica.
 AI_CONTEXT_FILES = (
-    "modules/valuation/ai_context.py",
-    "modules/valuation/products.py",
+    "ai_context.py",
+    "products.py",
+    "narrativa.py",
+    "panel/transacciones.py",
 )
 
 #: Las advertencias que acompañan a cualquier cifra de este eje. Van al contexto y no a la

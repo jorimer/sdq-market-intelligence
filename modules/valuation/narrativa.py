@@ -22,8 +22,10 @@ Cómo los cumple cada párrafo del resumen:
 """
 from __future__ import annotations
 
-from typing import Optional, Tuple
+from dataclasses import dataclass
+from typing import List, Optional, Sequence, Tuple
 
+from modules.valuation.panel import transacciones as tx
 from modules.valuation.service import Lectura
 
 #: Cuánto tiene que moverse Ke para dar vuelta el signo — se computa, no se estima a ojo.
@@ -304,10 +306,11 @@ def metodologia(lec: Lectura) -> str:
         f"{lec.persistencia:.3f} y retención de utilidades {lec.retencion:.2f}. "
         f"{lec.evidencia_del_tipo}\n\n"
         "**Enfoque de mercado, como contraste y no como método.** El panel de transacciones "
-        "bancarias del Caribe dice a cuánto sobre libro se ha pagado por una entidad, y sirve "
-        "para ver si el rango de salida es razonable. No se usa para producir el valor: son "
-        "pocas operaciones, de jurisdicciones y años distintos, y calibrar contra ellas sería "
-        "ajustar el modelo a un puñado de observaciones.")
+        "bancarias del Caribe dice a cuánto sobre libro se ha pagado por una entidad, y la "
+        "sección «Contraste de mercado» sitúa el rango de salida contra su mediana y su rango. "
+        "No se usa para producir el valor: son pocas operaciones, de jurisdicciones y años "
+        "distintos, y calibrar contra ellas sería ajustar el modelo a un puñado de "
+        "observaciones.")
 
 
 def fuentes_y_procedencia(lec: Lectura) -> str:
@@ -327,9 +330,16 @@ def fuentes_y_procedencia(lec: Lectura) -> str:
         "mediana de la serie | dato publicado |\n"
         "| Retención de utilidades y persistencia del exceso | medidas sobre el padrón "
         "completo de la SB, cierres 2019-2025 | estimación propia |\n"
-        "| Beta y prima de riesgo de mercado | comparables latinoamericanos | **rúbrica** |\n\n"
-        f"El **{lec.fraccion_de_rubrica:.0%}** del costo de capital descansa en la última "
-        "fila. Es la parte del resultado que no se apoya en dato dominicano observado, y por "
+        "| Beta y prima de riesgo de mercado | comparables latinoamericanos | **rúbrica** |\n"
+        "| Panel de transacciones bancarias RD/Caribe | relevamiento propio: anuncios, memorias "
+        "auditadas del comprador o de la adquirida, filings ante la SEC, SB/SIMBAD y BCRD | dato "
+        "publicado + relevamiento propio |\n\n"
+        # La fila se NOMBRA, no se señala por posición: decía «la última fila» y al entrar el
+        # panel de transacciones al final de la tabla la frase pasó a señalar otra cosa. Lo
+        # encontró leer el PDF, no un test.
+        f"El **{lec.fraccion_de_rubrica:.0%}** del costo de capital descansa en la fila de "
+        "beta y prima de riesgo de mercado. Es la parte del resultado que no se apoya en dato "
+        "dominicano observado, y por "
         "eso se publica el rango completo en vez de un punto.\n\n"
         "**Nada de este informe usa información no pública.** Todo insumo es reproducible por "
         "un tercero con las mismas fuentes, que es la condición para que la cifra se pueda "
@@ -345,8 +355,9 @@ def limitaciones(lec: Lectura) -> str:
     """
     partes = [
         "**Esta valuación no está contrastada contra precios pagados.** El panel de "
-        "transacciones bancarias del Caribe permite decir a cuánto sobre valor libro se ha "
-        "pagado por una entidad —una referencia de mercado— pero contrastar ESTE modelo es "
+        "transacciones bancarias del Caribe —la sección de contraste de mercado— permite decir "
+        "a cuánto sobre valor libro se ha pagado por una entidad, una referencia de mercado, "
+        "pero contrastar ESTE modelo es "
         "otra cosa: exige valuar cada adquirida a la fecha de su operación, y para eso hace "
         "falta su historia de balance. Mientras eso no exista, el eje no afirma que sus "
         "valores predicen precios.",
@@ -371,3 +382,265 @@ def limitaciones(lec: Lectura) -> str:
         "de SDQ Consulting y no constituyen asesoría de inversión.",
     ]
     return "\n\n".join(partes)
+
+
+# ── El contraste de mercado: el panel de transacciones LLEGA al informe ─────────────
+#
+# El panel se computaba entero —comparables, mediana, mínimo y máximo, el gate, las vías
+# abiertas y los descartes— y el informe no lo pedía: la metodología decía que «el panel dice
+# a cuánto sobre libro se ha pagado» y no mostraba ni tabla, ni rango, ni conteo. Es la
+# familia «servir el dato no alcanza: hay que pedirlo». Cada eje son DOS trabajos, el motor
+# y la plantilla; éste es el segundo.
+#
+# Tres reglas que gobiernan lo de abajo:
+#
+# 1. **Solo se ordena lo comparable.** A la tabla y al resumen entran los múltiplos sobre
+#    base CONTABLE; los verificables sobre valor razonable de la NIIF 3 van aparte y
+#    marcados, nunca ocultos — ocultarlos los hace desaparecer sin aviso.
+# 2. **La posición del rango se COMPUTA.** Por debajo, por encima o solapando, y dónde cae
+#    la mediana, se calculan en código y la prosa los copia. Un modelo acierta las cifras y
+#    falla las relaciones; acá no hay modelo, pero la regla se conserva para que un test la
+#    pueda exigir.
+# 3. **Es contraste, no método.** El panel sitúa el rango de salida; no lo produce. Y un
+#    panel abierto es evidencia de MERCADO, no de que este modelo acierte.
+
+#: Subtítulos de la sección. Son constantes porque los tests parten la sección por ellos.
+SUBTITULO_COMPARABLES = "Comparables sobre base contable"
+SUBTITULO_OTRA_BASE = "Verificables sobre otra base, que no entran al resumen"
+SUBTITULO_POSICION = "Dónde queda esta valuación"
+
+#: Las tres relaciones posibles entre el rango de la valuación y el panel. Se publican
+#: TAL CUAL —por eso empiezan en mayúscula— y los tests las importan. Viven en
+#: constantes y no dentro de una f-string: un literal partido por ancho de línea deja de
+#: existir en el fuente aunque el valor sea correcto, y el test que lo busque falla —o pasa—
+#: sin motivo.
+FRASE_RANGO_POR_DEBAJO = (
+    "Todo el rango de esta valuación queda por debajo del múltiplo mínimo observado en el panel")
+FRASE_RANGO_POR_ENCIMA = (
+    "Todo el rango de esta valuación queda por encima del múltiplo máximo observado en el panel")
+FRASE_RANGO_SOLAPA = "El rango de esta valuación solapa con lo observado en el panel"
+
+_BASES = {tx.BASE_CONTABLE: "contable", tx.BASE_VALOR_RAZONABLE: "valor razonable (NIIF 3)"}
+
+
+def _pais(codigo: str) -> str:
+    return tx.nombre_de_pais(codigo)
+
+
+@dataclass(frozen=True)
+class PosicionFrenteAlPanel:
+    """La relación entre el rango P/B de la valuación y el panel, COMPUTADA."""
+
+    pb_bajo: float
+    pb_alto: float
+    #: Todo el rango por debajo del mínimo observado.
+    por_debajo: bool
+    #: Todo el rango por encima del máximo observado.
+    por_encima: bool
+    #: Ni una cosa ni la otra: el rango y el panel se cruzan en algún punto.
+    solapa: bool
+    mediana_dentro_del_rango: bool
+    #: La mediana queda por encima del extremo favorable (la valuación es más baja que lo
+    #: que se pagó en el caso típico) o por debajo del adverso.
+    mediana_por_encima_del_rango: bool
+    mediana_por_debajo_del_rango: bool
+    #: Distancia del extremo favorable a la mediana, en veces el libro. Positiva si la
+    #: mediana está por encima.
+    distancia_favorable_a_mediana: float
+    distancia_adverso_a_mediana: float
+
+
+def posicion_frente_al_panel(pb_bajo: float, pb_alto: float,
+                             r: tx.ResumenDelPanel) -> PosicionFrenteAlPanel:
+    """Dónde cae el rango [pb_bajo, pb_alto] contra el panel. Se computa; la prosa copia."""
+    por_debajo = pb_alto < r.minimo
+    por_encima = pb_bajo > r.maximo
+    return PosicionFrenteAlPanel(
+        pb_bajo=pb_bajo, pb_alto=pb_alto,
+        por_debajo=por_debajo, por_encima=por_encima,
+        solapa=not (por_debajo or por_encima),
+        mediana_dentro_del_rango=pb_bajo <= r.mediana <= pb_alto,
+        mediana_por_encima_del_rango=r.mediana > pb_alto,
+        mediana_por_debajo_del_rango=r.mediana < pb_bajo,
+        distancia_favorable_a_mediana=round(r.mediana - pb_alto, 4),
+        distancia_adverso_a_mediana=round(r.mediana - pb_bajo, 4),
+    )
+
+
+def prosa_de_la_posicion(pos: PosicionFrenteAlPanel, r: tx.ResumenDelPanel) -> str:
+    """La lectura de la posición, con la relación ya computada y las cifras que la sostienen.
+
+    Dice qué supuesto implica cada caso —igual que la sección de decisión—, y nunca que el
+    modelo esté bien o mal: el panel son otras entidades, otras jurisdicciones y otros
+    años, y esta valuación no lo usa para producir el valor.
+    """
+    cifras = (f"El múltiplo implícito de esta valuación va de **{pos.pb_bajo:.2f}×** a "
+              f"**{pos.pb_alto:.2f}×**; el panel observa una mediana de **{r.mediana:.2f}×** "
+              f"entre **{r.minimo:.2f}×** y **{r.maximo:.2f}×**.")
+    if pos.por_debajo:
+        lectura = (
+            f"**{FRASE_RANGO_POR_DEBAJO}**: el "
+            f"extremo favorable queda **{abs(pos.distancia_favorable_a_mediana):.2f}×** por "
+            "debajo de la mediana. Quien pagara por esta entidad lo que el panel muestra "
+            "estaría afirmando un ROE mayor o un costo de capital menor que los de acá, y "
+            "esa afirmación se discute con evidencia, no con el panel.")
+    elif pos.por_encima:
+        lectura = (
+            f"**{FRASE_RANGO_POR_ENCIMA}**: el "
+            f"extremo adverso queda **{abs(pos.distancia_adverso_a_mediana):.2f}×** por "
+            "encima de la mediana. Un comprador que pagara dentro de este rango estaría "
+            "pagando más de lo que se pagó por cualquier banco del panel, o sea afirmando un "
+            "exceso de retorno que ninguna transacción observada respaldó.")
+    else:
+        if pos.mediana_dentro_del_rango:
+            mediana = ("la mediana del panel **cae dentro del rango**: el caso típico "
+                       "observado es uno de los supuestos que esta valuación admite.")
+        elif pos.mediana_por_encima_del_rango:
+            mediana = (f"la mediana del panel queda **{abs(pos.distancia_favorable_a_mediana):.2f}×** "
+                       "por encima del extremo favorable: en el caso típico se pagó más de lo "
+                       "que el modelo sostiene con su supuesto más favorable.")
+        else:
+            mediana = (f"la mediana del panel queda **{abs(pos.distancia_adverso_a_mediana):.2f}×** "
+                       "por debajo del extremo adverso: en el caso típico se pagó menos de lo "
+                       "que el modelo sostiene incluso con su supuesto más adverso.")
+        lectura = f"**{FRASE_RANGO_SOLAPA}**, y {mediana}"
+    return f"{cifras}\n\n{lectura}"
+
+
+def _fila(t: tx.Transaccion) -> str:
+    pb = t.pb_recomputado
+    return (f"| {t.anio} | {t.comprador} | {t.adquirida} | {_pais(t.pais)} | "
+            f"{pb:.2f}× | {_BASES.get(t.base, t.base)} | {t.periodo_libro or '—'} |"
+            if pb is not None else
+            f"| {t.anio} | {t.comprador} | {t.adquirida} | {_pais(t.pais)} | — | "
+            f"{_BASES.get(t.base, t.base)} | {t.periodo_libro or '—'} |")
+
+
+def _ordenados(casos: Sequence[tx.Transaccion]) -> List[tx.Transaccion]:
+    return sorted(casos, key=lambda t: (-t.anio, t.comprador))
+
+
+def contraste_de_mercado(lec: Lectura, panel: Sequence[tx.Transaccion] = tx.PANEL, *,
+                         con_anexo: bool) -> str:
+    """La sección: tabla de comparables, resumen computado, posición del rango, y lo que el
+    panel NO permite afirmar. `con_anexo` dice si el nivel trae el anexo con vías y
+    descartes, para que el puntero apunte a donde corresponde."""
+    estado = tx.estado(panel)
+    if not estado.abierto:
+        # El gate se consulta antes, no después. Con el panel corto la sección no publica
+        # una tabla de tres casos como si fuera un mercado: declara la brecha con su motivo.
+        return (
+            "**La vista de fusiones y adquisiciones está cerrada, y se dice por qué.** "
+            f"{estado.motivo}\n\n"
+            "Mientras el gate no abra, esta valuación no se sitúa contra precios pagados: "
+            "el rango se publica con sus supuestos y su sensibilidad, sin referencia de "
+            "mercado.")
+
+    r = tx.resumen(panel)
+    if r is None:  # no puede pasar con el gate abierto; se declara igual, no se inventa
+        return ("**La vista de fusiones y adquisiciones está cerrada.** " + estado.motivo)
+    comparables = _ordenados([t for t in panel if t.comparable])
+    otros = _ordenados([t for t in panel if t.verificable and not t.comparable])
+    c = tx.contraste_del_modelo(panel)
+    anios = [t.anio for t in comparables]
+    paises = sorted({_pais(t.pais) for t in comparables})
+
+    intro = (
+        "**Enfoque de mercado, como contraste y no como método.** Una valuación se sitúa "
+        "contra lo que alguien PAGÓ. El panel de transacciones bancarias del Caribe reúne "
+        f"**{estado.n_verificables} operaciones con las dos puntas publicadas** —precio y "
+        f"denominador—, de las cuales **{r.n} están sobre patrimonio contable**, que es la "
+        "base contra la que valúa el Excess Return y la única que entra a la misma tabla. "
+        f"Son {r.n} comparables en {len(paises)} jurisdicciones "
+        f"({', '.join(paises)}) entre {min(anios)} y {max(anios)}. El panel no se usa para "
+        "producir el valor: sitúa el rango de salida y nada más.")
+
+    filas = "\n".join(_fila(t) for t in comparables)
+    tabla = (
+        f"### {SUBTITULO_COMPARABLES}\n\n"
+        "| Año | Comprador | Adquirida | País | P/B | Base | Corte del libro |\n"
+        "|---|---|---|---|---|---|---|\n"
+        f"{filas}\n\n"
+        f"**Mediana {r.mediana:.2f}×**, mínimo {r.minimo:.2f}× y máximo {r.maximo:.2f}× sobre "
+        f"{r.n} comparables. Cada múltiplo se recomputa desde sus insumos —precio, "
+        "patrimonio al corte, tipo de cambio del mes y fracción comprada— y el corte del "
+        "libro es el último publicado antes de la operación. Un múltiplo por debajo de 1.0× "
+        "existe y está en la tabla: un panel que solo mirara hacia arriba estaría sesgado "
+        "por selección.")
+
+    pos = posicion_frente_al_panel(lec.pb_bajo, lec.pb_alto, r)
+    posicion = f"### {SUBTITULO_POSICION}\n\n{prosa_de_la_posicion(pos, r)}"
+
+    if otros:
+        filas_otros = "\n".join(_fila(t) for t in otros)
+        otra_base = (
+            f"### {SUBTITULO_OTRA_BASE}\n\n"
+            + ("Hay una operación más con las dos puntas publicadas cuyo denominador son "
+               if len(otros) == 1 else
+               f"Hay {len(otros)} operaciones más con las dos puntas publicadas cuyo "
+               "denominador son ")
+            + "los activos netos identificables a **valor razonable** de la NIIF 3: lo que "
+            "el COMPRADOR reconoce, no lo que el vendedor tenía en libros. Son datos "
+            "verificables y no son un P/B —en una de ellas el intangible reconocido en la "
+            "adquisición es el 62 % del denominador—, así que no entran ni a la tabla ni a "
+            "la mediana. Se listan para que no desaparezcan.\n\n"
+            "| Año | Comprador | Adquirida | País | Precio / activos netos | Base | Corte |\n"
+            "|---|---|---|---|---|---|---|\n"
+            f"{filas_otros}")
+    else:
+        otra_base = ""
+
+    limites = (
+        "**El panel abre la vista de mercado y no valida el modelo.** Contrastar ESTE "
+        "modelo exigiría valuar cada adquirida con el Excess Return a la fecha de su "
+        "operación y comparar ese valor con el precio, y para eso hace falta su historia de "
+        f"ROE y patrimonio: la tenemos para {c.n_valuables} de los {c.n_comparables} "
+        "comparables, porque el balance por entidad solo se ingiere de República "
+        "Dominicana. Por eso la sección de limitaciones sigue diciendo que esta valuación no "
+        "está contrastada contra precios pagados.\n\n"
+        f"Se relevaron además {len(tx.DESCARTADAS)} operaciones que no entran al panel "
+        "—anunciadas sin monto, no consumadas, disoluciones, fusiones entre iguales— y "
+        f"quedan {len(tx.VIAS_ABIERTAS)} vías abiertas con lo que falta nombrado en cada "
+        "una. "
+        + ("El anexo las lista una por una, con su motivo, y con lo que cada comparable "
+           "NO permite afirmar." if con_anexo else
+           "El Deep Dive las lista una por una, con su motivo, y con lo que cada comparable "
+           "NO permite afirmar."))
+
+    partes = [intro, tabla, posicion]
+    if otra_base:
+        partes.append(otra_base)
+    partes.append(limites)
+    return "\n\n".join(partes)
+
+
+def _un_parrafo(texto: str) -> str:
+    """Un motivo con saltos de párrafo adentro se convierte en una sola viñeta: el
+    renderizador parte las viñetas por línea, y un salto la cortaría en dos."""
+    return " ".join(p.strip() for p in texto.split("\n") if p.strip())
+
+
+def anexo_del_panel(panel: Sequence[tx.Transaccion] = tx.PANEL) -> str:
+    """Vías abiertas, descartes con motivo, la discrepancia declarada y lo que cada
+    comparable NO permite afirmar. Un panel chico sin explicación se lee como falta de
+    trabajo; esto es el resultado del trabajo."""
+    comparables = _ordenados([t for t in panel if t.comparable])
+    caveats: List[str] = []
+    for t in comparables:
+        caveats.append(f"**{t.anio} · {t.comprador} → {t.adquirida}** — alcance: {t.alcance}.")
+        caveats += [f"- {_un_parrafo(cv)}" for cv in t.caveats]
+    vias = "\n".join(f"- **{n}** — {_un_parrafo(f)}" for n, f in tx.VIAS_ABIERTAS)
+    descartes = "\n".join(f"- **{n}** — {_un_parrafo(m)}" for n, m in tx.DESCARTADAS)
+    return (
+        "### Lo que cada comparable NO permite afirmar\n\n"
+        "Los caveats viajan con el dato: un múltiplo sin ellos se lee con más precisión de "
+        "la que tiene.\n\n"
+        + "\n".join(caveats) + "\n\n"
+        f"### Vías abiertas ({len(tx.VIAS_ABIERTAS)})\n\n"
+        "Operaciones donde falta UNA cosa concreta y se sabe cuál. No son descartes y no "
+        "son casos: entran al panel el día que se cierre lo que falta.\n\n"
+        f"{vias}\n\n"
+        f"### Operaciones relevadas y descartadas ({len(tx.DESCARTADAS)})\n\n"
+        f"{descartes}\n\n"
+        "### Una discrepancia que se declara en vez de resolverse\n\n"
+        f"{tx.DISCREPANCIA_RFHL}")
