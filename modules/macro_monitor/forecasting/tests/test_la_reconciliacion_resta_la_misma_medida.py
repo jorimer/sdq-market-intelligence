@@ -188,8 +188,11 @@ def test_la_MUESTRA_trae_las_mismas_claves_que_el_payload_real(db):
     panel = S.construir_panel(db)
     pr = S.proyectar(panel, g_pib=panel.pib[-1], horizonte=panel.trimestres[-1],
                      origen_del_agregado="test", medida_del_agregado=S.MEDIDA_DEL_PANEL)
-    reales = {"etiqueta", "crecimiento", "crecimiento_sin_reconciliar", "peso", "incidencia"}
-    assert {f for f in pr.sectores[0].__dataclass_fields__} >= reales - {"etiqueta"}
+    # `clave` viaja desde #1152: es el identificador con el que `brechas` nombra a las
+    # ausentes, y sin ella la muestra y el payload real no podían tener la misma forma.
+    reales = {"clave", "etiqueta", "crecimiento", "crecimiento_sin_reconciliar", "peso",
+              "incidencia"}
+    assert {f for f in pr.sectores[0].__dataclass_fields__} >= reales
 
     for s in PF._SAMPLE_PAYLOAD["sectorial"]["sectores"]:
         assert set(s) == reales, (
