@@ -192,10 +192,11 @@ def test_SUPUESTOS_trae_los_PARAMETROS_que_produjeron_la_cifra(db) -> None:
     }
     faltan = [k for k, v in esperados.items() if v not in sup]
     assert faltan == [], f"parámetros que produjeron la cifra y no están en §Supuestos: {faltan}"
-    # Y la Rf del payload es la de la curva de la fixture, no un número suelto.
-    vivos = [v for _p, v in CURVA][-8:]
+    # Y la Rf del payload es la de la curva de la fixture AL CORTE (2025-12-31): las
+    # observaciones de 2026 quedan fuera, no un número suelto.
+    vivos = [v for p_, v in CURVA if p_ <= "2025-12"]
     assert pr["rf_pct"] == [min(vivos), max(vivos)]
-    assert pr["n_observaciones_rf"] == 8
+    assert pr["n_observaciones_rf"] == len(vivos)
 
 
 def test_SUPUESTOS_trae_la_SENSIBILIDAD_computada(db) -> None:
