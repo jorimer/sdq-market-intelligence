@@ -79,7 +79,7 @@ def test_anos_de_operacion_llegan_a_anclar(db):
     """El invariante del producto entero: con suficientes trimestres cerrados, la proyección
     ANCLA. Si esto falla, el eje prospectivo es decorativo."""
     _operar(db)
-    tr = led.track_record(db, led.backtest_id(MODELO, SERIE, 1))
+    tr = led.track_record(db, led.backtest_id(MODELO, SERIE, 1, med.DLOG_PCT))
     assert tr["n_oos"] >= MIN_OOS, (
         f"tras años de operación el conjunto de +1T tiene {tr['n_oos']} observaciones y el "
         f"gate exige {MIN_OOS}: la proyección no ancla NUNCA, y el motivo que ve el lector "
@@ -90,9 +90,9 @@ def test_cada_distancia_es_su_propio_conjunto(db):
     """Mezclar +1T con +2T promediaría errores de dificultad distinta y la calibración
     reportada no sería la de ninguno de los dos."""
     _operar(db)
-    uno = led.track_record(db, led.backtest_id(MODELO, SERIE, 1))
-    dos = led.track_record(db, led.backtest_id(MODELO, SERIE, 2))
-    juntos = led.track_record(db, led.backtest_id(MODELO, SERIE, None))
+    uno = led.track_record(db, led.backtest_id(MODELO, SERIE, 1, med.DLOG_PCT))
+    dos = led.track_record(db, led.backtest_id(MODELO, SERIE, 2, med.DLOG_PCT))
+    juntos = led.track_record(db, led.backtest_id(MODELO, SERIE, None, med.DLOG_PCT))
     assert uno["n_oos"] == dos["n_oos"]
     assert juntos["n_oos"] == uno["n_oos"] + dos["n_oos"]
 
@@ -112,8 +112,8 @@ def test_el_conjunto_de_un_trimestre_calendario_seria_de_uno(db):
 def test_el_horizonte_cero_del_nowcast_no_cae_al_comodin():
     """`h = 0` es falsy: con `if h` en vez de `if h is not None`, el nowcast del trimestre en
     curso se habría mezclado con TODOS los horizontes."""
-    assert led.backtest_id(MODELO, SERIE, 0).endswith("|+0T")
-    assert led.backtest_id(MODELO, SERIE, None).endswith("|*")
+    assert led.backtest_id(MODELO, SERIE, 0, med.DLOG_PCT).endswith("|+0T")
+    assert led.backtest_id(MODELO, SERIE, None, med.DLOG_PCT).endswith("|*")
 
 
 # ── las filas viejas no se inventan un horizonte ────────────────────────────────────
@@ -123,15 +123,15 @@ def test_una_fila_sin_h_queda_fuera_del_conjunto(db):
     """Anteriores a la migración. Adivinarles el horizonte sería fabricar track record, que
     es lo único que este ledger existe para impedir."""
     _operar(db, pasos=(1,))
-    antes = led.track_record(db, led.backtest_id(MODELO, SERIE, 1))["n_oos"]
+    antes = led.track_record(db, led.backtest_id(MODELO, SERIE, 1, med.DLOG_PCT))["n_oos"]
     f = led.registrar(db, model_id=MODELO, target_series=SERIE, horizon="2021-Q1",
                       as_of="2020-10-15", point=9.9, intervals=INTERVALOS,
                       measure=med.DLOG_PCT)  # sin h
     f.status, f.abs_error, f.sq_error = "scored", 5.0, 25.0
     db.commit()
-    despues = led.track_record(db, led.backtest_id(MODELO, SERIE, 1))["n_oos"]
+    despues = led.track_record(db, led.backtest_id(MODELO, SERIE, 1, med.DLOG_PCT))["n_oos"]
     assert despues == antes
-    assert led.track_record(db, led.backtest_id(MODELO, SERIE, None))["n_oos"] == antes
+    assert led.track_record(db, led.backtest_id(MODELO, SERIE, None, med.DLOG_PCT))["n_oos"] == antes
 
 
 # ── el solapamiento, que recién ahora significa algo ────────────────────────────────
@@ -139,7 +139,7 @@ def test_una_fila_sin_h_queda_fuera_del_conjunto(db):
 
 def test_una_sola_emision_por_trimestre_no_solapa(db):
     _operar(db, pasos=(1,))
-    assert led.track_record(db, led.backtest_id(MODELO, SERIE, 1))["overlapping"] is False
+    assert led.track_record(db, led.backtest_id(MODELO, SERIE, 1, med.DLOG_PCT))["overlapping"] is False
 
 
 def test_re_emitir_el_mismo_trimestre_si_solapa(db):
@@ -152,7 +152,7 @@ def test_re_emitir_el_mismo_trimestre_si_solapa(db):
                       measure=med.DLOG_PCT)
     f.status, f.abs_error, f.sq_error = "scored", 0.1, 0.01
     db.commit()
-    assert led.track_record(db, led.backtest_id(MODELO, SERIE, 1))["overlapping"] is True
+    assert led.track_record(db, led.backtest_id(MODELO, SERIE, 1, med.DLOG_PCT))["overlapping"] is True
 
 
 # ── la meta que se sirve al lector ──────────────────────────────────────────────────
