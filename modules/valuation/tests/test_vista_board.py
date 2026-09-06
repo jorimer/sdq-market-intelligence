@@ -50,13 +50,12 @@ def _entidad(db, *, roe_objetivo: float, nombre="Banco de Prueba"):
     # El patrimonio CRECE, que es lo que hace distinguibles las dos bases: con patrimonio
     # constante, ROE sobre apertura y sobre cierre dan lo mismo y el test no probaría nada.
     patrimonios = [1_000_000.0 * (1.06 ** i) for i in range(5)]
-    for i, (año, pat) in enumerate(zip((2022, 2023, 2024, 2025, 2026), patrimonios)):
-        # La utilidad se fija sobre la APERTURA (el cierre anterior), de modo que el ROE
-        # sobre apertura sea exactamente `roe_objetivo` y el ROE sobre cierre sea MENOR.
-        util = patrimonios[i - 1] * roe_objetivo / 100.0 if i else 0.0
-        db.add(BankingData(bank_id=BANCO, period_end=date(año, 12, 31),
-                           patrimonio_tecnico=pat, utilidad_neta=util,
-                           source=DataSource.sib_api))
+    # Cuatro cortes por año con utilidad ACUMULADA del ejercicio (como publica la SIB). La
+    # utilidad del año se fija sobre la APERTURA (el diciembre anterior), de modo que el ROE
+    # de doce meses sobre apertura sea exactamente `roe_objetivo` en cada diciembre.
+    from modules.valuation.tests._siembra import sembrar_trimestres
+    sembrar_trimestres(db, BANCO, patrimonio_diciembre=patrimonios,
+                       anios=(2022, 2023, 2024, 2025, 2026), roe_anual_pct=roe_objetivo)
     db.commit()
     return nombre
 
@@ -150,15 +149,21 @@ def test_el_ROE_de_la_historia_va_sobre_patrimonio_de_APERTURA(db):
     _entidad(db, roe_objetivo=15.0)
     h = historia_de(db, BANCO)
     assert h.roe_pct, "no se computó ningún ROE"
-    # Sobre APERTURA da exactamente el objetivo; sobre CIERRE daría 15/1,06 = 14,15 %.
-    assert h.roe_pct[0] == pytest.approx(15.0, abs=1e-6)
-    sobre_cierre = h.utilidad[1] / h.patrimonio[1] * 100.0
+    # En cada DICIEMBRE, sobre APERTURA da exactamente el objetivo; sobre CIERRE daría
+    # 15/1,06 = 14,15 %.
+    diciembres = {p: r for p, r in zip(h.periodos_con_roe, h.roe_pct) if p.endswith("-12-31")}
+    assert diciembres and all(r == pytest.approx(15.0, abs=1e-6) for r in diciembres.values())
+    i = h.periodos.index("2023-12-31")
+    util = h.utilidad[i]
+    assert util is not None
+    sobre_cierre = util / h.patrimonio[i] * 100.0
     assert sobre_cierre < 14.5, (
         "el fixture no distingue las dos bases: con patrimonio constante, ROE sobre "
         "apertura y sobre cierre dan lo mismo y el test no prueba nada")
-    assert len(h.roe_pct) == len(h.patrimonio) - 1, (
-        "el primer período no tiene apertura y no puede tener ROE: se declara con un "
-        "período menos en vez de inventarle una base")
+    # El primer AÑO no tiene apertura de doce meses: sus cuatro cortes no tienen ROE. Se
+    # declaran con cuatro cortes menos en vez de inventarles una base.
+    assert len(h.roe_pct) == len(h.patrimonio) - 4
+    assert not any(p.startswith("2022") for p in h.periodos_con_roe)
 
 
 def test_sin_dos_cierres_no_se_valua_y_se_dice(db):

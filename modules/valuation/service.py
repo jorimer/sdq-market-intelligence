@@ -12,6 +12,7 @@ se construye sobre la curva en pesos. El cruce de monedas lo veta `cost_of_capit
 from __future__ import annotations
 
 from dataclasses import dataclass
+from datetime import date
 from typing import Any, Dict, List, Optional, Sequence, Tuple
 
 from sqlalchemy import text
@@ -43,27 +44,84 @@ class Historia:
 
     periodos: Tuple[str, ...]
     patrimonio: Tuple[float, ...]
-    utilidad: Tuple[float, ...]
-    #: ROE sobre patrimonio de APERTURA, uno por período con apertura disponible.
+    #: La utilidad ACUMULADA del ejercicio tal cual la publica la SIB; `None` donde no vino.
+    utilidad: Tuple[Optional[float], ...]
+    #: ROE de DOCE MESES sobre el patrimonio de doce meses antes, uno por corte con ventana.
     roe_pct: Tuple[float, ...]
+    #: Los cortes que tienen ROE, alineados con `roe_pct`. No son todos: el primer año no
+    #: tiene apertura y un corte sin utilidad publicada no tiene ventana.
+    periodos_con_roe: Tuple[str, ...] = ()
+
+
+def _un_anio_antes(corte: date) -> Optional[date]:
+    try:
+        return date(corte.year - 1, corte.month, corte.day)
+    except ValueError:  # 29-feb
+        return None
+
+
+def utilidad_de_doce_meses(ytd: Dict[date, Optional[float]], corte: date) -> Optional[float]:
+    """La utilidad de los últimos doce meses cerrados en *corte*, o `None`.
+
+    La SIB publica el estado de resultados ACUMULADO del ejercicio (Q1 = 3 meses, Q2 = 6…).
+    Dividir ese acumulado por el patrimonio del trimestre anterior daba un «ROE» de 3, 6 o 9
+    meses en cada corte intermedio, y la mediana de los últimos cuatro publicaba ~60 % del
+    ROE real — con Ke de 14–20 %, «destruye valor» para entidades que no lo hacen. Es la
+    misma ventana que banking ya mide en `banking_score/scoring/ttm.py`:
+
+        TTM(Y, m) = acumulado(Y, m) + ejercicio_completo(Y−1) − acumulado(Y−1, m)
+
+    En diciembre el acumulado YA cubre doce meses. Sin los tres insumos no hay ventana, y se
+    devuelve `None`: un corte sin utilidad publicada no vale cero.
+    """
+    actual = ytd.get(corte)
+    if actual is None:
+        return None
+    if corte.month == 12:
+        return actual
+    mismo_corte_previo = _un_anio_antes(corte)
+    if mismo_corte_previo is None:
+        return None
+    ejercicio_previo = ytd.get(date(corte.year - 1, 12, 31))
+    acumulado_previo = ytd.get(mismo_corte_previo)
+    if ejercicio_previo is None or acumulado_previo is None:
+        return None
+    return actual + ejercicio_previo - acumulado_previo
 
 
 def historia_de(db: Session, bank_id: str) -> Historia:
-    """Patrimonio y utilidad por período, del más viejo al más nuevo."""
+    """Patrimonio y utilidad por corte, del más viejo al más nuevo, y el ROE de doce meses.
+
+    Sobre patrimonio de APERTURA, y apertura es el patrimonio de DOCE MESES ANTES —no el del
+    corte anterior—: con cortes trimestrales, el corte anterior está a tres meses y una
+    utilidad anual sobre un patrimonio de tres meses atrás tampoco es un ROE.
+    """
     filas = db.execute(text(
         "SELECT period_end, patrimonio_tecnico, utilidad_neta FROM banking_data "
         "WHERE bank_id = :b AND patrimonio_tecnico IS NOT NULL "
         "ORDER BY period_end"), {"b": bank_id}).fetchall()
-    periodos = tuple(str(f[0]) for f in filas)
+    cortes = [_como_fecha(f[0]) for f in filas]
+    periodos = tuple(c.isoformat() for c in cortes)
     patrimonio = tuple(float(f[1]) for f in filas)
-    utilidad = tuple(float(f[2]) if f[2] is not None else 0.0 for f in filas)
+    utilidad: Tuple[Optional[float], ...] = tuple(
+        float(f[2]) if f[2] is not None else None for f in filas)
+    por_corte = dict(zip(cortes, patrimonio))
+    ytd: Dict[date, Optional[float]] = dict(zip(cortes, utilidad))
     roes: List[float] = []
-    for i in range(1, len(patrimonio)):
-        # Apertura = el cierre del período anterior. El primero no tiene apertura y por eso
-        # no tiene ROE: se declara con un período menos en vez de inventarle una base.
-        if patrimonio[i - 1] > 0:
-            roes.append(er.roe_sobre_apertura(utilidad[i], patrimonio[i - 1]))
-    return Historia(periodos, patrimonio, utilidad, tuple(roes))
+    con_roe: List[str] = []
+    for corte in cortes:
+        apertura = _un_anio_antes(corte)
+        base = por_corte.get(apertura) if apertura else None
+        doce_meses = utilidad_de_doce_meses(ytd, corte)
+        if base is None or base <= 0 or doce_meses is None:
+            continue  # sin ventana de doce meses no hay ROE: se declara con un corte menos
+        roes.append(er.roe_sobre_apertura(doce_meses, base))
+        con_roe.append(corte.isoformat())
+    return Historia(periodos, patrimonio, utilidad, tuple(roes), tuple(con_roe))
+
+
+def _como_fecha(v: Any) -> date:
+    return v if isinstance(v, date) else date.fromisoformat(str(v)[:10])
 
 
 def _roe_proyectado(historia: Historia, n: int = 4) -> Optional[float]:
@@ -191,7 +249,7 @@ def valuar_entidad(db: Session, *, bank_id: str, nombre: str) -> Optional[Lectur
 
     spread_alto = roe - ke.bajo      # el extremo favorable
     spread_bajo = roe - ke.alto
-    serie = tuple((p, r) for p, r in zip(historia.periodos[1:], historia.roe_pct))
+    serie = tuple(zip(historia.periodos_con_roe, historia.roe_pct))
 
     return Lectura(
         entidad=nombre, periodo=historia.periodos[-1], moneda=cc.MONEDA,

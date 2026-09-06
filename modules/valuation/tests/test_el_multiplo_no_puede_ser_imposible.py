@@ -10,6 +10,7 @@ que valuar cada adquirida a la fecha de su operación— pero sí es una cota de
 rango de SALIDA: un modelo que devuelve un múltiplo que nadie pagó nunca está diciendo algo
 sobre sí mismo, no sobre la entidad.
 """
+# solo-diciembre: datos ANUALES reales del BHD, tal cual se publicaron
 from datetime import date
 
 import pytest

@@ -10,6 +10,7 @@ mitad de g1 por no declarar algo que sí podía medir. Con la cobertura en 1,00,
 trimestral porque la Superintendencia publica por trimestre; la curva es mensual y sale de
 subastas. Que el plazo largo no se haya colocado el mes pasado no envejece una valuación.
 """
+# solo-diciembre: mide la FRESCURA del último corte, no el ROE
 from datetime import date, timedelta
 
 import pytest
