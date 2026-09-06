@@ -176,6 +176,21 @@ def _promedios_escritos(promedios: Dict, semantica: Dict) -> Dict:
     return fuera
 
 
+def _anclas_del_hhi() -> Dict:
+    """Las anclas con las que ESTA plataforma lee el HHI, para que no se citen otras."""
+    from modules.banking_score.scoring.hhi_estratos import ANCLAS, POR_DEFECTO
+
+    return {
+        "regla": ("El HHI se lee POR ESTRATO, no contra un umbral único. Las bandas "
+                  "antimonopolio del DOJ (1500 / 2500) NO se usan acá: medidas sobre el "
+                  "panel dejaban al 62,8% de las entidades en cero y castigaban a las "
+                  "asociaciones de ahorros y préstamos por concentrarse en vivienda, que es "
+                  "su objeto social. NO cites umbrales que no estén en este bloque."),
+        "anclas_por_tipo": {t: {"p10_mejor": a, "p90_peor": b} for t, (a, b) in ANCLAS.items()},
+        "sin_estrato_propio": {"p10_mejor": POR_DEFECTO[0], "p90_peor": POR_DEFECTO[1]},
+    }
+
+
 def _build_system_context(report_type: str, scope_name: str, period: str,
                           benchmarks: Optional[Dict],
                           anuario: Optional[Dict] = None) -> Dict:
@@ -211,6 +226,21 @@ def _build_system_context(report_type: str, scope_name: str, period: str,
             # necesita el valor crudo para respaldar la cita.
             ctx["promedios_sistema_texto"] = _promedios_escritos(
                 benchmarks["sector_averages"], ctx["semantica_indicadores"])
+            if benchmarks.get("peer_groups"):
+                # Los grupos de pares también: el HHI por tipo de entidad salió escrito
+                # «5 040» en un boletín real, porque este bloque no pasaba por el formateador.
+                ctx["grupos_de_pares_texto"] = {
+                    tipo: _promedios_escritos(vals, ctx["semantica_indicadores"])
+                    for tipo, vals in benchmarks["peer_groups"].items()
+                    if isinstance(vals, dict)
+                }
+            # Cómo se INTERPRETA el HHI acá, servido como dato. Sin esto el modelo cita de
+            # memoria las bandas antimonopolio del DOJ —y en el boletín del 2026-09-06
+            # escribió «superiores a 2 500 concentración elevada, sobre 5 000 muy alta»—
+            # cuando esta plataforma las DESCARTÓ tras medirlas: con esos cortes el 62,8% del
+            # panel quedaba clavado en cero y las diez AAP sacaban cero por cumplir su objeto
+            # social. Un umbral que el modelo recuerda es un umbral que nadie verificó.
+            ctx["como_leer_el_hhi"] = _anclas_del_hhi()
         if benchmarks.get("peer_groups"):
             ctx["grupos_de_pares"] = benchmarks["peer_groups"]
         if benchmarks.get("regulatory_limits"):

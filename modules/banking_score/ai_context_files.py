@@ -23,6 +23,10 @@ AI_CONTEXT_FILES = (
     "etiquetas.py",
     "early_warning.py", "propension_quiebra.py",
     "scoring/indicator_detail.py", "scoring/weights.py",
+    # Las anclas del HHI viajan al contexto para que el modelo NO cite umbrales de memoria:
+    # el boletín del 2026-09-06 publicó las bandas del DOJ, que esta plataforma descartó tras
+    # medirlas. Si alguien recalibra los estratos, la caché tiene que enterarse.
+    "scoring/hhi_estratos.py",
     "scoring/benchmarks.py", "scoring/sensitivity.py",
     "scoring/support.py", "scoring/market_concentration.py",
     "scoring/system_aggregate.py",
