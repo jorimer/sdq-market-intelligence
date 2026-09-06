@@ -1076,3 +1076,30 @@ adquirente —J$110,54/US$ al centavo—. Tres cocientes iguales identifican la 
 - **Síntoma**: la tabla de procedencia de valuación decía «el 37 % del costo de capital descansa en la última fila» (beta y prima de riesgo). Al agregar el panel de transacciones al final de la tabla, la frase pasó a señalar al panel. Los 20 tests nuevos y los 8.700 viejos en verde; lo encontró leer el PDF.
 - **Regla**: la prosa nombra la fila por su CONTENIDO, nunca por su posición en una tabla que otro cambio puede alargar. Y leer el PDF después de cada sección nueva no es opcional: también salió de ahí que el renderizador repartía el ancho en partes iguales y partía «Intercommercial» a media palabra, y que el motivo del contraste publicaba códigos de país («BB, KY, PR, TT») en prosa de venta.
 - **Disparador**: cualquier frase que diga «arriba», «abajo», «la última», «la primera» sobre una tabla o lista computada.
+
+---
+
+### 2026-09-06 — El informe se pide por HTTP, y el nivel importa
+
+- **Síntoma**: verifiqué la sección nueva generando el informe `pulse` en producción. Volvió con una sola sección —`nowcast`— y la que yo había cambiado no estaba. Por un momento pareció que el cambio no había llegado.
+- **Causa raíz**: `pulse` no incluye la sección de trayectoria; está en `insight` y `deep_dive`. El manifiesto lo declara y yo pedí el nivel más barato por reflejo. Un informe que vuelve sin la sección se ve idéntico a un despliegue que no tomó.
+- **Regla**: al verificar un cambio de sección por HTTP, mirar primero el MANIFIESTO para saber qué nivel la incluye. Y antes de dudar del despliegue, comprobar si la sección estaba entre las que ese nivel publica: `list(d['narratives'])` cuesta nada y distingue «no llegó el código» de «pedí el nivel equivocado». Dato útil de este producto: sus narrativas son TODAS deterministas, así que generar el informe real no cuesta IA — no hay excusa para verificar contra el motor en vez de contra la ruta.
+- **Disparador**: cualquier verificación de una sección de informe en producción.
+
+
+---
+
+### 2026-09-06 — Verificar contra una caché es no verificar, y el truco del tiempo no siempre sirve
+
+- **Síntoma**: tras correr el sync, pedí el informe por HTTP y la sección volvió **byte a byte idéntica**. Iba a reportarlo como «aguanta». Pero las narrativas se cachean en `ProductReportCache` —sin TTL—, así que un HIT me habría dado exactamente el mismo resultado sin ejecutar una línea del código nuevo.
+- **Causa raíz**: la regla que tenía anotada era «menos de ~2 s es un HIT». No aplica acá: la prosa de este producto es DETERMINISTA, así que un MISS también responde en milisegundos. El discriminador que servía para el motor de IA no discrimina nada cuando el texto lo arma el código.
+- **Regla**: para saber si un texto se recomputó hay que atacar la CLAVE o la HUELLA, no el reloj. Lo que sirve: comprobar si el `period` de la clave es nuevo (una fila con `as_of` nuevo crea una entrada virgen), o medir el fingerprint antes y después de tocar la entrada. Y la pregunta previa, que es la que importa: **¿mi cambio entra en la huella?** Si no entra, la verificación no puede fallar aunque el código esté mal.
+- **Disparador**: cualquier verificación en producción de un texto que salga de una capa con caché. Antes de comparar, saber qué invalida esa caché.
+
+### 2026-09-06 — La huella cubría el contexto de IA y no el código que ESCRIBE el texto
+
+- **Síntoma**: al descartar el HIT medí el fingerprint antes y después de cambiar el texto de una sección. **Idéntico.** La declaración que acababa de desplegar llegó a producción solo porque de paso agregué un campo al payload — o sea, por suerte.
+- **Causa raíz**: `_contexto_ia_version` hashea `ai_context.py`, que es donde un producto arma lo que le PASA al modelo. Para un producto con `prosa_computada=True` no hay motor de IA: la receta ES el archivo que redacta, y ése no entraba en ninguna de las tres partes de la huella. Los dos productos así estaban igual y ninguno lo sabía.
+- **Regla**: cuando un mecanismo de invalidación se diseñó alrededor de un supuesto («el texto lo escribe el modelo, con este contexto»), verificar qué pasa con los casos que NO cumplen ese supuesto. Acá se cierra declarando el propio archivo en `AI_CONTEXT_FILES` —el mecanismo ya existía— y con un guard que lo exige para todo producto de prosa computada. Con dos instancias, la lección escrita no alcanza.
+- **Disparador**: agregar un producto con `prosa_computada=True`, o cualquier caché cuya huella se arme a partir de una lista de archivos declarada. Preguntar: ¿qué archivo, si lo cambio, debería invalidarla y no está en la lista?
+- **Coda del mismo día**: otra sesión encontró el defecto en su producto por su cuenta y lo resolvió MEJOR — lista canónica en `ai_context.py` re-exportada desde `products.py`, cubriendo cuatro archivos en vez de dos. Al mergear, mi literal quedó DEBAJO de su import y lo tapaba, dejando dos archivos fuera de la huella: un merge sin conflicto que empeoraba el estado, detectado solo porque su test falló. Cuando dos ramas arreglan lo mismo, la que llega segunda borra lo suyo y adopta lo otro — no lo mergea al lado.
