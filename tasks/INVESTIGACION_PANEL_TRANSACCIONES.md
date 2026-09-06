@@ -1,9 +1,43 @@
 # Encargo de investigación · Panel de transacciones bancarias RD/Caribe
 
-> **Quinta actualización. EL PANEL LLEGÓ A OCHO Y EL GATE ABRIÓ.** Lo que sigue ya no es un
-> pedido para completar el panel: es lo que hace falta para AFINARLO, y sobre todo la
-> distinción que ahora importa más que el conteo — abrir la vista de fusiones y adquisiciones
+> **Sexta actualización. DOS VÍAS ABIERTAS SE CERRARON, Y EL CONTADOR NO SE MOVIÓ.**
+> El panel pasó de once casos verificables a **trece**: entraron Intercommercial Bank
+> (Trinidad y Tobago, 2013) y Scotiabank Belize (2021), los dos con nota auditada y con las
+> dos puntas de la misma tabla. Los comparables siguen en **ocho**.
+>
+> **Eso no es un fracaso del relevamiento: es el gate haciendo su trabajo.** Las dos notas
+> publican activos netos a VALOR RAZONABLE de la NIIF 3 y ninguna publica el patrimonio en
+> libros del vendedor. Suman expediente y no suman tabla, porque la tabla es contra la que
+> valúa el modelo.
+>
+> Y apareció una dirección que nadie fue a buscar: **cuatro operaciones relevadas se pagaron
+> por debajo del valor razonable de lo que se entregaba**. Ver «El hallazgo que no se
+> buscaba».
+>
+> Sigue valiendo lo de la actualización anterior: abrir la vista de fusiones y adquisiciones
 > **no es** validar el modelo. Leer «Lo que el panel SÍ y NO demuestra».
+
+## El hallazgo que no se buscaba: la COMPRA VENTAJOSA
+
+Cuatro de las operaciones relevadas se pagaron **por debajo del valor razonable de los activos
+netos** que el comprador reconoció. Dos están en el panel y dos en las vías abiertas:
+
+| operación | año | múltiplo sobre valor razonable | lo que declara la nota |
+|---|---|---:|---|
+| JMMB / Intercommercial Bank (TT) | 2013 | **0,83×** | goodwill negativo J$361.657 miles |
+| CIHL / Scotiabank Belize | 2021 | **0,71×** | ganancia por compra ventajosa US$8,5 M |
+| Sagicor / RBC Royal Bank Jamaica | 2014 | — | goodwill negativo US$29.051 miles |
+| NCBFG / Clarien Group (Bermuda) | 2017 | — | ganancia por compra ventajosa J$4.392.149 miles |
+
+Cuando un comprador reconoce una ganancia por compra ventajosa está diciendo, en su propia
+contabilidad auditada, que el vendedor aceptó **menos** que el valor razonable de lo que
+entregaba. Cuatro casos en la misma dirección, dentro de una ola de desinversión de bancos
+internacionales que se retiraban del Caribe, dicen algo sobre de qué lado estaba la urgencia.
+
+**Qué NO es esto.** Cuatro observaciones no son una serie, y ninguna es dominicana. No se
+puede concluir que el mercado dominicano pague por debajo del valor razonable — de hecho los
+casos dominicanos del panel van al revés: Progreso a 2,53× y Bellbank a 1,82× sobre LIBRO.
+Es una dirección relevada, no un resultado, y se publica como tal.
 
 ## Qué necesitamos, exactamente
 

@@ -23,10 +23,22 @@ es el precio**.
 
 **La NIIF 3 también devuelve un denominador, y no es el mismo.** Obliga al comprador a
 publicar los activos netos identificables a VALOR RAZONABLE, que es lo que él reconoce y no
-lo que el vendedor tenía en libros. Los dos casos de Republic Financial Holdings entran así.
-Cuánto se separan las dos bases dejó de ser un argumento: la tabla del 10-Q de OFG Bancorp
-publica las dos columnas sobre el mismo balance, y el valor razonable está **15,0 % por
-encima** del libro.
+lo que el vendedor tenía en libros. Cinco casos entran así. Cuánto se separan las dos bases
+dejó de ser un argumento: la tabla del 10-Q de OFG Bancorp publica las dos columnas sobre el
+mismo balance, y el valor razonable está **15,0 % por encima** del libro.
+
+**El panel puede CRECER sin que el gate se mueva, y eso es información.** Trece casos
+verificables, ocho comparables. Las dos operaciones que se cerraron con nota auditada en el
+último relevamiento —Intercommercial Bank y Scotiabank Belize— publican valor razonable y
+ninguna publica el libro del vendedor, así que suman expediente y no suman tabla. El gate
+mide lo que el modelo puede contrastar, no el tamaño del archivo.
+
+**Y apareció una dirección que no se buscaba: la COMPRA VENTAJOSA.** Dos de los cinco casos
+sobre NIIF 3 se pagaron por DEBAJO del valor razonable de lo que se entregaba —IBL a 0,83x y
+Belice a 0,71x— y otros dos relevados en las vías abiertas van igual: Clarien y Sagicor/RBC
+Jamaica. Cuatro casos en esa dirección en una ola de desinversión dicen algo sobre quién
+tenía la urgencia. No es una conclusión del panel —son cuatro observaciones, no una serie—
+pero es el tipo de hallazgo que un contraste de valuación existe para producir.
 """
 from __future__ import annotations
 
@@ -549,6 +561,88 @@ PANEL: Tuple[Transaccion, ...] = (
             "el patrimonio; el denominador es la resta que hace la propia nota.",
         ),
     ),
+    Transaccion(
+        anio=2013, comprador="JMMB Group",
+        adquirida="Intercommercial Bank Limited (100 % del capital)", pais="TT",
+        precio=1_771_568_000.0, moneda_precio="JMD",
+        valor_libro=2_133_225_000.0, moneda_libro="JMD", periodo_libro="2013-10",
+        pb=0.831, base=BASE_VALOR_RAZONABLE,
+        fuente_precio=(
+            "Nota 27 «Business Combinations» de la memoria auditada de JMMB Group al 31 de "
+            "marzo de 2015, que reexpone la adquisición del ejercicio anterior. La compra "
+            "fue POR ETAPAS y la nota publica las dos puntas de la consideración total que "
+            "exige la NIIF 3: J$916.038 miles por el 50 % restante (US$8.750.000) MÁS "
+            "J$855.530 miles de valor razonable del 50 % que JMMB ya tenía, total "
+            "J$1.771.568 miles. Fecha de adquisición: 3 de octubre de 2013.\n\n"
+            "La relación se COMPUTA de la nota: 916.038 + 855.530 = 1.771.568, exacto. Y el "
+            "tipo de cambio implícito de la punta en dólares —916.038.000 / 8.750.000 = "
+            "J$104,69/US$— cae dentro del rango del peso jamaiquino en octubre de 2013, que "
+            "es una segunda comprobación independiente de que las dos cifras describen la "
+            "misma operación."),
+        fuente_libro=(
+            "La MISMA nota 27: «Fair value of net assets acquired» J$2.133.225 miles, con el "
+            "detalle línea por línea (efectivo 9.813.551, inversiones 1.468.993, cartera "
+            "neta 13.194.167, intangibles 516.076, depósitos −23.201.035, entre otras). "
+            "Cierra contra el goodwill negativo que la nota declara: 2.133.225 − 1.771.568 = "
+            "361.657, idéntico a los J$361.657 miles publicados.\n\n"
+            "Es base de VALOR RAZONABLE de la NIIF 3, no patrimonio contable de IBL. El "
+            "múltiplo es verificable y NO es un P/B."),
+        caveats=(
+            "COMPRA VENTAJOSA: el valor razonable de los activos netos SUPERA a la "
+            "consideración en J$361.657 miles. Es el cuarto caso relevado en esa dirección, "
+            "junto con Clarien, Sagicor/RBC Jamaica y Scotiabank Belize.",
+            "La vía abierta anterior daba por hecho que había que homogeneizar el precio del "
+            "segundo tramo al 50 %. No hace falta: la NIIF 3 obliga a sumarle el valor "
+            "razonable de la participación previamente tenida, así que la consideración "
+            "total de la nota YA cubre el 100 % y el denominador también. Por eso "
+            "`porcentaje` es 1,0 y no 0,5.",
+            "El ALCANCE es la punta débil. La nota nombra «Intercommercial Bank Limited», "
+            "mientras el relato corporativo de la misma memoria habla del IBL Group "
+            "—Intercommercial Bank más Intercommercial Trust and Merchant Bank—. Las dos "
+            "puntas salen de la misma nota, así que el múltiplo es internamente coherente "
+            "sea cual sea el perímetro; lo que no está establecido es CUÁL de los dos es.",
+            "Los intangibles reconocidos (J$516.076 miles) son el 24,2 % del denominador: no "
+            "existían en el balance de IBL y son parte de por qué esta base no es el libro.",
+        ),
+    ),
+    Transaccion(
+        anio=2021, comprador="Caribbean Investment Holdings Limited",
+        adquirida="Scotiabank (Belize) Limited (100 % de las acciones)", pais="BZ",
+        precio=20_700_000.0, moneda_precio="USD",
+        valor_libro=29_200_000.0, moneda_libro="USD", periodo_libro="2021-03",
+        pb=0.709, base=BASE_VALOR_RAZONABLE,
+        fuente_precio=(
+            "Nota 27 «Acquisition of Scotiabank (Belize) Limited» de los estados financieros "
+            "consolidados auditados de Caribbean Investment Holdings Limited al 31 de marzo "
+            "de 2021, expresados en MILLONES DE DÓLARES ESTADOUNIDENSES. La nota desglosa la "
+            "consideración: «Amount settled in cash» US$19,7 M más «Stamp duties paid» "
+            "US$1,0 M, total US$20,7 M. Fecha de adquisición: 31 de marzo de 2021.\n\n"
+            "El anuncio a la Bolsa de Bermudas hablaba de US$20 millones al cierre; la nota "
+            "auditada dice US$19,7 M de efectivo, o sea que el anuncio redondeaba esa punta. "
+            "Y las dos son menos que los «hasta US$30,5 millones» del acuerdo de junio 2020: "
+            "otro recordatorio de que el monto del anuncio no es el del cierre."),
+        fuente_libro=(
+            "La MISMA nota 27: «Net identifiable assets and liabilities» US$29,2 M, con el "
+            "detalle línea por línea (efectivo 193,7, cartera neta 236,7, propiedad y equipo "
+            "4,2, depósitos −402,9, entre otras). Cierra contra la ganancia que declara: "
+            "29,2 − 20,7 = 8,5, idéntico a los US$8,5 M de «Gain on acquisition».\n\n"
+            "Es base de VALOR RAZONABLE de la NIIF 3. La nota NO publica los importes en "
+            "libros previos a la adquisición, así que sobre este caso no se puede medir la "
+            "cuña entre bases como sí se puede en OFG."),
+        caveats=(
+            "COMPRA VENTAJOSA: el valor razonable de los activos netos SUPERA al precio en "
+            "US$8,5 M. Tercero de los cuatro casos relevados en esa dirección.",
+            "El numerador incluye US$1,0 M de sellos, que es un impuesto a la transferencia "
+            "y no dinero que recibiera el vendedor. Se publica la consideración de la nota "
+            "—que es la que la propia nota usa para computar la ganancia— y se declara la "
+            "alternativa: sobre los US$19,7 M que sí llegaron al vendedor el múltiplo sería "
+            "0,675× en vez de 0,709×.",
+            "El patrimonio CONTABLE de SBL sigue sin conseguirse: el archivo de información "
+            "financiera por banco del Banco Central de Belice arranca en junio de 2021, "
+            "DESPUÉS de la operación, y SBL ya no existía como entidad separada. Por eso "
+            "este caso no puede pasar a base contable con las fuentes públicas de hoy.",
+        ),
+    ),
 )
 
 #: Operaciones RELEVADAS y descartadas del panel, con el motivo. Se listan porque un panel
@@ -619,11 +713,18 @@ DESCARTADAS: Tuple[Tuple[str, str], ...] = (
 #: es una vía cerrada— y no son casos: entran al panel el día que se cierre lo que falta.
 #: Se listan porque nombrar el obstáculo exacto es lo que hace accionable un relevamiento.
 VIAS_ABIERTAS: Tuple[Tuple[str, str], ...] = (
-    ("JMMB / Intercommercial Bank Ltd (Trinidad y Tobago, 2013)",
-     "Precio verificado: US$8,75 millones (J$914,1 millones) por el 50 % RESTANTE, pasando "
-     "de 50 % a 100 %. Falta el patrimonio contable de la entidad al corte 2013, que "
-     "publicaría el Central Bank of Trinidad and Tobago. Además es una compra POR ETAPAS: el "
-     "precio es solo del segundo tramo y el múltiplo hay que homogeneizarlo al 50 %."),
+    ("JMMB / Intercommercial Bank Ltd — el denominador sobre base CONTABLE",
+     "CERRADO EN VALOR RAZONABLE: el caso ya está en el panel con las dos puntas de la nota "
+     "27 auditada de JMMB Group. Y de paso se cayó la premisa de esta vía: decía que el "
+     "precio era solo del segundo tramo y había que homogeneizarlo al 50 %, pero la NIIF 3 "
+     "obliga a sumarle el valor razonable de la participación previa, así que la "
+     "consideración total de la nota YA cubre el 100 %.\n\n"
+     "Lo que sigue faltando para pasarlo a base contable es el patrimonio que IBL declaraba "
+     "a su propio regulador, el Central Bank of Trinidad and Tobago. Y antes que eso, el "
+     "ALCANCE: la nota nombra «Intercommercial Bank Limited» y el relato de la misma memoria "
+     "habla del IBL Group, que suma Intercommercial Trust and Merchant Bank. Un libro del "
+     "banco solo contra un precio del grupo cruzaría perímetros, que es el error que este "
+     "panel ya se negó a cometer en Santander PR."),
     ("Butterfield Barbados — el patrimonio INDIVIDUAL de la entidad",
      "El caso ya está en el panel, con el denominador que publica la nota de operaciones "
      "discontinuadas del vendedor. Lo que falta es el patrimonio que la entidad declaraba a "
@@ -651,13 +752,16 @@ VIAS_ABIERTAS: Tuple[Tuple[str, str], ...] = (
      "acquired» de la NIIF 3 es valor razonable, así que aun verificado NO contaría para la "
      "meta salvo que la nota publique el libro. Sería el segundo caso relevado con COMPRA "
      "VENTAJOSA: el valor razonable supera al precio."),
-    ("Caribbean Investment Holdings / Scotiabank (Belize) (cierre abril 2021)",
-     "Precio verificado y FINAL: US$20 millones al cierre, por debajo de los «hasta US$30,5 "
-     "millones» del acuerdo de junio 2020 — un recordatorio de que el monto del anuncio no es "
-     "el del cierre. El anuncio a la bolsa de Bermudas no divulga activos netos. Falta el "
-     "patrimonio de la entidad: la memoria 2021 de CIHL con su asignación del precio de "
-     "compra, o el Banco Central de Belice. Se conoce que SBL tenía US$389,9 millones de "
-     "activos al 31-oct-2019, que NO son patrimonio."),
+    ("Caribbean Investment Holdings / Scotiabank (Belize) — el denominador CONTABLE",
+     "CERRADO EN VALOR RAZONABLE: la nota 27 de los estados auditados de CIHL al 31-mar-2021 "
+     "trae las dos puntas y el caso está en el panel. De paso corrige el precio que esta vía "
+     "daba por verificado: no fueron «US$20 millones» sino US$19,7 M de efectivo más US$1,0 "
+     "M de sellos.\n\n"
+     "La base contable, en cambio, hay que darla por INALCANZABLE con fuentes públicas: el "
+     "archivo de información financiera por banco del Banco Central de Belice arranca en "
+     "junio de 2021 —tres meses DESPUÉS de la operación— y SBL ya no existía como entidad "
+     "separada. No es «falta buscar más»: es que la ventana se cerró. Se deja listada para "
+     "que nadie vuelva a gastar el tiempo sin saberlo."),
     ("Banco Santander Puerto Rico — el denominador sobre base CONTABLE",
      "El caso ya está en el panel sobre valor razonable. Para pasarlo a base contable hace "
      "falta el patrimonio consolidado de SANTANDER BANCORP, la sociedad tenedora, que es lo "

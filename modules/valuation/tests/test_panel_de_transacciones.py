@@ -38,15 +38,20 @@ def test_el_minimo_son_OCHO_casos():
     assert tx.MINIMO_DE_CASOS == 8
 
 
-def test_hay_ONCE_verificables_y_OCHO_COMPARABLES():
+def test_hay_TRECE_verificables_y_OCHO_COMPARABLES():
     """La distinción que decide si la vista de M&A se abre.
 
-    Las once tienen las dos puntas publicadas. Solo ocho están sobre patrimonio CONTABLE,
-    que es la base contra la que valúa el Excess Return. Las otras dos vienen de la NIIF 3,
+    Las trece tienen las dos puntas publicadas. Solo ocho están sobre patrimonio CONTABLE,
+    que es la base contra la que valúa el Excess Return. Las otras CINCO vienen de la NIIF 3,
     cuyo denominador son activos netos a VALOR RAZONABLE — lo que el COMPRADOR reconoce, no
     lo que el vendedor tenía en libros.
+
+    Que el relevamiento sume casos y el contador de comparables NO se mueva es información,
+    no un fracaso: las dos operaciones que se pudieron cerrar con nota auditada —IBL y
+    Belice— publican valor razonable y ninguna publica el libro del vendedor. El gate mide
+    la tabla que el modelo puede contrastar, no el tamaño del expediente.
     """
-    assert len([t for t in tx.PANEL if t.verificable]) == 11
+    assert len([t for t in tx.PANEL if t.verificable]) == 13
     comparables = [t for t in tx.PANEL if t.comparable]
     assert len(comparables) == 8
     assert {t.pais for t in comparables} == {"DO", "PR", "KY", "TT", "BB"}
@@ -63,9 +68,9 @@ def test_el_gate_cuenta_COMPARABLES_y_no_verificables():
     equivocada o, peor, pasa por la razón equivocada.
     """
     e = tx.estado()
-    assert e.n_verificables == 11 and e.n_comparables == 8
+    assert e.n_verificables == 13 and e.n_comparables == 8
     excluidos = [t for t in tx.PANEL if t.verificable and not t.comparable]
-    assert len(excluidos) == e.n_verificables - e.n_comparables == 3
+    assert len(excluidos) == e.n_verificables - e.n_comparables == 5
     assert all(t.base == tx.BASE_VALOR_RAZONABLE for t in excluidos)
 
 
@@ -86,7 +91,7 @@ def test_OFG_mide_la_cuna_entre_bases_y_NO_la_transcribe():
 
 
 def test_sin_segundo_denominador_no_hay_cuna_INVENTADA():
-    """Los otros cuatro casos no publican las dos columnas. La cuña es `None`, no un 0,0 ni
+    """Los demás casos no publican las dos columnas. La cuña es `None`, no un 0,0 ni
     el 15 % del caso que sí la tiene: rellenarla haría ver como medido lo que no se midió."""
     for t in tx.PANEL:
         if t.valor_razonable is None:
@@ -181,7 +186,7 @@ def test_OCHO_comparables_SI_abren_el_gate():
 def test_las_de_NIIF_3_declaran_su_base_y_su_aritmetica_CIERRA():
     """La validación interna del dato: precio = activos netos + goodwill, exacto."""
     niif = [t for t in tx.PANEL if t.base == tx.BASE_VALOR_RAZONABLE]
-    assert len(niif) == 3
+    assert len(niif) == 5
     for t in niif:
         assert "valor razonable" in " ".join(t.caveats).lower()
         assert "cierra" in t.fuente_libro.lower() or "aritmética" in t.fuente_libro.lower()
@@ -438,3 +443,36 @@ def test_RBTT_reconcilia_sus_DOS_formas_de_precio():
     implicito = t.precio / 2_200_000_000.0
     assert 6.20 < implicito < 6.35, f"TT$/US$ implícito {implicito:.4f} fuera del rango real"
     assert "más vieja del panel" in " ".join(t.caveats).lower() or "2008" in " ".join(t.caveats)
+
+
+def test_los_casos_de_COMPRA_VENTAJOSA_se_cuentan_y_se_declaran():
+    """Dos de las cinco operaciones sobre NIIF 3 se pagaron POR DEBAJO del valor razonable.
+
+    No es una curiosidad contable: en una ola de desinversión, un comprador que reconoce una
+    ganancia por compra ventajosa está diciendo que el vendedor aceptó menos que el valor
+    razonable de lo que entregaba. Con dos casos DENTRO del panel y otros dos relevados en
+    las vías abiertas —Clarien y Sagicor/RBC Jamaica—, la dirección deja de ser anecdótica.
+
+    Se cuenta desde los DATOS y no desde la prosa: el múltiplo por debajo de 1,0x sobre su
+    propia base es el hecho, y el caveat solo tiene que nombrarlo.
+    """
+    niif = [t for t in tx.PANEL if t.base == tx.BASE_VALOR_RAZONABLE]
+    ventajosas = [t for t in niif if t.pb_recomputado is not None and t.pb_recomputado < 1.0]
+    assert len(ventajosas) == 2, [t.adquirida for t in ventajosas]
+    for t in ventajosas:
+        assert "COMPRA VENTAJOSA" in " ".join(t.caveats), (
+            f"{t.adquirida} se pagó por debajo del valor razonable y no lo declara")
+
+
+def test_la_compra_POR_ETAPAS_no_se_homogeneiza_a_mano():
+    """IBL entra por el 100 % porque la NIIF 3 ya suma la participación previa.
+
+    La vía abierta daba por hecho que había que llevar el precio del segundo tramo al 50 %.
+    Hacerlo habría sido inventar una homogeneización que la norma ya resuelve, y con un
+    denominador que también es del 100 %: el múltiplo habría salido a la mitad.
+    """
+    t = next(x for x in tx.PANEL if "Intercommercial" in x.adquirida)
+    assert t.porcentaje == 1.0, "el precio de la nota ya es por el 100 %"
+    assert t.pb_recomputado == pytest.approx(t.precio / t.valor_libro)
+    unidos = " ".join(t.caveats)
+    assert "participación previa" in unidos or "participación previamente tenida" in unidos
