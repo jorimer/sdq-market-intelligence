@@ -23,11 +23,11 @@ es el precio**.
 
 **La NIIF 3 también devuelve un denominador, y no es el mismo.** Obliga al comprador a
 publicar los activos netos identificables a VALOR RAZONABLE, que es lo que él reconoce y no
-lo que el vendedor tenía en libros. Cuatro casos quedan así. Cuánto se separan las dos bases
+lo que el vendedor tenía en libros. Cinco casos quedan así. Cuánto se separan las dos bases
 dejó de ser un argumento: la tabla del 10-Q de OFG Bancorp publica las dos columnas sobre el
 mismo balance, y el valor razonable está **15,0 % por encima** del libro.
 
-**El panel puede CRECER sin que el gate se mueva, y eso es información.** Trece casos
+**El panel puede CRECER sin que el gate se mueva, y eso es información.** Catorce casos
 verificables, nueve comparables. Intercommercial Bank y Scotiabank Belize entraron con nota
 auditada y publican valor razonable sin el libro del vendedor: suman expediente y no suman
 tabla. Santander Puerto Rico, en cambio, PASÓ de valor razonable a contable sin buscar un
@@ -36,10 +36,10 @@ la adquirida —auditados a diciembre 2019, interinos a junio 2020—, que es el
 que el precio compró. El gate mide lo que el modelo puede contrastar, no el tamaño del
 archivo.
 
-**Y apareció una dirección que no se buscaba: la COMPRA VENTAJOSA.** Dos de los cinco casos
-sobre NIIF 3 se pagaron por DEBAJO del valor razonable de lo que se entregaba —IBL a 0,83x y
-Belice a 0,71x— y otros dos relevados en las vías abiertas van igual: Clarien y Sagicor/RBC
-Jamaica. Cuatro casos en esa dirección en una ola de desinversión dicen algo sobre quién
+**Y apareció una dirección que no se buscaba: la COMPRA VENTAJOSA.** Tres de los cinco casos
+sobre NIIF 3 se pagaron por DEBAJO del valor razonable de lo que se entregaba —IBL a 0,83x,
+RBC Jamaica a 0,74x y Belice a 0,71x— y otro relevado en las vías abiertas va igual: Clarien.
+Cuatro casos en esa dirección en una ola de desinversión dicen algo sobre quién
 tenía la urgencia. No es una conclusión del panel —son cuatro observaciones, no una serie—
 pero es el tipo de hallazgo que un contraste de valuación existe para producir.
 """
@@ -675,6 +675,55 @@ PANEL: Tuple[Transaccion, ...] = (
             "este caso no puede pasar a base contable con las fuentes públicas de hoy.",
         ),
     ),
+    Transaccion(
+        anio=2014, comprador="Sagicor Group Jamaica",
+        adquirida="RBC Royal Bank (Jamaica) Limited y RBTT Securities Jamaica Limited (100 % de las acciones)",
+        pais="JM",
+        precio=9_327_037_000.0, moneda_precio="JMD",
+        valor_libro=12_538_217_000.0, moneda_libro="JMD", periodo_libro="2014-06",
+        pb=0.744, base=BASE_VALOR_RAZONABLE,
+        fuente_precio=(
+            "Nota 57 «Acquisition of Subsidiary» de la memoria anual AUDITADA de Sagicor Group "
+            "Jamaica al 31-dic-2014 (expresada en dólares jamaiquinos, $'000), alojada por la Bolsa "
+            "de Jamaica: «Purchase consideration - Cash» J$9.327.037 miles. Efectiva el 27 de junio "
+            "de 2014, por el 100 % del capital de RBC Royal Bank (Jamaica) Limited y su subsidiaria "
+            "RBC Securities (Jamaica) Limited.\n\n"
+            "La vía abierta anterior traía las cifras en US$ —consideración 84.378, activos netos "
+            "113.429, goodwill negativo 29.051— de un resumen de la matriz (Sagicor Financial "
+            "Corporation, Barbados, que reporta en US$ miles). Ese documento no se pudo abrir "
+            "(Cloudflare, y la captura del Wayback está truncada a 1 MiB). No hizo falta: las TRES "
+            "puntas dan el MISMO tipo implícito contra esta nota, J$110,54/US$ al centavo, dentro del "
+            "rango del peso jamaiquino en junio de 2014. Tres cocientes iguales identifican la misma "
+            "operación sin abrir el segundo documento."),
+        fuente_libro=(
+            "La MISMA nota 57: «Net assets acquired» J$12.538.217 miles a VALOR RAZONABLE, con el "
+            "detalle línea por línea (efectivo 14.054.108, saldos en el banco central 4.282.769, "
+            "cartera neta 24.487.533, intangibles 1.139.000, depósitos de clientes −37.251.948, entre "
+            "otras). Cierra contra el goodwill negativo que la nota declara: 12.538.217 − 9.327.037 = "
+            "3.211.180, idéntico a los J$3.211.180 miles publicados.\n\n"
+            "Es base de VALOR RAZONABLE de la NIIF 3. La nota no publica los importes en libros del "
+            "vendedor, y el vendedor tampoco: la Nota 11 «Significant dispositions» de la memoria "
+            "2014 de Royal Bank of Canada (40-F, SEC) publica solo la pérdida por disposición —C$100 "
+            "millones: 60 en el primer trimestre por goodwill e intangibles de la compra de RBTT en "
+            "2008, 40 en el tercero principalmente por conversión cambiaria reclasificada— y ni "
+            "consideración ni activos netos, porque RBC Jamaica NO se presentó como operación "
+            "discontinuada. Por eso este caso no puede pasar a base contable con fuentes públicas."),
+        caveats=(
+            "COMPRA VENTAJOSA: el valor razonable de los activos netos SUPERA a la consideración en "
+            "J$3.211.180 miles. Con IBL y Belice son tres dentro del panel, más Clarien en las vías "
+            "abiertas.",
+            "La asignación del precio de compra se declara «determined on a provisional basis». La "
+            "NIIF 3 permite revisarla hasta doce meses después; la memoria 2015 de SGJ, que traería la "
+            "final, no está en la Bolsa de Jamaica ni en el Wayback. Se publica la provisional y se "
+            "dice que lo es — igual que Bellbank.",
+            "El anuncio de aprobación regulatoria a la Bolsa de Jamaica (16-jun-2014) confirma el "
+            "perímetro —«full control» de las dos entidades— y no trae consideración. El «J$9.500 "
+            "millones» que circuló en prensa queda 1,9 % por encima de la consideración auditada y "
+            "no se usa.",
+            "Los intangibles reconocidos (J$1.139.000 miles) son el 9,1 % del denominador: no "
+            "existían en el balance del vendedor y son parte de por qué esta base no es el libro.",
+        ),
+    ),
 )
 
 #: Operaciones RELEVADAS y descartadas del panel, con el motivo. Se listan porque un panel
@@ -775,15 +824,17 @@ VIAS_ABIERTAS: Tuple[Tuple[str, str], ...] = (
      "La nota 34 agrega siete territorios en una sola cifra. Si algún estado local o el "
      "regulador de un territorio publicara su parte, esa observación se desdoblaría en "
      "varias. Hoy es una."),
-    ("Sagicor Group Jamaica / RBC Royal Bank (Jamaica) (2014)",
-     "Las tres cifras aparecen y CIERRAN entre sí —consideración US$84.378 miles, activos "
-     "netos adquiridos US$113.429 miles, goodwill negativo US$29.051 miles— y reconcilian "
-     "con los J$9.500 millones que publicó la prensa al tipo de cambio de 2014. Falta abrir "
-     "el estado auditado: hasta acá vienen de un resumen y no del documento, y un caso cuya "
-     "fuente no se abrió es una brecha, no un dato. Ojo además con la base: «net assets "
-     "acquired» de la NIIF 3 es valor razonable, así que aun verificado NO contaría para la "
-     "meta salvo que la nota publique el libro. Sería el segundo caso relevado con COMPRA "
-     "VENTAJOSA: el valor razonable supera al precio."),
+    ("Sagicor Group Jamaica / RBC Royal Bank (Jamaica) — el denominador CONTABLE",
+     "CERRADO EN VALOR RAZONABLE: se abrió la nota 57 de la memoria auditada de Sagicor Group "
+     "Jamaica 2014 y el caso está en el panel con las dos puntas en J$. Las cifras en US$ que "
+     "traía esta vía eran de la matriz de Barbados; se reconcilian con la nota jamaiquina al "
+     "centavo (mismo tipo implícito en las tres puntas).\n\n"
+     "La base contable hay que darla por INALCANZABLE con fuentes públicas, y se dice por qué: "
+     "la nota del adquirente publica solo valor razonable, y la del VENDEDOR —Nota 11 de la "
+     "memoria 2014 de Royal Bank of Canada— publica solo la pérdida por disposición (C$100 M) "
+     "porque RBC Jamaica no se presentó como operación discontinuada. Una nota de pérdida no es "
+     "un libro. Queda además la asignación FINAL: la de 2014 es provisional y la memoria 2015 "
+     "de SGJ no está en la Bolsa de Jamaica ni en el Wayback."),
     ("Caribbean Investment Holdings / Scotiabank (Belize) — el denominador CONTABLE",
      "CERRADO EN VALOR RAZONABLE: la nota 27 de los estados auditados de CIHL al 31-mar-2021 "
      "trae las dos puntas y el caso está en el panel. De paso corrige el precio que esta vía "

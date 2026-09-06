@@ -1032,6 +1032,20 @@ pequeño, no una propiedad del documento. Los archivos quedan guardados: abrirlo
 
 ---
 
+## Una nota de pérdida del vendedor no es un libro, y tres cocientes iguales son una identificación
+
+**Síntoma.** Para pasar Sagicor/RBC Jamaica a base contable fui al vendedor, como con Santander.
+RBC publicó la venta en «Significant dispositions» con la pérdida —C$100 M— y nada más: ni
+consideración ni activos netos. En la misma nota, la venta a PNC sí trae tablas, porque fue
+operación discontinuada. Jamaica no lo fue.
+
+**Regla.** El lado del vendedor solo da un libro si la venta se presentó como **operación
+discontinuada**. Una nota de pérdida por disposición dice cuánto perdió, no cuánto entregó.
+
+**Y lo que evitó abrir un documento inalcanzable.** Las cifras en US$ que circulaban eran de la
+matriz (SFC, Cloudflare; el Wayback guardó solo el primer MiB). No hizo falta: consideración,
+activos netos y goodwill negativo dan **el mismo tipo implícito** contra la nota en J$ del
+adquirente —J$110,54/US$ al centavo—. Tres cocientes iguales identifican la misma operación.
 ### 2026-09-06 — El motor sabía por qué faltaba; el informe no se enteraba
 
 - **Síntoma**: la sección de trayectoria publicaba UNA fila donde el modelo declara dos horizontes con track record. La causa estaba computada y escrita —`emision` la registra en sus `motivos`: «el período ya había cerrado al corte; el bloque va atrasado»— pero eso vive en el resultado de la operación, que no llega a ningún informe.
