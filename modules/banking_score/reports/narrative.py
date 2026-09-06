@@ -804,15 +804,83 @@ async def generate_report_narratives(
         cerebro = {"axis": "banking", "audience": "comite_credito"} \
             if template in _CEREBRO_TEMPLATES else {}
 
+        if section == "boletin_sistemas":
+            narratives[section] = await _narrar_pais_por_pais(context, mode)
+            continue
+
         result: NarrativeResult = await narrative_engine.generate(
             context=context,
             template=template,
             mode=mode,
             **cerebro,
         )
+        _exigir_texto_entero(section, result)
         narratives[section] = result.text
 
     return narratives
+
+
+class NarrativaTruncada(RuntimeError):
+    """El modelo se quedó sin presupuesto y el texto está CORTADO, no terminado."""
+
+
+def _exigir_texto_entero(section: str, result: NarrativeResult) -> None:
+    """Una sección truncada no se publica.
+
+    El motor ya distinguía «cortado» de «terminado» —lo declara la API en `stop_reason` y
+    viaja en `NarrativeResult.truncated`— y el ensamblador lo DESCARTABA: `narratives[s] =
+    result.text`. El 2026-09-06 eso puso en un PDF de distribución una frase cortada a mitad
+    de la palabra «unidades», y de paso hizo desaparecer un país entero sin que nada fallara.
+
+    Un `logger.warning` no protege un documento automático: nadie lee el log antes de que el
+    PDF salga. Es la misma regla que ya rige el guard de comparabilidad — avisar no es
+    proteger.
+    """
+    if getattr(result, "truncated", False):
+        raise NarrativaTruncada(
+            f"la sección «{section}» se cortó por presupuesto de tokens: el texto está "
+            "truncado, no terminado, y publicarlo imprimiría una frase a medias. Subí el "
+            "modo de la sección o partila en llamadas más chicas")
+
+
+async def _narrar_pais_por_pais(context: Dict, mode: str) -> str:
+    """§2 se genera con UNA LLAMADA POR PAÍS, y se concatena.
+
+    Con una sola llamada para todos, el presupuesto es compartido y agregar un país puede
+    tirar a otro por la borda: pasó con nueve países —la plantilla pedía «máximo 900
+    palabras», el contenido real eran 2.181, y el corte se llevó al último en orden ISO3—.
+    Repartido por país, agregar uno no puede acortar a los demás.
+    """
+    bloques = list(context.get("bloques_por_pais") or [])
+    if not bloques:
+        return ""
+    regla = context.get("regla", "")
+
+    async def _uno(bloque: Dict) -> str:
+        ctx = {"pais": bloque.get("pais"), "regla": regla, **bloque}
+        result: NarrativeResult = await narrative_engine.generate(
+            context=ctx, template="boletin_sistema_pais", mode=mode)
+        _exigir_texto_entero(f"boletin_sistemas::{bloque.get('iso3')}", result)
+        return result.text.strip()
+
+    textos = await asyncio.gather(*(_uno(b) for b in bloques))
+    _exigir_que_no_falte_ningun_pais(bloques, textos)
+    return "\n\n".join(t for t in textos if t)
+
+
+def _exigir_que_no_falte_ningun_pais(bloques: list, textos: list) -> None:
+    """Todo país servido tiene que quedar NOMBRADO en el texto.
+
+    Servir el dato no alcanza: hay que pedirlo, y hay que comprobar que salió. Un país que
+    llega al contexto y no aparece en la prosa no rompe nada — el boletín promete «los
+    sistemas de la región, uno por uno» y entrega uno menos, sin decir cuál ni por qué.
+    """
+    faltan = [b.get("pais") for b, t in zip(bloques, textos)
+              if not t or str(b.get("pais", "")).lower() not in t.lower()]
+    if faltan:
+        raise NarrativaTruncada(
+            f"§2 recibió {len(bloques)} países y no nombró a {faltan}. El boletín promete "
+            "recorrerlos uno por uno: entregar uno menos sin decirlo es peor que no salir")
 
 
 async def generate_named_narratives(
