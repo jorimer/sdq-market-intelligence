@@ -1,92 +1,83 @@
-# La fila del BVAR sin medida — plan
+# `n_oos` cuenta EMISIONES, no trimestres — plan
 
-## Qué es esa fila, determinado y no supuesto
+## El defecto, medido
 
-`bvar_minnesota.5v.v1` · `bcrd.xls.pib_2018.serie_original_indice` · horizonte 2026-Q3 ·
-h=2 · as_of 2026-09-05 · revisión 0 · **punto 0,7373** · `measure` NULL.
+Simulé cuatro trimestres objetivo con tres emisiones cada uno —la cadencia real: el sync
+dispara la emisión en cascada y cada corrida en otra fecha escribe una fila nueva, porque
+`as_of` está en la clave de cinco campos—:
 
-El punto se leyó de `GET /api/v1/registry/macro_forecast` (la señal proyectada del eje), sin
-generar ningún informe.
+```
+trimestres OBJETIVO distintos: 4
+n_oos que reporta el ledger:   12
+¿declara solapamiento?         True
+mínimo que exige el gate:      12
+¿el gate la deja anclar?       True
+```
 
-### Evidencia 1 — CRONOLOGÍA (la que cierra el caso)
+**Cuatro trimestres de evidencia real abren el gate que exige doce.** Y no es hipotético:
+hoy ya hay DOS filas para 2026-Q3 a h=2, con `as_of` 2026-09-05 y 2026-09-06. Están en
+conjuntos distintos solo porque entre medias cambió la medida; con la medida estable, la
+próxima emisión suma una fila al mismo conjunto.
 
-| hecho | UTC |
-|---|---|
-| la cascada de `macro-canonical-sync` escribió la fila | **2026-09-05 11:19:55** |
-| se ESCRIBIÓ el commit que pasa `pib_real` a interanual (`0d5ce2d6`) | 2026-09-05 15:53:40 |
-| se mergeó a main (PR #1117) | 2026-09-05 20:07:51 |
-| primer despliegue posterior al merge | ~2026-09-05 20:30 |
+Es exactamente lo que este ledger existe para impedir. El `backtest_id` fue diseñado para que
+«un trimestre se pronostica una sola vez a cada distancia» —lo dice su propio docstring— y la
+re-emisión rompe ese supuesto sin que nada avise.
 
-La fila es **4 h 34 min anterior a que el commit existiera**. No hubo ninguna corrida de
-`macro-canonical-sync` entre el despliegue del cambio y mi emisión manual de las 21:52 —el
-`last_run` del sync era el de las 11:19:55—, y mi emisión reportó `skipped_duplicate: 1`, o
-sea que la fila ya estaba. Se produjo con el bloque en **DLOG**: su punto es un `dlog_pct`.
+**El error también se distorsiona, no solo el conteo.** Con tres filas del mismo trimestre, el
+error de ESE trimestre pesa el triple en el RMSE. El promedio queda sesgado hacia los
+trimestres que más veces se re-emitieron, que es un criterio sin ningún sentido.
 
-### Evidencia 2 — la magnitud, computada sobre el dato real de prod
+## Por qué la re-emisión no es evidencia nueva
 
-Reproduje el modelo con las cinco series de producción, en las dos medidas:
-
-| bloque | trimestres | 2026-Q3 | trayectoria |
-|---|---:|---:|---|
-| TRIMESTRAL (`dlog` ×100) | 76 (hasta 2026-Q1) | **1,6892** | −0,87 · 1,69 · 1,14 · 1,08 |
-| INTERANUAL (`yoy` %) | 73 (hasta 2026-Q1) | **5,5672** | 5,32 · 5,57 · 5,37 · 5,11 |
-
-Ninguna reproduce 0,7373 EXACTO —el dato se movió desde entonces, y los 76 vs 73 trimestres
-confirman el costo de arranque que el propio commit declaró—, pero la separación no admite
-duda: la trayectoria interanual **no baja de 5,11** en ningún horizonte. Y sobre el
-observado, el QoQ promedia +1,13 % (rango reciente −1,60 … +3,08) contra +4,54 % del YoY.
-
-## Lo que apareció al ir a estamparla, y es peor
-
-**El `backtest_id` NO incluye la medida.** Es
-`{model_id}|{target_series}|+{h}T`, y `_del_conjunto` filtra por model_id, serie, revisión,
-estado y `h`. Comprobado: la fila vieja (trimestral) y las que el BVAR emite hoy
-(interanuales) caen en **el mismo conjunto**.
-
-O sea que estampar la medida y no tocar nada más cambia una brecha VISIBLE —una fila listada
-como impuntuable— por una corrupción INVISIBLE: un RMSE que promedia el error de una tasa
-trimestral con el de tasas interanuales, publicado en la sección de desempeño como si fuera
-un solo número. Es «solo se ordena lo comparable» exactamente: un score armado sobre otra
-unidad no rankea contra el resto.
-
-**No es hipotético y no depende de esta fila.** Cualquier motor que cambie su transformación
-—que es lo que acaba de pasar— parte su propio track record en dos poblaciones y las promedia
-sin que nada avise.
+Una fila re-emitida desde el MISMO bloque es el mismo pronóstico re-sellado con otra fecha: el
+conjunto de información no cambió, el punto es idéntico. Y si el bloque SÍ avanzó, el
+horizonte relativo cambia —2026-Q3 pasa de h=2 a h=1— y la fila cae en otro conjunto sola.
+O sea: **dentro de un conjunto, varias `as_of` para el mismo horizonte implican el mismo
+bloque, y por tanto el mismo pronóstico.**
 
 ## El arreglo
 
-### 1 · La medida entra en la identidad del conjunto
+### 1 · Un horizonte cuenta UNA vez
 
-`backtest_id` pasa a `{model_id}|{target_series}|{measure}|+{h}T`. La definición se muda a
-`shared/registry/signals.py`, al lado del campo que documenta el formato, porque hoy hay DOS
-constructores —`ledger.backtest_id` y `bvar.ProyeccionBVAR._backtest_id`— y una copia a mano
-de un serializador ya borró la tasa de 38 entidades en este repo. Consumidores:
-`_del_conjunto` (que además filtra por medida), `desempeno.filas` (que agrupa por ella) y
-`procedencia.meta_de`.
+`_del_conjunto` se queda, por horizonte, con la emisión de `as_of` más TEMPRANO — el
+pronóstico como se publicó por primera vez. Es la misma doctrina que ya rige para las
+revisiones: «el track record mide el pronóstico como se PUBLICÓ, no como se corrigió después».
 
-Con esto, la fila vieja forma su propio conjunto de n=1: no ancla —correcto, el modelo
-cambió— y **no contamina** el del modelo vigente.
+### 2 · Y entonces hay que codificar el solapamiento que el docstring ya declaraba
 
-### 2 · Recién entonces, la fila se estampa
+La única regla implementada en `_se_solapan` es «dos filas comparten horizonte». Con la
+deduplicación eso no puede pasar nunca, así que la función pasaría a devolver `False`
+siempre y el informe **dejaría de declarar un caveat que hoy declara**. Apagar un aviso en
+silencio es peor que el defecto que estoy arreglando.
 
-Migración con la evidencia adentro, acotada a lo que se probó:
-`measure is null` **y** `model_id like 'bvar_minnesota.%'` **y** la serie del PIB **y**
-`as_of <= '2026-09-05'`. El `measure is null` ya implica «escrita antes de que el arreglo se
-desplegara»; la cota de `as_of` está para que la afirmación quede verificable y para que la
-migración no diga nada sobre una fila que alguien inserte después.
+Su docstring ya nombra la regla real y nunca se escribió: «cuando el paso entre cortes es
+menor que el salto entre horizontes». Es el resultado estándar: pronósticos a `h` pasos
+emitidos cada `paso` períodos comparten información cuando `paso < h`, y sus errores quedan
+autocorrelacionados. Se computa: `min(gap entre horizontes consecutivos) < h`.
 
-### 3 · Verificar en prod
+- `h = 1` con emisión trimestral → `1 < 1` es falso → no solapan. (Conserva lo que el test
+  vigente ya afirma.)
+- `h = 2` con emisión trimestral → `1 < 2` → **solapan**, y hoy eso no se declaraba.
+- un conjunto de una sola fila no solapa con nada → `False`.
+- si algún horizonte no resuelve a un trimestre, **`None`**: «no sé» no es «no solapan», y el
+  gate ya rechaza el `None` con su motivo.
 
-Que la señal del registro deje de decir «unidad sin declarar» y que el readiness deje de
-contar `1 SIN PODER PUNTUARSE`. Recomputar readiness ANTES de leerlo.
+### 3 · El test que hoy afirma lo contrario
+
+`test_re_emitir_el_mismo_trimestre_si_solapa` afirma que re-emitir el mismo trimestre marca
+solapamiento. Con la deduplicación esa fila ya no entra al conjunto, así que la afirmación
+cambia — y por una MÁS fuerte: re-emitir no infla `n_oos` ni cambia el error. Se reescribe
+para exigir eso, que es la garantía que de verdad protege el track record.
 
 ## Tests, contra el código viejo primero
 
-- **El que importa**: dos filas del mismo modelo, mismo horizonte relativo y misma serie, con
-  MEDIDAS distintas, no caen en el mismo `track_record`. Hoy caen, y el RMSE las promedia.
-- Los dos constructores de `backtest_id` (ledger y bvar) dan la MISMA cadena.
-- `desempeno` publica un renglón por medida, no uno mezclado.
-- La migración estampa esa fila y no toca ninguna otra.
+- N emisiones del mismo trimestre objetivo dan `n_oos = 1`, no N. **Falla hoy con 12 vs 4.**
+- El RMSE no se sesga hacia el trimestre más re-emitido.
+- `h = 2` con emisión trimestral DECLARA solapamiento; `h = 1` no. Falla hoy: h=2 no lo
+  declaraba.
+- Un horizonte que no resuelve a trimestre da `None`, no `False`.
+- El contraejemplo: trimestres objetivo DISTINTOS sí suman a `n_oos` — sin él, un
+  `_del_conjunto` que devuelva una sola fila siempre pasaría todo lo de arriba.
 
 ## Los tres gates
 
