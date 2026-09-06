@@ -23,10 +23,13 @@ Cómo los cumple cada párrafo del resumen:
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import List, Optional, Sequence, Tuple
+from typing import TYPE_CHECKING, List, Optional, Sequence, Tuple
 
 from modules.valuation.panel import transacciones as tx
 from modules.valuation.service import Lectura
+
+if TYPE_CHECKING:
+    from modules.valuation.entorno import Entorno
 
 #: Cuánto tiene que moverse Ke para dar vuelta el signo — se computa, no se estima a ojo.
 def _cuanto_falta_para_cambiar_de_signo(lec: Lectura) -> float:
@@ -240,6 +243,91 @@ def antecedentes(lec: Lectura, *, posicion: Optional[Tuple[int, int]] = None,
         "historia de control, su plan de negocio y cualquier hecho posterior al cierre "
         "valuado. Se construye con los estados publicados y nada más, y eso acota lo que "
         "puede afirmar.")
+    return "\n\n".join(partes)
+
+
+_NOMBRE_DEL_TIPO = {
+    "banca_multiple": "los bancos múltiples", "banco_ahorro_credito": "los bancos de ahorro y crédito",
+    "corporacion_credito": "las corporaciones de crédito",
+    "aap": "las asociaciones de ahorros y préstamos"}
+
+
+def entorno_macro_e_industria(ent: Optional["Entorno"], lec: Lectura) -> str:
+    """La macro al corte y la industria del tipo. Cada cifra con su período; lo ausente se
+    omite; las relaciones se computan en `entorno.relacion`."""
+    from modules.valuation import entorno as env
+    if ent is None:
+        return ("El entorno macroeconómico y de industria no se pudo leer para este corte y se "
+                "omite en vez de rellenarse: el informe valúa con los estados de la entidad y "
+                "la curva en pesos, que sí están.")
+    partes: List[str] = []
+    macro: List[str] = []
+    if ent.pib_interanual:
+        c = ent.pib_interanual
+        macro.append(f"el PIB real creció **{c.valor:.2f} %** interanual al {c.periodo}")
+    if ent.inflacion_12m:
+        c = ent.inflacion_12m
+        macro.append(f"la inflación de doce meses fue **{c.valor:.2f} %** a {c.periodo}")
+    if ent.tipo_de_cambio:
+        c = ent.tipo_de_cambio
+        var = (f", **{c.interanual_pct:+.2f} %** interanual" if c.interanual_pct is not None
+               else "")
+        macro.append(f"el tipo de cambio de referencia promedió **RD$ {c.valor:.2f}** por dólar "
+                     f"en {c.periodo}{var}")
+    macro.append(f"la tasa libre de riesgo en pesos con la que se valuó —curva soberana a más "
+                 f"de dos años— estuvo entre **{lec.rf_pct[0]:.2f} %** y **{lec.rf_pct[1]:.2f} %**")
+    partes.append(
+        "**Macro al corte.** Cada cifra lleva el período de su fuente, que no siempre coincide "
+        "con el corte de la entidad: " + "; ".join(macro) + ". La macro entra a la valuación "
+        "por UNA sola puerta, la curva en pesos que arma el costo de capital; el resto es "
+        "contexto para leer el ROE, no un insumo del número.")
+    ind = ent.industria
+    if ind is None:
+        partes.append(
+            "**Industria.** No hay padrón suficiente del tipo de la entidad al corte para "
+            "comparar; se omite en vez de comparar contra un grupo de uno.")
+        return "\n\n".join(partes)
+    nombre = _NOMBRE_DEL_TIPO.get(ind.tipo, "las entidades de su tipo")
+    filas: List[str] = []
+    lecturas: List[str] = []
+
+    def fila(rotulo: str, propio: Optional[float], tipo: Optional[float], n: int,
+             unidad: str = "%") -> None:
+        rel = env.relacion(propio, tipo)
+        if propio is None or tipo is None:
+            return
+        brecha, palabra = rel if rel else (0.0, "en línea")
+        nexo = "con el" if palabra == "en línea" else "del"
+        filas.append(f"| {rotulo} | {propio:.2f} {unidad} | {tipo:.2f} {unidad} ({n}) | "
+                     f"{brecha:+.2f} pp · {palabra} |")
+        lecturas.append(f"{rotulo}: **{palabra} {nexo} resto** ({brecha:+.2f} pp)")
+
+    fila("ROE de doce meses sobre apertura", ind.roe_entidad_pct,
+         ind.roe_del_resto_del_tipo_pct, ind.n_en_roe)
+    fila("Crecimiento interanual de la cartera bruta", ind.crecimiento_cartera_entidad_pct,
+         ind.crecimiento_cartera_del_resto_del_tipo_pct, ind.n_en_cartera)
+    fila("Morosidad (cartera vencida a 90 días / cartera bruta)", ind.morosidad_entidad_pct,
+         ind.morosidad_del_resto_del_tipo_pct, ind.n_en_morosidad)
+    if not filas:
+        partes.append(f"**Industria.** El padrón de {nombre} al {ind.periodo} tiene "
+                      f"{ind.n_entidades_del_tipo} entidades, pero ninguna de las razones se "
+                      "pudo medir para las dos puntas; se omite en vez de rellenarse.")
+        return "\n\n".join(partes)
+    tabla = ("| Indicador | Entidad | Resto de su tipo (n) | Brecha |\n|---|---|---|---|\n"
+             + "\n".join(filas))
+    partes.append(
+        f"**Industria: {nombre}, al {ind.periodo}.** El tipo son "
+        f"**{ind.n_entidades_del_tipo} entidades** con patrimonio publicado al corte, y el "
+        "comparador es el RESTO —la entidad queda fuera de su propio agregado, porque contra "
+        "un total que ella domina siempre saldría en línea—; cada agregado es suma sobre suma "
+        "de las que tienen las dos puntas, y el número entre paréntesis dice cuántas. El ROE "
+        "del resto se computa con la MISMA base que el de la entidad —doce meses sobre "
+        "patrimonio de apertura—, así que la brecha es una brecha y no una diferencia de "
+        "definición.\n\n" + tabla + "\n\n"
+        "Lectura computada: " + "; ".join(lecturas) + ". La brecha de ROE es lo que "
+        "cuenta para el valor: el exceso sobre el costo de capital se compara contra un "
+        "`Ke` común a todo el tipo, así que estar por encima del tipo en ROE es estar más "
+        "lejos de destruir valor, no una garantía de crearlo.")
     return "\n\n".join(partes)
 
 

@@ -63,6 +63,7 @@ DISPLAY = "SDQ Valuación de Entidades"
 SECCION_RESUMEN = "resumen_ejecutivo"
 SECCION_PROPOSITO = "proposito_y_alcance"
 SECCION_ANTECEDENTES = "antecedentes_de_la_entidad"
+SECCION_ENTORNO = "entorno_macro_e_industria"
 SECCION_FINANCIERO = "analisis_financiero"
 SECCION_SPREAD = "spread_roe_ke"
 SECCION_METODOLOGIA = "metodologia"
@@ -82,6 +83,7 @@ _SECTION_TITLES = {
     SECCION_RESUMEN: "Resumen ejecutivo",
     SECCION_PROPOSITO: "Propósito y alcance",
     SECCION_ANTECEDENTES: "La entidad y su posición",
+    SECCION_ENTORNO: "Entorno macroeconómico e industria",
     SECCION_FINANCIERO: "Análisis financiero",
     SECCION_SPREAD: "Creación de valor · ROE − Ke",
     SECCION_METODOLOGIA: "Metodología de valuación",
@@ -130,7 +132,7 @@ def valuation_manifest() -> SectorProductManifest:
             ProductTier.insight: TierLevelSpec(
                 tier=ProductTier.insight, granularity=Granularity.named_entity,
                 sections=(SECCION_RESUMEN, SECCION_PROPOSITO, SECCION_ANTECEDENTES,
-                          SECCION_FINANCIERO, SECCION_SPREAD, SECCION_VALOR,
+                          SECCION_ENTORNO, SECCION_FINANCIERO, SECCION_SPREAD, SECCION_VALOR,
                           SECCION_DESCOMPOSICION, SECCION_CONTRASTE,
                           SECCION_LIMITACIONES),
                 narrative_templates=(), prosa_computada=True,
@@ -140,7 +142,7 @@ def valuation_manifest() -> SectorProductManifest:
             ProductTier.deep_dive: TierLevelSpec(
                 tier=ProductTier.deep_dive, granularity=Granularity.named_entity,
                 sections=(SECCION_RESUMEN, SECCION_PROPOSITO, SECCION_ANTECEDENTES,
-                          SECCION_FINANCIERO, SECCION_SPREAD, SECCION_METODOLOGIA,
+                          SECCION_ENTORNO, SECCION_FINANCIERO, SECCION_SPREAD, SECCION_METODOLOGIA,
                           SECCION_VALOR, SECCION_DESCOMPOSICION, SECCION_CONTRASTE,
                           SECCION_SUPUESTOS, SECCION_LIMITACIONES, SECCION_FUENTES,
                           SECCION_ANEXO_PANEL),
@@ -400,7 +402,13 @@ class ValuationProduct:
                 f"No hay con qué valuar «{fila[1]}»: hacen falta doce meses de historia —un "
                 "corte y el mismo corte del año anterior, con patrimonio y utilidad "
                 "publicados— para computar un ROE de doce meses sobre patrimonio de apertura.")
-        return ProductSnapshot(tier=tier, period=lec.periodo, payload=a_payload(lec),
+        from modules.valuation import entorno as env
+        payload = a_payload(lec)
+        # El entorno se lee ACÁ, donde hay base, y viaja en el payload: la prosa no
+        # recomputa nada y el informe en caché dice el entorno con el que se valuó.
+        payload["entorno"] = env.a_dict(env.leer_entorno(
+            db, bank_id=str(fila[0]), tipo=lec.tipo_de_entidad, periodo=lec.periodo))
+        return ProductSnapshot(tier=tier, period=lec.periodo, payload=payload,
                                entity_name=str(fila[1]))
 
     async def narratives(self, tier: ProductTier, snapshot: ProductSnapshot,
@@ -414,8 +422,10 @@ class ValuationProduct:
         # entidad ficticia» y publicando una fórmula de `Ke` con prima de riesgo país, que
         # este modelo no tiene. Ahora todas salen del dato, y del MISMO constructor que la
         # muestra: `_secciones_computadas`. Eran dos diccionarios copiados a mano.
+        from modules.valuation import entorno as env
         todas = _secciones_computadas(lec, posicion=posicion, cuota_pct=cuota,
-                                      con_anexo=SECCION_ANEXO_PANEL in secciones)
+                                      con_anexo=SECCION_ANEXO_PANEL in secciones,
+                                      entorno=env.desde_dict(snapshot.payload.get("entorno")))
         return {sec: todas[sec] for sec in secciones if sec in todas}
 
     def _posicion_en_su_tipo(self, lec: Any) -> Tuple[Optional[Tuple[int, int]],
@@ -533,7 +543,7 @@ class ValuationProduct:
 
 def _secciones_computadas(lec: Any, *, posicion: Optional[Tuple[int, int]] = None,
                           cuota_pct: Optional[float] = None,
-                          con_anexo: bool = False) -> Dict[str, str]:
+                          con_anexo: bool = False, entorno: Any = None) -> Dict[str, str]:
     """TODA la prosa del eje, de una `Lectura`. Es la única fuente: la usan el informe
     real y la muestra curada.
 
@@ -551,6 +561,7 @@ def _secciones_computadas(lec: Any, *, posicion: Optional[Tuple[int, int]] = Non
         SECCION_PROPOSITO: narrativa.proposito_y_alcance(lec),
         SECCION_ANTECEDENTES: narrativa.antecedentes(lec, posicion=posicion,
                                                      cuota_pct=cuota_pct),
+        SECCION_ENTORNO: narrativa.entorno_macro_e_industria(entorno, lec),
         SECCION_FINANCIERO: narrativa.analisis_financiero(lec),
         SECCION_SPREAD: narrativa.resumen_del_spread(lec),
         SECCION_METODOLOGIA: metodologia,
@@ -671,6 +682,26 @@ _SAMPLE_PAYLOAD: Dict[str, Any] = {
     "serie_spread": [{"periodo": f"{a}-12-31", "roe_pct": r} for a, r in
                      ((2021, 12.1), (2022, 13.8), (2023, 12.9), (2024, 13.5), (2025, 13.2))],
     "advertencias": [],
+    # Entorno ILUSTRATIVO, con la misma forma que el real (`entorno.a_dict`). Las cifras
+    # macro son de orden de magnitud y llevan período como las reales; la industria compara
+    # contra un tipo de tamaño plausible.
+    "entorno": {
+        "macro": {
+            "pib_interanual": {"valor": 4.1, "periodo": "2025-Q4", "medida": "interanual"},
+            "inflacion_12m": {"valor": 3.7, "periodo": "2025-12", "medida": "variacion_12_meses"},
+            "tipo_de_cambio": {"valor": 62.4, "periodo": "2025-Q4", "medida": "nivel",
+                               "interanual_pct": 3.9},
+        },
+        "industria": {
+            "tipo": "banca_multiple", "periodo": "2025-12-31", "n_entidades_del_tipo": 17,
+            "roe_del_resto_del_tipo_pct": 21.4, "roe_entidad_pct": 13.2,
+            "crecimiento_cartera_del_resto_del_tipo_pct": 11.8,
+            "crecimiento_cartera_entidad_pct": 9.5,
+            "morosidad_del_resto_del_tipo_pct": 1.4, "morosidad_entidad_pct": 1.9,
+            "n_en_roe": 16, "n_en_cartera": 16, "n_en_morosidad": 16,
+        },
+        "advertencias": [],
+    },
 }
 
 #: El AVISO que convierte una muestra en una muestra. Va en la primera sección de cada nivel
@@ -690,8 +721,10 @@ def _sample_narrativas_de(secciones) -> Dict[str, str]:
     """
     snap = ProductSnapshot(tier=ProductTier.deep_dive, period="2025-12-31",
                            payload=_SAMPLE_PAYLOAD, entity_name=_ENTIDAD_FICTICIA)
+    from modules.valuation import entorno as env
     todas = _secciones_computadas(_lectura_desde_payload(snap),
-                                  con_anexo=SECCION_ANEXO_PANEL in secciones)
+                                  con_anexo=SECCION_ANEXO_PANEL in secciones,
+                                  entorno=env.desde_dict(_SAMPLE_PAYLOAD.get("entorno")))
     salida = {s: todas[s] for s in secciones if s in todas}
     primera = next((s for s in secciones if s in salida), None)
     if primera:
