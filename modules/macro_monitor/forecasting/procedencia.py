@@ -59,7 +59,11 @@ def meta_de(db: Session, fila: ForecastLog) -> ProjectionMeta:
     # del gate: la proyección no ancla NUNCA, y el motivo que ve el lector es «1 observación
     # fuera de muestra», indistinguible del estado honesto del día uno.
     h = fila.h if fila.h is None else int(fila.h)
-    bt = led.backtest_id(str(fila.model_id), str(fila.target_series), h)
+    # La medida entra en la clave: un modelo que cambió de unidad no comparte conjunto con su
+    # versión anterior. Una fila sin medida arma una clave que no agrupa a nadie, y el gate
+    # la rechaza antes por ese mismo motivo.
+    bt = led.backtest_id(str(fila.model_id), str(fila.target_series), h,
+                         str(fila.measure or ""))
     tr = led.track_record(db, bt)
     rmse = tr.get("rmse")
     return ProjectionMeta(

@@ -86,7 +86,7 @@ def test_la_meta_sale_del_ledger_campo_por_campo(db):
     assert m.intervals == ((0.80, 2.1, 4.1), (0.90, 1.6, 4.6))
     # RELATIVO: el conjunto son los pronósticos a la misma distancia, no los de un
     # trimestre concreto — que sería uno solo y nunca alcanzaría el mínimo del gate.
-    assert m.backtest_id == led.backtest_id(MODELO, SERIE, 1)
+    assert m.backtest_id == led.backtest_id(MODELO, SERIE, 1, med.DLOG_PCT)
 
 
 def test_sin_filas_puntuadas_la_meta_sale_con_n_oos_cero_y_el_gate_la_rechaza(db):

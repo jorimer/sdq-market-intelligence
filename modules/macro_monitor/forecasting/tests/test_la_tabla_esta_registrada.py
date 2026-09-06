@@ -94,3 +94,56 @@ def test_el_backfill_de_la_migracion_es_TAN_ANGOSTO_como_dice():
         "el backfill le inventó una medida a un motor que no conoce")
     assert filas["d"] == ("otra.serie", "level"), (
         "el backfill pisó una medida que la fila ya declaraba")
+
+
+def _migracion_por_ruta(nombre: str):
+    import importlib.util
+    from pathlib import Path
+
+    ruta = (Path(__file__).resolve().parents[4] / "infrastructure" / "alembic" / "versions"
+            / nombre)
+    spec = importlib.util.spec_from_file_location(nombre.split("_")[0], ruta)
+    assert spec is not None and spec.loader is not None, ruta
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    return mod
+
+
+def test_la_medida_de_la_fila_del_BVAR_se_estampa_SOLO_donde_se_probo():
+    """La fila del 2026-09-05 se determinó por cronología (es 4h34m anterior al commit que
+    introdujo la variación interanual) y por reproducción del modelo. El `where` tiene que
+    llegar exactamente hasta ahí: una fila del mismo modelo emitida DESPUÉS es interanual, y
+    estamparla como trimestral metería el error equivocado en el track record."""
+    from sqlalchemy import create_engine, text
+
+    mig = _migracion_por_ruta("a4c8e1b70d93_medida_de_la_fila_del_bvar.py")
+    eng = create_engine("sqlite://")
+    with eng.begin() as cx:
+        cx.execute(text("create table mm_forecast_log ("
+                        "id text, model_id text, target_series text, as_of text, "
+                        "measure text)"))
+        for id_, model_id, serie, as_of, medida in [
+            # la fila real: trimestral, determinada
+            ("real", "bvar_minnesota.5v.v1", mig.PIB_CODE, "2026-09-05", None),
+            # una emitida DESPUÉS del cambio: ya trae su medida, y no se toca
+            ("post", "bvar_minnesota.5v.v1", mig.PIB_CODE, "2026-12-05", "yoy_pct"),
+            # una del futuro sin medida: NO se le inventa una
+            ("futura", "bvar_minnesota.5v.v1", mig.PIB_CODE, "2026-12-05", None),
+            # el nowcast ya lo resolvió la migración anterior
+            ("nowcast", "bridge_imae_pib.m2.v1", mig.PIB_CODE, "2026-09-05", "dlog_pct"),
+            # otro motor, otra serie: ni se mira
+            ("ajeno", "otro.v1", "otra.serie", "2026-09-05", None),
+        ]:
+            cx.execute(text("insert into mm_forecast_log values (:i,:m,:s,:a,:me)"),
+                       {"i": id_, "m": model_id, "s": serie, "a": as_of, "me": medida})
+        cx.execute(text(mig.ESTAMPAR_MEDIDA).bindparams(
+            pib=mig.PIB_CODE, corte=mig.ULTIMO_DIA_TRIMESTRAL))
+        got = dict(cx.execute(text("select id, measure from mm_forecast_log")).all())
+
+    assert got["real"] == "dlog_pct", "la fila que se determinó quedó sin estampar"
+    assert got["post"] == "yoy_pct", "pisó una medida ya declarada"
+    assert got["futura"] is None, (
+        "le inventó la medida a una fila posterior al cambio: ésa es interanual y quedaría "
+        "con el error de otra unidad en el track record")
+    assert got["nowcast"] == "dlog_pct"
+    assert got["ajeno"] is None

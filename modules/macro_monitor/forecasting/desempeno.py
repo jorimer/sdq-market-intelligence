@@ -39,6 +39,7 @@ from sqlalchemy.orm import Session
 
 from modules.macro_monitor.forecasting import ledger as led
 from modules.macro_monitor.forecasting.models import ForecastLog
+from shared.data import medida_de_pronostico as med
 
 TITULO = "Desempeño de nuestras proyecciones anteriores"
 
@@ -69,6 +70,10 @@ QUE_SI_SE_PUEDE_ESPERAR = (
 class FilaDeDesempeno:
     model_id: str
     target_series: str
+    #: En qué medida están los puntos de este conjunto. Va en la tabla: dos renglones del
+    #: mismo modelo y el mismo horizonte que difieren solo en la unidad se leerían como una
+    #: contradicción si no se dijera cuál es cuál.
+    medida: str
     #: El horizonte RELATIVO del conjunto (`+1T`), no un trimestre calendario: es lo que
     #: hace comparables a las filas que se promedian.
     horizonte: str
@@ -82,19 +87,23 @@ class FilaDeDesempeno:
 
 def filas(db: Session) -> List[FilaDeDesempeno]:
     """Un renglón por conjunto de backtest con al menos un pronóstico puntuado."""
-    conjuntos: Dict[Tuple[str, str, int], None] = {}
+    # Se agrupa TAMBIÉN por medida. Sin ella, un modelo que cambió de unidad publica un solo
+    # renglón que promedia dos poblaciones: medido sobre errores de 0,50 y 4,00, el RMSE daba
+    # 2,850 — que no es el error de ninguno de los dos.
+    conjuntos: Dict[Tuple[str, str, str, int], None] = {}
     for f in (db.query(ForecastLog)
               .filter(ForecastLog.status == "scored", ForecastLog.h.isnot(None)).all()):
-        conjuntos[(str(f.model_id), str(f.target_series), int(f.h))] = None
+        conjuntos[(str(f.model_id), str(f.target_series), str(f.measure or ""),
+                   int(f.h))] = None
     salida: List[FilaDeDesempeno] = []
-    for model_id, serie, paso in sorted(conjuntos):
-        bt = led.backtest_id(model_id, serie, paso)
+    for model_id, serie, medida, paso in sorted(conjuntos):
+        bt = led.backtest_id(model_id, serie, paso, medida)
         horizonte = bt.rsplit("|", 1)[-1]
         tr = led.track_record(db, bt)
         if not tr.get("n_oos"):
             continue
         salida.append(FilaDeDesempeno(
-            model_id=model_id, target_series=serie, horizonte=horizonte,
+            model_id=model_id, target_series=serie, medida=medida, horizonte=horizonte,
             n_oos=int(tr["n_oos"]), rmse=tr.get("rmse"), mae=tr.get("mae"),
             interval_coverage=tuple(tr.get("interval_coverage") or ()),
             solapan=tr.get("overlapping"),
@@ -167,8 +176,9 @@ def texto(fs: Sequence[FilaDeDesempeno], rotas: Sequence[Mapping[str, Any]]) -> 
     for f in fs:
         rmse = f"{f.rmse:.3f}" if f.rmse is not None else "—"
         mae = f"{f.mae:.3f}" if f.mae is not None else "—"
-        lineas.append(f"| {f.model_id} | {f.target_series} | {f.horizonte} | {f.n_oos} | "
-                      f"{rmse} | {mae} | {_calibracion(f)} |")
+        lineas.append(f"| {f.model_id} | {f.target_series} | "
+                      f"{med.ETIQUETAS.get(f.medida, f.medida or 'sin declarar')} | "
+                      f"{f.horizonte} | {f.n_oos} | {rmse} | {mae} | {_calibracion(f)} |")
 
     lineas.append("")
     lineas.append(
