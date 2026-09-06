@@ -766,7 +766,9 @@ def supuestos_y_sensibilidad(lec: Lectura) -> str:
     filas = [
         ("Rf · curva soberana en pesos, más de dos años",
          f"{rf[0]:.2f} % – {rf[1]:.2f} %",
-         f"dato: {lec.n_observaciones_rf} observación(es) del cuadro V.1 del BCRD"),
+         f"dato: {lec.n_observaciones_rf} observación(es) del cuadro V.1 del BCRD"
+         + (f", de {lec.rf_ventana[0]} a {lec.rf_ventana[1]}" if lec.rf_ventana[0] else "")
+         + ", publicadas al corte"),
         ("β de equity, por tipo de entidad", f"{beta[0]:.2f} – {beta[1]:.2f}",
          "rúbrica: bancos cotizados latinoamericanos, sin desapalancar"),
         ("ERP · prima de riesgo de mercado", f"{erp[0]:.2f} % – {erp[1]:.2f} %",

@@ -181,6 +181,8 @@ class Lectura:
     beta: Tuple[float, float] = (0.0, 0.0)
     erp: Tuple[float, float] = (0.0, 0.0)
     n_observaciones_rf: int = 0
+    #: Primer y último período de la ventana de la Rf. Sin fechas, un rango no se juzga.
+    rf_ventana: Tuple[str, str] = ("", "")
 
     @property
     def destruye_valor(self) -> bool:
@@ -216,7 +218,8 @@ def valuar_entidad(db: Session, *, bank_id: str, nombre: str) -> Optional[Lectur
         return None
     tipo = _tipo_de(db, bank_id)
     beta = pt.beta_de(tipo)
-    ke = cc.calcular(db, beta=beta)
+    # La Rf se arma AL CORTE de la lectura: un informe a una fecha no usa tasas posteriores.
+    ke = cc.calcular(db, beta=beta, hasta=_como_fecha(historia.periodos[-1]))
     if ke.alto <= 0:
         return None
     retencion = pt.retencion_de(tipo)
@@ -265,6 +268,7 @@ def valuar_entidad(db: Session, *, bank_id: str, nombre: str) -> Optional[Lectur
         serie_spread=serie,
         tipo_de_entidad=tipo or "",
         rf_pct=_rf_de(ke), beta=beta, erp=cc.ERP, n_observaciones_rf=ke.n_observaciones_rf,
+        rf_ventana=ke.ventana_rf,
         retencion=retencion,
         g_terminal_pct=g,
         evidencia_del_tipo=pt.evidencia_de(tipo),
@@ -314,6 +318,7 @@ def a_payload(lec: Lectura) -> Dict[str, Any]:
             "beta": [lec.beta[0], lec.beta[1]],
             "erp": [lec.erp[0], lec.erp[1]],
             "n_observaciones_rf": lec.n_observaciones_rf,
+            "rf_ventana": [lec.rf_ventana[0], lec.rf_ventana[1]],
         },
         "serie_spread": [{"periodo": p, "roe_pct": r} for p, r in lec.serie_spread],
         "advertencias": list(lec.advertencias),
