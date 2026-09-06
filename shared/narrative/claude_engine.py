@@ -2261,8 +2261,13 @@ class NarrativeEngine:
         """
         from shared.narrative.cerebro import DEEP_DIRECTIVE, build_system
         from shared.narrative.numeric_guard import GUARD_VERSION
+        # El SANEADOR también es receta: post-procesa cada narrativa (meta-comentario,
+        # formato numérico, registro). Sin él en la huella, arreglar una regla de saneado se
+        # desplegaba y no cambiaba nada — la caché seguía sirviendo el texto viejo. Es el
+        # cuarto caso de la misma familia que este método existe para cerrar.
+        from shared.narrative.sanitize import FINGERPRINT as HUELLA_SANEADOR
 
-        parts = [settings.ANTHROPIC_MODEL or "", GUARD_VERSION]
+        parts = [settings.ANTHROPIC_MODEL or "", GUARD_VERSION, HUELLA_SANEADOR]
         if _uses_cerebro(template, axis) and axis:  # `and axis` es redundante: estrecha el tipo
             parts += [build_system(axis, audience, mode), THIN_TEMPLATES[template]]
             if mode == "deep":
