@@ -1,5 +1,19 @@
 # Encargo de investigación · Panel de transacciones bancarias RD/Caribe
 
+> **Octava actualización. SAGICOR / RBC JAMAICA ENTRA EN VALOR RAZONABLE; NUEVE COMPARABLES.**
+> Se abrió la nota 57 de la memoria auditada 2014 de Sagicor Group Jamaica —el adquirente real,
+> en J$—: consideración **J$9.327.037 miles**, activos netos a valor razonable **J$12.538.217
+> miles**, goodwill negativo **J$3.211.180 miles** (cierra exacto), 100 % el 27-jun-2014. Las
+> cifras en US$ que traía la vía eran de la matriz de Barbados y reconcilian con la nota
+> jamaiquina **al centavo**: las tres puntas dan el mismo tipo implícito, J$110,54/US$.
+> Múltiplo sobre valor razonable: **0,74×** — la tercera compra ventajosa dentro del panel.
+>
+> No cuenta como comparable, y la base contable hay que darla por inalcanzable con fuentes
+> públicas: el vendedor (RBC, Nota 11 de su memoria 2014) publicó solo la pérdida por
+> disposición, C$100 M, porque no presentó RBC Jamaica como operación discontinuada. Una nota
+> de pérdida no es un libro. La asignación es además **provisional**; la final (memoria 2015 de
+> SGJ) no está disponible. Panel: **14 verificables, 9 comparables**.
+
 > **Séptima actualización. SANTANDER PUERTO RICO PASA A BASE CONTABLE: NUEVE COMPARABLES.**
 > No hizo falta el FR Y-9C —esa premisa no estaba verificada y era dudosa: lo presentan las
 > tenedoras de primer nivel, y Santander BanCorp colgaba de Santander Holdings USA—. El
