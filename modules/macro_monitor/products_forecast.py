@@ -47,6 +47,14 @@ from shared.registry.signals import COVERAGE_PROJECTION
 
 logger = logging.getLogger("sdq.products.macro_forecast")
 
+#: Los archivos que entran en la HUELLA de la caché de narrativas. Este producto redacta con
+#: CÓDIGO (`prosa_computada`), así que su «contexto» no es solo `ai_context.py`: es también
+#: el archivo que arma el texto. Sin declararlo, cambiar la prosa dejaba el fingerprint
+#: IDÉNTICO —medido— y la caché, que no tiene TTL, seguía sirviendo el texto viejo
+#: indefinidamente. Lo vigila
+#: `shared/products/tests/test_ningun_producto_sin_huella_de_contexto.py`.
+AI_CONTEXT_FILES = ("ai_context.py", "products_forecast.py")
+
 SECTOR_KEY = "macro_forecast"
 #: La variable objetivo dentro del bloque del BVAR. Es el nombre del MODELO, no un
 #: `series_code`: `bloque.codigo_de_variable` lo resuelve a la serie observable.
