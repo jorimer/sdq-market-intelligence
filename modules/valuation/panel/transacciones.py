@@ -23,15 +23,18 @@ es el precio**.
 
 **La NIIF 3 también devuelve un denominador, y no es el mismo.** Obliga al comprador a
 publicar los activos netos identificables a VALOR RAZONABLE, que es lo que él reconoce y no
-lo que el vendedor tenía en libros. Cinco casos entran así. Cuánto se separan las dos bases
+lo que el vendedor tenía en libros. Cuatro casos quedan así. Cuánto se separan las dos bases
 dejó de ser un argumento: la tabla del 10-Q de OFG Bancorp publica las dos columnas sobre el
 mismo balance, y el valor razonable está **15,0 % por encima** del libro.
 
 **El panel puede CRECER sin que el gate se mueva, y eso es información.** Trece casos
-verificables, ocho comparables. Las dos operaciones que se cerraron con nota auditada en el
-último relevamiento —Intercommercial Bank y Scotiabank Belize— publican valor razonable y
-ninguna publica el libro del vendedor, así que suman expediente y no suman tabla. El gate
-mide lo que el modelo puede contrastar, no el tamaño del archivo.
+verificables, nueve comparables. Intercommercial Bank y Scotiabank Belize entraron con nota
+auditada y publican valor razonable sin el libro del vendedor: suman expediente y no suman
+tabla. Santander Puerto Rico, en cambio, PASÓ de valor razonable a contable sin buscar un
+documento nuevo del regulador: el propio comprador había archivado en la SEC los estados de
+la adquirida —auditados a diciembre 2019, interinos a junio 2020—, que es el perímetro exacto
+que el precio compró. El gate mide lo que el modelo puede contrastar, no el tamaño del
+archivo.
 
 **Y apareció una dirección que no se buscaba: la COMPRA VENTAJOSA.** Dos de los cinco casos
 sobre NIIF 3 se pagaron por DEBAJO del valor razonable de lo que se entregaba —IBL a 0,83x y
@@ -454,31 +457,60 @@ PANEL: Tuple[Transaccion, ...] = (
     ),
     Transaccion(
         anio=2020, comprador="First BanCorp (FirstBank Puerto Rico)",
-        adquirida="Santander BanCorp y Banco Santander Puerto Rico",
+        adquirida="Santander BanCorp y Banco Santander Puerto Rico (100 % de las acciones)",
         pais="PR",
         precio=1_277_626_000.0, moneda_precio="USD",
-        valor_libro=1_271_323_000.0, moneda_libro="USD", periodo_libro="2020-09",
-        pb=1.005, base=BASE_VALOR_RAZONABLE,
+        valor_libro=1_190_926_000.0, moneda_libro="USD", periodo_libro="2020-06",
+        pb=1.073, base=BASE_CONTABLE, valor_razonable=1_271_323_000.0,
+        alcance="sociedad tenedora consolidada (las dos puntas)",
         fuente_precio=("Form 10-Q de First BanCorp del 3T2020 (SEC), nota de combinación de "
                        "negocios: «Total purchase price consideration (cash)» US$1.277.626 "
-                       "miles. Cierre el 1 de septiembre de 2020."),
-        fuente_libro=("Misma nota: «Fair value of net assets and identifiable intangible "
-                      "assets» US$1.271.323 miles, con goodwill de US$6.303 miles. "
-                      "1.271.323 + 6.303 = 1.277.626, cierra exacta.\n\n"
-                      "LA TABLA NO PUBLICA COLUMNA DE LIBRO, a diferencia de las dos de OFG. "
-                      "Por eso el caso queda sobre base valor razonable pese a venir del "
-                      "mismo tipo de documento: que un 10-Q traiga el libro es una elección "
-                      "de presentación del emisor, no una exigencia de la norma."),
+                       "miles. Cierre el 1 de septiembre de 2020. El precio compró las "
+                       "ACCIONES de Santander BanCorp, la tenedora."),
+        fuente_libro=("Estados financieros de la PROPIA Santander BanCorp y subsidiarias, "
+                      "presentados por el comprador a la SEC como exhibits del 8-K/A del 18 "
+                      "de noviembre de 2020 (Regla 3-05 de la S-X): exhibit 99.1, la memoria "
+                      "AUDITADA por PwC al 31-dic-2019, y exhibit 99.2, el interino "
+                      "condensado consolidado al 30-jun-2020, último corte publicado antes "
+                      "del cierre. «Total stockholder's equity» al 30-jun-2020: "
+                      "US$1.190.926 miles (dólares en miles), literal en el balance y en el "
+                      "estado de cambios en el patrimonio.\n\n"
+                      "CONTROL DE CONSISTENCIA: el comparativo del interino al 31-dic-2019 "
+                      "es 1.211.573, idéntico al total del balance AUDITADO del 99.1. Y "
+                      "activos totales 6.001.182 menos pasivos 4.810.256 recompone el "
+                      "1.190.926 exacto.\n\n"
+                      "EL PERÍMETRO COINCIDE CON EL DEL PRECIO: es la tenedora consolidada "
+                      "—banco, agencia de seguros y, hasta el 1-jun-2020, SAM—. Los dos "
+                      "carve-outs que el contrato exigía antes del cierre ya están fuera de "
+                      "este balance: los activos improductivos se vendieron a una afiliada "
+                      "el 31-dic-2019 (US$114,5 M de préstamos y US$30,1 M de adjudicados, "
+                      "a valor de mercado que aproximaba el libro) y SAM el 1-jun-2020 "
+                      "(activos netos ~US$1,3 M). Junio 2020 ya es el perímetro que se "
+                      "vendió.\n\n"
+                      "La vía abierta anterior apuntaba al FR Y-9C de la Reserva Federal. "
+                      "Esa premisa NO se verificó y no hizo falta: el FR Y-9C lo presentan "
+                      "las tenedoras de PRIMER nivel, y Santander BanCorp colgaba de "
+                      "Santander Holdings USA. El documento correcto era el que el propio "
+                      "comprador tuvo que archivar."),
         caveats=(
-            "LA BASE NO ES VALOR LIBRO. Son activos netos identificables a valor razonable.",
-            "Y no alcanza con ir al regulador: el Call Report del FDIC da un patrimonio de "
-            "US$1.013.608 miles al 30 de junio de 2020, pero ése es el BANCO y el precio "
-            "compró la sociedad tenedora —que además tenía la financiera de consumo—. "
-            "Cruzarlos daría 1,26x, un múltiplo con el numerador y el denominador midiendo "
-            "cosas distintas. Es el error de ALCANCE, y produce un número plausible.",
-            "Las condiciones anunciadas hablaban de 117,5 % del «core tangible common "
-            "equity» más el capital excedente a la par: una tercera base, definida por el "
-            "contrato y no por un balance.",
+            "EL SEGUNDO DENOMINADOR VIENE DE OTRO DOCUMENTO Y OTRA FECHA. El valor "
+            "razonable (US$1.271.323 miles) es la asignación del precio de compra del 10-Q "
+            "del comprador a la fecha de adquisición, 1-sep-2020; el libro es el balance de "
+            "la adquirida al 30-jun-2020. La cuña de +6,75 % que se computa entre los dos "
+            "lleva adentro dos meses de resultados y ajustes de cierre, así que NO es la "
+            "medición limpia de OFG —donde las dos columnas están sobre el mismo balance a "
+            "la misma fecha—. Se publica como cuña APROXIMADA.",
+            "Dos meses entre el corte del libro y el cierre. El contrato fijó el precio "
+            "como 117,5 % del «core tangible common equity» más el capital excedente a la "
+            "par, ajustado por el balance consolidado AL CIERRE, que no se publicó. El "
+            "múltiplo sobre junio es el último que las fuentes públicas permiten.",
+            "El error de ALCANCE que este caso evitó, medido: el Call Report del FDIC da "
+            "US$1.013.608 miles al 30-jun-2020 para el BANCO solo; sobre esa cifra el "
+            "múltiplo saldría 1,26x. La tenedora tiene US$1.190.926 miles: los ~US$177 M "
+            "de diferencia son el perímetro que el precio compró y el banco solo no tiene.",
+            "El interino a junio 2020 NO está auditado; el auditado es el de diciembre 2019 "
+            "(1.211.573). Sobre diciembre el múltiplo daría 1,05x. Se publica junio porque "
+            "es el corte más cercano al cierre y el que ya tiene los dos carve-outs fuera.",
         ),
     ),
     Transaccion(
@@ -762,12 +794,6 @@ VIAS_ABIERTAS: Tuple[Tuple[str, str], ...] = (
      "junio de 2021 —tres meses DESPUÉS de la operación— y SBL ya no existía como entidad "
      "separada. No es «falta buscar más»: es que la ventana se cerró. Se deja listada para "
      "que nadie vuelva a gastar el tiempo sin saberlo."),
-    ("Banco Santander Puerto Rico — el denominador sobre base CONTABLE",
-     "El caso ya está en el panel sobre valor razonable. Para pasarlo a base contable hace "
-     "falta el patrimonio consolidado de SANTANDER BANCORP, la sociedad tenedora, que es lo "
-     "que compró el precio. El Call Report del FDIC solo cubre el banco (US$1.013.608 miles "
-     "al 30-jun-2020) y usarlo cruzaría alcances. La vía es el FR Y-9C que la tenedora "
-     "presenta a la Reserva Federal."),
     ("JMMB / Bellbank — segundo denominador",
      "El PPA estaba «not yet finalized» al trimestre de diciembre 2022. La memoria auditada "
      "de JMMB Group del año fiscal a marzo 2023 debería traerlo, y con él este caso pasaría "
