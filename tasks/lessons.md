@@ -1076,3 +1076,23 @@ adquirente —J$110,54/US$ al centavo—. Tres cocientes iguales identifican la 
 - **Síntoma**: la tabla de procedencia de valuación decía «el 37 % del costo de capital descansa en la última fila» (beta y prima de riesgo). Al agregar el panel de transacciones al final de la tabla, la frase pasó a señalar al panel. Los 20 tests nuevos y los 8.700 viejos en verde; lo encontró leer el PDF.
 - **Regla**: la prosa nombra la fila por su CONTENIDO, nunca por su posición en una tabla que otro cambio puede alargar. Y leer el PDF después de cada sección nueva no es opcional: también salió de ahí que el renderizador repartía el ancho en partes iguales y partía «Intercommercial» a media palabra, y que el motivo del contraste publicaba códigos de país («BB, KY, PR, TT») en prosa de venta.
 - **Disparador**: cualquier frase que diga «arriba», «abajo», «la última», «la primera» sobre una tabla o lista computada.
+
+---
+
+## Dos secciones con el MISMO texto no fallan: se leen como dos secciones (2026-09-06)
+
+El Deep Dive de valuación traía trece secciones y dos eran idénticas: `SECCION_SUPUESTOS:
+metodologia` en `_secciones_computadas`, un alias puesto el día que se creó el nivel y que
+nadie volvió a mirar. El test de completitud exigía que cada sección EXISTIERA y tuviera más de
+200 caracteres — y una copia cumple las dos cosas. Se vio solo leyendo el PDF real de punta a
+punta contra una estructura externa (las diez secciones que se pidieron), no corriendo tests.
+
+Y la muestra publicaba un Ke de 12,4–14,9 %: 2,5 pp de ancho, que el motor no puede producir
+porque solo β × ERP abre 3,375 pp. Nadie cruzó la muestra contra la identidad del método.
+
+**Regla:** en un informe con N secciones, un test que exige `narr[a] != narr[b]` para cada
+par cuesta una línea y caza el alias. Y una muestra curada tiene que ser PRODUCIBLE por el
+motor: si publica `Ke`, cruzar `Ke = Rf + β × ERP` en los dos extremos. Los parámetros que
+produjeron una cifra viajan en el payload (`rf_pct`, `beta`, `erp`, `n_observaciones_rf`),
+no se leen de constantes al renderizar: un informe en caché tiene que decir la beta con la que
+se valuó, no la que rige hoy.

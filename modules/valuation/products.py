@@ -527,7 +527,9 @@ def _secciones_computadas(lec: Any, *, posicion: Optional[Tuple[int, int]] = Non
         # `con_anexo` lo decide el llamador leyendo el manifiesto del nivel: el insight no
         # trae el anexo y su puntero apunta al Deep Dive.
         SECCION_CONTRASTE: narrativa.contraste_de_mercado(lec, con_anexo=con_anexo),
-        SECCION_SUPUESTOS: metodologia,
+        # CORREGIDO. §Supuestos servía el MISMO texto que §Metodología: un informe de trece
+        # secciones con dos idénticas. Ahora trae los parámetros que produjeron ESTA cifra.
+        SECCION_SUPUESTOS: narrativa.supuestos_y_sensibilidad(lec),
         SECCION_LIMITACIONES: narrativa.limitaciones(lec),
         SECCION_FUENTES: narrativa.fuentes_y_procedencia(lec),
         SECCION_ANEXO_PANEL: narrativa.anexo_del_panel(),
@@ -569,7 +571,18 @@ def _lectura_desde_payload(snapshot: ProductSnapshot):
         g_terminal_pct=float(pr.get("g_terminal_pct") or 0.0),
         evidencia_del_tipo=str(pr.get("evidencia_del_tipo") or ""),
         persistencia=float(pr.get("persistencia") or 0.0),
+        rf_pct=_par(pr.get("rf_pct")), beta=_par(pr.get("beta")), erp=_par(pr.get("erp")),
+        n_observaciones_rf=int(pr.get("n_observaciones_rf") or 0),
     )
+
+
+def _par(v: Any) -> Tuple[float, float]:
+    """Un rango `[bajo, alto]` del payload, o `(0, 0)` si no viajó — nunca un número
+    inventado con forma de rango."""
+    try:
+        return (float(v[0]), float(v[1]))
+    except (TypeError, IndexError, ValueError):
+        return (0.0, 0.0)
 
 
 #: Ficticia y que lo diga en el nombre. No es un banco real con los datos cambiados: es un
@@ -593,25 +606,34 @@ _SAMPLE_PAYLOAD: Dict[str, Any] = {
     "moneda": "DOP",
     "es_ilustrativo": True,
     "tipo_de_entidad": "banca_multiple",
+    # CORREGIDO. La muestra publicaba un Ke de 12,4–14,9 %: 2,5 pp de ancho, que el motor
+    # NO puede producir —solo β × ERP abre 3,375 pp—. Una vidriera que enseñaba un número
+    # que el método no da. Ahora los extremos salen del motor sobre estos mismos insumos
+    # (Rf 7,70–7,90 %, β 0,85–1,15, ERP 5,5–7,0 %; `test_la_base_del_valor_se_declara`
+    # cruza la identidad) y el valor es el de `excess_return.valuar` con ellos.
     "spread": {
         "roe_proyectado_pct": 13.2,
-        "ke_rango_pct": [12.4, 14.9],
-        "spread_pp": [0.8, -1.7],
+        "ke_rango_pct": [12.375, 15.95],
+        "spread_pp": [0.825, -2.75],
         "cambia_de_signo": True,
         "destruye_valor": False,
     },
     "valor": {
         "patrimonio_libro": 18_400_000_000.0,
-        "rango": [16_800_000_000.0, 19_900_000_000.0],
-        "pb_implicito": [0.91, 1.08],
+        "rango": [15_160_349_086.0, 19_567_266_652.0],
+        "pb_implicito": [0.8239, 1.0634],
     },
     "procedencia": {
-        "fraccion_de_rubrica": 0.37,
+        "fraccion_de_rubrica": 0.45,
         "retencion_supuesta": 0.75,
         "persistencia": 0.902,
         "g_terminal_pct": 9.03,
         "evidencia_del_tipo": _evidencia_de_muestra(),
         "horizonte_anios": 5,
+        "rf_pct": [7.70, 7.90],
+        "beta": [0.85, 1.15],
+        "erp": [5.5, 7.0],
+        "n_observaciones_rf": 8,
     },
     # Horizonte explícito de cinco años, el mismo que usa el servicio.
     "serie_spread": [{"periodo": f"{a}-12-31", "roe_pct": r} for a, r in

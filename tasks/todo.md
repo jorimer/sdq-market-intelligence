@@ -1,81 +1,155 @@
-# El panel de transacciones llega al informe de valuación — plan
+# El informe de valuación contra la estructura pedida — plan de los tres cierres
 
-## El defecto
+## Lo que se midió (Deep Dive real generado de `d9578841`, el head del #1138)
 
-`modules/valuation/panel/transacciones.py` computa el panel entero —14 casos verificables, 9
-comparables sobre base contable, `resumen()` con mediana/mínimo/máximo, `estado()`,
-`contraste_del_modelo()`, `VIAS_ABIERTAS`, `DESCARTADAS`— y el informe NO lo pide: la
-metodología y las limitaciones dicen que «el panel dice a cuánto sobre libro se ha pagado»
-y no muestran ni tabla, ni rango, ni conteo. El único llamador fuera del panel es
-`validation_state()`, que copia el `motivo`.
+El informe trae 13 secciones. Contra la estructura de diez que se pidió, siete están, tres
+faltan o están a medias, y **la estructura pedida no estaba escrita en ningún lugar del repo**
+(0 coincidencias en `tasks/`, `docs/`, `modules/valuation/`, `shared/products/`): el eje se
+diseñó con el spread ROE − Ke como columna y nadie cruzó las dos listas.
 
-Familia «servir el dato no alcanza: hay que pedirlo». Cada eje son DOS trabajos: el motor
-y la plantilla. Acá faltaba el segundo.
+| Pedido | Estado | Evidencia |
+|---|---|---|
+| 4 · Análisis macro e industria | **falta** | 3 líneas macro incidentales; el PIB solo en Fuentes |
+| 7 · Cálculos y ajustes | **a medias** | Ke y sensibilidad sí; **0 líneas** sobre prima de control, minoría o iliquidez (DLOM): ni aplicados ni declarados |
+| 9 · Conclusión y firma | **a medias** | §7 Conclusión existe; ninguna firma, certificación ni declaración de responsabilidad (los 7 hits de «firma\|certific» eran «afirmar»/«confirmado») |
 
-**Y un defecto lateral que apareció leyendo el ensamblador**: `AI_CONTEXT_FILES` está
-declarado en `ai_context.py`, pero el ensamblador lo busca en el MÓDULO DEL PRODUCTO
-(`modules.valuation.products`), que no lo importa. La huella de contexto de valuación es
-solo `ai_context.py`: un arreglo de `narrativa.py` o de `products.py` desplegado a prod NO
-invalida la caché de informes (Postgres, sin TTL). Esta sección nueva sería invisible en
-todo informe ya generado.
+Lo demás —portada, resumen, entidad, financiero, metodología, supuestos + limitaciones,
+anexo del panel— está. Queda FUERA de este plan el anexo de planillas del modelo (series por
+fecha, insumos del Ke, tabla de la regresión P/B): es la cuarta brecha y se abre aparte.
 
-## Qué se hace
+## Doctrina que gobierna los tres
 
-1. **Sección nueva `contraste_de_mercado`** (insight + deep dive), después de la
-   descomposición y antes de supuestos/limitaciones:
-   - si `estado(panel).abierto` es falso: se declara el motivo, sin tabla (el gate se
-     consulta antes, no después);
-   - tabla de los COMPARABLES (año, comprador, adquirida, país, P/B recomputado, base,
-     corte del libro) — solo base contable;
-   - mediana / mínimo / máximo / n de `resumen()`, computados;
-   - la POSICIÓN del rango P/B de la valuación contra el panel, COMPUTADA (por debajo del
-     mínimo, por encima del máximo, solapa; dónde cae la mediana), con la lectura de qué
-     supuesto implica — sin usar el panel para producir el valor;
-   - los verificables sobre VALOR RAZONABLE (NIIF 3) aparte y marcados, sin entrar al
-     resumen: «solo se ordena lo comparable»;
-   - el contraste NO valida el modelo (`contraste_del_modelo`): n valuables de n comparables;
-   - conteo de descartes y vías abiertas con puntero al anexo.
-2. **Anexo `anexo_panel_de_transacciones`** (deep dive): vías abiertas, descartadas con
-   motivo, discrepancia RFHL y, por comparable, alcance y caveats — lo que el caso no
-   permite afirmar viaja con el número.
-3. **Prosa existente**: la metodología y las fuentes apuntan a la sección; fila nueva en la
-   tabla de procedencia (relevamiento propio).
-4. **Una sola fuente de prosa**: `_secciones_computadas(lec, ...)` la usan `narratives()` y
-   `_sample_narrativas_de()`. Hoy son dos diccionarios copiados a mano — la muestra no
-   puede desincronizarse de lo real si comparten el constructor.
-5. **Huella de caché**: `products.py` expone `AI_CONTEXT_FILES` (el mismo objeto de
-   `ai_context.py`) y la lista suma `narrativa.py` y `panel/transacciones.py`.
-6. **UI**: etiquetas i18n (es/en/fr) para TODAS las secciones de valuación — hoy ninguna
-   tiene y la app muestra «spread roe ke».
+- **Prosa computada, no IA.** El eje entero es `prosa_computada=True`; las tres secciones
+  nuevas salen de `_secciones_computadas()` —el ÚNICO constructor, que también alimenta la
+  muestra— o la muestra dirá algo que el informe no dice.
+- **Un tipo nuevo se registra en TODAS sus superficies**: `SECCION_*`, `_SECTION_TITLES`,
+  el manifiesto (insight Y deep dive), `_secciones_computadas`, y
+  `test_el_informe_esta_completo.py`. Falta una y la sección desaparece sin fallar.
+- **Se pide por HTTP.** El test de cada cierre entra por `GET /api/v1/products/valuation/
+  deep_dive/report` (el patrón de `test_el_panel_llega_al_informe.py`), no por la función de prosa.
+- **Correr el test contra el código VIEJO antes de arreglar** (mis tests nacen ciegos).
+- **La doctrina gobierna el dato, no el texto**: la afirmación de método va UNA vez y dice
+  de qué está hecho el valor; no se enumera lo que falta.
 
-## Tests (por la RUTA, contra el código viejo primero)
+---
 
-`modules/valuation/tests/test_el_panel_llega_al_informe.py`:
-- `assemble_product_content` (deep dive e insight) trae la sección con la tabla, la
-  mediana computada de `resumen()`, los nueve comparables y NINGÚN caso de valor razonable
-  en la tabla → hoy falla (la sección no existe).
-- la posición del rango se computa: con un `pb` por debajo del mínimo la prosa lo dice, y
-  con uno por encima del máximo dice lo contrario (contraejemplo).
-- gate cerrado (panel chico) → la sección declara el motivo y no arma tabla.
-- el anexo del deep dive lista TODAS las vías y descartes; insight no lo trae.
-- HTTP: `GET /api/v1/products/valuation/deep_dive/report` devuelve la sección en
-  `narratives` y en `commercial.sections`.
-- la muestra sale del MISMO constructor que lo real (monkeypatch del constructor).
-- `AI_CONTEXT_FILES` de `products` es el de `ai_context` e incluye los dos archivos; la
-  huella del ensamblador cambia al tocar `narrativa.py` → hoy falla.
-- títulos: toda sección del manifiesto tiene título en `_SECTION_TITLES` y en los tres
-  i18n.
+## Cierre 1 · Macro e industria (`SECCION_ENTORNO = "entorno_macro_e_industria"`)
 
-## Cierre — HECHO (2026-09-06)
+**Va entre §3 La entidad y §4 Análisis financiero** (insight y deep dive), que es donde un
+lector espera el contexto antes de los números de la entidad.
 
-- [x] 20 tests nuevos en `test_el_panel_llega_al_informe.py`: fallaban contra el código viejo
-      (ImportError del símbolo) y pasan contra el nuevo. Más 4 en `test_anchos_de_columna.py`.
-- [x] tres gates: pytest 8.702 en verde · ruff limpio · mypy-baseline filter exit 0.
-- [x] informe REAL (deep dive e insight) y muestra generados por `assemble_product_report` /
-      `assemble_sample_report`, leídos con `pdftotext` y mirados como imagen. Cuatro defectos
-      salieron de ahí y no de los tests: «la última fila» de la tabla de fuentes apuntaba a la
-      fila nueva; la tabla de 7 columnas partía «Intercommercial» a media palabra (ancho
-      igualitario del renderizador compartido); «operación(es)»; códigos de país en prosa.
-      Los cuatro corregidos y verificados en un segundo PDF.
-- [x] Word (`fmt="docx"`) verificado: la sección y las tablas llegan.
-- [x] lessons.md: dos entradas.
+### Qué se computa (nunca se transcribe)
+
+**Capa macro, al corte del informe**, leída con `panel.observaciones(db, code)` —el mismo
+acceso que ya usa `cost_of_capital.rf_de_la_curva`— y con la MEDIDA viajando con la cifra:
+
+| Cifra | Serie | Medida |
+|---|---|---|
+| PIB real, variación interanual | `bcrd.xls.pib_2018.serie_original_indice` → `panel.variacion_interanual_pct` | INTERANUAL, pp |
+| Inflación 12 meses | `bcrd.xls.ipc_base_2019_2020.variacion_porcentual_12_meses` | % |
+| Tipo de cambio de referencia (venta) | `bcrd.xls.tasa_dolar_referencia_mc.promtrimestral.venta` | RD$/US$, nivel + interanual |
+| Tasa libre de riesgo en pesos | `SERIE_RF` (ya en el informe como insumo del Ke) | %, la misma que usa el modelo |
+
+Cada cifra lleva su período de fuente (regla del framework: las capas agregadas se publican
+con SU período, el corte manda sobre la entidad). Serie ausente → `None` y la frase se omite;
+jamás 0.0.
+
+**Capa industria, sobre `banking_data` al MISMO corte y sobre el TIPO de la entidad**
+(`lec.tipo_de_entidad`, el padrón completo — como `_posicion_en_su_tipo`):
+
+- `roe_del_tipo_pct` (utilidad / patrimonio promedio del grupo) y la RELACIÓN computada:
+  «la entidad rinde X pp por encima/debajo de su tipo».
+- `crecimiento_cartera_del_tipo_pct` interanual, y el de la entidad, y la relación.
+- `morosidad_del_tipo_pct` (`cartera_vencida_90d / cartera_bruta`) vs la entidad.
+- `cuota_patrimonio_del_tipo_pct` (ya computada en `_posicion_en_su_tipo`; se reutiliza).
+
+Las claves nombran su población (`_del_tipo`): el SUJETO viaja con el número. Con menos de
+dos entidades en el tipo, la capa se omite y se dice por qué (como hoy la posición).
+
+### Por qué NO se usa el ledger de proyecciones acá
+La proyección del PIB vive en `macro_forecast` con su propio gate y readiness. Citarla desde
+valuación la publicaría por una puerta que no tiene ese gate. Si más adelante se quiere el
+PIB proyectado, entra por su `emitir()` con `medida` y `admisible`, no por un `SELECT`.
+
+### Pasos
+1. Test por HTTP que exija `SECCION_ENTORNO` con las cuatro cifras macro y las tres de
+   industria, con relación computada. **Correrlo contra el código actual: debe fallar.**
+2. `modules/valuation/entorno.py`: `leer_entorno(db, lec) -> Entorno` (dataclass con
+   `Optional` por cifra, período por cifra, medida). Sin prosa.
+3. `narrativa.entorno(ent, lec)`: prosa computada; relaciones «por encima/debajo» calculadas.
+4. Registro en las cinco superficies. Muestra: `_SAMPLE_PAYLOAD` gana un bloque `entorno`
+   ilustrativo (la entidad ficticia no puede tener industria real).
+5. Gates (tres) · PR · merge · Deep Dive real en prod (>2 s) y leer la sección.
+
+---
+
+## Cierre 2 · Base del valor y ajustes (control, minoría, iliquidez) — HECHO
+
+Rama `claude/vl-8-base-del-valor`. Además de lo planeado apareció y se cerró un defecto: §6 y §10 servían el MISMO texto (`SECCION_SUPUESTOS: metodologia`); ahora §10 trae los parámetros que produjeron la cifra (viajan en el payload) y la sensibilidad. Y la muestra publicaba un Ke que el motor no puede producir; se recomputó con el motor.
+
+Hoy el modelo valúa el **100 % del patrimonio, como negocio en marcha, sin ajustar**. Eso es
+una decisión correcta para lo que el eje afirma, pero no está DICHA — y un lector profesional
+la busca. El punto que además hace CONSISTENTE al informe: el panel de transacciones son
+compras de control (100 % o mayoría), así que el contraste P/B modelo vs. P/B pagado ya está
+en la misma base. Hoy eso no se dice y el lector no puede saberlo.
+
+### Qué cambia (prosa en CONSTANTES, no en literales partidos)
+- `narrativa.metodologia()`: un párrafo **`BASE_DEL_VALOR`** — «valor del 100 % del
+  patrimonio, base de control implícita, negocio en marcha; no se aplica prima de control ni
+  descuento por iliquidez; la referencia de mercado está en la misma base porque el panel
+  son operaciones de control».
+- `narrativa.limitaciones()`: la afirmación de método UNA vez: la cifra es para una
+  participación de control; una participación minoritaria o no transferible **no vale la
+  fracción proporcional**, y ese ajuste no se estima acá.
+- Tipo `aap` (mutual): frase propia — no hay acciones que comprar; el valor es del negocio,
+  no de un título. Ya existe el gancho (`_TIPOS`, `evidencia_del_tipo`).
+- El resumen del contraste (`SECCION_CONTRASTE`) nombra la base de los múltiplos del panel.
+
+### Pasos
+1. Test por HTTP: las tres frases aparecen UNA vez cada una (no dos), y la de AAP solo para
+   AAP. Contra el código actual: falla.
+2. Constantes + cableado. 3. Gates · PR · merge · prod.
+
+**Decisión del dueño, no bloqueante:** si en algún momento se va a OFRECER una valuación
+de participación minoritaria (con DLOM estimado), es otro producto; este plan solo declara.
+
+---
+
+## Cierre 3 · Conclusión y responsabilidad (`SECCION_CIERRE = "conclusion_y_responsabilidad"`)
+
+Última sección, en insight y deep dive. **Todo computado de la plataforma**; nada escrito
+a mano, porque un número o una fecha copiada se desincroniza:
+
+- Fecha de emisión y corte (del snapshot).
+- Versión de la metodología: la última entrada del changelog del eje
+  (`GET /api/v1/products/methodology-changelog?sector=valuation`).
+- Estado de validación: `ValuationProduct.validation_state()` — hoy «no contrastada
+  contra precios pagados», computado por `contraste_del_modelo()`.
+- Quién responde: `settings.VALUACION_FIRMANTE` (nombre y cargo) si está configurado; si
+  no, la sección **declara** «emitido por la plataforma SDQ·MIP sin firmante individual».
+  No se fabrica una firma.
+- Alcance de la certificación: independencia (SDQ no tiene interés en la entidad) y que
+  NO es una valuación bajo NIIF 13 ni IVS — lo que se puede afirmar y solo eso.
+
+### Decisiones del dueño (BLOQUEAN el paso 2)
+1. ¿Quién firma y con qué cargo? (`VALUACION_FIRMANTE` en el entorno de prod.)
+2. ¿La declaración de independencia se afirma siempre o depende de la entidad? (si hay
+   clientes de consultoría entre los bancos, hay que poder EXCEPTUAR por entidad.)
+3. ¿Va en insight o solo en deep dive?
+
+### Pasos
+1. Test por HTTP: sección presente, fecha = emisión, versión = changelog, estado =
+   `validation_state()`, y con `VALUACION_FIRMANTE` vacío la frase de «sin firmante».
+2. (tras las decisiones) `settings` + `narrativa.cierre()` + registro en las superficies.
+3. Gates · PR · merge · prod.
+
+---
+
+## Orden y por qué
+**2 → 1 → 3.** El 2 es un PR de prosa que cierra una omisión visible en el documento que ya se
+entrega; el 1 es el más largo (dato + plantilla); el 3 espera tres decisiones. Cada uno es un
+PR aparte con su test por HTTP y su Deep Dive real en prod.
+
+## Pendiente ajeno a este plan
+- #1138 (M&A) en poll de merge → deploy → Deep Dive real en prod.
+- `macro_forecast`: readiness 0,70 con niveles activos; MIN_OOS recalibrable. Decisión del dueño.

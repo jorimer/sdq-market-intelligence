@@ -279,6 +279,34 @@ def analisis_financiero(lec: Lectura) -> str:
         "y el apalancamiento es materia prima y no estructura de capital.")
 
 
+#: La BASE del valor. Va en la metodología —es una afirmación de método, no una brecha— y
+#: va una sola vez. Cero líneas decían esto en un Deep Dive real, y un lector profesional
+#: busca exactamente esta declaración antes de usar la cifra.
+BASE_DEL_VALOR = (
+    "**Base del valor: el 100 % del patrimonio, como participación de control, en marcha.** "
+    "El Excess Return capitaliza lo que el negocio ENTERO gana por encima de su capital, así "
+    "que el resultado es el valor de la entidad completa —lo que compraría quien la "
+    "controla— y no el de una acción suelta. Por eso no se aplica prima de control ni "
+    "descuento por iliquidez: el control ya está adentro del método, y un descuento por "
+    "falta de mercado (DLOM) es un ajuste sobre una participación concreta, con sus derechos "
+    "y su liquidez, que este informe no valúa. La referencia de mercado del contraste está "
+    "en la misma base: el panel son compras de control.")
+
+#: Lo que la base implica para quien lea la cifra pensando en una participación menor.
+FRASE_PARTICIPACION_MINORITARIA = (
+    "**La cifra es del 100 % y de una participación de control.** Una participación "
+    "minoritaria, o una que no se puede transferir, no vale la fracción proporcional de este "
+    "rango: el descuento que le corresponde depende de derechos y liquidez que acá no se "
+    "estiman.")
+
+#: Solo para las asociaciones de ahorros y préstamos, que son mutuales.
+FRASE_AAP_SIN_ACCIONES = (
+    "**Una asociación de ahorros y préstamos no tiene acciones.** Es una mutual: no hay "
+    "socios que puedan vender ni participación que se compre, así que el valor es el del "
+    "NEGOCIO y no el de un título. Sirve para medir si crea o destruye valor y para "
+    "encuadrar una conversión o una fusión, no para fijar el precio de una compra.")
+
+
 def metodologia(lec: Lectura) -> str:
     """Cómo se construyó el número. Es la sección que permite discutirlo."""
     return (
@@ -305,6 +333,7 @@ def metodologia(lec: Lectura) -> str:
         f"**Los parámetros dependen del TIPO de entidad.** Para ésta: persistencia "
         f"{lec.persistencia:.3f} y retención de utilidades {lec.retencion:.2f}. "
         f"{lec.evidencia_del_tipo}\n\n"
+        f"{BASE_DEL_VALOR}\n\n"
         "**Enfoque de mercado, como contraste y no como método.** El panel de transacciones "
         "bancarias del Caribe dice a cuánto sobre libro se ha pagado por una entidad, y la "
         "sección «Contraste de mercado» sitúa el rango de salida contra su mediana y su rango. "
@@ -361,7 +390,7 @@ def limitaciones(lec: Lectura) -> str:
         "otra cosa: exige valuar cada adquirida a la fecha de su operación, y para eso hace "
         "falta su historia de balance. Mientras eso no exista, el eje no afirma que sus "
         "valores predicen precios.",
-        f"**El costo de capital no se observa.** El **{lec.fraccion_de_rubrica:.0%}** de `Ke` "
+        f"**El costo de capital no se observa.** El **{lec.fraccion_de_rubrica * 100:.0f} %** de `Ke` "
         "descansa en la beta y la prima de riesgo de mercado, que son supuestos de "
         "comparables latinoamericanos: la República Dominicana no tiene entidades "
         "financieras cotizadas contra las cuales medirlos. Por eso el resultado es un rango.",
@@ -372,6 +401,9 @@ def limitaciones(lec: Lectura) -> str:
             "defecto del cálculo: es el hallazgo. Que la entidad cree o destruya valor "
             "depende de un supuesto que no se observa, y quien decida sobre esta cifra tiene "
             "que tomar posición sobre ese supuesto antes que sobre el número.")
+    partes.append(FRASE_PARTICIPACION_MINORITARIA)
+    if lec.tipo_de_entidad == "aap":
+        partes.append(FRASE_AAP_SIN_ACCIONES)
     partes += [
         "**Valuación de negocio en marcha, a una fecha.** Supone que la entidad sigue "
         f"operando y usa los estados al cierre de **{lec.periodo}**. No incorpora hechos "
@@ -553,7 +585,8 @@ def contraste_de_mercado(lec: Lectura, panel: Sequence[tx.Transaccion] = tx.PANE
         "base contra la que valúa el Excess Return y la única que entra a la misma tabla. "
         f"Son {r.n} comparables en {len(paises)} jurisdicciones "
         f"({', '.join(paises)}) entre {min(anios)} y {max(anios)}. El panel no se usa para "
-        "producir el valor: sitúa el rango de salida y nada más.")
+        "producir el valor: sitúa el rango de salida y nada más. "
+        + _base_del_panel(comparables))
 
     filas = "\n".join(_fila(t) for t in comparables)
     tabla = (
@@ -612,6 +645,73 @@ def contraste_de_mercado(lec: Lectura, panel: Sequence[tx.Transaccion] = tx.PANE
         partes.append(otra_base)
     partes.append(limites)
     return "\n\n".join(partes)
+
+
+def _base_del_panel(comparables: Sequence[tx.Transaccion]) -> str:
+    """Que el panel esté en la misma base que el modelo —control— se COMPUTA de las
+    fracciones compradas, no se afirma: si entra un comparable minoritario, la frase cambia
+    sola y deja de decir «misma base»."""
+    n_todo = sum(1 for t in comparables if t.porcentaje >= 1.0)
+    minimo = min(t.porcentaje for t in comparables)
+    if minimo < 0.5:
+        return (f"Ojo con la base: {n_todo} de las {len(comparables)} operaciones compran "
+                f"el 100 % y la fracción mínima es {minimo * 100:.0f} %, así que no todo el "
+                "panel está en la misma base de control que este rango.")
+    return (f"Son operaciones de control: {n_todo} de las {len(comparables)} compran el "
+            f"100 % y la fracción mínima es {minimo * 100:.0f} %, así que el múltiplo pagado "
+            "está en la misma base que este rango — el de la entidad entera.")
+
+
+def supuestos_y_sensibilidad(lec: Lectura) -> str:
+    """Los PARÁMETROS que produjeron esta cifra, con su procedencia, y qué la mueve.
+
+    Es la sección que un comité usa para discutir el número: cada fila es un supuesto que se
+    puede rebatir. Todo sale de la `Lectura` —los términos del Ke viajan en el payload— y
+    nada se lee de una constante al renderizar: un informe en caché dice la beta con la que
+    se valuó, no la que rige hoy.
+    """
+    rf, beta, erp = lec.rf_pct, lec.beta, lec.erp
+    filas = [
+        ("Rf · curva soberana en pesos, más de dos años",
+         f"{rf[0]:.2f} % – {rf[1]:.2f} %",
+         f"dato: {lec.n_observaciones_rf} observación(es) del cuadro V.1 del BCRD"),
+        ("β de equity, por tipo de entidad", f"{beta[0]:.2f} – {beta[1]:.2f}",
+         "rúbrica: bancos cotizados latinoamericanos, sin desapalancar"),
+        ("ERP · prima de riesgo de mercado", f"{erp[0]:.2f} % – {erp[1]:.2f} %",
+         "rúbrica: renta variable latinoamericana"),
+        ("Ke = Rf + β × ERP", f"{lec.ke_bajo_pct:.2f} % – {lec.ke_alto_pct:.2f} %",
+         f"{lec.fraccion_de_rubrica * 100:.0f} % del Ke es rúbrica"),
+        ("ROE proyectado", f"{lec.roe_proyectado_pct:.2f} %",
+         "sobre patrimonio de apertura, del promedio de cierres publicados"),
+        ("Persistencia del exceso (ω)", f"{lec.persistencia:.3f}", "medida por tipo"),
+        ("Retención de utilidades (b)", f"{lec.retencion:.2f}", "medida por tipo"),
+        ("Crecimiento terminal (g)", f"{lec.g_terminal_pct:.2f} %",
+         "ROE × b, con techo en el crecimiento nominal de la economía"),
+    ]
+    tabla = ("| Parámetro | Valor usado | Procedencia |\n|---|---|---|\n"
+             + "\n".join(f"| {a} | {b} | {c} |" for a, b, c in filas))
+    intro = (
+        "**Estos son los supuestos con los que se produjo la cifra, tal cual se usaron.** "
+        "Los que dicen «dato» se observaron; los que dicen «rúbrica» son supuestos "
+        "declarados, y son los que un lector puede no compartir.")
+    extremos = (
+        f"**Sensibilidad al costo de capital.** En el extremo favorable del rango de `Ke` la "
+        f"entidad vale **{lec.pb_alto:.2f}×** su libro; en el adverso, **{lec.pb_bajo:.2f}×**. "
+        "Toda esa distancia la produce el costo de capital, que es el supuesto y no el dato.")
+    if lec.cambia_de_signo:
+        signo = (
+            "**El spread cruza el cero dentro del rango.** No hay un movimiento que «dé "
+            "vuelta» la lectura porque la lectura ya contiene los dos signos: lo que la "
+            "resolvería es un ROE sostenido fuera del rango de `Ke`, o una curva en pesos que "
+            "lo angoste.")
+    else:
+        margen = abs(_cuanto_falta_para_cambiar_de_signo(lec))
+        signo = (
+            f"**Cuánto falta para cambiar de signo: {margen:.2f} pp.** Un movimiento de esa "
+            "magnitud en el costo de capital o en el ROE sostenido invierte la lectura. Es la "
+            "cifra que hay que vigilar: la curva en pesos a más de dos años y la trayectoria "
+            "del ROE sobre patrimonio de apertura.")
+    return "\n\n".join([intro, tabla, extremos, signo])
 
 
 def _un_parrafo(texto: str) -> str:
