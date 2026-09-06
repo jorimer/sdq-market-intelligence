@@ -67,6 +67,11 @@ def exigir_comparable(filas: List[CountryBankingAggregate]) -> List[CountryBanki
 def _valor(fila: CountryBankingAggregate) -> Dict[str, Any]:
     return {
         "metrica": fila.metric,
+        # La clave es un identificador; el nombre es lo que el modelo puede escribir. Sin
+        # él, «mora_90_consumo: 2,39» se redacta como «consumo, 2,39 %» y el lector no sabe
+        # si es el saldo, la mora o la provisión de esa cartera. `None` donde la fuente no
+        # lo declara: se prefiere el hueco a inventarle un nombre a la métrica de otro.
+        "nombre": (fila.meta or {}).get("nombre"),
         "valor": fila.value,
         "unidad": (fila.meta or {}).get("unit"),
         "corte": fila.period_end.isoformat() if fila.period_end else None,
