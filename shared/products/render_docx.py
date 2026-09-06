@@ -91,6 +91,38 @@ def _texto_sin_cortes(text: str) -> str:
     return _UNIDAD_PEGADA_RE.sub("\\1\u00a0\\2", text)
 
 
+def _partir_por_indices(text: str):
+    """*text* → ``[(trozo, clase)]`` con clase ``"sub"``, ``"super"`` o ``None``.
+
+    Word no interpreta el marcado `<sub>` de ReportLab: lo dibujaría literal. Acá el
+    subíndice es una PROPIEDAD del run (`font.subscript`), así que hay que partir el texto y
+    emitir cada trozo por separado.
+
+    La REGLA —qué caracteres y cómo se agrupan en corridas— vive en `render.py` y se importa:
+    dos copias de la tabla de subíndices divergen en la primera que alguien amplíe.
+    """
+    from shared.products.render import _marcar_indices
+
+    # Anotada: sin esto mypy infiere `list[tuple[str, str]]` del primer `append` y rechaza
+    # el trozo sin clase, que es la mayoría del texto.
+    partes: List[Tuple[str, Optional[str]]] = []
+    SEP = "\x00"
+
+    def _envolver(t, k):
+        return f"{SEP}{k}:{t}{SEP}"
+
+    for trozo in _marcar_indices(text, _envolver).split(SEP):
+        if not trozo:
+            continue
+        if trozo.startswith("sub:"):
+            partes.append((trozo[4:], "sub"))
+        elif trozo.startswith("super:"):
+            partes.append((trozo[6:], "super"))
+        else:
+            partes.append((trozo, None))
+    return partes
+
+
 def _add_runs(paragraph, text: str, *, color: Optional[RGBColor] = None, size: Optional[int] = None,
               bold_all: bool = False) -> None:
     """Añade *text* a *paragraph* respetando **negritas** y *cursivas* markdown.
@@ -103,25 +135,32 @@ def _add_runs(paragraph, text: str, *, color: Optional[RGBColor] = None, size: O
 
     text = _texto_sin_cortes(text)
 
+    def _emitir_con_indices(txt: str, *, negrita: bool, cursiva: bool = False) -> None:
+        """Emite *txt* partiendo los sub/superíndices en runs con su propiedad puesta."""
+        for trozo, clase in _partir_por_indices(txt):
+            r = paragraph.add_run(trozo)
+            r.bold = negrita or bold_all
+            if cursiva:
+                r.italic = True
+            if clase == "sub":
+                r.font.subscript = True
+            elif clase == "super":
+                r.font.superscript = True
+            _estilo(r, color, size)
+
     def _emitir(txt: str, *, negrita: bool) -> None:
         """Parte por CURSIVA y emite. Un mismo criterio de frontera que el PDF."""
         pos = 0
         for m in _ITALIC_RE.finditer(txt):
             antes = txt[pos:m.start()] + m.group(1)
             if antes:
-                r = paragraph.add_run(antes)
-                r.bold = negrita or bold_all
-                _estilo(r, color, size)
-            r = paragraph.add_run(m.group(2))
-            r.bold = negrita or bold_all
-            r.italic = True                  # cursiva, anidada dentro de negrita si toca
-            _estilo(r, color, size)
+                _emitir_con_indices(antes, negrita=negrita)
+            # cursiva, anidada dentro de negrita si toca
+            _emitir_con_indices(m.group(2), negrita=negrita, cursiva=True)
             pos = m.end()
         resto = txt[pos:]
         if resto:
-            r = paragraph.add_run(resto)
-            r.bold = negrita or bold_all
-            _estilo(r, color, size)
+            _emitir_con_indices(resto, negrita=negrita)
 
     # Los impares del split vienen de **...** — y pueden contener *cursiva* adentro.
     for i, chunk in enumerate(re.split(r"\*\*(.+?)\*\*", _clean(text))):
@@ -247,6 +286,7 @@ def render_product_docx(
     sample: bool = False,
     output_dir: Optional[str] = None,
     tables_last: bool = False,
+    period_label: str = "Período",
 ) -> str:
     """Renderiza el .docx de marca de un producto y devuelve el path."""
     from shared.products.report_sections import STANDARD_SECTION_TITLES
@@ -279,7 +319,7 @@ def render_product_docx(
         hq = doc.add_paragraph()
         _left_accent(hq, _ACCENT)
         _add_runs(hq, headline, color=_NAVY, size=13)
-    _add_runs(doc.add_paragraph(), f"**Período:** {period}", color=_NAVY)
+    _add_runs(doc.add_paragraph(), f"**{period_label}:** {period}", color=_NAVY)
     _add_runs(doc.add_paragraph(), f"**Fecha:** {datetime.now().strftime('%d/%m/%Y')}", color=_NAVY)
     doc.add_page_break()
 

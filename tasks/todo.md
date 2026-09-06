@@ -1,94 +1,93 @@
-# La fila del BVAR sin medida — plan
+# La pasada de FORMA del informe
 
-## Qué es esa fila, determinado y no supuesto
+Tres defectos, los tres medidos sobre el PDF y no deducidos del código.
 
-`bvar_minnesota.5v.v1` · `bcrd.xls.pib_2018.serie_original_indice` · horizonte 2026-Q3 ·
-h=2 · as_of 2026-09-05 · revisión 0 · **punto 0,7373** · `measure` NULL.
+## A · La portada rotula «Período» sobre un corte de información
 
-El punto se leyó de `GET /api/v1/registry/macro_forecast` (la señal proyectada del eje), sin
-generar ningún informe.
+`render.py:332` imprime `**Período:** {period}` con lo que el producto declare en
+`available_periods()`.
 
-### Evidencia 1 — CRONOLOGÍA (la que cierra el caso)
+**Medido contra producción, los 18 ejes del catálogo.** Cuatro pasan una fecha completa:
 
-| hecho | UTC |
-|---|---|
-| la cascada de `macro-canonical-sync` escribió la fila | **2026-09-05 11:19:55** |
-| se ESCRIBIÓ el commit que pasa `pib_real` a interanual (`0d5ce2d6`) | 2026-09-05 15:53:40 |
-| se mergeó a main (PR #1117) | 2026-09-05 20:07:51 |
-| primer despliegue posterior al merge | ~2026-09-05 20:30 |
+```
+banking          → 2026-06-30     cierre de trimestre
+macro            → 2025-12-31     cierre de año
+monetary_policy  → 2026-07-31     cierre de mes
+macro_forecast   → 2026-09-06     ← NO es un cierre: es el corte de información
+```
 
-La fila es **4 h 34 min anterior a que el commit existiera**. No hubo ninguna corrida de
-`macro-canonical-sync` entre el despliegue del cambio y mi emisión manual de las 21:52 —el
-`last_run` del sync era el de las 11:19:55—, y mi emisión reportó `skipped_duplicate: 1`, o
-sea que la fila ya estaba. Se produjo con el bloque en **DLOG**: su punto es un `dlog_pct`.
+Los tres primeros **se leen bien**: una fecha de cierre bajo «Período» es una forma legítima
+de nombrar el período. El único mal rotulado es el de proyecciones, y su propio
+`std_methodology` ya lo llama por su nombre: *«Corte del informe: 2026-09-06»*.
 
-### Evidencia 2 — la magnitud, computada sobre el dato real de prod
+Corrijo mi encuadre anterior: dije «la portada dice Período sobre una fecha» como si fuera
+general. Es de un eje.
 
-Reproduje el modelo con las cinco series de producción, en las dos medidas:
+## B · El informe cita una serie por la ruta de la hoja de cálculo
 
-| bloque | trimestres | 2026-Q3 | trayectoria |
-|---|---:|---:|---|
-| TRIMESTRAL (`dlog` ×100) | 76 (hasta 2026-Q1) | **1,6892** | −0,87 · 1,69 · 1,14 · 1,08 |
-| INTERANUAL (`yoy` %) | 73 (hasta 2026-Q1) | **5,5672** | 5,32 · 5,57 · 5,37 · 5,11 |
+La tabla de trayectoria publica el `serie` crudo:
 
-Ninguna reproduce 0,7373 EXACTO —el dato se movió desde entonces, y los 76 vs 73 trimestres
-confirman el costo de arranque que el propio commit declaró—, pero la separación no admite
-duda: la trayectoria interanual **no baja de 5,11** en ningún horizonte. Y sobre el
-observado, el QoQ promedia +1,13 % (rango reciente −1,60 … +3,08) contra +4,54 % del YoY.
+```
+| bcrd.xls.pib_2018.serie_original_indice | 2026-Q3 | 5.57% | … |
+```
 
-## Lo que apareció al ir a estamparla, y es peor
+El mecanismo para esto **ya existe y la doctrina ya está escrita**, en el comentario de
+`canonical.CURATED_LABELS`:
 
-**El `backtest_id` NO incluye la medida.** Es
-`{model_id}|{target_series}|+{h}T`, y `_del_conjunto` filtra por model_id, serie, revisión,
-estado y `h`. Comprobado: la fila vieja (trimestral) y las que el BVAR emite hoy
-(interanuales) caen en **el mismo conjunto**.
+> *«Todo lo demás que sale del motor de Excel es extracción masiva —dato real, pero con el
+> nombre que la planilla dejó—, y se declara como no-curado **para que un informe no lo cite
+> por la ruta de la hoja de cálculo**.»*
 
-O sea que estampar la medida y no tocar nada más cambia una brecha VISIBLE —una fila listada
-como impuntuable— por una corrupción INVISIBLE: un RMSE que promedia el error de una tasa
-trimestral con el de tasas interanuales, publicado en la sección de desempeño como si fuera
-un solo número. Es «solo se ordena lo comparable» exactamente: un score armado sobre otra
-unidad no rankea contra el resto.
+`is_curated("bcrd.xls.pib_2018.serie_original_indice")` da **False**, y el informe lo cita
+igual. Nada lo vigila.
 
-**No es hipotético y no depende de esta fila.** Cualquier motor que cambie su transformación
-—que es lo que acaba de pasar— parte su propio track record en dos poblaciones y las promedia
-sin que nada avise.
+Ojo: esto EMPEORÓ con el arreglo del ledger. Antes la fila decía `pib_real` —feo pero
+corto—; ahora dice el código completo, que es lo correcto para el ledger y lo peor posible
+para un informe que se vende.
 
-## El arreglo
+## C · Los subíndices salen como cajas negras
 
-### 1 · La medida entra en la identidad del conjunto
+**Medido**, renderizando cada familia y leyendo el PDF:
 
-`backtest_id` pasa a `{model_id}|{target_series}|{measure}|+{h}T`. La definición se muda a
-`shared/registry/signals.py`, al lado del campo que documenta el formato, porque hoy hay DOS
-constructores —`ledger.backtest_id` y `bvar.ProyeccionBVAR._backtest_id`— y una copia a mano
-de un serializador ya borró la tasa de 38 entidades en este repo. Consumidores:
-`_del_conjunto` (que además filtra por medida), `desempeno.filas` (que agrupa por ella) y
-`procedencia.meta_de`.
+```
+subíndices    ₀₁₂₃₄₅₆₇₈₉ₜ  →  ■■■■■■■■■■■     TODOS fallan
+superíndices  ⁰¹²³⁴⁵⁶⁷⁸⁹   →  ■¹²³■■■■■■      solo ¹²³ (que son Latin-1)
+griego        αβγδλμσωΣΔΩ  →  αβγδλµσωΣ∆Ω     bien
+matemática    ± × ÷ ≈ ≤ ≥ ≠ ∑ √ ∞ ·          bien
+flechas       → ← ↑ ↓ ⇒                       bien
+tipografía    — – … « » “ ” ¡ ¿ § † € $       bien
+```
 
-Con esto, la fila vieja forma su propio conjunto de n=1: no ancla —correcto, el modelo
-cambió— y **no contamina** el del modelo vigente.
+**Corrijo lo que venía diciendo**: la `λ` renderiza perfecto. Lo que falla son los subíndices
+y los superíndices distintos de ¹²³. `BV₀` y `λ₁` salían mal por el subíndice, no por la
+letra griega.
 
-### 2 · Recién entonces, la fila se estampa
+**Y esto NO necesita decisión del dueño.** Yo había planteado «transliterar o cambiar la
+fuente», y hay una tercera que es mejor que las dos: ReportLab entiende marcado `<sub>` y
+`<super>`, y con la fuente que ya tenemos dibuja un subíndice de verdad. Verificado en PDF y
+mirando la imagen renderizada:
 
-Migración con la evidencia adentro, acotada a lo que se probó:
-`measure is null` **y** `model_id like 'bvar_minnesota.%'` **y** la serie del PIB **y**
-`as_of <= '2026-09-05'`. El `measure is null` ya implica «escrita antes de que el arreglo se
-desplegara»; la cota de `as_of` está para que la afirmación quede verificable y para que la
-migración no diga nada sobre una fila que alguien inserte después.
+```
+Con marcado: BV₀  λ₁  x⁴   → subíndice y superíndice reales
+Sin marcado: BV■  λ■  x■   → cajas negras
+```
 
-### 3 · Verificar en prod
+Ni transliteración (que pierde la forma) ni fuente nueva (que cambia el aspecto de TODOS los
+informes).
 
-Que la señal del registro deje de decir «unidad sin declarar» y que el readiness deje de
-contar `1 SIN PODER PUNTUARSE`. Recomputar readiness ANTES de leerlo.
+---
 
-## Tests, contra el código viejo primero
+## Plan
 
-- **El que importa**: dos filas del mismo modelo, mismo horizonte relativo y misma serie, con
-  MEDIDAS distintas, no caen en el mismo `track_record`. Hoy caen, y el RMSE las promedia.
-- Los dos constructores de `backtest_id` (ledger y bvar) dan la MISMA cadena.
-- `desempeno` publica un renglón por medida, no uno mezclado.
-- La migración estampa esa fila y no toca ninguna otra.
+1. **`period_label`** en los dos renderers, con default «Período». Solo `macro_forecast` lo
+   pisa con «Corte», que es como su propia metodología ya lo llama.
+2. **Etiqueta curada** para la serie del PIB, y que el informe use `curated_label()`. Más un
+   guard: ninguna prosa de informe puede imprimir un código `bcrd.xls.` crudo.
+3. **Sub/superíndices → marcado** en el PDF; en el Word, formato de run (`font.subscript`),
+   que es lo que Word entiende. La REGLA en una constante compartida, como el espacio duro.
 
-## Los tres gates
-
-`pytest modules/ shared/ -q` · `ruff check modules/ shared/ app/` ·
-`mypy shared/ modules/ app/ --no-incremental | mypy-baseline filter` (exit code del FILTRO).
+## Verificación
+- [ ] Los tests contra el código VIEJO tienen que FALLAR
+- [ ] Leer el PDF: ningún `■`, ningún `bcrd.xls.` en la prosa
+- [ ] Mirar la imagen renderizada, no solo el texto extraído
+- [ ] Los tres gates
