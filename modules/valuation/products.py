@@ -637,7 +637,15 @@ def _lectura_desde_payload(snapshot: ProductSnapshot):
         persistencia=float(pr.get("persistencia") or 0.0),
         rf_pct=_par(pr.get("rf_pct")), beta=_par(pr.get("beta")), erp=_par(pr.get("erp")),
         n_observaciones_rf=int(pr.get("n_observaciones_rf") or 0),
+        rf_ventana=_ventana(pr.get("rf_ventana")),
     )
+
+
+def _ventana(v: Any) -> Tuple[str, str]:
+    try:
+        return (str(v[0] or ""), str(v[1] or ""))
+    except (TypeError, IndexError):
+        return ("", "")
 
 
 def _par(v: Any) -> Tuple[float, float]:
@@ -698,6 +706,7 @@ _SAMPLE_PAYLOAD: Dict[str, Any] = {
         "beta": [0.85, 1.15],
         "erp": [5.5, 7.0],
         "n_observaciones_rf": 8,
+        "rf_ventana": ["2025-05", "2025-12"],
     },
     # Horizonte explícito de cinco años, el mismo que usa el servicio.
     "serie_spread": [{"periodo": f"{a}-12-31", "roe_pct": r} for a, r in
