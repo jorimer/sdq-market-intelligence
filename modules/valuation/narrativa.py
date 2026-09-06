@@ -30,6 +30,7 @@ from modules.valuation.service import Lectura
 
 if TYPE_CHECKING:
     from modules.valuation.entorno import Entorno
+    from modules.valuation.responsabilidad import Cierre
 
 #: Cuánto tiene que moverse Ke para dar vuelta el signo — se computa, no se estima a ojo.
 def _cuanto_falta_para_cambiar_de_signo(lec: Lectura) -> float:
@@ -803,6 +804,72 @@ def supuestos_y_sensibilidad(lec: Lectura) -> str:
             "cifra que hay que vigilar: la curva en pesos a más de dos años y la trayectoria "
             "del ROE sobre patrimonio de apertura.")
     return "\n\n".join([intro, tabla, extremos, signo])
+
+
+# ── Conclusión y responsabilidad ─────────────────────────────────────────────────
+
+FRASE_INDEPENDENCIA = (
+    "**Independencia.** SDQ Consulting no tiene interés económico en la entidad valuada, no "
+    "mantiene con ella una relación profesional vigente y sus honorarios no dependen del "
+    "resultado de esta valuación.")
+FRASE_RELACION_DECLARADA = (
+    "**Relación declarada.** {relacion}. Esta valuación NO se presenta como independiente: el "
+    "método y las cifras son los mismos que para cualquier otra entidad, y la relación se "
+    "declara para que el lector la pese.")
+FRASE_RESPONSABILIDAD = (
+    "**Responsabilidad.** Emitido por **SDQ Consulting** a través de la plataforma SDQ·MIP, "
+    "sin firmante personal: la firma es institucional. SDQ Consulting responde por el método "
+    "y por la lectura; la prosa de este informe es computada de las cifras, sin intervención "
+    "de un modelo de lenguaje, y cada cifra se puede reproducir con la información pública "
+    "que la sección de fuentes nombra.")
+FRASE_ALCANCE_NORMATIVO = (
+    "**Alcance normativo.** No es una valuación bajo NIIF 13 ni bajo los International "
+    "Valuation Standards, ni una tasación con efectos fiscales o regulatorios; es una opinión "
+    "de valor por el enfoque de ingreso con supuestos declarados, para discusión de comité y "
+    "encuadre de negociación.")
+FRASE_SIN_CAMBIOS = ("no hay cambios de metodología registrados para este eje desde su "
+                     "publicación")
+
+
+def conclusion_y_responsabilidad(c: Optional["Cierre"], lec: Lectura) -> str:
+    """La última sección: el valor en una línea y quién responde por él, con qué versión
+    del método, con qué estado de validación y desde qué posición frente a la entidad."""
+    if lec.cambia_de_signo:
+        veredicto = ("el spread ROE − Ke cambia de signo dentro del rango de costo de capital, "
+                     "así que crear o destruir valor depende de un supuesto que no se observa")
+    elif lec.destruye_valor:
+        veredicto = "la entidad destruye valor en todo el rango razonable de costo de capital"
+    else:
+        veredicto = "la entidad crea valor en todo el rango razonable de costo de capital"
+    conclusion = (
+        f"**Conclusión.** {lec.entidad}, con estados al **{lec.periodo}**: patrimonio contable "
+        f"de **RD$ {lec.patrimonio_libro:,.0f}** y valor estimado entre **RD$ {lec.valor_bajo:,.0f}** "
+        f"y **RD$ {lec.valor_alto:,.0f}** (**{lec.pb_bajo:.2f}× a {lec.pb_alto:.2f}×** el libro), "
+        f"porque {veredicto}. El detalle está en la sección de conclusión de valor y los "
+        "supuestos que lo sostienen, en la de supuestos y sensibilidad.")
+    if c is None:
+        return "\n\n".join([conclusion, FRASE_RESPONSABILIDAD, FRASE_ALCANCE_NORMATIVO])
+    emision = (f"**Emisión.** Emitido el **{c.emitido_el}** con corte de información al "
+               f"**{c.corte}**.")
+    if c.metodologia_id:
+        metodologia = (
+            f"**Metodología vigente.** `{c.metodologia_id}` ({c.metodologia_fecha}): "
+            f"{c.metodologia_titulo}. Es la última entrada del registro de cambios del eje al "
+            "emitir; el registro completo, con qué cambió y por qué, está abierto en la "
+            "plataforma (`/api/v1/products/methodology-changelog?sector=valuation`).")
+    else:
+        metodologia = f"**Metodología vigente.** Al emitir, {FRASE_SIN_CAMBIOS}."
+    if c.validacion_aprobada:
+        validacion = (f"**Estado de validación.** Validada contra {c.validacion_desenlace}; el "
+                      "veredicto vigente se lee en la plataforma, no en este documento.")
+    else:
+        validacion = (f"**Estado de validación.** No contrastada contra {c.validacion_desenlace}: "
+                      "el eje publica el modelo, sus supuestos y su sensibilidad, y el motivo "
+                      "está en la sección de limitaciones.")
+    posicion = (FRASE_RELACION_DECLARADA.format(relacion=c.relacion_declarada)
+                if c.relacion_declarada else FRASE_INDEPENDENCIA)
+    return "\n\n".join([conclusion, emision, metodologia, validacion, posicion,
+                        FRASE_RESPONSABILIDAD, FRASE_ALCANCE_NORMATIVO])
 
 
 def _un_parrafo(texto: str) -> str:
