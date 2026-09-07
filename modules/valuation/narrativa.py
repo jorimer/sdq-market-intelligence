@@ -875,6 +875,101 @@ def conclusion_y_responsabilidad(c: Optional["Cierre"], lec: Lectura) -> str:
                         FRASE_RESPONSABILIDAD, FRASE_ALCANCE_NORMATIVO])
 
 
+# ── Anexo · Planillas del modelo ─────────────────────────────────────────────────
+
+def _rd(x: Optional[float]) -> str:
+    return "—" if x is None else f"RD$ {x:,.0f}"
+
+
+def _pct(x: Optional[float], dec: int = 2) -> str:
+    return "—" if x is None else f"{x:.{dec}f} %"
+
+
+def anexo_planillas(lec: Lectura) -> str:
+    """Lo que un tercero necesita para REPRODUCIR la cifra, tal cual lo produjo el motor.
+
+    Cuatro planillas, todas del payload —nada se recomputa al renderizar—: la historia con
+    la que se computó cada ROE de doce meses, las observaciones de la curva que armaron la
+    Rf, el flujo del Excess Return año a año en los dos extremos de Ke (con la identidad
+    libro + Σ VP + terminal = valor escrita, para que se pueda sumar), y el estado de la
+    regresión P/B sobre bancos cotizados. Un anexo que no cierra contra la cifra que dice
+    reproducir es peor que ninguno.
+    """
+    pl = lec.planillas or {}
+    if not pl:
+        return ("Las planillas del modelo no viajaron con esta valuación y se omiten en vez "
+                "de recomputarse: un anexo recomputado al renderizar puede no cerrar contra "
+                "la cifra que dice reproducir.")
+    partes: List[str] = [
+        "**Para reproducir la cifra.** Estas planillas son las que produjeron el valor de este "
+        "informe, tal cual salieron del motor; no se recomputan al maquetar. Con ellas y las "
+        "fuentes de la sección anterior, un tercero llega al mismo número."]
+
+    hist = pl.get("historia") or []
+    if hist:
+        filas = "\n".join(
+            f"| {h['corte']} | {_rd(h.get('patrimonio'))} | {_rd(h.get('utilidad_acumulada'))} | "
+            f"{_rd(h.get('utilidad_12m'))} | {_pct(h.get('roe_12m_pct'))} |" for h in hist)
+        partes.append(
+            "### Historia: patrimonio, utilidad y ROE de doce meses\n\n"
+            "Patrimonio y utilidad acumulada del ejercicio tal cual los publica la "
+            "Superintendencia; la utilidad de doce meses y el ROE sobre el patrimonio de doce "
+            "meses antes, computados. Un corte sin ventana de doce meses no tiene ROE (—), no "
+            "cero.\n\n"
+            "| Corte | Patrimonio | Utilidad acumulada | Utilidad 12 m | ROE 12 m |\n"
+            "|---|---|---|---|---|\n" + filas)
+
+    curva = pl.get("curva_rf") or []
+    if curva:
+        filas = "\n".join(f"| {o['periodo']} | {_pct(o.get('tasa_pct'))} |" for o in curva)
+        partes.append(
+            "### Curva en pesos: las observaciones que armaron la Rf\n\n"
+            f"Valores subastados del BCRD a más de dos años, publicados al corte: {len(curva)} "
+            f"observación(es); el rango de la Rf es su mínimo y su máximo "
+            f"({_pct(lec.rf_pct[0])} – {_pct(lec.rf_pct[1])}).\n\n"
+            "| Período | Tasa |\n|---|---|\n" + filas)
+
+    for f in pl.get("flujos") or []:
+        if f.get("error"):
+            partes.append(
+                f"### Excess Return con Ke = {_pct(f['ke_pct'])}\n\n"
+                f"Este extremo no se pudo computar y el valor se declara igual al libro "
+                f"({_rd(f.get('valor'))}): {f['error']}")
+            continue
+        filas = "\n".join(
+            f"| {r['t']} | {_rd(r['bv_apertura'])} | {_pct(r['roe_pct'])} | "
+            f"{_rd(r['residual_income'])} | {r['factor_descuento']:.4f} | "
+            f"{_rd(r['vp_residual_income'])} |" for r in f["periodos"])
+        suma_vp = sum(r["vp_residual_income"] for r in f["periodos"])
+        ajuste = f.get("ajuste_clean_surplus_total") or 0.0
+        partes.append(
+            f"### Excess Return con Ke = {_pct(f['ke_pct'])}\n\n"
+            f"`RI_t = (ROE − Ke) × BV(t−1)`, descontado a Ke; terminal `ω·RI_T/(1+Ke−ω)` con "
+            f"g = {_pct(f.get('g_pct'))}.\n\n"
+            "| t | BV apertura | ROE | Residual income | (1+Ke)^t | VP del RI |\n"
+            "|---|---|---|---|---|---|\n" + filas + "\n\n"
+            f"Libro {_rd(f['bv_inicial'])} + Σ VP {_rd(suma_vp)} + terminal descontado "
+            f"{_rd(f['terminal_descontado'])} (en T: {_rd(f['terminal_en_T'])})"
+            + (f" + ajuste de clean surplus {_rd(ajuste)}" if ajuste else "")
+            + f" = **{_rd(f['valor'])}**.")
+
+    reg = pl.get("regresion_pb") or {}
+    if reg:
+        if reg.get("suficiente"):
+            partes.append(
+                "### Regresión P/B sobre bancos cotizados\n\n"
+                f"El panel tiene {reg['n']} bancos (mínimo {reg['minimo']}); los coeficientes "
+                "se publican en la sección de contraste cuando el motor los emite.")
+        else:
+            partes.append(
+                "### Regresión P/B sobre bancos cotizados\n\n"
+                f"**No se publica.** El panel tiene {reg['n']} banco(s) y hacen falta "
+                f"{reg['minimo']} para que la regresión signifique algo; mientras tanto el "
+                "contraste de mercado es el panel de transacciones. Se lista para que la "
+                "ausencia se vea.")
+    return "\n\n".join(partes)
+
+
 def _un_parrafo(texto: str) -> str:
     """Un motivo con saltos de párrafo adentro se convierte en una sola viñeta: el
     renderizador parte las viñetas por línea, y un salto la cortaría en dos."""

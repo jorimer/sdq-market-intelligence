@@ -81,6 +81,7 @@ SECCION_CIERRE = "conclusion_y_responsabilidad"
 #: Vías abiertas, descartes con motivo y lo que cada comparable NO permite afirmar. Un
 #: panel chico sin explicación se lee como falta de trabajo; el anexo es el trabajo.
 SECCION_ANEXO_PANEL = "anexo_panel_de_transacciones"
+SECCION_ANEXO_PLANILLAS = "anexo_planillas_del_modelo"
 
 _SECTION_TITLES = {
     SECCION_RESUMEN: "Resumen ejecutivo",
@@ -98,6 +99,7 @@ _SECTION_TITLES = {
     SECCION_FUENTES: "Fuentes y procedencia",
     SECCION_CIERRE: "Conclusión y responsabilidad",
     SECCION_ANEXO_PANEL: "Anexo · Panel de transacciones: vías abiertas y descartes",
+    SECCION_ANEXO_PLANILLAS: "Anexo · Planillas del modelo",
 }
 
 #: Por qué el eje no puede entregar todavía. Se declara en una constante y no en un `if`
@@ -149,7 +151,7 @@ def valuation_manifest() -> SectorProductManifest:
                           SECCION_ENTORNO, SECCION_FINANCIERO, SECCION_SPREAD, SECCION_METODOLOGIA,
                           SECCION_VALOR, SECCION_DESCOMPOSICION, SECCION_CONTRASTE,
                           SECCION_SUPUESTOS, SECCION_LIMITACIONES, SECCION_FUENTES,
-                          SECCION_CIERRE, SECCION_ANEXO_PANEL),
+                          SECCION_CIERRE, SECCION_ANEXO_PANEL, SECCION_ANEXO_PLANILLAS),
                 narrative_templates=(), prosa_computada=True,
                 audience="comité / contraparte", cadence="on_demand", price_band="on-demand"),
         })
@@ -602,6 +604,7 @@ def _secciones_computadas(lec: Any, *, posicion: Optional[Tuple[int, int]] = Non
         SECCION_FUENTES: narrativa.fuentes_y_procedencia(lec),
         SECCION_CIERRE: narrativa.conclusion_y_responsabilidad(cierre, lec),
         SECCION_ANEXO_PANEL: narrativa.anexo_del_panel(),
+        SECCION_ANEXO_PLANILLAS: narrativa.anexo_planillas(lec),
     }
 
 
@@ -643,6 +646,7 @@ def _lectura_desde_payload(snapshot: ProductSnapshot):
         rf_pct=_par(pr.get("rf_pct")), beta=_par(pr.get("beta")), erp=_par(pr.get("erp")),
         n_observaciones_rf=int(pr.get("n_observaciones_rf") or 0),
         rf_ventana=_ventana(pr.get("rf_ventana")),
+        planillas=dict(p.get("planillas") or {}),
     )
 
 
@@ -677,6 +681,10 @@ _ENTIDAD_FICTICIA = "Banco Múltiple Ejemplo (entidad ilustrativa)"
 # formas del mismo dato, y de ahí salía el defecto del render: leía las planas, así que con
 # la muestra el titular y las tablas aparecían y en un informe REAL no aparecían nunca. La
 # muestra ahora tiene exactamente la forma que produce `a_payload`.
+from modules.valuation.panel import latam_comparables as _lc
+
+_ESTADO_REGRESION = _lc.estado()
+
 _SAMPLE_PAYLOAD: Dict[str, Any] = {
     "entidad": _ENTIDAD_FICTICIA,
     "periodo": "2025-12-31",
@@ -697,7 +705,7 @@ _SAMPLE_PAYLOAD: Dict[str, Any] = {
     },
     "valor": {
         "patrimonio_libro": 18_400_000_000.0,
-        "rango": [15_160_349_086.0, 19_567_266_652.0],
+        "rango": [15160349085.63966, 19567266652.173008],
         "pb_implicito": [0.8239, 1.0634],
     },
     "procedencia": {
@@ -717,6 +725,208 @@ _SAMPLE_PAYLOAD: Dict[str, Any] = {
     "serie_spread": [{"periodo": f"{a}-12-31", "roe_pct": r} for a, r in
                      ((2021, 12.1), (2022, 13.8), (2023, 12.9), (2024, 13.5), (2025, 13.2))],
     "advertencias": [],
+    # Las PLANILLAS de la muestra salen del MOTOR sobre sus mismos insumos (`excess_return.valuar`
+    # con Ke 12,375 / 15,95 %, ROE 13,2 %, retención 0,75, g 9,03 %, ω 0,902): el anexo de la
+    # muestra cierra contra su conclusión de valor igual que el real. La historia y la curva
+    # son ilustrativas y consistentes con la serie de ROE y la Rf de la muestra; el estado de
+    # la regresión P/B se computa al cargar, como en el informe real.
+    "planillas": {**{
+        "historia": [
+            {
+                "corte": "2020-12-31",
+                "patrimonio": 12000000000.0,
+                "utilidad_acumulada": None,
+                "utilidad_12m": None,
+                "roe_12m_pct": None
+            },
+            {
+                "corte": "2021-12-31",
+                "patrimonio": 13100000000.0,
+                "utilidad_acumulada": 1452000000.0,
+                "utilidad_12m": 1452000000.0,
+                "roe_12m_pct": 12.1
+            },
+            {
+                "corte": "2022-12-31",
+                "patrimonio": 14400000000.0,
+                "utilidad_acumulada": 1807800000.0,
+                "utilidad_12m": 1807800000.0,
+                "roe_12m_pct": 13.8
+            },
+            {
+                "corte": "2023-12-31",
+                "patrimonio": 15600000000.0,
+                "utilidad_acumulada": 1857600000.0,
+                "utilidad_12m": 1857600000.0,
+                "roe_12m_pct": 12.9
+            },
+            {
+                "corte": "2024-12-31",
+                "patrimonio": 17000000000.0,
+                "utilidad_acumulada": 2106000000.0,
+                "utilidad_12m": 2106000000.0,
+                "roe_12m_pct": 13.5
+            },
+            {
+                "corte": "2025-12-31",
+                "patrimonio": 18400000000.0,
+                "utilidad_acumulada": 2244000000.0,
+                "utilidad_12m": 2244000000.0,
+                "roe_12m_pct": 13.2
+            }
+        ],
+        "curva_rf": [
+            {
+                "periodo": "2025-05",
+                "tasa_pct": 7.7
+            },
+            {
+                "periodo": "2025-06",
+                "tasa_pct": 7.78
+            },
+            {
+                "periodo": "2025-07",
+                "tasa_pct": 7.85
+            },
+            {
+                "periodo": "2025-08",
+                "tasa_pct": 7.9
+            },
+            {
+                "periodo": "2025-09",
+                "tasa_pct": 7.82
+            },
+            {
+                "periodo": "2025-10",
+                "tasa_pct": 7.75
+            },
+            {
+                "periodo": "2025-11",
+                "tasa_pct": 7.88
+            },
+            {
+                "periodo": "2025-12",
+                "tasa_pct": 7.8
+            }
+        ],
+        "flujos": [
+            {
+                "ke_pct": 12.375,
+                "bv_inicial": 18400000000.0,
+                "g_pct": 9.03,
+                "periodos": [
+                    {
+                        "t": 1,
+                        "bv_apertura": 18400000000.0,
+                        "roe_pct": 13.2,
+                        "residual_income": 151799999.99999988,
+                        "factor_descuento": 1.12375,
+                        "vp_residual_income": 135083426.02892092,
+                        "ajuste_clean_surplus": 0.0
+                    },
+                    {
+                        "t": 2,
+                        "bv_apertura": 20061520000.0,
+                        "roe_pct": 13.2,
+                        "residual_income": 165507539.99999988,
+                        "factor_descuento": 1.2628140625000002,
+                        "vp_residual_income": 131062477.77471188,
+                        "ajuste_clean_surplus": 0.0
+                    },
+                    {
+                        "t": 3,
+                        "bv_apertura": 21873075256.0,
+                        "roe_pct": 13.2,
+                        "residual_income": 180452870.86199987,
+                        "factor_descuento": 1.4190873027343751,
+                        "vp_residual_income": 127161218.70324215,
+                        "ajuste_clean_surplus": 0.0
+                    },
+                    {
+                        "t": 4,
+                        "bv_apertura": 23848213951.616802,
+                        "roe_pct": 13.2,
+                        "residual_income": 196747765.10083845,
+                        "factor_descuento": 1.594699356447754,
+                        "vp_residual_income": 123376086.09757055,
+                        "ajuste_clean_surplus": 0.0
+                    },
+                    {
+                        "t": 5,
+                        "bv_apertura": 26001707671.4478,
+                        "roe_pct": 13.2,
+                        "residual_income": 214514088.28944418,
+                        "factor_descuento": 1.7920434018081637,
+                        "vp_residual_income": 119703623.29003887,
+                        "ajuste_clean_surplus": 0.0
+                    }
+                ],
+                "terminal_en_T": 951359679.0832328,
+                "terminal_descontado": 530879820.27852404,
+                "ajuste_clean_surplus_total": 0.0,
+                "valor": 19567266652.173008
+            },
+            {
+                "ke_pct": 15.95,
+                "bv_inicial": 18400000000.0,
+                "g_pct": 9.03,
+                "periodos": [
+                    {
+                        "t": 1,
+                        "bv_apertura": 18400000000.0,
+                        "roe_pct": 13.2,
+                        "residual_income": -506000000.0,
+                        "factor_descuento": 1.1595,
+                        "vp_residual_income": -436394997.84389824,
+                        "ajuste_clean_surplus": 0.0
+                    },
+                    {
+                        "t": 2,
+                        "bv_apertura": 20061520000.0,
+                        "roe_pct": 13.2,
+                        "residual_income": -551691800.0,
+                        "factor_descuento": 1.34444025,
+                        "vp_residual_income": -410350552.95317143,
+                        "ajuste_clean_surplus": 0.0
+                    },
+                    {
+                        "t": 3,
+                        "bv_apertura": 21873075256.0,
+                        "roe_pct": 13.2,
+                        "residual_income": -601509569.54,
+                        "factor_descuento": 1.558878469875,
+                        "vp_residual_income": -385860463.89378417,
+                        "ajuste_clean_surplus": 0.0
+                    },
+                    {
+                        "t": 4,
+                        "bv_apertura": 23848213951.616802,
+                        "roe_pct": 13.2,
+                        "residual_income": -655825883.6694621,
+                        "factor_descuento": 1.8075195858200623,
+                        "vp_residual_income": -362831965.315561,
+                        "ajuste_clean_surplus": 0.0
+                    },
+                    {
+                        "t": 5,
+                        "bv_apertura": 26001707671.4478,
+                        "roe_pct": 13.2,
+                        "residual_income": -715046960.9648145,
+                        "factor_descuento": 2.095818959758362,
+                        "vp_residual_income": -341177828.18762934,
+                        "ajuste_clean_surplus": 0.0
+                    }
+                ],
+                "terminal_en_T": -2730925680.734072,
+                "terminal_descontado": -1303035106.1662955,
+                "ajuste_clean_surplus_total": 0.0,
+                "valor": 15160349085.63966
+            }
+        ]
+    },
+                  "regresion_pb": {"n": _ESTADO_REGRESION.n, "minimo": _ESTADO_REGRESION.minimo,
+                                   "suficiente": _ESTADO_REGRESION.suficiente,
+                                   "motivo": _ESTADO_REGRESION.motivo}},
     # Entorno ILUSTRATIVO, con la misma forma que el real (`entorno.a_dict`). Las cifras
     # macro son de orden de magnitud y llevan período como las reales; la industria compara
     # contra un tipo de tamaño plausible.

@@ -98,6 +98,9 @@ class CostoDeCapital:
     #: Primer y último período de las observaciones que armaron la `Rf`. Va al informe: un
     #: rango de tasa sin sus fechas no se puede juzgar.
     ventana_rf: Tuple[str, str] = ("", "")
+    #: Las observaciones mismas (período, tasa), para el anexo de planillas: un rango de Rf
+    #: se reproduce con ellas o no se reproduce.
+    observaciones_rf: Tuple[Tuple[str, float], ...] = ()
 
     @property
     def punto_medio(self) -> float:
@@ -230,7 +233,8 @@ def calcular(db: Session, *, beta: Tuple[float, float] = BETA,
     return CostoDeCapital(
         moneda=MONEDA, bajo=round(bajo, 4), alto=round(alto, 4), terminos=terminos,
         sensibilidad=_sensibilidad(bajo, alto), n_observaciones_rf=n,
-        advertencias=tuple(avisos), ventana_rf=ventana)
+        advertencias=tuple(avisos), ventana_rf=ventana,
+        observaciones_rf=tuple((p, float(v)) for p, v in vivos))
 
 
 class MonedaCruzadaError(ValueError):

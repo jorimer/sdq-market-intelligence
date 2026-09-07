@@ -14,7 +14,10 @@ diseñó con el spread ROE − Ke como columna y nadie cruzó las dos listas.
 | 9 · Conclusión y firma | **a medias** | §7 Conclusión existe; ninguna firma, certificación ni declaración de responsabilidad (los 7 hits de «firma\|certific» eran «afirmar»/«confirmado») |
 
 Lo demás —portada, resumen, entidad, financiero, metodología, supuestos + limitaciones,
-anexo del panel— está. Queda FUERA de este plan el anexo de planillas del modelo (series por
+anexo del panel— está. El anexo de planillas del modelo —la cuarta brecha, que este plan
+dejaba fuera— se cerró después (`claude/vl-15-anexo-planillas`): historia, curva de la Rf, flujo
+del Excess Return en los dos extremos con la identidad escrita, y estado de la regresión P/B;
+todo en el payload, cerrando contra la conclusión de valor. Quedaba FUERA (series por
 fecha, insumos del Ke, tabla de la regresión P/B): es la cuarta brecha y se abre aparte.
 
 ## Doctrina que gobierna los tres
