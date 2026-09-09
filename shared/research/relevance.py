@@ -116,8 +116,9 @@ async def is_method_applicable(question: str, passages: List[str],
     if not passages:
         return False
     from shared.config.settings import settings
-    from shared.llm.budget import budget_allows, record_usage
+    from shared.llm.budget import budget_allows
     from shared.narrative.claude_engine import narrative_engine
+    from shared.observability.llm_ledger import PURPOSE_ROUTING, account
 
     client = narrative_engine._get_client()
     if client is None or not budget_allows():
@@ -132,11 +133,10 @@ async def is_method_applicable(question: str, passages: List[str],
                 model=settings.ANTHROPIC_MODEL, max_tokens=64, temperature=0.0,
                 system=_SYSTEM, messages=[{"role": "user", "content": user}])
         raw = "".join(getattr(b, "text", "") for b in (resp.content or []))
-        usage = getattr(resp, "usage", None)
-        if usage is not None:
-            record_usage(settings.ANTHROPIC_MODEL,
-                         getattr(usage, "input_tokens", 0) or 0,
-                         getattr(usage, "output_tokens", 0) or 0)
+        # `account` = techo diario + ledger. Con `record_usage` a secas, el costo de este
+        # juicio —uno por sub-pregunta, así que MUCHOS— no entraba a la tabla consultable.
+        account(resp, model=settings.ANTHROPIC_MODEL, purpose=PURPOSE_ROUTING,
+                module="research", template="relevance")
     except Exception as e:  # noqa: BLE001 — cualquier fallo del API → conservador (GAP)
         logger.warning("is_method_applicable: fallo del Cerebro (%s); se asume NO aplicable.", e)
         return False

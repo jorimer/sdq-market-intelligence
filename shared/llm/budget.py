@@ -64,6 +64,18 @@ def _today() -> str:
     return datetime.now(timezone.utc).strftime("%Y-%m-%d")
 
 
+def modelo_tarifado(model: str) -> bool:
+    """¿El costo de este modelo se CALCULA con su tarifa, o se SUPONE con la de Sonnet?
+
+    ``estimate_cost`` cae a la tarifa Sonnet para cualquier modelo fuera de la tabla, y esa
+    caída es invisible: devuelve un float con la misma cara que una cifra real. Para el techo
+    diario da igual —es un orden de magnitud y el corte es suave—, pero un TOTAL que se
+    presenta como medición no puede absorber en silencio lo que no supo convertir. Quien sume
+    costos declara al lado cuántas llamadas salieron de una suposición.
+    """
+    return model in PRICING_PER_MTOK
+
+
 def estimate_cost(model: str, input_tokens: int, output_tokens: int) -> float:
     inp, out = PRICING_PER_MTOK.get(model, _DEFAULT_PRICING)
     return (input_tokens * inp / 1_000_000) + (output_tokens * out / 1_000_000)
