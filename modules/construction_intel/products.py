@@ -53,6 +53,7 @@ _SECTION_TITLES = {
     "construction_assessment": "Evaluación de Coyuntura (ICC)",
     "positioning": "Posición y Trayectoria",
     "recommendation": "Lectura para Decisión",
+    "delta_mensual": "Movimiento del Mes (licencias MIVHED)",
     "limitations": "Limitaciones",
 }
 _LIMITATIONS = (
@@ -236,6 +237,41 @@ class ConstructionProduct:
                           detail=f"ICC {_fmt(s.icc_score)} ({s.band}) en {s.period} · "
                                  f"{int(s.permits) if s.permits else '—'} licencias")
 
+    # ── El feed sub-anual: otra FUENTE del eje, con su propia cadencia ──
+    #
+    # NO se declara en `DataHealth.cadence`. Ese campo escala los umbrales de G1 y, medido,
+    # declarar `monthly` en un índice anual cuesta 0,300 de readiness contra un umbral de
+    # activación de 0,85: como el máximo es 1,0, el eje deja de publicarse en TODOS sus
+    # niveles. El índice sigue siendo anual porque lo es; el feed es otra fuente.
+    def senales_de_fuentes(self):
+        """La señal del feed mensual del MIVHED para el sensor de fuentes congeladas."""
+        from datetime import date
+
+        from modules.construction_intel.service import CLAVE_DEL_FEED
+        from shared.observations import service as obs
+        from shared.operations.fuentes_congeladas import SenalDeFuente
+
+        try:
+            ultimo = obs.ultimo_periodo(self._require_db(), sector_key=SECTOR_KEY)
+        except Exception as e:  # noqa: BLE001 — sin feed no hay señal, no hay error
+            logger.warning("feed mensual de construcción no legible: %s", e)
+            return []
+        if not ultimo:
+            return []
+        # La antigüedad es la del PERÍODO del dato, no la de la fila: un sync que corre en
+        # verde contra un archivo que ya no se actualiza no mueve el período.
+        try:
+            anio, mes = int(str(ultimo)[:4]), int(str(ultimo)[5:7])
+            fin = date(anio + (mes == 12), 1 if mes == 12 else mes + 1, 1)
+            dias = max(0, (date.today() - fin).days)
+        except (ValueError, IndexError):
+            dias = None
+        return [SenalDeFuente(
+            clave=CLAVE_DEL_FEED,
+            etiqueta="MIVHED · licencias emitidas",
+            cadence="monthly", freshness_days=dias,
+            detalle=f"último mes con licencias observadas: {ultimo}")]
+
     def has_engine(self) -> bool:
         return self._latest() is not None
 
@@ -267,6 +303,74 @@ class ConstructionProduct:
                                      "amplitud geográfica sobre dato real.")
 
     # ── Snapshot por nivel ──
+    @staticmethod
+    def _motivo_en_castellano(veredicto) -> str:
+        """El porqué del veto, redactado para el CLIENTE.
+
+        El `motivo` que trae el veredicto está escrito para el operador del panel y arrastra
+        la clave de máquina de la cadencia ("monthly"): pegarlo tal cual publicaba «su fuente
+        (monthly)» dentro de un documento en español. Es el mismo defecto que obligó a
+        traducir la cadencia en la sección de metodología. Los HECHOS se copian del veredicto;
+        la frase se escribe acá.
+        """
+        from shared.products.report_sections import CADENCIA_ES
+
+        if veredicto is None:
+            return ("el eje no declara este feed, así que no hay veredicto de frescura que "
+                    "lo respalde")
+        cad = CADENCIA_ES.get((veredicto.cadencia or "").lower(), veredicto.cadencia or "—")
+        dias = veredicto.dias_desde_el_periodo_del_dato
+        tope = veredicto.tope_de_dias_de_la_cadencia
+        if dias is None or tope is None:
+            return ("no se pudo determinar la antigüedad del dato de esta fuente, y una "
+                    "frescura indeterminada no es una frescura verificada")
+        return (f"el dato más reciente de esta fuente de cadencia {cad} tiene {dias} días, "
+                f"cuando una edición nueva debía haber aparecido a los {tope}")
+
+    def _delta_mensual(self) -> Optional[Dict[str, Any]]:
+        """El movimiento del último mes observado, o ``None`` si no hay sección que publicar.
+
+        **La frescura VETA, y `indeterminada` también.** La sección se apoya en un feed
+        mensual; si su fuente dejó de publicar, la lectura del "último mes" describiría un
+        mes viejo con cara de actual — y en un documento fechado eso es una afirmación falsa,
+        no un dato incompleto. Un veredicto que no se puede computar tampoco publica: «no sé
+        de cuándo es» y «está al día» son cosas distintas.
+
+        Lo vetado NO desaparece en silencio: vuelve con `no_publicable` y su motivo, que la
+        sección imprime. Un bloque que se esfuma se lee como que el eje no tiene nada que
+        decir este mes, que es una afirmación distinta y falsa.
+        """
+        from modules.construction_intel.service import (
+            CLAVE_DEL_FEED, ETIQUETAS_DEL_FEED)
+        from shared.observations import service as obs
+        from shared.observations.delta import leer_delta
+        from shared.operations.fuentes_congeladas import (
+            AL_DIA, veredicto_de_la_fuente)
+
+        try:
+            db = self._require_db()
+            ultimo = obs.ultimo_periodo(db, sector_key=SECTOR_KEY)
+            if not ultimo:
+                return None            # sin feed no hay sección: no aparece vacía
+            veredicto = veredicto_de_la_fuente(db, sector_key=SECTOR_KEY,
+                                               clave=CLAVE_DEL_FEED)
+            if veredicto is None or veredicto.estado != AL_DIA:
+                return {"no_publicable": self._motivo_en_castellano(veredicto),
+                        "ultimo_periodo_observado": ultimo}
+            bloque = leer_delta(db, sector_key=SECTOR_KEY, period=ultimo,
+                                etiquetas=ETIQUETAS_DEL_FEED)
+            bloque["emisor"] = "MIVHED (datos.gob.do)"
+            bloque["provincias"] = obs.por_dimension(
+                db, sector_key=SECTOR_KEY, series_code="mivhed.licencias.metros_cuadrados",
+                period=ultimo, campo="provincia")[:5]
+            bloque["tipologias"] = obs.por_dimension(
+                db, sector_key=SECTOR_KEY, series_code="mivhed.licencias.metros_cuadrados",
+                period=ultimo, campo="tipologia")[:5]
+            return bloque
+        except Exception:  # noqa: BLE001 — el informe anual nunca depende de esta sección
+            logger.exception("Delta mensual omitido en el snapshot de construcción")
+            return None
+
     def snapshot(self, tier: ProductTier, period: str,
                  scope: Optional[str] = None) -> ProductSnapshot:
         s = _latest_score(self._require_db(), period or None)
@@ -276,6 +380,14 @@ class ConstructionProduct:
                                    payload={"has_score": False}, entity_name=entity,
                                    entity_roster=())
         payload: Dict[str, Any] = {"has_score": True, "index": _index_dict(s)}
+        # EL MOVIMIENTO DEL MES. Va al PAYLOAD y no solo al contexto del narrador: el
+        # fingerprint de la caché de narrativas es del payload, así que un dato que llega
+        # solo al contexto cambia sin que la caché se entere y el informe sigue sirviendo la
+        # lectura vieja. Es el agujero que ya existe en energía (la serie de tendencia entra
+        # al contexto de `positioning` sin estar en el payload) y no se replica acá.
+        _delta = self._delta_mensual()
+        if _delta:
+            payload["delta_mensual"] = _delta
         # EL FINANCIAMIENTO DEL SECTOR, que este eje no tenía de ninguna forma. Mide
         # permisos, m² y concentración geográfica; cuánto crédito recibe la construcción, a
         # qué tasa y con qué mora venía del cubo de la SIB y no salía de banca.
@@ -454,7 +566,38 @@ class ConstructionProduct:
 
         for section, text in await asyncio.gather(*(_gen(s, k) for s, k in pending)):
             out[section] = text
+
+        # EL MOVIMIENTO DEL MES: sección PROPIA, con contexto PROPIO.
+        #
+        # No entra al contexto de `positioning` ni de `construction_assessment`. Son dos
+        # sujetos —el índice del año y el flujo del mes— y meterlos en un mismo prompt hace
+        # que el modelo elija uno; es la razón por la que banca sirve su mapa sectorial como
+        # sección aparte y no dentro del año. Y no está en el manifiesto a propósito: depende
+        # del PERÍODO del feed, no del nivel, así que la anexa `orden_de_secciones`.
+        delta = (snapshot.payload or {}).get("delta_mensual")
+        if delta:
+            out["delta_mensual"] = await self._narrar_delta(delta, snapshot)
         return out
+
+    async def _narrar_delta(self, delta: Dict[str, Any],
+                            snapshot: ProductSnapshot) -> str:
+        """La lectura del movimiento del mes. Determinista cuando está vetada."""
+        from modules.construction_intel.ai_context import construction_delta_context
+        from shared.narrative.claude_engine import narrative_engine
+
+        no_publicable = delta.get("no_publicable")
+        if no_publicable:
+            # Prosa determinista: no se le pide al modelo que redacte una ausencia. El texto
+            # NOMBRA la causa — un bloque que dice «no disponible» y calla el porqué se lee
+            # como un fallo nuestro, y acá el hecho es del emisor.
+            return (f"No se publica la lectura del movimiento del mes: {no_publicable}. "
+                    f"El índice anual de este informe no depende de este feed y no se ve "
+                    f"afectado.")
+        res = await narrative_engine.generate(
+            context=construction_delta_context(delta, snapshot.period),
+            template="construction_delta", mode="standard",
+            axis="construction_intel", audience="inversionista")
+        return res.text
 
     # ── Render (sin DB, renderer genérico) ──
     async def render(self, tier: ProductTier, snapshot: ProductSnapshot,

@@ -124,3 +124,42 @@ def construction_ai_context(index: Dict[str, Any], period: str,
                  "el flujo de permisos); sin validación retrospectiva de resultados. La inversión licenciada es nominal "
                  "(RD$); no la confundas con la inversión ejecutada."),
     }
+
+
+def construction_delta_context(delta: Dict[str, Any], periodo_del_informe: str) -> Dict[str, Any]:
+    """Contexto de la sección del MOVIMIENTO DEL MES. Bloque CERRADO: el modelo lo copia.
+
+    **Todas las relaciones vienen resueltas.** Dirección, variación, línea base y su tipo se
+    computan en ``shared/observations/delta.py``; acá solo se reetiquetan para el narrador. El
+    modelo acierta las cifras y falla las relaciones, y además el guard numérico exige que
+    toda cifra del texto se trace al contexto: si el modelo produce el número, no hay contra
+    qué trazarlo.
+
+    **Cada cifra viaja con su sujeto y su medida.** ``metros_cuadrados_licenciados_del_mes``,
+    no ``valor``; ``variacion_pct_vs_mismo_mes_del_anio_anterior``, no ``variacion``. El
+    modelo reatribuye al sujeto más cercano — así se publicó una vez «cuatro compañías» donde
+    eran cuatro ramos.
+
+    **Lo que no se pudo leer viaja también.** ``series_sin_lectura`` va al contexto con su
+    motivo: una lista que solo trae lo que salió bien se lee como que todo salió bien.
+    """
+    return {
+        "periodo_del_movimiento": delta.get("periodo"),
+        "periodo_del_indice_anual_del_informe": periodo_del_informe,
+        "emisor_del_movimiento": delta.get("emisor"),
+        "series_del_mes": delta.get("series") or [],
+        "series_sin_lectura": delta.get("sin_lectura") or [],
+        "metros_cuadrados_licenciados_por_provincia_del_mes": delta.get("provincias") or [],
+        "metros_cuadrados_licenciados_por_tipologia_del_mes": delta.get("tipologias") or [],
+        **bloque_de_atribucion(_MIVHED),
+        "regla_de_alcance": (
+            "Esta sección LEE el movimiento y su magnitud. NO explica su causa: la atribución "
+            "de este producto es por sección y fuente, no por oración, así que una afirmación "
+            "causal no tendría con qué respaldarse."),
+        "note": ("El movimiento del mes es un FLUJO de licencias emitidas (indicador líder: el "
+                 "permiso precede a la obra), no producción ejecutada. Se compara contra el "
+                 "MISMO mes del año anterior porque la serie tiene estación. La ventana móvil "
+                 "de doce meses, cuando viene, es la magnitud comparable con el índice anual "
+                 "de este informe. La inversión del MIVHED no se sirve: es un costo estándar "
+                 "derivado de los m² con una tarifa fija, no un valor tasado."),
+    }
