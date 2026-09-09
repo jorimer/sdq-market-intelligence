@@ -88,8 +88,13 @@ def _fecha_del_corte(as_of: str):
         return None
 
 
-_CADENCIA_ES = {"monthly": "mensual", "quarterly": "trimestral", "annual": "anual",
-                "daily": "diaria", "weekly": "semanal"}
+#: Cadencia de máquina → castellano. Pública porque la necesita toda superficie que escriba
+#: una cadencia para una persona: `cadence` es una CLAVE —la usa `_CADENCE_THRESHOLDS` para
+#: elegir umbrales— y sin traducirla al escribirla, un documento en español sale diciendo
+#: «Cadencia: quarterly». Una segunda copia de esta tabla garantiza que un día difieran.
+CADENCIA_ES = {"monthly": "mensual", "quarterly": "trimestral", "annual": "anual",
+               "daily": "diaria", "weekly": "semanal"}
+_CADENCIA_ES = CADENCIA_ES   # nombre histórico, en uso dentro de este módulo
 
 
 def _frescura_md(sig, as_of: Optional[str], hoy=None) -> str:
@@ -176,8 +181,43 @@ FRASE_COBERTURA_METODOLOGIA = {
 }
 
 
+def _feeds_md(product) -> str:
+    """La cadencia de los FEEDS sub-anuales del eje, cuando declara alguno.
+
+    **Por qué no alcanza con la línea de arriba.** ``DataHealth.cadence`` es la del ÍNDICE, y
+    esta sección la escribe tal cual en el informe del cliente: «Cadencia: anual». Un eje con
+    feed mensual publica además una sección del movimiento del mes, y entonces el documento
+    dice «anual» en una página y trae un mes en la otra — se contradice solo, que es la misma
+    familia de defecto que hizo que dos secciones de un informe afirmaran lo contrario.
+
+    No se cambia la cadencia del índice para arreglarlo: el índice ES anual, y ese campo
+    gobierna los umbrales de G1 (declarar `monthly` ahí despublica el eje entero). Son dos
+    fuentes con dos cadencias y se nombran las dos.
+
+    Devuelve ``""`` si el eje no declara feeds — la enorme mayoría, y ahí la línea no aparece.
+    """
+    declarar = getattr(product, "senales_de_fuentes", None)
+    if declarar is None:
+        return ""
+    try:
+        senales = list(declarar() or [])
+    except Exception:  # noqa: BLE001 — la metodología nunca se cae por esto
+        return ""
+    partes = []
+    for s in senales:
+        cad = _CADENCIA_ES.get((getattr(s, "cadence", "") or "").lower(), None)
+        etiqueta = getattr(s, "etiqueta", "") or getattr(s, "clave", "")
+        if cad and etiqueta:
+            partes.append(f"{etiqueta} ({cad})")
+    if not partes:
+        return ""
+    return ("**Fuentes sub-anuales:** además del dato del índice, este eje recibe "
+            + ", ".join(partes) + ".")
+
+
 def _methodology_md(sig, val, as_of: Optional[str] = None, *,
-                    con_seccion_de_fuentes: bool = False) -> str:
+                    con_seccion_de_fuentes: bool = False,
+                    product=None) -> str:
     """Markdown de Metodología desde ``DataHealth`` (sig) + ``ValidationState`` (val).
 
     ``as_of`` es el CORTE del informe. Con él, la metodología deja de hablar del estado
@@ -217,6 +257,9 @@ def _methodology_md(sig, val, as_of: Optional[str] = None, *,
     else:
         lines.append(f"**Fuentes de dato:** {', '.join(fuentes) or '—'}.")
     lines.append(_frescura_md(sig, as_of))
+    feeds = _feeds_md(product) if product is not None else ""
+    if feeds:
+        lines.append(feeds)
     if sig and sig.coverage is not None:
         kind = getattr(sig, "coverage_kind", "") or COVERAGE_INDEX
         lines.append("**Cobertura:** " + FRASE_COBERTURA_METODOLOGIA.get(
@@ -293,7 +336,7 @@ def standard_sections(product, tier: ProductTier,
         val = product.validation_state()
     except Exception:  # noqa: BLE001
         val = None
-    methodology = _methodology_md(sig, val, as_of,
+    methodology = _methodology_md(sig, val, as_of, product=product,
                                   con_seccion_de_fuentes=tv in _TIERS_WITH_SOURCES)
     # Procedencia POR VARIABLE, generada del registro en vivo — nunca prosa escrita a
     # mano (lección Hallazgo 7: la prosa que afirma procedencia envejece con cada
