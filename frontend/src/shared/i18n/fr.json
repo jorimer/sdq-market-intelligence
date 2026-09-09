@@ -1944,6 +1944,32 @@
       "title": "Fraîcheur de la validation",
       "vigente": "À jour"
     },
+    "fuentes": {
+      "al_dia": "À jour",
+      "colEdad": "Ancienneté",
+      "colEje": "Axe / émetteur",
+      "colEstado": "État",
+      "colMotivo": "Motif",
+      "congelada": "Figée",
+      "edad": "{{dias}} j · seuil {{tope}}",
+      "empty": "Aucun axe du catalogue ne déclare de source.",
+      "indeterminada": "Indéterminé",
+      "resumen": "{{congeladas}} à source figée · {{indeterminadas}} sans verdict (ce n'est pas « à jour »)",
+      "sinEmisor": "Aucun émetteur déclaré",
+      "sub": "Si la source de chaque axe publie encore (ancienneté de la donnée, pas du sync)",
+      "title": "Sources des axes"
+    },
+    "herramientas": {
+      "colAcciones": "Par action",
+      "colCorridas": "Exécutions",
+      "colFallidas": "Échecs",
+      "colHerramienta": "Outil",
+      "colUsuarios": "Utilisateurs",
+      "empty": "Aucun outil n'a enregistré d'exécution.",
+      "rango": "{{desde}} au {{hasta}} · {{total}} exécution(s) au total",
+      "sub": "Combien de fois chaque outil commercial a été lancé (mesure, ne restreint pas)",
+      "title": "Utilisation des outils"
+    },
     "cadence": {
       "daily": "Quotidien",
       "weekly": "Hebdomadaire",

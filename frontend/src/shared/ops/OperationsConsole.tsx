@@ -4,6 +4,8 @@ import type { TFunction } from "i18next";
 import { Wrench, RefreshCw, Play, Clock, History } from "lucide-react";
 import { PageHead, Card, CardHead, StateBlock, Chip } from "@/shared/ui/primitives";
 import { FrescuraPanel } from "@/shared/ops/FrescuraPanel";
+import { FuentesPanel } from "@/shared/ops/FuentesPanel";
+import { HerramientasPanel } from "@/shared/ops/HerramientasPanel";
 import { SpendPanel } from "@/shared/ops/SpendPanel";
 import {
   getOperationsStatus,
@@ -302,6 +304,21 @@ export function OperationsConsole({ eyebrow, title, sub, filter, emptyMessage, o
           validación de un eje obsoleto— está en las tarjetas de abajo. */}
       <div className="mb-5">
         <FrescuraPanel />
+      </div>
+
+      {/* Y las FUENTES junto a la frescura de la validación, porque son la misma familia de
+          pregunta con distinto sujeto: aquélla dice si la cifra de validación sigue
+          correspondiendo a su insumo; ésta, si el insumo sigue llegando. Un sync verde no
+          responde ninguna de las dos. */}
+      <div className="mb-5">
+        <FuentesPanel />
+      </div>
+
+      {/* Y el uso de las herramientas junto al gasto: es la capa con costo variable por
+          corrida, así que las dos columnas —cuánto se gastó y cuántas veces se corrió— se
+          leen juntas o ninguna de las dos dice lo que cuesta operar esto. */}
+      <div className="mb-5">
+        <HerramientasPanel />
       </div>
 
       {status === "loading" && <StateBlock kind="loading" message={t("ops.loading")} />}

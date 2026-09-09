@@ -1944,6 +1944,32 @@
       "title": "Frescura de la validación",
       "vigente": "Vigente"
     },
+    "fuentes": {
+      "al_dia": "Al día",
+      "colEdad": "Edad del dato",
+      "colEje": "Eje / emisor",
+      "colEstado": "Estado",
+      "colMotivo": "Motivo",
+      "congelada": "Congelada",
+      "edad": "{{dias}} d · tope {{tope}}",
+      "empty": "Ningún eje del catálogo declara fuente.",
+      "indeterminada": "Indeterminado",
+      "resumen": "{{congeladas}} con la fuente detenida · {{indeterminadas}} sin veredicto (no es «al día»)",
+      "sinEmisor": "Sin emisor declarado",
+      "sub": "Si la fuente que alimenta cada eje sigue publicando (antigüedad del dato, no del sync)",
+      "title": "Fuentes de los ejes"
+    },
+    "herramientas": {
+      "colAcciones": "Por acción",
+      "colCorridas": "Corridas",
+      "colFallidas": "Fallidas",
+      "colHerramienta": "Herramienta",
+      "colUsuarios": "Usuarios",
+      "empty": "Ninguna herramienta registró corridas.",
+      "rango": "{{desde}} a {{hasta}} · {{total}} corrida(s) en total",
+      "sub": "Cuántas veces se corrió cada herramienta comercial (mide, no restringe)",
+      "title": "Uso de las herramientas"
+    },
     "cadence": {
       "daily": "Diario",
       "weekly": "Semanal",

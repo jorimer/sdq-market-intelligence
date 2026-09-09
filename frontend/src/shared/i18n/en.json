@@ -1944,6 +1944,32 @@
       "title": "Validation freshness",
       "vigente": "Current"
     },
+    "fuentes": {
+      "al_dia": "Up to date",
+      "colEdad": "Data age",
+      "colEje": "Axis / publisher",
+      "colEstado": "Status",
+      "colMotivo": "Reason",
+      "congelada": "Frozen",
+      "edad": "{{dias}} d · limit {{tope}}",
+      "empty": "No axis in the catalog declares a source.",
+      "indeterminada": "Undetermined",
+      "resumen": "{{congeladas}} with a stalled source · {{indeterminadas}} with no verdict (not the same as up to date)",
+      "sinEmisor": "No publisher declared",
+      "sub": "Whether each axis's source is still publishing (age of the data, not of the sync)",
+      "title": "Axis data sources"
+    },
+    "herramientas": {
+      "colAcciones": "By action",
+      "colCorridas": "Runs",
+      "colFallidas": "Failed",
+      "colHerramienta": "Tool",
+      "colUsuarios": "Users",
+      "empty": "No tool recorded any runs.",
+      "rango": "{{desde}} to {{hasta}} · {{total}} run(s) in total",
+      "sub": "How many times each commercial tool ran (measures, does not restrict)",
+      "title": "Tool usage"
+    },
     "cadence": {
       "daily": "Daily",
       "weekly": "Weekly",

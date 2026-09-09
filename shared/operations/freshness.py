@@ -216,11 +216,14 @@ def _audit_publications(db: Session, admin_ids: List[str], now: datetime) -> Lis
 def run_freshness_audit(db: Session) -> Dict:
     """Audita la frescura de cada fuente recurrente y notifica las atrasadas.
 
-    Devuelve ``{checked, n_overdue, overdue, notified, sovereign_proposed, publications_stale}``.
-    Solo considera operaciones con cadencia (>0) que no necesitan parámetros (las on-demand no
-    tienen frescura esperada). No se audita a sí misma. Además: propone re-verificar ratings
-    soberanos cuya última acción envejeció (dato declarado, no un sync agendado), y avisa las
-    publicaciones BCRD sin edición nueva dentro de su cadencia (renombrado/atraso del CDN).
+    Devuelve ``{checked, n_overdue, overdue, notified, sovereign_proposed, publications_stale,
+    fuentes_congeladas, extra_stale}``. Solo considera operaciones con cadencia (>0) que no
+    necesitan parámetros (las on-demand no tienen frescura esperada). No se audita a sí misma.
+    Además, tres medidas que NO son la cadencia de un job: propone re-verificar ratings
+    soberanos cuya última acción envejeció (dato declarado, no un sync agendado), avisa las
+    publicaciones BCRD sin edición nueva dentro de su cadencia (renombrado/atraso del CDN), y
+    avisa los ejes cuya FUENTE dejó de publicar — el sync corre en verde contra un archivo
+    muerto y el eje aparenta estar vivo (ver ``fuentes_congeladas``).
     """
     scheds = get_schedules(db)
     admin_ids = _admin_ids(db)
@@ -276,6 +279,11 @@ def run_freshness_audit(db: Session) -> Dict:
 
     sovereign_proposed = _audit_sovereign_ratings(db, admin_ids, now)
     publications_stale = _audit_publications(db, admin_ids, now)
+    # Tercera medida de "dato viejo", y la que ninguna de las dos anteriores cubría: la
+    # FUENTE de cada eje sectorial. Import perezoso como las otras dos (el sensor recorre
+    # el catálogo de productos, que importa medio framework).
+    from shared.operations.fuentes_congeladas import auditar_fuentes_de_los_ejes
+    fuentes_congeladas = auditar_fuentes_de_los_ejes(db, admin_ids, now)
 
     extra_stale: List[str] = []
     for fn in _EXTRA_AUDITS:
@@ -288,6 +296,7 @@ def run_freshness_audit(db: Session) -> Dict:
             "overdue": overdue, "notified": notified,
             "sovereign_proposed": sovereign_proposed,
             "publications_stale": publications_stale,
+            "fuentes_congeladas": fuentes_congeladas,
             "extra_stale": extra_stale}
 
 
