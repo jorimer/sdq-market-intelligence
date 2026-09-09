@@ -18,6 +18,7 @@ from sqlalchemy.orm import Session
 from shared.auth.dependencies import get_current_user, require_role
 from shared.auth.models import User, UserRole
 from shared.database.session import get_db
+from shared.observability.uso_de_herramientas import RESEARCH, id_de, medir_uso
 from shared.research.decompose import DEFAULT_MIN_ANCHOR_SCORE
 from shared.research.deliverable import render_deliverable
 from shared.research.export import to_markdown
@@ -46,14 +47,20 @@ async def run_research(
     _user: User = Depends(get_current_user),
 ) -> Dict[str, Any]:
     """Responde una pregunta libre con procedencia honesta + gate de publicación."""
-    answer = await answer_question(
-        body.question, db=db,
-        gap_threshold=body.gap_threshold if body.gap_threshold is not None
-        else DEFAULT_GAP_THRESHOLD,
-        per_q_k=body.per_q_k,
-        min_anchor_score=body.min_anchor_score if body.min_anchor_score is not None
-        else DEFAULT_MIN_ANCHOR_SCORE,
-    )
+    # Se cuenta la corrida (no se restringe): es la capa de costo variable por ejecución y
+    # hasta ahora no había forma de saber cuántas veces se usaba. El sujeto —la pregunta—
+    # viaja con el conteo: un número de corridas sin sujeto no sostiene una conversación
+    # comercial. La medición ENVUELVE la ejecución para contar también las que fallan.
+    with medir_uso(herramienta=RESEARCH, accion="respuesta", user_id=id_de(_user),
+                   sujeto=body.question):
+        answer = await answer_question(
+            body.question, db=db,
+            gap_threshold=body.gap_threshold if body.gap_threshold is not None
+            else DEFAULT_GAP_THRESHOLD,
+            per_q_k=body.per_q_k,
+            min_anchor_score=body.min_anchor_score if body.min_anchor_score is not None
+            else DEFAULT_MIN_ANCHOR_SCORE,
+        )
     result = answer.to_dict()
     result["markdown"] = to_markdown(answer)   # documento con anatomía REPORT_STANDARD
     return result
@@ -75,15 +82,20 @@ async def research_deliverable(
 ) -> FileResponse:
     """Fase 5: la respuesta del motor como entregable de marca (PDF/Word) — el borrador
     anclado a procedencia que acelera el DD Full/Deep Dive. Reusa el pipeline branded."""
-    answer = await answer_question(
-        body.question, db=db,
-        gap_threshold=body.gap_threshold if body.gap_threshold is not None
-        else DEFAULT_GAP_THRESHOLD,
-        min_anchor_score=body.min_anchor_score if body.min_anchor_score is not None
-        else DEFAULT_MIN_ANCHOR_SCORE,
-    )
-    kw = {"watermark": body.watermark} if body.watermark is not None else {}
-    path = render_deliverable(answer, fmt=body.fmt, **kw)
+    # Acción propia y no «respuesta»: producir el entregable de marca cuesta más que
+    # contestar, y sumarlas bajo un mismo rótulo escondería la diferencia justo cuando la
+    # pregunta es cuánto cuesta cada cosa.
+    with medir_uso(herramienta=RESEARCH, accion="entregable", user_id=id_de(_user),
+                   sujeto=body.question, detalle={"fmt": body.fmt}):
+        answer = await answer_question(
+            body.question, db=db,
+            gap_threshold=body.gap_threshold if body.gap_threshold is not None
+            else DEFAULT_GAP_THRESHOLD,
+            min_anchor_score=body.min_anchor_score if body.min_anchor_score is not None
+            else DEFAULT_MIN_ANCHOR_SCORE,
+        )
+        kw = {"watermark": body.watermark} if body.watermark is not None else {}
+        path = render_deliverable(answer, fmt=body.fmt, **kw)
     media = ("application/vnd.openxmlformats-officedocument.wordprocessingml.document"
              if body.fmt == "docx" else "application/pdf")
     return FileResponse(path, media_type=media, filename=os.path.basename(path))

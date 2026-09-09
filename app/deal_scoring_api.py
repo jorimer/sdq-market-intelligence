@@ -16,6 +16,7 @@ from sqlalchemy.orm import Session
 from shared.auth.dependencies import get_current_user
 from shared.auth.models import User
 from shared.database.session import get_db
+from shared.observability.uso_de_herramientas import DEAL_SCORING, id_de, medir_uso
 from modules.deal_scoring.scoring.rubric import (
     ISO2_TO_ISO3, SECTOR_TO_BCRD, WEIGHTS, compute_deal_score,
 )
@@ -116,14 +117,23 @@ async def score(
         raise HTTPException(status_code=400, detail="Body inválido.")
     country = body.get("country")
     sector = body.get("sector")
-    anchors = _fetch_anchors(db, country, sector)
-    result = compute_deal_score(body, anchors["values"])
-    result["anchor_sources"] = anchors["sources"]
+    # Se cuenta la corrida, no se restringe. `con_ia` separa las dos poblaciones: un score
+    # con narrativa cuesta una llamada al modelo y uno sin ella no cuesta ninguna, así que un
+    # conteo que las mezcle no dice nada sobre el costo de operar la herramienta.
+    with medir_uso(herramienta=DEAL_SCORING, accion="score", user_id=id_de(current_user),
+                   sujeto=str(body.get("deal_name") or "") or None,
+                   detalle={"con_ia": bool(body.get("with_ai", True)),
+                            "sector": sector, "pais": country}):
+        anchors = _fetch_anchors(db, country, sector)
+        result = compute_deal_score(body, anchors["values"])
+        result["anchor_sources"] = anchors["sources"]
 
-    ai = None
-    if body.get("with_ai", True):
-        from modules.deal_scoring.ai_context import deal_ai_context
-        ctx = deal_ai_context(body, result, anchors["sources"], country=country, sector=sector)
-        ai = await _narrative(ctx, body.get("audience") or "comite_inversion", bool(body.get("deep")))
-    result["ai_insight"] = ai
+        ai = None
+        if body.get("with_ai", True):
+            from modules.deal_scoring.ai_context import deal_ai_context
+            ctx = deal_ai_context(body, result, anchors["sources"], country=country,
+                                  sector=sector)
+            ai = await _narrative(ctx, body.get("audience") or "comite_inversion",
+                                  bool(body.get("deep")))
+        result["ai_insight"] = ai
     return result

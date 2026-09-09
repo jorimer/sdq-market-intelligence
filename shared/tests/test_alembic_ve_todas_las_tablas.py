@@ -101,7 +101,10 @@ def test_env_py_registra_TODAS_las_tablas_de_la_app():
 #: existen cuando la base se monta desde el metadata. Esta lista solo puede ACHICARSE — una
 #: tabla nueva no entra acá, se arregla importando su modelo desde algo que `app/main.py`
 #: alcance.
-INVISIBLES_AL_2026_09_05 = {"dgii_contribuyente_subclase", "llm_calls"}
+#: `llm_calls` salió de la lista el 2026-09-09: el registro de uso de herramientas vive
+#: en el mismo módulo de modelos y lo importa el router de research, que `app/main.py`
+#: sí alcanza. La lista solo puede achicarse, y ésta es la forma de achicarla.
+INVISIBLES_AL_2026_09_05 = {"dgii_contribuyente_subclase"}
 
 
 def _tablas(codigo: str) -> set:
