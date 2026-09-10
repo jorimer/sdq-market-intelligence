@@ -5,7 +5,7 @@ ruta mientras los tests del motor seguían verdes. Un contador que funciona perf
 nadie llama desde el endpoint no cuenta nada, y el síntoma —un panel en cero— se lee como
 «no la usó nadie», que es una respuesta comercialmente opuesta.
 """
-from datetime import date, timedelta
+from datetime import datetime, timedelta, timezone
 
 import pytest
 from fastapi import FastAPI
@@ -142,9 +142,16 @@ def test_las_fallidas_se_muestran_aparte_y_no_se_restan(sesion_del_contador):
 
 def test_el_rango_incluye_el_DIA_COMPLETO_de_hasta(sesion_del_contador):
     """Tomar la fecha tal cual dejaría fuera todo el último día —el que más se mira— y el
-    total seguiría siendo un número plausible."""
+    total seguiría siendo un número plausible.
+
+    El «hoy» de este test es el de **UTC**, no el local, porque en UTC se sella la fila
+    (`created_at`) y en UTC computa su rango `resumen_de_uso`. Con `date.today()` el test
+    fallaba entre la medianoche UTC y la local —tres o cuatro horas por día en el huso de
+    Santo Domingo— sin que nada estuviera roto: el defecto era del reloj del test, y un test
+    que falla por franja horaria enseña a ignorar los rojos.
+    """
     registrar_uso(herramienta=RESEARCH, accion="respuesta")
-    hoy = date.today()
+    hoy = datetime.now(timezone.utc).date()
     r = resumen_de_uso(sesion_del_contador, desde=hoy - timedelta(days=1), hasta=hoy)
     assert r["corridas_totales_de_las_herramientas"] == 1
 
