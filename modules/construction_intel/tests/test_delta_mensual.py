@@ -139,6 +139,27 @@ async def test_SIN_observaciones_las_secciones_son_EXACTAMENTE_las_de_antes(db, 
     assert set(narr) == set(declaradas), "el informe sin feed cambió de secciones"
 
 
+async def _entregado(p, tier=ProductTier.deep_dive):
+    """El texto como lo ENTREGA la plataforma: lo cacheable más lo que se completa en vivo.
+
+    Desde que la fecha de la última descarga se agrega después de la caché, `narratives()`
+    devuelve solo lo del modelo; probar sobre `narratives()` a secas prueba lo que se guarda,
+    no lo que se sirve.
+    """
+    snap = p.snapshot(tier, "2025")
+    return p.completar_en_vivo(tier, snap, await p.narratives(tier, snap))
+
+
+def _hoy_utc_largo():
+    """La fecha de la última descarga en estos tests es la de la ingesta, sellada por la base
+    en UTC. Con la fecha LOCAL el test fallaría entre la medianoche UTC y la de Santo Domingo."""
+    from datetime import datetime, timezone
+
+    from shared.narrative.formato import fecha_larga_es
+
+    return fecha_larga_es(datetime.now(timezone.utc).date().isoformat())
+
+
 # ── Fuente ATRASADA: se publica con el mes nombrado y la declaración al lado ─────
 #
 # Decisión del dueño (2026-09-10). El primer diseño vetaba la sección; se cambió porque la
@@ -168,12 +189,11 @@ def test_con_la_fuente_ATRASADA_la_seccion_SE_PUBLICA_con_su_delta(db, icc):
 @pytest.mark.asyncio
 async def test_el_texto_NOMBRA_el_mes_y_DECLARA_la_ultima_publicacion(db, icc):
     _feed_atrasado(db)
-    p = ConstructionProduct(db)
-    texto = (await p.narratives(ProductTier.deep_dive,
-                                p.snapshot(ProductTier.deep_dive, "2025")))["delta_mensual"]
+    texto = (await _entregado(ConstructionProduct(db)))["delta_mensual"]
     assert texto.startswith("Movimiento de diciembre de 2023.")
     assert "el 20 de diciembre de 2023" in texto
-    assert "la de enero de 2024" in texto and "no figura en la fuente" in texto
+    assert "la de enero de 2024" in texto
+    assert f"no figuraba en la fuente en nuestra última descarga, del {_hoy_utc_largo()}." in texto
 
 
 @pytest.mark.asyncio
@@ -181,9 +201,7 @@ async def test_la_fecha_declarada_se_COMPUTA_de_la_publicacion_y_no_esta_escrita
     """Una fecha transcrita se desincroniza con la primera edición nueva. Con otra fecha de
     publicación en el dato, el texto tiene que decir OTRA fecha."""
     _feed_atrasado(db, publicado_el="2024-01-05")
-    p = ConstructionProduct(db)
-    texto = (await p.narratives(ProductTier.deep_dive,
-                                p.snapshot(ProductTier.deep_dive, "2025")))["delta_mensual"]
+    texto = (await _entregado(ConstructionProduct(db)))["delta_mensual"]
     assert "el 5 de enero de 2024" in texto
     assert "20 de diciembre" not in texto
 
@@ -192,22 +210,18 @@ async def test_la_fecha_declarada_se_COMPUTA_de_la_publicacion_y_no_esta_escrita
 async def test_con_la_fuente_AL_DIA_se_nombra_el_mes_SIN_declaracion(db, icc):
     """La declaración de atraso no puede aparecer cuando no hay atraso."""
     ultimo = _feed_fresco(db)
-    p = ConstructionProduct(db)
-    texto = (await p.narratives(ProductTier.deep_dive,
-                                p.snapshot(ProductTier.deep_dive, "2025")))["delta_mensual"]
+    texto = (await _entregado(ConstructionProduct(db)))["delta_mensual"]
     from shared.narrative.formato import mes_largo_es
 
     assert texto.startswith(f"Movimiento de {mes_largo_es(ultimo)}.")
-    assert "no figura en la fuente" not in texto
+    assert "no figuraba en la fuente" not in texto
 
 
 @pytest.mark.asyncio
 async def test_sin_fecha_de_publicacion_la_declaracion_NO_inventa_una(db, icc):
     """Si el portal no declaró la fecha, se dice lo que se sabe: el mes que falta."""
     _feed_atrasado(db, publicado_el=None)
-    p = ConstructionProduct(db)
-    texto = (await p.narratives(ProductTier.deep_dive,
-                                p.snapshot(ProductTier.deep_dive, "2025")))["delta_mensual"]
+    texto = (await _entregado(ConstructionProduct(db)))["delta_mensual"]
     assert "última edición disponible" in texto
     assert "la de enero de 2024" in texto
     assert " el 20 de" not in texto and "publicó el MIVHED, el" not in texto
@@ -238,9 +252,7 @@ def test_con_frescura_INDETERMINADA_la_seccion_no_publica(db, icc, monkeypatch):
 async def test_lo_vetado_se_ESCRIBE_con_su_causa_y_sin_claves_de_maquina(db, icc, monkeypatch):
     _feed_fresco(db)
     _forzar_indeterminada(monkeypatch)
-    p = ConstructionProduct(db)
-    texto = (await p.narratives(ProductTier.deep_dive,
-                                p.snapshot(ProductTier.deep_dive, "2025")))["delta_mensual"]
+    texto = (await _entregado(ConstructionProduct(db)))["delta_mensual"]
     assert texto.startswith("No se publica")
     assert "no depende de este feed" in texto
     for clave in ("monthly", "quarterly", "annual"):
@@ -344,9 +356,7 @@ async def test_la_declaracion_no_arrastra_la_clave_de_MAQUINA_de_la_cadencia(db,
     fuente (monthly)» en un documento en castellano es el defecto que obligó a traducir la
     cadencia en la metodología."""
     _feed_atrasado(db)
-    p = ConstructionProduct(db)
-    texto = (await p.narratives(ProductTier.deep_dive,
-                                p.snapshot(ProductTier.deep_dive, "2025")))["delta_mensual"]
+    texto = (await _entregado(ConstructionProduct(db)))["delta_mensual"]
     for clave in ("monthly", "quarterly", "annual"):
         assert clave not in texto, f"la clave de máquina «{clave}» llegó al informe"
     assert "mensual" in texto
@@ -369,3 +379,69 @@ def test_toda_seccion_del_producto_tiene_TITULO_en_la_app(lang):
                          .read_text(encoding="utf-8"))["platform"]["catalog"]["section"]
     faltan = sorted(k for k in _SECTION_TITLES if k not in titulos)
     assert not faltan, f"{lang}: secciones sin título en la app: {faltan}"
+
+
+# ── La frase afirma solo lo que se sabe, y se completa DESPUÉS de la caché ───────
+
+@pytest.mark.asyncio
+async def test_lo_que_se_CACHEA_no_trae_el_encabezado(db, icc):
+    """El encabezado lleva la fecha de la última descarga, que cambia con cada verificación.
+    Si quedara en el texto cacheado, esa fecha viajaría congelada en la caché."""
+    _feed_atrasado(db)
+    p = ConstructionProduct(db)
+    cacheable = await p.narratives(ProductTier.deep_dive, p.snapshot(ProductTier.deep_dive, "2025"))
+    assert not cacheable["delta_mensual"].startswith("Movimiento de ")
+
+
+@pytest.mark.asyncio
+async def test_la_frase_NUNCA_afirma_el_estado_actual_de_la_fuente(db, icc):
+    """«No figura en la fuente a la fecha de este informe» afirmaba el estado ACTUAL de la
+    fuente, y lo único verificado era la última descarga: falso durante hasta 30 días si el
+    emisor publicaba entre dos syncs."""
+    _feed_atrasado(db)
+    texto = (await _entregado(ConstructionProduct(db)))["delta_mensual"]
+    assert "a la fecha de este informe" not in texto
+    assert "no figura en la fuente" not in texto
+    assert "en nuestra última descarga" in texto
+
+
+@pytest.mark.asyncio
+async def test_una_verificacion_de_la_SONDA_mas_nueva_que_la_ingesta_es_la_que_se_cita(db, icc):
+    """La sonda baja el CSV a diario sin ingerir: su fecha es una descarga, y si es la más
+    nueva es la que el lector necesita."""
+    from datetime import datetime, timedelta, timezone
+
+    from modules.construction_intel.service import guardar_verificacion
+    from shared.narrative.formato import fecha_larga_es
+
+    _feed_atrasado(db)
+    manana = datetime.now(timezone.utc) + timedelta(days=1)
+    guardar_verificacion(db, {"verificado_el": manana.isoformat()})
+    texto = (await _entregado(ConstructionProduct(db)))["delta_mensual"]
+    assert f"del {fecha_larga_es(manana.date().isoformat())}." in texto
+
+
+def test_un_encabezado_VIEJO_grabado_en_la_cache_se_REEMPLAZA_y_no_se_apila(db, icc):
+    """La versión anterior grababa el encabezado —con la frase falsa— dentro del texto
+    cacheado. Esas filas siguen siendo HIT, porque cambiar products.py no rota la huella: el
+    encabezado viejo se reemplaza al servir."""
+    _feed_atrasado(db)
+    p = ConstructionProduct(db)
+    snap = p.snapshot(ProductTier.deep_dive, "2025")
+    viejo = ("Movimiento de diciembre de 2023. Es la última edición que publicó el MIVHED, "
+             "el 20 de diciembre de 2023; la de enero de 2024, de cadencia mensual, no figura "
+             "en la fuente a la fecha de este informe.\n\n## Flujo de licencias\n\ntexto")
+    texto = p.completar_en_vivo(ProductTier.deep_dive, snap, {"delta_mensual": viejo})["delta_mensual"]
+    assert texto.count("Movimiento de diciembre de 2023.") == 1
+    assert "a la fecha de este informe" not in texto
+    assert texto.endswith("## Flujo de licencias\n\ntexto")
+
+
+def test_lo_VETADO_no_se_toca_al_completar(db, icc, monkeypatch):
+    _feed_fresco(db)
+    _forzar_indeterminada(monkeypatch)
+    p = ConstructionProduct(db)
+    snap = p.snapshot(ProductTier.deep_dive, "2025")
+    veto = {"delta_mensual": "No se publica la lectura del movimiento del mes: x."}
+    assert p.completar_en_vivo(ProductTier.deep_dive, snap, dict(veto)) == veto
+
