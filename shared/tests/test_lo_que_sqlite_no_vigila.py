@@ -90,3 +90,68 @@ def test_las_claves_de_los_conectores_ENTRAN_en_su_columna():
         f"la clave más larga de SECMCA mide {len(peor)} y la columna admite {tope}. En "
         f"PostgreSQL el sync entero falla con «value too long»; en SQLite entra sin ruido. "
         f"La clave es: {peor!r}")
+
+
+# ── La PROCEDENCIA de un conector entra en la columna que la guarda ──────────────
+#
+# El 2026-09-10 el primer sync del feed mensual del MIVHED reventó en producción con
+# `StringDataRightTruncation`: la licencia que declara el conector son 278 caracteres y la
+# columna era `VARCHAR(200)`. Los 9.769 tests estaban en verde, porque SQLite no aplica el
+# largo de un VARCHAR. Es la MISMA familia que el caso de `rb_country_aggregates.metric` de
+# arriba, y que se repita es la prueba de que la lección escrita no alcanza: hace falta un
+# lector que mida lo que los conectores producen contra lo que la columna acepta.
+#
+# Se miden los conectores REALES —no un fixture—, porque el valor problemático es un atributo
+# de clase que cualquiera puede alargar al corregir una licencia mal declarada, que es
+# exactamente como esto va a volver a pasar.
+
+
+def _procedencia_de_los_conectores():
+    """`[(clase, campo, largo)]` de `source` y `license` de todo conector de shared/data."""
+    import importlib
+    import inspect
+    import pkgutil
+
+    import shared.data as paquete
+
+    salida = []
+    for m in pkgutil.iter_modules(paquete.__path__):
+        try:
+            mod = importlib.import_module(f"shared.data.{m.name}")
+        except Exception:  # noqa: BLE001 — un conector que no importa no aporta al barrido
+            continue
+        for nombre, obj in inspect.getmembers(mod, inspect.isclass):
+            for campo in ("source", "license"):
+                valor = getattr(obj, campo, None)
+                if isinstance(valor, str) and valor:
+                    salida.append((nombre, campo, len(valor)))
+    return salida
+
+
+def test_el_barrido_de_conectores_ENCUENTRA_procedencia():
+    """Sin esto, el guard de abajo pasaría en verde sin medir nada."""
+    filas = _procedencia_de_los_conectores()
+    clases = {c for c, _, _ in filas}
+    assert len(clases) >= 20, f"solo se leyeron {len(clases)} conectores: el barrido falló"
+    assert any(campo == "license" for _, campo, _ in filas)
+
+
+def test_la_procedencia_ENTRA_en_sector_observations():
+    """La tabla de observaciones es TRANSVERSAL: recibe la procedencia de cualquier eje, así
+    que tiene que aceptar la del conector más largo del catálogo, no la del que la estrenó."""
+    from shared.observations.models import SectorObservation
+
+    filas = _procedencia_de_los_conectores()
+    for campo in ("source", "license"):
+        col = SectorObservation.__table__.c[campo]
+        tope = getattr(col.type, "length", None)
+        if tope is None:
+            continue  # TEXT: sin cota, nada que verificar
+        peor = max(((n, largo) for n, c, largo in filas if c == campo),
+                   key=lambda x: x[1], default=None)
+        assert peor is not None
+        assert peor[1] <= tope, (
+            f"`sector_observations.{campo}` acepta {tope} caracteres y {peor[0]} declara "
+            f"{peor[1]}. En SQLite el INSERT pasa; en PostgreSQL revienta con "
+            f"StringDataRightTruncation y el feed no persiste nada.")
+

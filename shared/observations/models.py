@@ -32,7 +32,7 @@ Código nuevo no debería sumar deuda que ya se está pagando.
 from datetime import date
 from typing import Optional
 
-from sqlalchemy import Date, Float, Index, String, UniqueConstraint
+from sqlalchemy import Date, Float, Index, String, Text, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column
 
 from shared.database.base import Base, UUIDMixin
@@ -74,6 +74,15 @@ class SectorObservation(UUIDMixin, Base):
         String(80), nullable=False, default="", server_default="")
 
     # ── Linaje ──
-    source: Mapped[Optional[str]] = mapped_column(String(60), nullable=True)   # "MIVHED"
+    #: 120 y no 60: el conector más largo del catálogo declara 82 caracteres
+    #: (`ONEConstructionClient`). Medido, no estimado — lo vigila el guard de
+    #: `shared/tests/test_lo_que_sqlite_no_vigila.py`.
+    source: Mapped[Optional[str]] = mapped_column(String(120), nullable=True)
     published_at: Mapped[Optional[date]] = mapped_column(Date, nullable=True)
-    license: Mapped[Optional[str]] = mapped_column(String(200), nullable=True)
+    #: TEXT y no un VARCHAR: la licencia es un PÁRRAFO del emisor, no un identificador, y no
+    #: tiene cota natural. La más larga del catálogo hoy son 306 caracteres (`SISClient`) y
+    #: la de MIVHED 278 — con `String(200)` el INSERT del feed reventó en producción con
+    #: StringDataRightTruncation mientras los 9.769 tests seguían verdes, porque SQLite no
+    #: aplica el largo de un VARCHAR y PostgreSQL sí. Cualquier número que eligiera hoy es
+    #: la próxima truncación; en PostgreSQL `text` y `varchar` rinden igual.
+    license: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
