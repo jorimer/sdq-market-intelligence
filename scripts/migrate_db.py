@@ -27,6 +27,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from sqlalchemy import create_engine, delete, func, select  # noqa: E402
 
 from shared.config.settings import settings  # noqa: E402
+from shared.database.conexion import connect_args_para  # noqa: E402
 from shared.database.base import Base  # noqa: E402
 
 # Import every model so Base.metadata holds all tables (mirrors alembic/env.py).
@@ -62,8 +63,9 @@ def main() -> None:
         logger.error("Origen y destino son la misma base.")
         sys.exit(1)
 
-    src = create_engine(args.source)
-    tgt = create_engine(target_url)
+    # El destino recibe filas con el reloj de ESTA sesión donde falte un `created_at`.
+    src = create_engine(args.source, connect_args=connect_args_para(args.source))
+    tgt = create_engine(target_url, connect_args=connect_args_para(target_url))
 
     tables = list(Base.metadata.sorted_tables)  # FK-safe order
     if args.only:

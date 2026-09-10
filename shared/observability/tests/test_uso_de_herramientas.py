@@ -5,7 +5,7 @@ ruta mientras los tests del motor seguían verdes. Un contador que funciona perf
 nadie llama desde el endpoint no cuenta nada, y el síntoma —un panel en cero— se lee como
 «no la usó nadie», que es una respuesta comercialmente opuesta.
 """
-from datetime import datetime, timedelta, timezone
+from datetime import date, datetime, time, timezone
 
 import pytest
 from fastapi import FastAPI
@@ -140,19 +140,59 @@ def test_las_fallidas_se_muestran_aparte_y_no_se_restan(sesion_del_contador):
     assert fila["corridas_fallidas_de_la_herramienta"] == 1
 
 
-def test_el_rango_incluye_el_DIA_COMPLETO_de_hasta(sesion_del_contador):
-    """Tomar la fecha tal cual dejaría fuera todo el último día —el que más se mira— y el
-    total seguiría siendo un número plausible.
+#: Un día CUALQUIERA pero FIJO. El rango se prueba contra instantes elegidos, nunca contra
+#: el reloj de quien corre los tests: sellar con «ahora» ataba el veredicto a la hora del día.
+_DIA = date(2026, 5, 14)
 
-    El «hoy» de este test es el de **UTC**, no el local, porque en UTC se sella la fila
-    (`created_at`) y en UTC computa su rango `resumen_de_uso`. Con `date.today()` el test
-    fallaba entre la medianoche UTC y la local —tres o cuatro horas por día en el huso de
-    Santo Domingo— sin que nada estuviera roto: el defecto era del reloj del test, y un test
-    que falla por franja horaria enseña a ignorar los rojos.
+
+def _corrida_sellada_en(db, cuando: datetime) -> None:
+    """Una fila con su sello puesto A MANO, para poder pararse en los bordes del día."""
+    db.add(ToolRun(herramienta=RESEARCH, accion="respuesta", ok=True,
+                   periodo=cuando.strftime("%Y-%m"), created_at=cuando))
+    db.commit()
+
+
+def test_el_rango_incluye_el_DIA_COMPLETO_de_hasta(db):
+    """Los DOS extremos del día de ``hasta``, no solo su medianoche.
+
+    Tomar la fecha tal cual dejaría fuera todo el último día —el que más se mira— y el total
+    seguiría siendo un número plausible.
+
+    **Por qué el día es fijo y el sello se pone a mano.** Este test sembraba con «ahora» y
+    preguntaba por ``date.today()``, que es el reloj LOCAL: pasadas las 20:00 AST el sello
+    —que viaja en UTC— ya era del día siguiente y quedaba fuera del rango, así que el test se
+    ponía rojo por la hora en que se lo corría y no por el código bajo prueba. En CI, que
+    corre en UTC, no se veía nunca. Un test de rango que solo tiene dientes en cierta franja
+    horaria no es un test de rango.
+    """
+    _corrida_sellada_en(db, datetime.combine(_DIA, time(0, 0, 0)))
+    _corrida_sellada_en(db, datetime.combine(_DIA, time(23, 59, 59)))
+
+    r = resumen_de_uso(db, desde=_DIA, hasta=_DIA)
+    assert r["corridas_totales_de_las_herramientas"] == 2, (
+        "el rango se comió un extremo del día de 'hasta'")
+    assert (r["desde"], r["hasta"]) == (_DIA.isoformat(), _DIA.isoformat())
+
+
+def test_el_reloj_QUE_SELLA_es_el_MISMO_que_FILTRA(sesion_del_contador):
+    """Una corrida de recién entra en el rango por defecto — y «hoy» es UNO solo.
+
+    Es la costura que el test anterior ya no cruza: el sello lo pone la base y el rango lo
+    arma el motor, y si los dos relojes se separan la corrida desaparece del panel sin que
+    falle nada. El síntoma —un número más bajo— se lee como «se usó menos», que es una
+    conclusión comercial equivocada. Se afirma contra UTC y no contra ``date.today()``
+    porque el motor, los otros tres paneles y el frontend arman el rango en UTC.
     """
     registrar_uso(herramienta=RESEARCH, accion="respuesta")
-    hoy = datetime.now(timezone.utc).date()
-    r = resumen_de_uso(sesion_del_contador, desde=hoy - timedelta(days=1), hasta=hoy)
+    ahora_utc = datetime.now(timezone.utc).replace(tzinfo=None)
+
+    fila = sesion_del_contador.query(ToolRun).one()
+    desfase_s = abs((fila.created_at - ahora_utc).total_seconds())
+    assert desfase_s < 60, (
+        f"el sello de la corrida está {desfase_s:.0f}s del reloj que arma el rango: son dos "
+        "relojes distintos y las corridas del borde del día se pierden")
+
+    r = resumen_de_uso(sesion_del_contador)
     assert r["corridas_totales_de_las_herramientas"] == 1
 
 
