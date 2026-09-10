@@ -1953,6 +1953,7 @@
       "congelada": "Figée",
       "edad": "{{dias}} j · seuil {{tope}}",
       "empty": "Aucun axe du catalogue ne déclare de source.",
+      "feed": "flux infra-annuel",
       "indeterminada": "Indéterminé",
       "resumen": "{{congeladas}} à source figée · {{indeterminadas}} sans verdict (ce n'est pas « à jour »)",
       "sinEmisor": "Aucun émetteur déclaré",

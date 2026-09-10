@@ -43,7 +43,7 @@ from __future__ import annotations
 
 import logging
 from datetime import datetime
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from typing import Any, Dict, List, Optional, Tuple
 
 from sqlalchemy.orm import Session
@@ -91,9 +91,25 @@ class Veredicto:
     dias_desde_el_periodo_del_dato: Optional[int] = None
     tope_de_dias_de_la_cadencia: Optional[int] = None
     detalle_del_producto: str = ""
+    #: QUÉ fuente del eje juzga este veredicto. ``""`` = la del índice, que es la que el
+    #: producto declara en ``data_signals``. Un eje puede tener además feeds sub-anuales con
+    #: su propia cadencia, y cada uno se juzga por separado: un feed mensual muerto y un
+    #: índice anual al día son dos hechos distintos, y un solo veredicto por eje obligaba a
+    #: elegir cuál de los dos contar.
+    clave: str = ""
+    #: Nombre legible de esa fuente, para la fila del panel.
+    etiqueta: str = ""
+
+    @property
+    def id(self) -> str:
+        """Identificador estable de la fila: eje + fuente. La app lo usa de clave."""
+        return f"{self.eje}:{self.clave}" if self.clave else self.eje
 
     def to_dict(self) -> Dict[str, Any]:
         return {
+            "id": self.id,
+            "clave": self.clave,
+            "etiqueta": self.etiqueta,
             "eje": self.eje,
             "estado": self.estado,
             "motivo": self.motivo,
@@ -103,6 +119,34 @@ class Veredicto:
             "tope_de_dias_de_la_cadencia": self.tope_de_dias_de_la_cadencia,
             "detalle_del_producto": self.detalle_del_producto,
         }
+
+
+@dataclass(frozen=True)
+class SenalDeFuente:
+    """Lo que un eje declara de UNA fuente suya para que el sensor la pueda juzgar.
+
+    Un producto la expone con ``senales_de_fuentes()`` (opcional, detectado por ``getattr``,
+    igual que el resto de los métodos opcionales del contrato). Un eje que no la implemente
+    simplemente no aporta feeds — brecha honesta, no error.
+
+    **Por qué una señal aparte y no otra cadencia en ``DataHealth``.** Ese campo gobierna
+    lógica real: ``readiness._CADENCE_THRESHOLDS`` escala los umbrales de G1 con él. Medido:
+    declarar ``monthly`` en un índice anual le cuesta 0,300 de readiness contra un umbral de
+    activación de 0,85 — como el readiness máximo es 1,0, **ningún eje sobrevive a ningún
+    nivel**. El feed no es otra cadencia del mismo eje: es otra FUENTE, y una fuente ya sabe
+    declarar la suya (``shared/narrative/atribucion.Fuente.cadence``; telecom sostiene dos
+    emisores con cadencias distintas en la misma serie desde hace tiempo).
+    """
+
+    #: Identifica la fuente DENTRO del eje ("feed", un código de serie…). No vacío.
+    clave: str
+    #: Nombre del emisor, tal como se lo cita.
+    etiqueta: str
+    #: Con qué cadencia publica ESTA fuente (``monthly``/``quarterly``/``annual``).
+    cadence: str
+    #: Antigüedad, en días, del período del dato más nuevo que llegó por esta fuente.
+    freshness_days: Optional[int]
+    detalle: str = ""
 
 
 def evaluar_fuente(
@@ -210,11 +254,58 @@ def _veredicto_del_eje(eje: str, db: Optional[Session]) -> Veredicto:
     )
 
 
+def _veredictos_de_los_feeds(eje: str, db: Optional[Session]) -> List[Veredicto]:
+    """Un veredicto por cada fuente sub-anual que el producto declare. Nunca lanza."""
+    from shared.products.registry import get_product
+
+    try:
+        producto = get_product(eje, db)
+        declarar = getattr(producto, "senales_de_fuentes", None)
+        if producto is None or declarar is None:
+            return []
+        senales = list(declarar() or [])
+    except Exception as e:  # noqa: BLE001 — un eje que revienta no aborta el barrido
+        logger.warning("no se pudieron leer las fuentes del feed de «%s»: %s", eje, e)
+        return []
+
+    salida: List[Veredicto] = []
+    for s in senales:
+        v = evaluar_fuente(eje=eje, freshness_days=s.freshness_days, cadence=s.cadence,
+                           fuentes=(s.etiqueta,) if s.etiqueta else (),
+                           detalle=s.detalle)
+        salida.append(replace(v, clave=s.clave, etiqueta=s.etiqueta))
+    return salida
+
+
 def leer_fuentes_de_los_ejes(db: Optional[Session] = None) -> List[Veredicto]:
-    """El veredicto de CADA eje del catálogo, en orden de catálogo. Solo lee."""
+    """El veredicto de cada fuente de cada eje del catálogo, en orden de catálogo. Solo lee.
+
+    Por eje sale primero el veredicto de la fuente del ÍNDICE (la que declara
+    ``data_signals``) y después uno por cada feed sub-anual declarado. Son fuentes distintas
+    con cadencias distintas: fundirlas en un solo veredicto obliga a elegir cuál de los dos
+    hechos contar, y el que se calla es siempre el que hacía falta.
+    """
     from shared.products.registry import PRODUCT_CATALOG
 
-    return [_veredicto_del_eje(entrada.sector_key, db) for entrada in PRODUCT_CATALOG]
+    salida: List[Veredicto] = []
+    for entrada in PRODUCT_CATALOG:
+        salida.append(_veredicto_del_eje(entrada.sector_key, db))
+        salida.extend(_veredictos_de_los_feeds(entrada.sector_key, db))
+    return salida
+
+
+def veredicto_de_la_fuente(db: Optional[Session], *, sector_key: str,
+                           clave: str) -> Optional[Veredicto]:
+    """El veredicto de UNA fuente de un eje, para que su sección pueda vetarse a sí misma.
+
+    Devuelve ``None`` si el eje no declara esa fuente. Un consumidor honesto trata ese
+    ``None`` como «no sé», no como «está al día»: es la misma distinción por la que el
+    panel pinta lo indeterminado de otro color.
+    """
+    for v in _veredictos_de_los_feeds(sector_key, db):
+        if v.clave == clave:
+            return v
+    return None
 
 
 def resumen_de_fuentes(db: Optional[Session] = None) -> Dict[str, Any]:
@@ -226,8 +317,10 @@ def resumen_de_fuentes(db: Optional[Session] = None) -> Dict[str, Any]:
     ejes = leer_fuentes_de_los_ejes(db)
     return {
         "ejes": [v.to_dict() for v in ejes],
-        "congeladas": [v.eje for v in ejes if v.estado == CONGELADA],
-        "indeterminadas": [v.eje for v in ejes if v.estado == INDETERMINADA],
+        # Se listan por `id` (eje:fuente) y no por eje: un eje puede aparecer con su índice
+        # al día y su feed congelado, y una lista de ejes no podría decir cuál de los dos.
+        "congeladas": [v.id for v in ejes if v.estado == CONGELADA],
+        "indeterminadas": [v.id for v in ejes if v.estado == INDETERMINADA],
         "topes_por_cadencia": dict(TOPES_POR_CADENCIA),
     }
 
@@ -247,7 +340,10 @@ def auditar_fuentes_de_los_ejes(db: Session, admin_ids: List[str],
 
     avisados: List[str] = []
     for v in leer_fuentes_de_los_ejes(db):
-        clave = f"fuente:{v.eje}"
+        # La clave de dedup lleva la FUENTE, no solo el eje: con el índice y su feed en el
+        # mismo eje, una clave por eje haría que el primero que avise silencie al otro
+        # durante un mes — y el silenciado se leería como que está al día.
+        clave = f"fuente:{v.id}"
         if v.estado != CONGELADA:
             if v.estado == AL_DIA:
                 _clear_notified(db, clave)
@@ -256,7 +352,8 @@ def auditar_fuentes_de_los_ejes(db: Session, admin_ids: List[str],
             continue
 
         emisor = ", ".join(v.fuentes) or "sin emisor declarado"
-        title = f"Fuente sin publicar: {v.eje}"
+        title = (f"Fuente sin publicar: {v.eje}"
+                 + (f" · {v.etiqueta or v.clave}" if v.clave else ""))
         body = (f"El dato más nuevo del eje «{v.eje}» tiene ~{v.dias_desde_el_periodo_del_dato} "
                 f"día(s); su fuente ({emisor}, cadencia {v.cadencia}) debió publicar una "
                 f"edición nueva a los {v.tope_de_dias_de_la_cadencia}. El sync puede estar "

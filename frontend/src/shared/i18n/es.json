@@ -1953,6 +1953,7 @@
       "congelada": "Congelada",
       "edad": "{{dias}} d · tope {{tope}}",
       "empty": "Ningún eje del catálogo declara fuente.",
+      "feed": "feed sub-anual",
       "indeterminada": "Indeterminado",
       "resumen": "{{congeladas}} con la fuente detenida · {{indeterminadas}} sin veredicto (no es «al día»)",
       "sinEmisor": "Sin emisor declarado",

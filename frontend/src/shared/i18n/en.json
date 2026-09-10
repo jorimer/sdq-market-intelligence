@@ -1953,6 +1953,7 @@
       "congelada": "Frozen",
       "edad": "{{dias}} d · limit {{tope}}",
       "empty": "No axis in the catalog declares a source.",
+      "feed": "sub-annual feed",
       "indeterminada": "Undetermined",
       "resumen": "{{congeladas}} with a stalled source · {{indeterminadas}} with no verdict (not the same as up to date)",
       "sinEmisor": "No publisher declared",

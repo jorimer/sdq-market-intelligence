@@ -23,6 +23,7 @@ from shared.alerts.models import (  # noqa: F401
     AlertDelivery, AlertEventRow, AlertSubscription)
 from shared.billing.models import Tariff  # noqa: F401
 from shared.observability.models import LLMCall, ToolRun  # noqa: F401
+from shared.observations.models import SectorObservation  # noqa: F401
 from shared.data_api.models import (  # noqa: F401
     ApiAssetLedger,
     ApiKey,

@@ -67,7 +67,7 @@ export function FuentesPanel() {
   if (status === "forbidden") return null;
 
   const ejes: FuenteDeEje[] = [...(data?.ejes ?? [])].sort(
-    (a, b) => (ORDEN[a.estado] ?? 9) - (ORDEN[b.estado] ?? 9) || a.eje.localeCompare(b.eje),
+    (a, b) => (ORDEN[a.estado] ?? 9) - (ORDEN[b.estado] ?? 9) || a.id.localeCompare(b.id),
   );
   const nCongeladas = data?.congeladas.length ?? 0;
   const nIndeterminadas = data?.indeterminadas.length ?? 0;
@@ -99,9 +99,16 @@ export function FuentesPanel() {
               </thead>
               <tbody>
                 {ejes.map((e) => (
-                  <tr key={e.eje} className="border-b border-slate-100 align-top">
+                  <tr key={e.id} className="border-b border-slate-100 align-top">
                     <td className="py-2 pr-3 font-medium text-slate-800">
                       {e.eje}
+                      {/* Qué fuente del eje es esta fila. Sin el rótulo, dos filas del mismo
+                          eje con veredictos opuestos se leen como una contradicción. */}
+                      {e.clave && (
+                        <span className="ml-2 text-xs font-normal text-slate-500">
+                          · {t("ops.fuentes.feed")}
+                        </span>
+                      )}
                       {/* El emisor viaja con el eje: sin él la fila no es accionable. */}
                       <div className="text-xs text-slate-400">
                         {e.fuentes.length > 0 ? e.fuentes.join(" · ") : t("ops.fuentes.sinEmisor")}

@@ -13,10 +13,19 @@ from sqlalchemy.orm import Session
 from modules.construction_intel.events import publish_construction_updated
 from modules.construction_intel.models.models import ConstructionScore
 from modules.construction_intel.scoring.momentum import compute_construction_index
+# El modelo se importa acá, a nivel de módulo, y no dentro de las funciones que lo usan:
+# `Base.metadata` tiene que conocer la tabla al ARRANCAR. Una tabla que Alembic ve y la app
+# no registra no rompe producción —la migración la crea— pero no existe cuando la base se
+# monta desde el metadata, que es como corren los tests y como se arma un informe a mano. Lo
+# vigila `shared/tests/test_alembic_ve_todas_las_tablas.py`, y este import es su respuesta.
+from shared.observations.models import SectorObservation  # noqa: F401
 
 logger = logging.getLogger("sdq.construction_intel.service")
 
 MODEL_VERSION = "1.0"
+
+#: Clave del eje en el catálogo de productos y en la tabla de observaciones.
+SECTOR_KEY_OBS = "construction"
 
 _MONTHS_FULL_YEAR = 12  # un año "completo" del MIVHED tiene los 12 meses
 
@@ -124,6 +133,86 @@ def compute_and_persist(
                 period, index["icc_score"], index["band"], index["coverage"])
     return {"period": period, "score_id": row.id, **payload, "coverage": index["coverage"],
             "model_version": MODEL_VERSION}
+
+
+# ── Feed sub-anual: las observaciones mensuales del MIVHED ──────────────────────────
+#
+# Las series que se persisten. Los códigos son estables y llevan su emisor adelante, porque
+# la observación viaja a una tabla TRANSVERSAL donde conviven los ejes: `permisos` a secas
+# colisionaría con cualquier otro eje que licencie algo.
+SERIE_PERMISOS = "mivhed.licencias.permisos"
+SERIE_SQM = "mivhed.licencias.metros_cuadrados"
+
+#: Etiquetas legibles de las series, para el contexto del narrador y el panel.
+ETIQUETAS_DEL_FEED = {
+    SERIE_PERMISOS: "licencias de construcción emitidas",
+    SERIE_SQM: "metros cuadrados licenciados",
+}
+
+#: Clave con la que el sensor de fuentes congeladas identifica ESTE feed dentro del eje.
+CLAVE_DEL_FEED = "mivhed_mensual"
+
+#: La inversión del MIVHED NO se persiste como observación. Verificado el 2026-07-14: es un
+#: costo estándar derivado (el 94 % de las filas es exactamente m² × RD$61.600 y el resto
+#: m² × RD$57.200), no un valor declarado ni tasado por permiso. Publicarla como magnitud
+#: monetaria independiente serviría los m² dos veces, una de ellas disfrazada de dinero.
+_INVERSION_ES_REDUNDANTE_CON_LOS_M2 = True
+
+
+def ingest_observaciones_mensuales(db: Session,
+                                   mensual: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+    """Persiste el flujo MENSUAL de licencias del MIVHED en la tabla de observaciones.
+
+    No toca el ICC ni ninguna de sus entradas: es un feed que convive con el índice anual,
+    no una recalibración suya. El índice sigue leyéndose de ``parse_licenses``.
+
+    Idempotente: borra la serie del eje y la reescribe. El CSV del MIVHED es un archivo
+    completo en cada descarga —no un incremento— así que un upsert fila a fila dejaría vivos
+    los meses que el emisor haya retirado, y un mes retirado que sobrevive es peor que uno
+    que falta: no hay forma de notarlo.
+    """
+    from shared.data.series_nature import FLOW
+    from shared.observations import service as obs
+
+    if mensual is None:
+        from shared.data.mivhed_client import mivhed_client
+        mensual = mivhed_client.licenses_mensual()
+
+    periodos = (mensual or {}).get("periodos") or {}
+    sin_mes = int((mensual or {}).get("sin_mes") or 0)
+    if not periodos:
+        return {"periodos": 0, "filas": 0, "sin_mes": sin_mes,
+                "motivo": "el MIVHED no devolvió ningún mes legible"}
+
+    from shared.data.mivhed_client import mivhed_client as _mc
+    emisor, licencia = _mc.source, _mc.license
+
+    for codigo in (SERIE_PERMISOS, SERIE_SQM):
+        obs.borrar_serie(db, sector_key=SECTOR_KEY_OBS, series_code=codigo)
+
+    filas = 0
+    for periodo, rec in sorted(periodos.items()):
+        for codigo, valor, unidad in ((SERIE_PERMISOS, rec.get("permits"), "conteo"),
+                                      (SERIE_SQM, rec.get("sqm"), "m2")):
+            obs.upsert(db, sector_key=SECTOR_KEY_OBS, series_code=codigo, period=periodo,
+                       value=None if valor is None else float(valor), unit=unidad,
+                       frequency="monthly", nature=FLOW, source=emisor, license=licencia)
+            filas += 1
+        # El microdato por dimensión, que el agregado anual descartaba. Es la diferencia
+        # entre «el sector creció» y «tal plaza concentra tal cosa».
+        for campo, mapa in (("provincia", rec.get("by_province") or {}),
+                            ("tipologia", rec.get("by_typology") or {})):
+            for nombre, d in mapa.items():
+                obs.upsert(db, sector_key=SECTOR_KEY_OBS, series_code=SERIE_SQM,
+                           period=periodo, value=float(d.get("sqm") or 0.0), unit="m2",
+                           frequency="monthly", nature=FLOW, source=emisor,
+                           license=licencia, **{campo: nombre[:80]})
+                filas += 1
+    db.commit()
+    logger.info("MIVHED mensual: %d período(s), %d fila(s), %d permiso(s) sin mes legible",
+                len(periodos), filas, sin_mes)
+    return {"periodos": len(periodos), "filas": filas, "sin_mes": sin_mes,
+            "ultimo_periodo": max(periodos)}
 
 
 def backfill_scores(

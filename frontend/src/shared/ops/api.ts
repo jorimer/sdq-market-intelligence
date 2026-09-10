@@ -148,6 +148,13 @@ export async function getValidacionFrescura(): Promise<FrescuraValidacion> {
 // mide la antigüedad del DATO, nunca el éxito del job.
 
 export interface FuenteDeEje {
+  /** Identificador estable de la fila: `eje` o `eje:fuente`. Un eje puede aparecer con su
+   *  índice al día y su feed congelado — son dos hechos y necesitan dos filas. */
+  id: string;
+  /** Qué fuente del eje juzga la fila. Vacío = la del índice. */
+  clave: string;
+  /** Nombre legible de esa fuente, cuando no es la del índice. */
+  etiqueta: string;
   eje: string;
   /** "al_dia" | "congelada" | "indeterminada". El tercero NO se pinta de verde. */
   estado: string;
@@ -163,6 +170,8 @@ export interface FuenteDeEje {
 
 export interface FuentesDeLosEjes {
   ejes: FuenteDeEje[];
+  /** Por `id` (eje:fuente), no por eje: una lista de ejes no podría decir cuál de sus
+   *  fuentes es la que dejó de publicar. */
   congeladas: string[];
   indeterminadas: string[];
   topes_por_cadencia: Record<string, number>;
