@@ -346,6 +346,15 @@ class SectorProduct(Protocol):
     # No está en el Protocol como obligatorio: ``assembler.supports_sample`` lo detecta y
     # los sectores que aún no lo implementan simplemente no ofrecen muestra.
 
+    # ── Completar secciones EN VIVO, después de la caché (OPCIONAL) ──
+    # Un producto PUEDE implementar ``completar_en_vivo(tier, snapshot, narratives) -> dict``
+    # para completar sus secciones con un dato que cambia más seguido que su contenido (p.ej.
+    # la fecha de la última descarga de una fuente) SIN meterlo en el payload: si entrara,
+    # la huella de la caché cambiaría con ese dato y el informe entero se regeneraría. Lo
+    # llama el ensamblador en cada entrega, después de la caché y del control de degradación;
+    # lo heredan la app y el PDF/Word. Se detecta por ``getattr`` y un fallo nunca tumba la
+    # entrega. Lo que se agregue acá NO pasa por el guard numérico: solo texto determinista.
+
     # ── Entidades elegibles de los niveles nombrados (OPCIONAL) ──
     # Un sector con un sujeto ELEGIBLE en sus niveles nombrados (Insight / Deep Dive) PUEDE
     # implementar ``scope_options() -> List[ScopeOption]`` para alimentar el selector del

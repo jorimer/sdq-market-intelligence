@@ -20,6 +20,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+from datetime import date
 from typing import Any, Dict, List, Optional
 
 from sqlalchemy.orm import Session
@@ -612,17 +613,58 @@ class ConstructionProduct:
             context=construction_delta_context(delta, snapshot.period),
             template="construction_delta", mode="standard",
             axis="construction_intel", audience="inversionista")
-        encabezado = self._encabezado_del_movimiento(delta)
-        return f"{encabezado}\n\n{res.text}" if encabezado else res.text
+        # SIN encabezado: lo que se devuelve acá se GUARDA en la caché, y el encabezado lleva
+        # la fecha de la última descarga, que cambia con cada verificación. Lo agrega
+        # `completar_en_vivo`, que corre después de la caché en cada entrega.
+        return res.text
+
+    #: Cómo empieza el encabezado. Sirve para reconocer uno ya grabado en la caché por la
+    #: versión anterior —que lo metía en el texto cacheado, con la frase vieja— y reemplazarlo
+    #: en vez de apilar dos.
+    _INICIO_DEL_ENCABEZADO = "Movimiento de "
+
+    def completar_en_vivo(self, tier: ProductTier, snapshot: ProductSnapshot,
+                          narratives: Dict[str, str]) -> Dict[str, str]:
+        """Antepone el encabezado del movimiento con la fecha de la última descarga, en vivo.
+
+        Corre después de la caché (ver `assembler`), así que la fecha puede cambiar a diario
+        sin regenerar el informe. Reemplaza un encabezado viejo si la caché trae uno: la
+        versión anterior lo grababa con la frase «no figura en la fuente a la fecha de este
+        informe», que afirmaba sobre el estado ACTUAL de la fuente algo que solo se sabía de la
+        última descarga — falso durante hasta 30 días si el emisor publicaba entre dos syncs.
+        """
+        delta = (snapshot.payload or {}).get("delta_mensual")
+        texto = narratives.get("delta_mensual")
+        if not delta or not isinstance(texto, str) or delta.get("no_publicable"):
+            return narratives
+        if texto.startswith(self._INICIO_DEL_ENCABEZADO):
+            _, sep, resto = texto.partition("\n\n")
+            texto = resto if sep else ""
+        from modules.construction_intel.service import ultima_descarga_del_feed
+
+        descarga = None
+        try:
+            descarga = ultima_descarga_del_feed(self._require_db())
+        except Exception:  # noqa: BLE001 — sin fecha de descarga se dice lo que se sabe
+            logger.warning("fecha de la última descarga del MIVHED no disponible",
+                           exc_info=True)
+        encabezado = self._encabezado_del_movimiento(delta, descarga)
+        if not encabezado:
+            return narratives
+        return {**narratives,
+                "delta_mensual": f"{encabezado}\n\n{texto}" if texto else encabezado}
 
     @staticmethod
-    def _encabezado_del_movimiento(delta: Dict[str, Any]) -> str:
+    def _encabezado_del_movimiento(delta: Dict[str, Any],
+                                   ultima_descarga: Optional[date] = None) -> str:
         """El mes nombrado y, si la fuente está atrasada, la declaración. Determinista.
 
         Va en CÓDIGO y no pedido al modelo: una declaración que tiene que aparecer no puede
-        depender de que el narrador se acuerde, y "servir el dato no alcanza" ya se aprendió
-        acá. El modelo narra el movimiento; esto garantiza que el lector sepa de qué mes es y
-        si hubo ediciones después. Todo sale del bloque computado — ninguna fecha a mano.
+        depender de que el narrador se acuerde. Todo sale del dato — ninguna fecha a mano.
+
+        **Afirma solo lo que se sabe.** No dice que la edición siguiente «no figura en la
+        fuente»: eso es el estado ACTUAL de la fuente, y lo único verificado es que no estaba
+        en la ÚLTIMA DESCARGA. Por eso la frase nombra esa descarga y su fecha.
         """
         from shared.narrative.formato import fecha_larga_es, mes_largo_es, mes_siguiente
 
@@ -635,14 +677,17 @@ class ConstructionProduct:
             return lead
         publicada = fecha_larga_es(fuente.get("ultima_publicacion"))
         falta = mes_largo_es(mes_siguiente(fuente.get("ultimo_periodo")))
-        if publicada and falta:
-            return (f"{lead} Es la última edición que publicó el MIVHED, el {publicada}; "
-                    f"la de {falta}, de cadencia mensual, no figura en la fuente a la fecha "
-                    f"de este informe.")
-        if falta:
-            return (f"{lead} Es la última edición disponible del MIVHED; la de {falta}, de "
-                    f"cadencia mensual, no figura en la fuente a la fecha de este informe.")
-        return lead
+        if not falta:
+            return lead
+        descarga = (fecha_larga_es(ultima_descarga.isoformat())
+                    if isinstance(ultima_descarga, date) else None)
+        no_estaba = (f"la de {falta}, de cadencia mensual, no figuraba en la fuente en nuestra "
+                     f"última descarga, del {descarga}." if descarga else
+                     f"la de {falta}, de cadencia mensual, no figuraba en la fuente en nuestra "
+                     f"última descarga.")
+        if publicada:
+            return f"{lead} Es la última edición que publicó el MIVHED, el {publicada}; {no_estaba}"
+        return f"{lead} Es la última edición disponible del MIVHED; {no_estaba}"
 
     # ── Render (sin DB, renderer genérico) ──
     async def render(self, tier: ProductTier, snapshot: ProductSnapshot,

@@ -6,6 +6,7 @@ index (ICC) for the latest COMPLETE year and persists it. A partial current year
 of permits, not a full year) is dropped — never annualized.
 """
 import logging
+from datetime import date
 from typing import Any, Dict, List, Optional
 
 from sqlalchemy.orm import Session
@@ -157,6 +158,72 @@ CLAVE_DEL_FEED = "mivhed_mensual"
 #: m² × RD$57.200), no un valor declarado ni tasado por permiso. Publicarla como magnitud
 #: monetaria independiente serviría los m² dos veces, una de ellas disfrazada de dinero.
 _INVERSION_ES_REDUNDANTE_CON_LOS_M2 = True
+
+
+#: Clave de configuración donde la sonda deja su última verificación EXITOSA. Clave propia y
+#: no el `last_result` de la operación: una corrida fallida sobrescribe el resultado, y la
+#: fecha de «la última vez que miramos la fuente y la leímos» no puede borrarse porque la
+#: siguiente no llegó.
+CLAVE_VERIFICACION = "construction.mivhed.ultima_verificacion"
+
+
+def guardar_verificacion(db: Session, registro: Dict[str, Any]) -> None:
+    """Persiste la última verificación exitosa de la fuente del feed. Commitea."""
+    import json
+
+    from shared.settings.models import AppSetting
+
+    valor = json.dumps(registro, ensure_ascii=False, default=str)
+    row = db.query(AppSetting).filter(AppSetting.key == CLAVE_VERIFICACION).first()
+    if row is None:
+        db.add(AppSetting(key=CLAVE_VERIFICACION, value=valor, is_secret=False))
+    else:
+        # `AppSetting` es del estilo `Column` y el checker ve `Column[str]` donde hay un `str`:
+        # el mismo ruido que el baseline carga ~1.300 veces, no un error de tipo real.
+        row.value = valor  # type: ignore[assignment]
+    db.commit()
+
+
+def leer_verificacion(db: Session) -> Optional[Dict[str, Any]]:
+    import json
+
+    from shared.settings.models import AppSetting
+
+    row = db.query(AppSetting).filter(AppSetting.key == CLAVE_VERIFICACION).first()
+    if row is None or not row.value:
+        return None
+    try:
+        dato = json.loads(str(row.value))
+    except (TypeError, ValueError):
+        return None
+    return dato if isinstance(dato, dict) else None
+
+
+def ultima_descarga_del_feed(db: Session) -> Optional[date]:
+    """La fecha más reciente en que DESCARGAMOS la fuente del feed y la leímos, o ``None``.
+
+    Hay dos descargas que cuentan, y se toma la más nueva: la de la SONDA diaria, que baja el
+    CSV para comparar sin ingerir, y la del SYNC, que reescribe las observaciones (su
+    `created_at` es la hora de esa ingesta, porque la ingesta borra y reescribe).
+    """
+    from datetime import datetime
+
+    from sqlalchemy import func
+
+    from shared.observations.models import SectorObservation
+
+    candidatas: List[date] = []
+    fila = (db.query(func.max(SectorObservation.created_at))
+            .filter(SectorObservation.sector_key == SECTOR_KEY_OBS).first())
+    if fila and fila[0]:
+        candidatas.append(fila[0].date() if isinstance(fila[0], datetime) else fila[0])
+    verif = leer_verificacion(db) or {}
+    try:
+        if verif.get("verificado_el"):
+            candidatas.append(date.fromisoformat(str(verif["verificado_el"])[:10]))
+    except ValueError:
+        pass
+    return max(candidatas) if candidatas else None
 
 
 def ingest_observaciones_mensuales(db: Session,
