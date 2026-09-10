@@ -184,8 +184,19 @@ def ingest_observaciones_mensuales(db: Session,
         return {"periodos": 0, "filas": 0, "sin_mes": sin_mes,
                 "motivo": "el MIVHED no devolvió ningún mes legible"}
 
+    from datetime import date as _date
+
     from shared.data.mivhed_client import mivhed_client as _mc
     emisor, licencia = _mc.source, _mc.license
+    # CUÁNDO publicó el emisor esta edición. Es lo que permite declarar «la fuente no publica
+    # desde tal fecha» computándolo, en vez de escribir la fecha a mano. Una fecha ilegible
+    # queda en NULL: se declara que no se sabe.
+    publicado_el = None
+    try:
+        crudo = (mensual or {}).get("publicado_el")
+        publicado_el = _date.fromisoformat(str(crudo)[:10]) if crudo else None
+    except ValueError:
+        publicado_el = None
 
     for codigo in (SERIE_PERMISOS, SERIE_SQM):
         obs.borrar_serie(db, sector_key=SECTOR_KEY_OBS, series_code=codigo)
@@ -196,7 +207,8 @@ def ingest_observaciones_mensuales(db: Session,
                                       (SERIE_SQM, rec.get("sqm"), "m2")):
             obs.upsert(db, sector_key=SECTOR_KEY_OBS, series_code=codigo, period=periodo,
                        value=None if valor is None else float(valor), unit=unidad,
-                       frequency="monthly", nature=FLOW, source=emisor, license=licencia)
+                       frequency="monthly", nature=FLOW, source=emisor, license=licencia,
+                       published_at=publicado_el)
             filas += 1
         # El microdato por dimensión, que el agregado anual descartaba. Es la diferencia
         # entre «el sector creció» y «tal plaza concentra tal cosa».
@@ -206,13 +218,15 @@ def ingest_observaciones_mensuales(db: Session,
                 obs.upsert(db, sector_key=SECTOR_KEY_OBS, series_code=SERIE_SQM,
                            period=periodo, value=float(d.get("sqm") or 0.0), unit="m2",
                            frequency="monthly", nature=FLOW, source=emisor,
-                           license=licencia, **{campo: nombre[:80]})
+                           license=licencia, published_at=publicado_el,
+                           **{campo: nombre[:80]})
                 filas += 1
     db.commit()
     logger.info("MIVHED mensual: %d período(s), %d fila(s), %d permiso(s) sin mes legible",
                 len(periodos), filas, sin_mes)
     return {"periodos": len(periodos), "filas": filas, "sin_mes": sin_mes,
-            "ultimo_periodo": max(periodos)}
+            "ultimo_periodo": max(periodos),
+            "publicado_el": publicado_el.isoformat() if publicado_el else None}
 
 
 def backfill_scores(

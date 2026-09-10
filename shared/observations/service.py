@@ -83,6 +83,21 @@ def ultimo_periodo(db: Session, *, sector_key: str) -> Optional[str]:
     return row[0] if row else None
 
 
+def ultima_publicacion(db: Session, *, sector_key: str) -> Optional[date]:
+    """La fecha más reciente en que el EMISOR publicó algo de este eje, o ``None``.
+
+    Es otra medida que ``ultimo_periodo``: el período dice a qué mes pertenece el dato, la
+    publicación dice cuándo lo sacó el emisor. Una fuente al día con rezago normal tiene las
+    dos cerca; una que dejó de publicar tiene la publicación quieta mientras el calendario
+    avanza, y eso es lo que se declara.
+    """
+    from sqlalchemy import func
+
+    row = (db.query(func.max(SectorObservation.published_at))
+           .filter(SectorObservation.sector_key == sector_key).first())
+    return row[0] if row and row[0] else None
+
+
 def por_dimension(db: Session, *, sector_key: str, series_code: str, period: str,
                   campo: str) -> List[Dict[str, Any]]:
     """Las filas de *period* desagregadas por ``provincia`` o ``tipologia``, de mayor a menor.
