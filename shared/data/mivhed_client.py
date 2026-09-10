@@ -267,12 +267,22 @@ class MIVHEDClient:
     def _resolve_recurso(self, slug: str) -> Tuple[str, Optional[str]]:
         """``(url del CSV, fecha en que el emisor lo publicó por última vez)``.
 
-        La fecha sale del ``last_modified`` del recurso en el CKAN del portal: es la única
-        evidencia de CUÁNDO publicó el emisor, y el dato no la trae. Se descartaba al resolver
-        la URL. Sin ella, «la fuente no publica desde tal fecha» solo se podría escribir a mano
-        — y una fecha transcrita es una fecha que se desincroniza con la primera edición nueva.
+        La fecha sale del CKAN del portal: es la única evidencia de CUÁNDO publicó el emisor, y
+        el dato no la trae. Se descartaba al resolver la URL. Sin ella, «la fuente no publica
+        desde tal fecha» solo se podría escribir a mano — y una fecha transcrita es una fecha
+        que se desincroniza con la primera edición nueva.
 
-        ``None`` si el portal no la declara: se dice que no se sabe, no se inventa.
+        **En la práctica sale de ``metadata_modified``, no de ``last_modified``.** Verificado el
+        2026-09-10 sobre los cuatro recursos del dataset (CSV, XLSX, ODS, JSON): el portal deja
+        ``last_modified`` en ``None`` y registra la subida en ``metadata_modified``. Se prefiere
+        ``last_modified`` si algún día viene, porque es el campo que nombra la subida del
+        fichero; ``metadata_modified`` también se mueve si alguien edita solo la descripción del
+        recurso, así que es un respaldo, no un sinónimo. Para el MIVHED coincide con la carpeta
+        de subida de la URL (``/uploads/2026/07/`` para la edición del 21 de julio), que es lo
+        que lo sostiene como fecha de publicación.
+
+        ``None`` si el portal no declara ninguna de las dos: se dice que no se sabe, no se
+        inventa.
         """
         import httpx
         with httpx.Client(timeout=60, follow_redirects=True, headers=_HEADERS) as http:

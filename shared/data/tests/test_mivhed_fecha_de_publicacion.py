@@ -48,6 +48,30 @@ def test_la_fecha_de_publicacion_sale_del_last_modified_del_recurso(monkeypatch)
     assert "2026-06" in m["periodos"]
 
 
+def test_el_camino_REAL_del_portal_last_modified_vacio_y_metadata_modified(monkeypatch):
+    """El caso que producción toma DE VERDAD, que el test de arriba no ejerce.
+
+    Verificado el 2026-09-10 en los cuatro recursos del dataset: el CKAN deja
+    `last_modified` en None y registra la subida en `metadata_modified`. El primer test de
+    esta función solo probaba `last_modified`, así que el camino por el que pasa la fecha
+    real del MIVHED no tenía cobertura — el mismo defecto de verificar el camino que no se
+    usa.
+    """
+    _falso_httpx(monkeypatch, {"format": "CSV", "url": "https://x/l.csv",
+                               "last_modified": None,
+                               "metadata_modified": "2026-07-21T12:39:08.996340"})
+    assert mod.MIVHEDClient().licenses_mensual()["publicado_el"] == "2026-07-21"
+
+
+def test_si_vienen_las_dos_manda_last_modified(monkeypatch):
+    """`metadata_modified` también se mueve si alguien edita solo la descripción del recurso:
+    es un respaldo, no un sinónimo. Cuando el portal declara la subida del fichero, esa manda."""
+    _falso_httpx(monkeypatch, {"format": "CSV", "url": "https://x/l.csv",
+                               "last_modified": "2026-07-21T12:00:00",
+                               "metadata_modified": "2026-08-30T09:00:00"})
+    assert mod.MIVHEDClient().licenses_mensual()["publicado_el"] == "2026-07-21"
+
+
 def test_la_lectura_de_ambas_trae_la_fecha_en_la_mensual(monkeypatch):
     _falso_httpx(monkeypatch, {"format": "CSV", "url": "https://x/l.csv",
                                "last_modified": "2026-07-21T12:39:08"})
