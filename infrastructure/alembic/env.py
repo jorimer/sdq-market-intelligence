@@ -11,6 +11,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 from shared.config.settings import settings
 from shared.database.base import Base
 from shared.database.paths import ensure_sqlite_directory
+from shared.database.conexion import connect_args_para
 
 # Import all models so Alembic can detect them
 from shared.auth.models import User  # noqa: F401
@@ -119,11 +120,15 @@ def run_migrations_online() -> None:
     # los modelos de arriba importa ese módulo y el import crea el directorio— pero eso es
     # un accidente de la cadena de imports, no una garantía: quitá ese import y Alembic
     # vuelve a romperse en silencio. Explícito.
-    ensure_sqlite_directory(config.get_main_option("sqlalchemy.url") or settings.DATABASE_URL)
+    url = config.get_main_option("sqlalchemy.url") or settings.DATABASE_URL
+    ensure_sqlite_directory(url)
+    # Mismo reloj que la aplicación: una migración que inserte filas deja su `created_at`
+    # con el `now()` de ESTA sesión. Ver shared/database/conexion.py.
     connectable = engine_from_config(
         config.get_section(config.config_ini_section, {}),
         prefix="sqlalchemy.",
         poolclass=pool.NullPool,
+        connect_args=connect_args_para(url),
     )
     with connectable.connect() as connection:
         context.configure(connection=connection, target_metadata=target_metadata)
