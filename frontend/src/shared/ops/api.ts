@@ -140,3 +140,78 @@ export async function getValidacionFrescura(): Promise<FrescuraValidacion> {
   const { data } = await client.get<FrescuraValidacion>("/operations/validacion");
   return data;
 }
+
+// ── Fuentes de los ejes: cuáles dejaron de publicar ─────────────────────
+// La consola ya decía si cada operación corrió a tiempo. Un sync puede correr en verde
+// para siempre contra un archivo que la fuente dejó de actualizar —la sección de
+// estadísticas de la SIE lleva años así— y entonces el eje aparenta estar vivo. Esto
+// mide la antigüedad del DATO, nunca el éxito del job.
+
+export interface FuenteDeEje {
+  eje: string;
+  /** "al_dia" | "congelada" | "indeterminada". El tercero NO se pinta de verde. */
+  estado: string;
+  motivo: string;
+  cadencia: string;
+  /** El emisor. Sin él, "energía está congelada" no es accionable. */
+  fuentes: string[];
+  /** Antigüedad del período al que pertenece el dato más nuevo del eje. */
+  dias_desde_el_periodo_del_dato: number | null;
+  tope_de_dias_de_la_cadencia: number | null;
+  detalle_del_producto: string;
+}
+
+export interface FuentesDeLosEjes {
+  ejes: FuenteDeEje[];
+  congeladas: string[];
+  indeterminadas: string[];
+  topes_por_cadencia: Record<string, number>;
+}
+
+export async function getFuentesDeLosEjes(): Promise<FuentesDeLosEjes> {
+  const { data } = await client.get<FuentesDeLosEjes>("/operations/fuentes");
+  return data;
+}
+
+// ── Uso de las herramientas comerciales ─────────────────────────────────
+// Las tres herramientas con costo variable real por corrida no tenían contador: "cuántas
+// veces se usó Deal Scoring este mes" no tenía respuesta. El gasto del modelo cuenta
+// LLAMADAS, que no es lo mismo — un informe de marca dispara decenas y un score sin
+// narrativa no dispara ninguna. Mide; no restringe.
+
+export interface UsoDeHerramienta {
+  herramienta: string;
+  etiqueta: string;
+  corridas_de_la_herramienta: number;
+  corridas_fallidas_de_la_herramienta: number;
+  usuarios_distintos_de_la_herramienta: number;
+}
+
+export interface UsoPorAccion {
+  herramienta: string;
+  etiqueta: string;
+  accion: string;
+  corridas_de_la_accion: number;
+}
+
+export interface UsoDeHerramientas {
+  desde: string;
+  hasta: string;
+  corridas_totales_de_las_herramientas: number;
+  por_herramienta: UsoDeHerramienta[];
+  por_accion: UsoPorAccion[];
+}
+
+/** Corridas en un rango de FECHAS. `hasta` incluye el día completo. */
+export async function getUsoDeHerramientas(
+  desde?: string,
+  hasta?: string,
+): Promise<UsoDeHerramientas> {
+  const params: Record<string, string> = {};
+  if (desde) params.desde = desde;
+  if (hasta) params.hasta = hasta;
+  const { data } = await client.get<UsoDeHerramientas>("/operations/uso-de-herramientas", {
+    params,
+  });
+  return data;
+}

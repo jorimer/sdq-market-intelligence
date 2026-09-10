@@ -49,3 +49,45 @@ class LLMCall(UUIDMixin, Base):
 
     #: Todo lo que no merece columna propia (ámbito, nivel, idioma, período).
     detail = Column(JSON, nullable=True)
+
+
+class ToolRun(UUIDMixin, Base):
+    """Una corrida de una herramienta comercial: qué se corrió, quién y cuánto tardó.
+
+    **Por qué hace falta una tabla y no alcanza ``llm_calls``.** El ledger del modelo cuenta
+    LLAMADAS, y la relación con una corrida no es uno a uno: un informe de marca dispara
+    decenas y un score sin narrativa no dispara ninguna. «Cuántas veces se usó Deal Scoring
+    este mes» no se puede derivar de ahí sin inventar un criterio de agrupación. Son dos
+    preguntas distintas y cada una necesita su fila.
+
+    **Mide, no restringe.** No hay cuota, ni gate, ni tier acá: esta tabla existe para que la
+    decisión comercial se tome con números en vez de con una impresión. Es la única capa del
+    sistema con costo variable real por corrida, y hoy nadie sabe cuántas corridas hay.
+
+    Se registran también las corridas FALLIDAS (``ok = False``). Una herramienta cara que
+    falla la mitad de las veces cuesta igual, y contar solo los éxitos oculta justo eso.
+    """
+
+    __tablename__ = "tool_runs"
+    __table_args__ = (
+        # El uso normal es «cuántas corridas por herramienta en un mes» y «las de este rango».
+        Index("ix_tool_runs_periodo_herramienta", "periodo", "herramienta"),
+        Index("ix_tool_runs_created", "created_at"),
+    )
+
+    #: Clave de la herramienta. Ver ``uso_de_herramientas.HERRAMIENTAS`` para el catálogo.
+    herramienta = Column(String(40), nullable=False, index=True)
+    #: Qué se corrió DENTRO de la herramienta ("respuesta", "entregable", "score", …). Sin
+    #: esto, «marca: 40 corridas» mezcla leer un mazo de 60 láminas con abrir un informe.
+    accion = Column(String(60), nullable=False)
+    user_id = Column(String, nullable=True, index=True)
+    #: Sobre QUÉ se corrió: el encargo, el deal, la pregunta recortada. El sujeto viaja con
+    #: el número — un conteo sin sujeto no sostiene una conversación comercial.
+    sujeto = Column(String(200), nullable=True)
+    #: Período de agregación "AAAA-MM" desnormalizado. Se cuenta por índice sobre esta
+    #: columna y no por una función de fecha, que en SQLite y Postgres se escribe distinto
+    #: (paridad dev↔prod, misma doctrina que ``data_api_usage.quota_period``).
+    periodo = Column(String(7), nullable=False)
+    ok = Column(Boolean, nullable=False, default=True)
+    latency_ms = Column(Integer, nullable=True)
+    detalle = Column(JSON, nullable=True)

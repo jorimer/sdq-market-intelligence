@@ -25,6 +25,7 @@ from sqlalchemy.orm import Session
 from shared.auth.dependencies import get_current_user, require_role
 from shared.auth.models import User, UserRole
 from shared.database.session import get_db
+from shared.observability.uso_de_herramientas import BRAND_INTEL, id_de, medir_uso
 from modules.brand_intel import report as rpt
 from modules.brand_intel import service as svc
 from modules.brand_intel.ingest.excel_ingest import ingest_workbook
@@ -356,18 +357,24 @@ async def ingest_pdf(
         raise HTTPException(status_code=400, detail="Se espera un archivo .pdf.")
     content = await file.read()
 
-    try:
-        extraction = jobs.queue_extraction(
-            db, eng, content, file.filename or "documento.pdf", max_pages,
-            conclusions_only=conclusions_only)
-    except ValueError as exc:
-        db.rollback()
-        raise HTTPException(status_code=400, detail=str(exc)) from exc
-    except Exception as exc:  # noqa: BLE001 — surface the failure, never half-commit
-        db.rollback()
-        logger.exception("No se pudo encolar la lectura de %s", slug)
-        raise HTTPException(status_code=400,
-                            detail=f"No se pudo procesar el PDF: {exc}") from exc
+    # Se cuenta la corrida (no se restringe). Es la más cara de la plataforma —decenas de
+    # llamadas de visión por mazo— y la que más urgía medir. Se cuenta el ENCOLADO, que es
+    # el compromiso de gasto: el trabajo corre en su propia fila y esta ruta ya respondió.
+    with medir_uso(herramienta=BRAND_INTEL, accion="lectura_del_mazo", user_id=id_de(user),
+                   sujeto=slug, detalle={"max_paginas": max_pages,
+                                         "solo_conclusiones": conclusions_only}):
+        try:
+            extraction = jobs.queue_extraction(
+                db, eng, content, file.filename or "documento.pdf", max_pages,
+                conclusions_only=conclusions_only)
+        except ValueError as exc:
+            db.rollback()
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+        except Exception as exc:  # noqa: BLE001 — surface the failure, never half-commit
+            db.rollback()
+            logger.exception("No se pudo encolar la lectura de %s", slug)
+            raise HTTPException(status_code=400,
+                                detail=f"No se pudo procesar el PDF: {exc}") from exc
     return jobs.job_status(db, extraction)
 
 
@@ -468,17 +475,20 @@ async def discover_structure(
         raise HTTPException(status_code=400, detail="Se espera un archivo .pdf.")
     content = await file.read()
 
-    try:
-        proposal = await asyncio.to_thread(
-            functools.partial(
-                dsc.discover_structure, content, sample=sample,
-                with_brands=with_brands, with_metrics=with_metrics,
+    with medir_uso(herramienta=BRAND_INTEL, accion="descubrimiento", user_id=id_de(user),
+                   sujeto=slug, detalle={"laminas_de_muestra": sample,
+                                         "con_marcas": with_brands}):
+        try:
+            proposal = await asyncio.to_thread(
+                functools.partial(
+                    dsc.discover_structure, content, sample=sample,
+                    with_brands=with_brands, with_metrics=with_metrics,
+                )
             )
-        )
-    except Exception as exc:  # noqa: BLE001 — the caller must see why, not a blank panel
-        logger.exception("Fallo el descubrimiento de estructura en %s", slug)
-        raise HTTPException(status_code=400,
-                            detail=f"No se pudo leer el PDF: {exc}") from exc
+        except Exception as exc:  # noqa: BLE001 — the caller must see why, not a blank panel
+            logger.exception("Fallo el descubrimiento de estructura en %s", slug)
+            raise HTTPException(status_code=400,
+                                detail=f"No se pudo leer el PDF: {exc}") from exc
     return {"document": file.filename, **proposal.as_dict()}
 
 
@@ -1423,7 +1433,12 @@ def report_json(slug: str, wave: Optional[str] = Query(
                 user: User = Depends(get_current_user)) -> Dict[str, Any]:
     eng = _resolve(db, slug, user)
     _validate_wave(db, eng, wave)
-    payload = rpt.build_report(db, eng, wave=wave)
+    # El informe es el entregable que el cliente consume: cuenta como corrida aunque su
+    # costo por vez sea menor que el de leer el mazo. Sin él, el conteo de la herramienta
+    # mediría la carga de datos y no el uso.
+    with medir_uso(herramienta=BRAND_INTEL, accion="informe", user_id=id_de(user),
+                   sujeto=slug, detalle={"ola": wave}):
+        payload = rpt.build_report(db, eng, wave=wave)
     db.commit()
     return payload
 
@@ -1434,7 +1449,12 @@ def report_html(slug: str, wave: Optional[str] = Query(None),
                 user: User = Depends(get_current_user)) -> Response:
     eng = _resolve(db, slug, user)
     _validate_wave(db, eng, wave)
-    payload = rpt.build_report(db, eng, wave=wave)
+    # Acción propia y no la del informe en pantalla: el informe sale por TRES superficies
+    # (JSON in-app, HTML imprimible y documento) y contar solo una lo subregistra. Cada una
+    # con su rótulo, para que ninguna desaparezca ni se funda con otra en el total.
+    with medir_uso(herramienta=BRAND_INTEL, accion="informe_html", user_id=id_de(user),
+                   sujeto=slug, detalle={"ola": wave}):
+        payload = rpt.build_report(db, eng, wave=wave)
     db.commit()
     return Response(content=rpt.render_html(payload), media_type="text/html; charset=utf-8")
 
@@ -1497,22 +1517,27 @@ def report_document(
         raise HTTPException(status_code=404, detail="Formato no disponible.")
     eng = _resolve(db, slug, user)
     _validate_wave(db, eng, wave)
-    payload = rpt.build_report(db, eng, wave=wave)
-    # Las tres secciones narrativas del cliente van por la ruta cerebro (doctrina +
-    # guard numérico). La degradación es estructural, no promesa: cualquier fallo de la
-    # generación cae a la composición determinista, nunca tumba la descarga.
-    try:
-        ai = rpt.ai_narratives_sync(payload)
-    except Exception:  # noqa: BLE001
-        logger.exception("Narrativa cerebro no disponible para %s; composición "
-                         "determinista", slug)
-        ai = {}
-    try:
-        path = report_docs.render(payload, fmt=fmt, ai=ai)
-    except Exception as exc:  # noqa: BLE001 — el fallo se dice, no se sirve en blanco
-        logger.exception("No se pudo renderizar el informe %s de %s", fmt, slug)
-        raise HTTPException(status_code=500,
-                            detail=f"No se pudo generar el documento: {exc}") from exc
+    # La superficie CARA del informe: es la única que además narra con el modelo. Va con su
+    # propio rótulo por eso mismo — sumarla a las otras dos escondería que el costo por
+    # corrida de esta no se parece al de abrir el informe en pantalla.
+    with medir_uso(herramienta=BRAND_INTEL, accion="informe_documento", user_id=id_de(user),
+                   sujeto=slug, detalle={"ola": wave, "fmt": fmt}):
+        payload = rpt.build_report(db, eng, wave=wave)
+        # Las tres secciones narrativas del cliente van por la ruta cerebro (doctrina +
+        # guard numérico). La degradación es estructural, no promesa: cualquier fallo de la
+        # generación cae a la composición determinista, nunca tumba la descarga.
+        try:
+            ai = rpt.ai_narratives_sync(payload)
+        except Exception:  # noqa: BLE001
+            logger.exception("Narrativa cerebro no disponible para %s; composición "
+                             "determinista", slug)
+            ai = {}
+        try:
+            path = report_docs.render(payload, fmt=fmt, ai=ai)
+        except Exception as exc:  # noqa: BLE001 — el fallo se dice, no se sirve en blanco
+            logger.exception("No se pudo renderizar el informe %s de %s", fmt, slug)
+            raise HTTPException(status_code=500,
+                                detail=f"No se pudo generar el documento: {exc}") from exc
     with open(path, "rb") as fh:
         content = fh.read()
     media = ("application/pdf" if fmt == "pdf" else

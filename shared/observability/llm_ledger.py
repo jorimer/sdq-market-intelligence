@@ -30,9 +30,10 @@ from __future__ import annotations
 
 import contextvars
 import logging
+import threading
 from contextlib import contextmanager
 from dataclasses import dataclass
-from typing import Any, Dict, Iterator, Optional
+from typing import Any, Dict, Iterator, Optional, Tuple
 
 logger = logging.getLogger("sdq.observability.llm_ledger")
 
@@ -43,6 +44,11 @@ PURPOSE_GUARD = "guard_numerico"
 PURPOSE_VISION = "vision"
 PURPOSE_DIGEST = "digest"
 PURPOSE_EXTRACTION = "extraccion"
+#: Clasificación previa a producir: ruteo de dominios, pertinencia de entidad, relevancia de
+#: un pasaje. Son llamadas baratas y MUCHAS —una por pregunta y por sub-pregunta—, así que
+#: sumadas al motivo «otro» su peso queda invisible justo cuando lo que se quiere saber es
+#: cuánto cuesta operar el motor de research por corrida.
+PURPOSE_ROUTING = "ruteo"
 PURPOSE_OTHER = "otro"
 
 #: Quién disparó la llamada, cuando nadie lo declaró.
@@ -61,6 +67,81 @@ class Caller:
 _CALLER: contextvars.ContextVar[Optional[Caller]] = contextvars.ContextVar(
     "sdq_llm_caller", default=None,
 )
+
+
+@dataclass
+class Cuenta:
+    """Lo que costó un tramo de trabajo, con lo que NO se pudo convertir declarado al lado.
+
+    **Por qué no es un float.** ``estimate_cost`` cae a la tarifa Sonnet para un modelo fuera
+    de la tabla de precios, y esa caída devuelve un número con la misma cara que una medición.
+    Un total que la absorbe en silencio es una suposición vestida de cifra. Acá el importe y
+    lo no convertido viajan juntos: ``costo_es_exacto`` es False en cuanto una sola llamada
+    salió de una tarifa supuesta, y quien publique el número tiene que decirlo.
+
+    ``hits_de_cache`` va aparte porque un tramo servido desde caché cuesta cero DE VERDAD, y
+    eso no es lo mismo que un cero por no haber medido.
+    """
+
+    costo_usd: float = 0.0
+    llamadas: int = 0
+    llamadas_sin_tarifa: int = 0
+    hits_de_cache: int = 0
+
+    @property
+    def costo_es_exacto(self) -> bool:
+        return self.llamadas_sin_tarifa == 0
+
+    def _sumar(self, *, costo: float, sin_tarifa: bool, hit: bool) -> None:
+        self.costo_usd += float(costo or 0.0)
+        self.llamadas += 1
+        if sin_tarifa:
+            self.llamadas_sin_tarifa += 1
+        if hit:
+            self.hits_de_cache += 1
+
+
+#: Cuentas abiertas en este contexto. Es una TUPLA y no una lista mutable global para que
+#: anidar dos tramos no se pisen y para que una corrutina hija herede las de su padre: un
+#: ``asyncio.gather`` copia el contexto, así que las llamadas de cada rama suman a los mismos
+#: objetos ``Cuenta`` sin que las ramas se vean entre sí.
+_CUENTAS: contextvars.ContextVar[Tuple["Cuenta", ...]] = contextvars.ContextVar(
+    "sdq_llm_cuentas", default=(),
+)
+_CUENTAS_LOCK = threading.Lock()
+
+
+@contextmanager
+def contar_llamadas() -> Iterator[Cuenta]:
+    """Cuenta lo que se le gasta al modelo DENTRO del bloque, sin consultar la base.
+
+    Existe porque medir el costo de un tramo consultando ``llm_calls`` por ventana de tiempo
+    obliga a inventar un criterio de corte, y dos corridas simultáneas se contaminarían. Acá
+    la atribución es exacta por construcción: solo suma lo que pasó por este contexto.
+    """
+    cuenta = Cuenta()
+    token = _CUENTAS.set(_CUENTAS.get() + (cuenta,))
+    try:
+        yield cuenta
+    finally:
+        _CUENTAS.reset(token)
+
+
+def _anotar_en_las_cuentas(*, model: str, cost_usd: float, cache_hit: bool) -> None:
+    """Suma la llamada a los tramos abiertos. Best-effort y aparte del guardado en base:
+    que falle Postgres no debe borrar lo que sí sabemos que se gastó en este proceso."""
+    cuentas = _CUENTAS.get()
+    if not cuentas:
+        return
+    try:
+        from shared.llm.budget import modelo_tarifado
+
+        sin_tarifa = not cache_hit and not modelo_tarifado(model)
+        with _CUENTAS_LOCK:
+            for c in cuentas:
+                c._sumar(costo=cost_usd, sin_tarifa=sin_tarifa, hit=cache_hit)
+    except Exception:  # noqa: BLE001 — la contabilidad jamás rompe la llamada
+        logger.debug("No se pudo anotar la llamada en las cuentas abiertas", exc_info=True)
 
 
 @contextmanager
@@ -100,6 +181,8 @@ def record_call(
     datos —y no debe recibirla, porque tiene que seguir siendo probable sin ella—, así que
     la apertura vive acá y no en la ruta que genera.
     """
+    _anotar_en_las_cuentas(model=model, cost_usd=float(cost_usd or 0.0),
+                           cache_hit=bool(cache_hit))
     try:
         from shared.database.session import SessionLocal
         from shared.observability.models import LLMCall

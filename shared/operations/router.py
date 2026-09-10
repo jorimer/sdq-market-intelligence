@@ -97,6 +97,29 @@ async def validacion_frescura(
             "indeterminados": [f["eje"] for f in filas if f.get("stale") is None]}
 
 
+@router.get("/fuentes", summary="Fuentes de los ejes: cuáles dejaron de publicar")
+async def fuentes_de_los_ejes(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> Dict:
+    """Por eje: si la FUENTE que lo alimenta sigue publicando, medido por la antigüedad del
+    período de su dato más nuevo — nunca por el éxito del sync.
+
+    La consola ya decía si cada operación corrió a tiempo. Un sync puede correr en verde
+    para siempre contra un archivo que la fuente dejó de actualizar, y entonces el eje
+    aparenta estar vivo: es el caso de la sección de estadísticas de la SIE, cuyo propio
+    slug en el portal declara que la serie termina en 2023-2024. Y el gate de readiness
+    tampoco lo delata: para una fuente anual tolera hasta seis años de dato viejo.
+
+    Tres estados, y el tercero no se pinta en verde: `al_dia`, `congelada` e
+    `indeterminada`. Un eje cuya antigüedad no se puede medir no es un eje al día.
+    """
+    from shared.operations.fuentes_congeladas import resumen_de_fuentes
+
+    _require_admin(current_user)
+    return resumen_de_fuentes(db)
+
+
 @router.post("/{name}/run", summary="Disparar una operación")
 async def run_operation(
     name: str,
@@ -163,6 +186,36 @@ async def llm_spend(
                 "llamadas": spend.spend_detail(db, desde=desde, hasta=hasta,
                                                trigger=trigger)}
     return spend.spend_summary(db, desde=desde, hasta=hasta)
+
+
+@router.get("/uso-de-herramientas",
+            summary="Corridas de las tres herramientas comerciales")
+async def uso_de_herramientas(
+    desde: Optional[date] = Query(
+        None, description="Fecha inicial inclusive (AAAA-MM-DD). Por defecto, 30 días atrás"),
+    hasta: Optional[date] = Query(
+        None, description="Fecha final INCLUSIVE del día completo. Por defecto, hoy"),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> Dict:
+    """Cuántas veces se corrió cada herramienta, y quiénes la corrieron.
+
+    Research a Medida, Deal Scoring y Contexto de Marca son la única capa con costo variable
+    real por corrida, y hasta ahora ninguna tenía contador: «cuántas veces se usó» no tenía
+    respuesta. El gasto del modelo (`/llm-spend`) responde otra pregunta —cuenta LLAMADAS, y
+    la relación con una corrida no es uno a uno—, así que no se puede derivar de ahí.
+
+    **Mide, no restringe.** No hay cuota ni gate: poner un techo es una decisión comercial
+    que no está tomada, y tomarla desde la instrumentación sería decidirla sin los datos que
+    esto viene a producir.
+    """
+    from shared.observability.uso_de_herramientas import resumen_de_uso
+
+    _require_admin(current_user)
+    if desde and hasta and desde > hasta:
+        raise HTTPException(status_code=400,
+                            detail="El rango está invertido: 'desde' es posterior a 'hasta'.")
+    return resumen_de_uso(db, desde=desde, hasta=hasta)
 
 
 @router.get("/marcas-del-guard", summary="Cifras que el guard numérico marcó (y sobrevivieron)")

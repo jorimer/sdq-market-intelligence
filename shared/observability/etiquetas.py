@@ -24,10 +24,12 @@ from __future__ import annotations
 import re
 from typing import Dict, Optional, Tuple
 
-#: Motivos de la llamada. Son tres y no crecen solos.
+#: Motivos de la llamada. Crecen poco y a propósito: cada uno separa un tipo de gasto que
+#: sumado a otro se vuelve invisible.
 _MOTIVOS: Dict[str, str] = {
     "narrativa": "Redacción del análisis",
     "guard_numerico": "Verificación de cifras",
+    "ruteo": "Ruteo y pertinencia (research)",
     "vision": "Lectura de láminas (visión)",
     "digest": "Resumen de publicaciones",
     "extraccion": "Extracción de documentos",

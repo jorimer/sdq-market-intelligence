@@ -31,7 +31,8 @@ from typing import Any, Dict, List, Optional
 from sqlalchemy.orm import Session
 
 from shared.cache import cache_get, cache_set
-from shared.llm.budget import budget_allows, record_usage
+from shared.llm.budget import budget_allows
+from shared.observability.llm_ledger import PURPOSE_ROUTING, account
 from shared.products.registry import CATALOG_BY_KEY, PRODUCT_CATALOG
 
 logger = logging.getLogger("sdq.research.domain_router")
@@ -235,11 +236,11 @@ async def route_domains(question: str, db: Optional[Session]) -> List[RoutedDoma
                 messages=[{"role": "user", "content": user}],
             )
         raw = "".join(getattr(b, "text", "") for b in (resp.content or []))
-        usage = getattr(resp, "usage", None)
-        if usage is not None:
-            record_usage(settings.ANTHROPIC_MODEL,
-                         getattr(usage, "input_tokens", 0) or 0,
-                         getattr(usage, "output_tokens", 0) or 0)
+        # `account` y no `record_usage`: el contador del techo diario NO es el ledger. Con
+        # solo el primero esta llamada existía para el corte de presupuesto y no existía
+        # para «¿en qué se fue el dinero?», que es la pregunta que se contesta después.
+        account(resp, model=settings.ANTHROPIC_MODEL, purpose=PURPOSE_ROUTING,
+                module="research", template="domain_router")
     except Exception as e:  # noqa: BLE001 — cualquier fallo del API → fallback determinista
         logger.warning("route_domains: fallo del Cerebro (%s); fallback al contexto curado.", e)
         return []
