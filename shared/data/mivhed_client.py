@@ -21,7 +21,7 @@ import csv
 import io
 import logging
 import unicodedata
-from typing import Any, Dict, Optional
+from typing import Any, Dict, Optional, Tuple
 
 logger = logging.getLogger("sdq.data.mivhed")
 
@@ -264,27 +264,55 @@ class MIVHEDClient:
         "(§4.5) — https://opendatacommons.org/licenses/odbl/1-0/")
     license_ok = True
 
-    def _resolve_csv(self, slug: str) -> str:
+    def _resolve_recurso(self, slug: str) -> Tuple[str, Optional[str]]:
+        """``(url del CSV, fecha en que el emisor lo publicó por última vez)``.
+
+        La fecha sale del CKAN del portal: es la única evidencia de CUÁNDO publicó el emisor, y
+        el dato no la trae. Se descartaba al resolver la URL. Sin ella, «la fuente no publica
+        desde tal fecha» solo se podría escribir a mano — y una fecha transcrita es una fecha
+        que se desincroniza con la primera edición nueva.
+
+        **En la práctica sale de ``metadata_modified``, no de ``last_modified``.** Verificado el
+        2026-09-10 sobre los cuatro recursos del dataset (CSV, XLSX, ODS, JSON): el portal deja
+        ``last_modified`` en ``None`` y registra la subida en ``metadata_modified``. Se prefiere
+        ``last_modified`` si algún día viene, porque es el campo que nombra la subida del
+        fichero; ``metadata_modified`` también se mueve si alguien edita solo la descripción del
+        recurso, así que es un respaldo, no un sinónimo. Para el MIVHED coincide con la carpeta
+        de subida de la URL (``/uploads/2026/07/`` para la edición del 21 de julio), que es lo
+        que lo sostiene como fecha de publicación.
+
+        ``None`` si el portal no declara ninguna de las dos: se dice que no se sabe, no se
+        inventa.
+        """
         import httpx
         with httpx.Client(timeout=60, follow_redirects=True, headers=_HEADERS) as http:
             data = http.get(_CKAN, params={"id": slug}).json()
         for r in (data.get("result") or {}).get("resources", []):
             if (r.get("format") or "").upper() == "CSV" and r.get("url"):
-                return r["url"]
+                crudo = str(r.get("last_modified") or r.get("metadata_modified") or "")
+                return r["url"], (crudo[:10] if len(crudo) >= 10 else None)
         raise RuntimeError(f"MIVHED: sin recurso CSV para '{slug}'")
 
-    def _fetch_csv(self, slug: str) -> str:
+    def _resolve_csv(self, slug: str) -> str:
+        return self._resolve_recurso(slug)[0]
+
+    def _fetch_csv_con_fecha(self, slug: str) -> Tuple[str, Optional[str]]:
+        """El CSV y la fecha de su última publicación, de UNA sola resolución del recurso."""
         import httpx
-        url = self._resolve_csv(slug)
+        url, publicado_el = self._resolve_recurso(slug)
         with httpx.Client(timeout=120, follow_redirects=True, headers=_HEADERS) as http:
-            return http.get(url).content.decode("utf-8-sig")
+            return http.get(url).content.decode("utf-8-sig"), publicado_el
+
+    def _fetch_csv(self, slug: str) -> str:
+        return self._fetch_csv_con_fecha(slug)[0]
 
     def licenses(self) -> Dict[int, Dict[str, Any]]:
         return parse_licenses(self._fetch_csv(SLUG_LICENSES))
 
     def licenses_mensual(self) -> Dict[str, Any]:
-        """La misma descarga, leída por MES. Ver :func:`parse_licenses_mensual`."""
-        return parse_licenses_mensual(self._fetch_csv(SLUG_LICENSES))
+        """La misma descarga, leída por MES, con la fecha de publicación del emisor."""
+        text, publicado_el = self._fetch_csv_con_fecha(SLUG_LICENSES)
+        return {**parse_licenses_mensual(text), "publicado_el": publicado_el}
 
     def licenses_ambas(self) -> Dict[str, Any]:
         """Anual y mensual de UNA sola descarga.
@@ -294,8 +322,9 @@ class MIVHEDClient:
         dos lecturas correspondan a descargas distintas: si el emisor publica entre una y
         otra, el mensual y el anual del mismo informe dejarían de cuadrar.
         """
-        text = self._fetch_csv(SLUG_LICENSES)
-        return {"anual": parse_licenses(text), "mensual": parse_licenses_mensual(text)}
+        text, publicado_el = self._fetch_csv_con_fecha(SLUG_LICENSES)
+        return {"anual": parse_licenses(text),
+                "mensual": {**parse_licenses_mensual(text), "publicado_el": publicado_el}}
 
 
 mivhed_client = MIVHEDClient()

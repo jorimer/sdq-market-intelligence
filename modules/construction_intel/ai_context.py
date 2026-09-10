@@ -143,8 +143,19 @@ def construction_delta_context(delta: Dict[str, Any], periodo_del_informe: str) 
     **Lo que no se pudo leer viaja también.** ``series_sin_lectura`` va al contexto con su
     motivo: una lista que solo trae lo que salió bien se lee como que todo salió bien.
     """
+    from shared.narrative.formato import fecha_larga_es, mes_largo_es
+
+    fuente = delta.get("fuente_del_feed") or {}
     return {
         "periodo_del_movimiento": delta.get("periodo"),
+        # El mes ESCRITO, para que el modelo lo nombre igual que el encabezado y no traduzca
+        # "2026-06" por su cuenta.
+        "mes_leido": mes_largo_es(delta.get("periodo")),
+        # Si la fuente está atrasada, el encabezado ya lo declara. Estos dos campos existen
+        # para que la prosa NO lo contradiga —«la lectura más reciente», «este mes»—, no para
+        # que lo repita.
+        "fuente_al_dia": bool(fuente.get("al_dia", True)),
+        "ultima_publicacion_de_la_fuente": fecha_larga_es(fuente.get("ultima_publicacion")),
         "periodo_del_indice_anual_del_informe": periodo_del_informe,
         "emisor_del_movimiento": delta.get("emisor"),
         "series_del_mes": delta.get("series") or [],

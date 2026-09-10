@@ -139,37 +139,112 @@ async def test_SIN_observaciones_las_secciones_son_EXACTAMENTE_las_de_antes(db, 
     assert set(narr) == set(declaradas), "el informe sin feed cambió de secciones"
 
 
-# ── Control NEGATIVO 2: la frescura VETA, y lo vetado se DECLARA ─────────────────
+# ── Fuente ATRASADA: se publica con el mes nombrado y la declaración al lado ─────
+#
+# Decisión del dueño (2026-09-10). El primer diseño vetaba la sección; se cambió porque la
+# lectura nombra su período —no se hace pasar por el mes en curso— y que el emisor lleve
+# semanas sin publicar es en sí información que el lector quiere.
 
-def test_con_la_fuente_CONGELADA_la_seccion_no_publica_y_dice_por_que(db, icc):
-    """Publicar «el último mes» de un feed muerto describiría un mes viejo con cara de
-    actual, que en un documento fechado es una afirmación falsa."""
+def _feed_atrasado(db, publicado_el="2023-12-20"):
     periodos = {}
     for m in range(1, 13):
         periodos.update(_mes(f"2022-{m:02d}", 100, 50_000.0))
     for m in range(1, 13):
         periodos.update(_mes(f"2023-{m:02d}", 130, 65_000.0))
-    ingest_observaciones_mensuales(db, {"periodos": periodos, "sin_mes": 0})
+    ingest_observaciones_mensuales(
+        db, {"periodos": periodos, "sin_mes": 0, "publicado_el": publicado_el})
 
+
+def test_con_la_fuente_ATRASADA_la_seccion_SE_PUBLICA_con_su_delta(db, icc):
+    _feed_atrasado(db)
     d = ConstructionProduct(db).snapshot(ProductTier.deep_dive, "2025").payload["delta_mensual"]
-    assert "no_publicable" in d
-    assert "series" not in d
-    assert d["ultimo_periodo_observado"] == "2023-12"
+    assert "no_publicable" not in d, "la fuente atrasada volvió a vetar la sección"
+    assert d["periodo"] == "2023-12"
+    assert d["series"], "se publicó la sección sin la lectura"
+    assert d["fuente_del_feed"]["al_dia"] is False
+    assert d["fuente_del_feed"]["ultima_publicacion"] == "2023-12-20"
 
 
 @pytest.mark.asyncio
-async def test_lo_vetado_se_ESCRIBE_en_el_informe_con_su_causa(db, icc):
-    """Un bloque que se esfuma se lee como que el eje no tiene nada que decir este mes."""
-    periodos = {f"2023-{m:02d}": {"permits": 100, "sqm": 50_000.0} for m in range(1, 13)}
-    ingest_observaciones_mensuales(db, {"periodos": periodos, "sin_mes": 0})
+async def test_el_texto_NOMBRA_el_mes_y_DECLARA_la_ultima_publicacion(db, icc):
+    _feed_atrasado(db)
     p = ConstructionProduct(db)
-    snap = p.snapshot(ProductTier.deep_dive, "2025")
-    texto = (await p.narratives(ProductTier.deep_dive, snap))["delta_mensual"]
+    texto = (await p.narratives(ProductTier.deep_dive,
+                                p.snapshot(ProductTier.deep_dive, "2025")))["delta_mensual"]
+    assert texto.startswith("Movimiento de diciembre de 2023.")
+    assert "el 20 de diciembre de 2023" in texto
+    assert "la de enero de 2024" in texto and "no figura en la fuente" in texto
 
-    assert "No se publica" in texto
-    assert "fuente" in texto.lower() and "días" in texto
-    assert "no depende de este feed" in texto, (
-        "el texto no aclara que el índice anual sigue en pie")
+
+@pytest.mark.asyncio
+async def test_la_fecha_declarada_se_COMPUTA_de_la_publicacion_y_no_esta_escrita(db, icc):
+    """Una fecha transcrita se desincroniza con la primera edición nueva. Con otra fecha de
+    publicación en el dato, el texto tiene que decir OTRA fecha."""
+    _feed_atrasado(db, publicado_el="2024-01-05")
+    p = ConstructionProduct(db)
+    texto = (await p.narratives(ProductTier.deep_dive,
+                                p.snapshot(ProductTier.deep_dive, "2025")))["delta_mensual"]
+    assert "el 5 de enero de 2024" in texto
+    assert "20 de diciembre" not in texto
+
+
+@pytest.mark.asyncio
+async def test_con_la_fuente_AL_DIA_se_nombra_el_mes_SIN_declaracion(db, icc):
+    """La declaración de atraso no puede aparecer cuando no hay atraso."""
+    ultimo = _feed_fresco(db)
+    p = ConstructionProduct(db)
+    texto = (await p.narratives(ProductTier.deep_dive,
+                                p.snapshot(ProductTier.deep_dive, "2025")))["delta_mensual"]
+    from shared.narrative.formato import mes_largo_es
+
+    assert texto.startswith(f"Movimiento de {mes_largo_es(ultimo)}.")
+    assert "no figura en la fuente" not in texto
+
+
+@pytest.mark.asyncio
+async def test_sin_fecha_de_publicacion_la_declaracion_NO_inventa_una(db, icc):
+    """Si el portal no declaró la fecha, se dice lo que se sabe: el mes que falta."""
+    _feed_atrasado(db, publicado_el=None)
+    p = ConstructionProduct(db)
+    texto = (await p.narratives(ProductTier.deep_dive,
+                                p.snapshot(ProductTier.deep_dive, "2025")))["delta_mensual"]
+    assert "última edición disponible" in texto
+    assert "la de enero de 2024" in texto
+    assert " el 20 de" not in texto and "publicó el MIVHED, el" not in texto
+
+
+# ── Frescura INDETERMINADA: ahí sí se veta, y se dice por qué ────────────────────
+
+def _forzar_indeterminada(monkeypatch):
+    import shared.operations.fuentes_congeladas as fc
+
+    def indeterminada(db, *, sector_key, clave):
+        return fc.Veredicto(eje=sector_key, estado=fc.INDETERMINADA, cadencia="monthly",
+                            motivo="no se pudo medir", clave=clave)
+
+    monkeypatch.setattr(fc, "veredicto_de_la_fuente", indeterminada)
+
+
+def test_con_frescura_INDETERMINADA_la_seccion_no_publica(db, icc, monkeypatch):
+    """Sin saber cuándo publicó la fuente no hay declaración honesta que poner al lado, y
+    publicar sin ella presentaría la lectura como vigente sin saberlo."""
+    _feed_fresco(db)
+    _forzar_indeterminada(monkeypatch)
+    d = ConstructionProduct(db).snapshot(ProductTier.deep_dive, "2025").payload["delta_mensual"]
+    assert "no_publicable" in d and "series" not in d
+
+
+@pytest.mark.asyncio
+async def test_lo_vetado_se_ESCRIBE_con_su_causa_y_sin_claves_de_maquina(db, icc, monkeypatch):
+    _feed_fresco(db)
+    _forzar_indeterminada(monkeypatch)
+    p = ConstructionProduct(db)
+    texto = (await p.narratives(ProductTier.deep_dive,
+                                p.snapshot(ProductTier.deep_dive, "2025")))["delta_mensual"]
+    assert texto.startswith("No se publica")
+    assert "no depende de este feed" in texto
+    for clave in ("monthly", "quarterly", "annual"):
+        assert clave not in texto
 
 
 # ── La invariante dura: el índice no se mueve ────────────────────────────────────
@@ -264,16 +339,33 @@ def test_la_metodologia_NOMBRA_las_dos_cadencias(db, icc):
 
 
 @pytest.mark.asyncio
-async def test_el_texto_del_veto_no_arrastra_la_clave_de_MAQUINA_de_la_cadencia(db, icc):
-    """`cadence` es una clave que elige umbrales, no una palabra en español. Pegar el motivo
-    del panel en el informe publicaba «su fuente (monthly)» en un documento en castellano —
-    el mismo defecto que obligó a traducir la cadencia en la metodología."""
-    periodos = {f"2023-{m:02d}": {"permits": 100, "sqm": 50_000.0} for m in range(1, 13)}
-    ingest_observaciones_mensuales(db, {"periodos": periodos, "sin_mes": 0})
+async def test_la_declaracion_no_arrastra_la_clave_de_MAQUINA_de_la_cadencia(db, icc):
+    """`cadence` es una clave que elige umbrales, no una palabra en español: publicar «su
+    fuente (monthly)» en un documento en castellano es el defecto que obligó a traducir la
+    cadencia en la metodología."""
+    _feed_atrasado(db)
     p = ConstructionProduct(db)
     texto = (await p.narratives(ProductTier.deep_dive,
                                 p.snapshot(ProductTier.deep_dive, "2025")))["delta_mensual"]
-
     for clave in ("monthly", "quarterly", "annual"):
         assert clave not in texto, f"la clave de máquina «{clave}» llegó al informe"
     assert "mensual" in texto
+
+
+# ── Un tipo nuevo se registra en TODAS sus superficies ───────────────────────────
+
+@pytest.mark.parametrize("lang", ["es", "en", "fr"])
+def test_toda_seccion_del_producto_tiene_TITULO_en_la_app(lang):
+    """La app titula las secciones con `platform.catalog.section.<clave>` y, sin entrada, cae
+    a la clave con espacios: el informe mostraba «delta mensual» mientras el PDF decía otra
+    cosa. Dos superficies en desacuerdo, y ninguna fallaba."""
+    import json
+    import pathlib
+
+    from modules.construction_intel.products import _SECTION_TITLES
+
+    raiz = pathlib.Path(__file__).resolve().parents[3]
+    titulos = json.loads((raiz / "frontend" / "src" / "shared" / "i18n" / f"{lang}.json")
+                         .read_text(encoding="utf-8"))["platform"]["catalog"]["section"]
+    faltan = sorted(k for k in _SECTION_TITLES if k not in titulos)
+    assert not faltan, f"{lang}: secciones sin título en la app: {faltan}"

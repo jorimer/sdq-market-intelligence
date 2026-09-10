@@ -53,7 +53,7 @@ _SECTION_TITLES = {
     "construction_assessment": "Evaluación de Coyuntura (ICC)",
     "positioning": "Posición y Trayectoria",
     "recommendation": "Lectura para Decisión",
-    "delta_mensual": "Movimiento del Mes (licencias MIVHED)",
+    "delta_mensual": "Movimiento mensual de licencias (MIVHED)",
     "limitations": "Limitaciones",
 }
 _LIMITATIONS = (
@@ -330,22 +330,26 @@ class ConstructionProduct:
     def _delta_mensual(self) -> Optional[Dict[str, Any]]:
         """El movimiento del último mes observado, o ``None`` si no hay sección que publicar.
 
-        **La frescura VETA, y `indeterminada` también.** La sección se apoya en un feed
-        mensual; si su fuente dejó de publicar, la lectura del "último mes" describiría un
-        mes viejo con cara de actual — y en un documento fechado eso es una afirmación falsa,
-        no un dato incompleto. Un veredicto que no se puede computar tampoco publica: «no sé
-        de cuándo es» y «está al día» son cosas distintas.
+        **Con la fuente atrasada, la lectura SE PUBLICA con su mes nombrado y la declaración
+        al lado** (decisión del dueño, 2026-09-10). El primer diseño vetaba la sección: temía
+        describir un mes viejo con cara de actual. Pero la lectura nombra su período, así que
+        no se hace pasar por el mes en curso; y que el emisor lleve semanas sin publicar es en
+        sí información que el lector quiere. Callarla —o esconder la lectura— la perdía.
 
-        Lo vetado NO desaparece en silencio: vuelve con `no_publicable` y su motivo, que la
-        sección imprime. Un bloque que se esfuma se lee como que el eje no tiene nada que
-        decir este mes, que es una afirmación distinta y falsa.
+        La declaración viaja como DATO computado (`fuente_del_feed`) y no como prosa: la fecha
+        de la última publicación sale de `published_at`, que se captura del portal al ingerir.
+        Nunca se escribe a mano.
+
+        **`indeterminada` sí veta.** Ahí no se sabe cuándo publicó la fuente, así que no hay
+        declaración honesta que poner al lado: publicar la lectura sin ella sería presentarla
+        como vigente sin saberlo. Vuelve con `no_publicable` y su motivo, que la sección imprime.
         """
         from modules.construction_intel.service import (
             CLAVE_DEL_FEED, ETIQUETAS_DEL_FEED)
         from shared.observations import service as obs
         from shared.observations.delta import leer_delta
         from shared.operations.fuentes_congeladas import (
-            AL_DIA, veredicto_de_la_fuente)
+            AL_DIA, CONGELADA, veredicto_de_la_fuente)
 
         try:
             db = self._require_db()
@@ -354,12 +358,23 @@ class ConstructionProduct:
                 return None            # sin feed no hay sección: no aparece vacía
             veredicto = veredicto_de_la_fuente(db, sector_key=SECTOR_KEY,
                                                clave=CLAVE_DEL_FEED)
-            if veredicto is None or veredicto.estado != AL_DIA:
+            if veredicto is None or veredicto.estado not in (AL_DIA, CONGELADA):
                 return {"no_publicable": self._motivo_en_castellano(veredicto),
                         "ultimo_periodo_observado": ultimo}
             bloque = leer_delta(db, sector_key=SECTOR_KEY, period=ultimo,
                                 etiquetas=ETIQUETAS_DEL_FEED)
             bloque["emisor"] = "MIVHED (datos.gob.do)"
+            # La frescura de la FUENTE, como dato. Sin `dias`: una cifra calculada contra hoy
+            # cambiaría el payload cada día e invalidaría la caché sin que el dato cambie, y
+            # dentro de un documento envejecería sola. Lo estable es el período, la fecha de
+            # publicación y el veredicto — que cambia, a lo sumo, una vez por edición.
+            publicada = obs.ultima_publicacion(db, sector_key=SECTOR_KEY)
+            bloque["fuente_del_feed"] = {
+                "al_dia": veredicto.estado == AL_DIA,
+                "ultimo_periodo": ultimo,
+                "ultima_publicacion": publicada.isoformat() if publicada else None,
+                "cadencia": "mensual",
+            }
             bloque["provincias"] = obs.por_dimension(
                 db, sector_key=SECTOR_KEY, series_code="mivhed.licencias.metros_cuadrados",
                 period=ultimo, campo="provincia")[:5]
@@ -597,7 +612,37 @@ class ConstructionProduct:
             context=construction_delta_context(delta, snapshot.period),
             template="construction_delta", mode="standard",
             axis="construction_intel", audience="inversionista")
-        return res.text
+        encabezado = self._encabezado_del_movimiento(delta)
+        return f"{encabezado}\n\n{res.text}" if encabezado else res.text
+
+    @staticmethod
+    def _encabezado_del_movimiento(delta: Dict[str, Any]) -> str:
+        """El mes nombrado y, si la fuente está atrasada, la declaración. Determinista.
+
+        Va en CÓDIGO y no pedido al modelo: una declaración que tiene que aparecer no puede
+        depender de que el narrador se acuerde, y "servir el dato no alcanza" ya se aprendió
+        acá. El modelo narra el movimiento; esto garantiza que el lector sepa de qué mes es y
+        si hubo ediciones después. Todo sale del bloque computado — ninguna fecha a mano.
+        """
+        from shared.narrative.formato import fecha_larga_es, mes_largo_es, mes_siguiente
+
+        fuente = delta.get("fuente_del_feed") or {}
+        mes = mes_largo_es(fuente.get("ultimo_periodo") or delta.get("periodo"))
+        if not mes:
+            return ""
+        lead = f"Movimiento de {mes}."
+        if fuente.get("al_dia", True):
+            return lead
+        publicada = fecha_larga_es(fuente.get("ultima_publicacion"))
+        falta = mes_largo_es(mes_siguiente(fuente.get("ultimo_periodo")))
+        if publicada and falta:
+            return (f"{lead} Es la última edición que publicó el MIVHED, el {publicada}; "
+                    f"la de {falta}, de cadencia mensual, no figura en la fuente a la fecha "
+                    f"de este informe.")
+        if falta:
+            return (f"{lead} Es la última edición disponible del MIVHED; la de {falta}, de "
+                    f"cadencia mensual, no figura en la fuente a la fecha de este informe.")
+        return lead
 
     # ── Render (sin DB, renderer genérico) ──
     async def render(self, tier: ProductTier, snapshot: ProductSnapshot,
