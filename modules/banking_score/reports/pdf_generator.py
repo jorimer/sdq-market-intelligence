@@ -141,6 +141,9 @@ NARRATIVE_SECTION_TITLES = {
     # identificador. Un título de sección de un documento que se vende no se deriva de un
     # nombre de variable.
     "anio_por_trimestres": "El Año por Trimestres",
+    # El mismo defecto, en el anuario del sistema: salía «Anio Del Sistema». Lo vigila
+    # `shared/products/tests/test_toda_seccion_tiene_titulo_en_la_app.py`.
+    "anio_del_sistema": "El Año del Sistema",
     "boletin_rd": "República Dominicana en profundidad",
     "boletin_sistemas": "Los sistemas de la región, uno por uno",
     "boletin_armonizado": "Crédito y tasas comparables: la capa armonizada",
