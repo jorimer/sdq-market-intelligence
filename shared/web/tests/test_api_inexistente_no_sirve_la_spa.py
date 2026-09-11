@@ -95,3 +95,37 @@ def test_las_rutas_del_frontend_siguen_sirviendo_el_index(client: TestClient, pa
 def test_un_asset_faltante_sigue_dando_404(client: TestClient) -> None:
     r = client.get("/assets/no-existe.js")
     assert r.status_code == 404
+
+
+# ── Una ruta que SÍ existe, pedida con otro método: 405, no 404 ──────────────────
+#
+# El mount de la SPA gana el match antes de que el router ofrezca su 405, así que el primer
+# arreglo respondía «Ruta no encontrada» también sobre rutas reales pedidas con el método
+# equivocado. Ese 404 manda a buscar algo que está ahí.
+
+
+@pytest.mark.parametrize(
+    "metodo,path,admitido",
+    [
+        ("get", "/api/v1/auth/login", "POST"),
+        # con parámetros de path: el router tiene que reconocerla igual
+        ("get", "/api/v1/products/construction/deep_dive/activate", "POST"),
+        ("delete", "/api/v1/operations/fuentes", "GET"),
+    ],
+)
+def test_ruta_existente_con_otro_metodo_devuelve_405_con_Allow(
+        client: TestClient, metodo: str, path: str, admitido: str) -> None:
+    r = getattr(client, metodo)(path)
+    assert r.status_code == 405, f"{metodo.upper()} {path} → {r.status_code}"
+    assert r.headers["content-type"].startswith("application/json")
+    # `Allow` lo exige el estándar en un 405, y es lo que le dice al cliente qué hacer.
+    assert admitido in r.headers.get("allow", ""), r.headers.get("allow")
+    detalle = r.json()["detail"]
+    assert "no permitido" in detalle.lower() and admitido in detalle
+    assert "no encontrada" not in detalle.lower()
+
+
+def test_el_metodo_correcto_sigue_llegando_al_handler(client: TestClient) -> None:
+    """El 405 no puede tragarse la ruta buena: POST sin cuerpo llega y lo valida el handler."""
+    r = client.post("/api/v1/auth/login", json={})
+    assert r.status_code == 422, r.status_code
