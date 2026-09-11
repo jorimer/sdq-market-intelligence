@@ -1807,7 +1807,7 @@
         "irc_pulse": "Climate resilience pulse",
         "irc_assessment": "Resilience assessment (IRC)",
         "panel_position": "Panel position",
-        "recommendation": "Recommendation",
+        "recommendation": "Reading for decision-making",
         "limitations": "Limitations",
         "std_methodology": "Methodology & sources",
         "std_sources": "Sources & references",
@@ -1848,7 +1848,67 @@
         "conclusion_y_responsabilidad": "Conclusion and responsibility",
         "fuentes_y_procedencia": "Sources and provenance",
         "anexo_planillas_del_modelo": "Appendix · Model schedules",
-        "anexo_panel_de_transacciones": "Annex · Transactions panel: open leads and exclusions"
+        "anexo_panel_de_transacciones": "Annex · Transactions panel: open leads and exclusions",
+        "std_glossary": "Glossary",
+        "executive_summary": "Executive summary",
+        "solidez_financiera": "Financial soundness",
+        "calidad_activos": "Asset quality",
+        "eficiencia_rentabilidad": "Efficiency and profitability",
+        "liquidez": "Liquidity",
+        "diversificacion": "Diversification",
+        "comparative": "Comparative analysis",
+        "entorno_operativo": "Operating environment",
+        "mapa_sectorial": "Sector credit map",
+        "soporte_soberano": "Sovereign support and ceiling",
+        "early_warning": "Early warning",
+        "anio_por_trimestres": "The year quarter by quarter",
+        "anio_del_sistema": "The system's year",
+        "mapa_sectorial_sistema": "System credit by sector",
+        "revision_anual": "Annual review",
+        "contexto_de_mercado": "Market context",
+        "insurance_pulse": "Insurance market pulse",
+        "insurance_assessment": "Insurer soundness (ISF)",
+        "market_context": "Market context (mix and structure)",
+        "portfolio_context": "System investment portfolio (risk context)",
+        "social_pulse": "Social development pulse",
+        "social_assessment": "Development assessment (IDM)",
+        "inequality": "Distribution across municipalities",
+        "geographic_concentration": "Geographic concentration (partners)",
+        "mechanism": "Mechanism and scenario: the hinge sector",
+        "tpm_snapshot": "Policy rate (TPM) stance and path",
+        "mp_evaluation": "Monetary policy assessment",
+        "forecast": "Model forecast (Taylor rule + classifier)",
+        "nowcast": "Nowcast of the current quarter",
+        "trajectory": "Projected path",
+        "sectoral": "Sector reading",
+        "scenarios": "Scenarios 3-8 quarters ahead (no track record)",
+        "forecast_track_record": "Track record of our previous forecasts",
+        "methodology": "How each figure is built",
+        "estado_de_la_ley": "Where the law stands against what it set out to do",
+        "logrado": "What was achieved",
+        "no_logrado": "What was not achieved",
+        "pendiente": "What lies ahead",
+        "coherencia_proceso": "Declared process versus measured outcome",
+        "verificabilidad": "Who produces the evidence the law is judged by",
+        "brechas": "Which part of the law this report cannot judge",
+        "recomendaciones": "What can be demanded, and through which instrument"
+      },
+      "sectionBySector": {
+        "banking": {
+          "recommendation": "Recommendation"
+        },
+        "insurance": {
+          "peer_positioning": "Competitive position versus the market"
+        },
+        "macro": {
+          "risk_assessment": "Country risk assessment (IRMP)"
+        },
+        "pension": {
+          "peer_positioning": "Competitive position versus the AFPs"
+        },
+        "valuation": {
+          "limitations": "Limitations and conditions"
+        }
       },
       "dimensionsTitle": "Dimensions (score 0–100)",
       "risk": {

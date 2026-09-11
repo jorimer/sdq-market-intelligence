@@ -35,6 +35,7 @@ import {
   type ScopeOption,
   type OpcionDePeriodo,
 } from "../api";
+import { sectionTitle } from "../sectionTitle";
 import { checkoutOrder, checkoutSubscription } from "../billingApi";
 import { CheckoutConfirmModal } from "../components/CheckoutConfirmModal";
 import { mensajeDeError, pistaTecnica } from "../../../shared/api/errores";
@@ -586,7 +587,7 @@ function ProductReportDrawer({ sector, level, periodEnd, onClose, t }: {
             return (
               <div key={sec} className="space-y-1.5">
                 <div className="text-[11px] uppercase tracking-wide text-faint">
-                  {n}. {t(`platform.catalog.section.${sec}`, { defaultValue: sec.replace(/_/g, " ") })}
+                  {n}. {sectionTitle(t, report.sector_key, sec)}
                 </div>
                 <Markdown text={text} />
               </div>

@@ -362,23 +362,8 @@ async def test_la_declaracion_no_arrastra_la_clave_de_MAQUINA_de_la_cadencia(db,
     assert "mensual" in texto
 
 
-# ── Un tipo nuevo se registra en TODAS sus superficies ───────────────────────────
-
-@pytest.mark.parametrize("lang", ["es", "en", "fr"])
-def test_toda_seccion_del_producto_tiene_TITULO_en_la_app(lang):
-    """La app titula las secciones con `platform.catalog.section.<clave>` y, sin entrada, cae
-    a la clave con espacios: el informe mostraba «delta mensual» mientras el PDF decía otra
-    cosa. Dos superficies en desacuerdo, y ninguna fallaba."""
-    import json
-    import pathlib
-
-    from modules.construction_intel.products import _SECTION_TITLES
-
-    raiz = pathlib.Path(__file__).resolve().parents[3]
-    titulos = json.loads((raiz / "frontend" / "src" / "shared" / "i18n" / f"{lang}.json")
-                         .read_text(encoding="utf-8"))["platform"]["catalog"]["section"]
-    faltan = sorted(k for k in _SECTION_TITLES if k not in titulos)
-    assert not faltan, f"{lang}: secciones sin título en la app: {faltan}"
+# El título de `delta_mensual` en la app lo vigila, para TODO el catálogo,
+# `shared/products/tests/test_toda_seccion_tiene_titulo_en_la_app.py`.
 
 
 # ── La frase afirma solo lo que se sabe, y se completa DESPUÉS de la caché ───────
