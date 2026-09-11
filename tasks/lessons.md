@@ -1209,3 +1209,12 @@ siendo escrita.
 - **Causa raíz**: la muestra se escribió a mano como cifras «ilustrativas» y el único test que la tocaba comprobaba que el PDF pesara más de 5 KB. Que renderice no dice nada de si los números cierran entre sí. Y su propio comentario prometía «una actividad no proyectada» que nunca se implementó: el texto describía una intención, no el contenido.
 - **Regla**: una muestra curada tiene que satisfacer las identidades del método que exhibe, y eso se vigila con un test que las compruebe una por una — no con uno que verifique que el archivo existe. Reconstruirla desde un corte real es la forma barata de que sea producible por el motor. Y si el comentario de la muestra promete un caso, el test lo exige.
 - **Disparador**: toda muestra, fixture de demo o payload de ejemplo que un cliente vaya a ver. Preguntar: ¿estas cifras salen de correr el método, o las escribió alguien para que se vieran bien?
+
+---
+
+### 2026-09-11 — Buscar la ESTRUCTURA del defecto, no su síntoma: el orden inverso no hace ruido
+
+- **Síntoma**: #1165 arregló el re-spam de alertas (aviso comprometido, marcador de dedup después, marcador rechazado). El mismo par de escrituras separadas estaba en seis sitios más. Cinco repetían el orden y el re-spam; el sexto —«Listo para publicar»— lo tenía AL REVÉS: marcador primero. Ahí un aviso que no entraba dejaba un marcador **sin vencimiento**, y ese cruce de publicabilidad no se avisaba nunca más. Sin error repetido, sin log diario, sin nadie que se queje.
+- **Causa raíz**: buscar «dónde más pasa el re-spam» encuentra solo la variante ruidosa. El defecto no es el orden sino que dos escrituras que tienen que ir juntas se comprometen por separado, y la variante silenciosa es la peor de las dos.
+- **Regla**: al cerrar un defecto, nombrarlo por su estructura («A y B comprometidos por separado») y barrer por esa estructura, con los dos órdenes. Lo vigila `shared/tests/test_aviso_y_marcador_en_una_transaccion.py`, que exige `commit=False` en ambos y un `rollback` a toda función que avisa y marca.
+- **Disparador**: todo arreglo de atomicidad. Preguntar: ¿qué pasa si falla la PRIMERA escritura en vez de la segunda? Y en el test, un `before_flush` que levanta no invalida la sesión: si el test no hace el rollback que hace el llamador, la fila rechazada se flushea en el siguiente query y el test mide un artefacto (me pasó acá).

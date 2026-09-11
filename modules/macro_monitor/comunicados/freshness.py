@@ -53,11 +53,15 @@ def audit_comunicados_freshness(db: Session, admin_ids: List[str], now: datetime
     body = (f"La última decisión de política monetaria del BCRD ingerida es del "
             f"{row.decision_date} (~{age_days} días). La Junta Monetaria decide cada ~mes; "
             f"conviene verificar si hay un comunicado nuevo sin capturar.")
+    # Avisos y marcador en UNA transacción: si el marcador no entra, no queda ningún aviso
+    # escrito que la auditoría de mañana repita.
     try:
         for uid in admin_ids:
             notification_service.create(db, user_id=uid, type="warning", title=title,
-                                        body=body, action_url="/datos/macro?tab=comunicados")
-        _mark_notified(db, _KEY)
+                                        body=body, action_url="/datos/macro?tab=comunicados",
+                                        commit=False)
+        _mark_notified(db, _KEY, commit=False)
+        db.commit()
         return [_KEY]
     except Exception as e:  # noqa: BLE001
         db.rollback()

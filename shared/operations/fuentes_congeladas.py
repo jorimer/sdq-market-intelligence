@@ -359,11 +359,15 @@ def auditar_fuentes_de_los_ejes(db: Session, admin_ids: List[str],
                 f"edición nueva a los {v.tope_de_dias_de_la_cadencia}. El sync puede estar "
                 f"corriendo en verde contra un archivo que ya no se actualiza — conviene "
                 f"verificar en el emisor si hay una edición más reciente.")
+        # Avisos y marcador en UNA transacción: si el marcador no entra, no queda ningún aviso
+        # escrito que la auditoría de mañana repita.
         try:
             for uid in admin_ids:
                 notification_service.create(db, user_id=uid, type="warning", title=title,
-                                            body=body, action_url="/datos/operaciones")
-            _mark_notified(db, clave)
+                                            body=body, action_url="/datos/operaciones",
+                                            commit=False)
+            _mark_notified(db, clave, commit=False)
+            db.commit()
             avisados.append(v.eje)
         except Exception as e:  # noqa: BLE001 — un fallo por eje no aborta los demás
             db.rollback()
