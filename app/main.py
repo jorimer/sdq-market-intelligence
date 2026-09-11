@@ -306,6 +306,47 @@ if _os.getenv("SDQ_SCHEDULER") == "1":
     normalize_ondemand_schedules()
     start_scheduler()
 
+# Todo lo que cuelga de este prefijo es API: si el router no lo reconoció, no existe,
+# y la SPA no tiene nada que decir al respecto. Cubre los DOS contratos —/api/v1 (SPA) y
+# /api/data/v1 (público máquina-a-máquina)— porque el corte es el namespace, no el módulo.
+_PREFIJO_DE_API = "api"
+
+
+def _es_ruta_de_api(path: str) -> bool:
+    """`path` es el path relativo al mount ("api/v1/x" para /api/v1/x), ya normalizado."""
+    return path == _PREFIJO_DE_API or path.startswith(_PREFIJO_DE_API + "/")
+
+
+#: Los métodos que se sondean para armar `Allow`. HEAD no se lista aparte: el router lo
+#: agrega solo a toda ruta GET, así que aparece cuando corresponde.
+_METODOS_HTTP = ("GET", "HEAD", "POST", "PUT", "PATCH", "DELETE", "OPTIONS")
+
+
+def _metodos_admitidos(app_asgi, scope) -> "set | None":
+    """``None`` si la ruta no existe con NINGÚN método; si existe, los métodos con que sí.
+
+    El mount de la SPA en "/" gana el match completo antes de que el router pueda ofrecer su
+    405, así que el catch-all ve también las rutas que existen pero se pidieron con otro
+    método. Tratarlas como inexistentes devolvía «Ruta no encontrada» sobre una ruta real —
+    un 404 que manda a buscar algo que está ahí.
+
+    **Se usa solo el contrato público `matches()`, sondeando método por método.** Con
+    FastAPI 0.139 los routers incluidos NO se aplanan: `app.routes` trae 36 `_IncludedRouter`
+    anidados, que delegan el match pero no exponen `methods`. La primera versión detectaba el
+    `PARTIAL` y buscaba los métodos en el router anidado: salía vacío y respondía 404 igual.
+    Apoyarse en esa clase privada rompería con la próxima versión; preguntar «¿con este
+    método casa COMPLETO?» vale para cualquier anidamiento.
+    """
+    from starlette.routing import Match, Mount
+
+    rutas = [r for r in (getattr(app_asgi, "routes", None) or [])
+             if not (isinstance(r, Mount) and getattr(r, "name", "") == "frontend")]
+    if not any(r.matches(scope)[0] == Match.PARTIAL for r in rutas):
+        return None
+    return {m for m in _METODOS_HTTP
+            if any(r.matches({**scope, "method": m})[0] == Match.FULL for r in rutas)}
+
+
 # Serve frontend in production.
 #
 # Cache strategy for the SPA:
@@ -316,6 +357,31 @@ if _os.getenv("SDQ_SCHEDULER") == "1":
 #     changes whenever the content changes, so they're safe to cache forever.
 class SPAStaticFiles(StaticFiles):
     async def get_response(self, path, scope):
+        # El catch-all de la SPA está montado en "/" y casa CUALQUIER path, así que
+        # también atrapaba lo que empieza por /api/: una ruta de API inexistente
+        # devolvía 200 con el index.html. Eso no es un detalle cosmético, es una trampa
+        # de verificación —un endpoint que nunca se desplegó "responde 200"— y a un
+        # cliente de la Data API un typo le devolvía HTML en vez de un error accionable.
+        #
+        # Un método equivocado sobre una ruta que SÍ existe también cae acá: el mount
+        # gana el match completo antes de que el router pueda ofrecer su 405. Esa ruta no
+        # es inexistente, y responderle 404 «Ruta no encontrada» mandaba a buscar algo que
+        # está ahí. Se distingue y se responde 405 con `Allow`, como el propio framework.
+        if _es_ruta_de_api(path):
+            ruta = scope.get("path") or f"/{path}"
+            admitidos = _metodos_admitidos(scope.get("app"), scope)
+            if admitidos is not None:
+                lista = ", ".join(sorted(admitidos))
+                return JSONResponse(
+                    status_code=405,
+                    content={"detail": (f"Método no permitido: {scope.get('method', '')} "
+                                        f"{ruta}. Métodos admitidos: {lista}")},
+                    headers={"Allow": lista},
+                )
+            return JSONResponse(
+                status_code=404,
+                content={"detail": f"Ruta no encontrada: {ruta}"},
+            )
         try:
             response = await super().get_response(path, scope)
         except HTTPException as exc:
@@ -341,5 +407,17 @@ class SPAStaticFiles(StaticFiles):
         return response
 
 
+def montar_spa(app: FastAPI, directory: str) -> None:
+    """Monta la SPA como catch-all. Se hace de ÚLTIMO: el mount de "/" casa cualquier
+    path, así que todo router debe estar ya registrado cuando esto corre.
+
+    Es una función y no dos líneas sueltas para que un test pueda montar la SPA sobre
+    ESTA app —la de verdad, con sus routers— en un CI donde `frontend/dist` no existe.
+    El defecto que se vigila vive en el ORDEN de montaje, y contra una FastAPI() vacía
+    no se reproduce.
+    """
+    app.mount("/", SPAStaticFiles(directory=directory, html=True), name="frontend")
+
+
 if os.path.exists("frontend/dist"):
-    app.mount("/", SPAStaticFiles(directory="frontend/dist", html=True), name="frontend")
+    montar_spa(app, "frontend/dist")
