@@ -127,11 +127,9 @@ def _notify_publishable_transitions(
     # Agrupar los cruces por sector (un aviso por producto, listando sus nuevos niveles).
     fresh: Dict[str, List[Tuple[ProductTier, float]]] = {}
     for sector, tier, score in up:
-        clave = _dedup_key(sector, tier.value)
-        if _DEDUP.avisado_recientemente(db, clave, _SIN_VENCIMIENTO):
+        if _DEDUP.avisado_recientemente(db, _dedup_key(sector, tier.value), _SIN_VENCIMIENTO):
             continue  # ya avisado para este (sector, nivel)
         fresh.setdefault(sector, []).append((tier, score))
-        _DEDUP.marcar(db, clave)
     if not fresh:
         return
 
@@ -139,6 +137,7 @@ def _notify_publishable_transitions(
         User.is_active.is_(True),
         User.role.in_([UserRole.admin, UserRole.super_admin])).all()]
     if not admin_ids:
+        # Sin destinatario tampoco se marca: un marcador sin aviso es el mismo silencio.
         return
     for sector, levels in fresh.items():
         entry = CATALOG_BY_KEY.get(sector)
@@ -148,9 +147,19 @@ def _notify_publishable_transitions(
         title = f"Listo para publicar: {name}"
         body = (f"«{name}» cruzó el umbral de publicación en: {niveles}. "
                 f"Revisar en el monitor para activar (la activación es manual).")
-        for uid in admin_ids:
-            notification_service.create(db, user_id=uid, type="success", title=title,
-                                        body=body, action_url="/products")
+        # **El aviso y sus marcadores entran en UNA transacción.** Antes cada marcador se
+        # comprometía ANTES de avisar: si el aviso no entraba quedaba el marcador, y como este
+        # no vence, ese cruce no se avisaba nunca más mientras el nivel siguiera publicable.
+        try:
+            for uid in admin_ids:
+                notification_service.create(db, user_id=uid, type="success", title=title,
+                                            body=body, action_url="/products", commit=False)
+            for tier, _ in levels:
+                _DEDUP.marcar(db, _dedup_key(sector, tier.value), commit=False)
+            db.commit()
+        except Exception as e:  # noqa: BLE001 — un sector que falla no aborta a los demás
+            db.rollback()
+            logger.warning("no se pudo avisar el cruce de publicabilidad de %s: %s", sector, e)
 
 
 def build_matrix(db: Session) -> Dict[str, Any]:

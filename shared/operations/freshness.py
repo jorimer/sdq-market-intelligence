@@ -102,8 +102,13 @@ def _recently_notified(db: Session, op_name: str, interval_hours: int) -> bool:
     return _DEDUP.avisado_recientemente(db, op_name, interval_hours)
 
 
-def _mark_notified(db: Session, op_name: str) -> None:
-    _DEDUP.marcar(db, op_name)
+def _mark_notified(db: Session, op_name: str, *, commit: bool = True) -> None:
+    """Deja el marcador. Quien además AVISA pasa ``commit=False`` a los avisos y al marcador
+    y compromete una sola vez: con el marcador comprometido después de los avisos, un marcador
+    que no entraba dejaba los avisos escritos y la auditoría del día siguiente los repetía (el
+    defecto de #1165, en su consumidor original). Lo vigila
+    `shared/tests/test_aviso_y_marcador_en_una_transaccion.py`."""
+    _DEDUP.marcar(db, op_name, commit=commit)
 
 
 def _clear_notified(db: Session, op_name: str) -> None:
@@ -151,8 +156,9 @@ def _audit_sovereign_ratings(db: Session, admin_ids: List[str], now: datetime) -
             for uid in admin_ids:
                 notification_service.create(db, user_id=uid, type="warning",
                                             title=title, body=body,
-                                            action_url="/datos/gobernanza")
-            _mark_notified(db, key)
+                                            action_url="/datos/gobernanza", commit=False)
+            _mark_notified(db, key, commit=False)
+            db.commit()
             proposed.append(s["iso"])
         except Exception as e:  # noqa: BLE001
             db.rollback()
@@ -202,8 +208,10 @@ def _audit_publications(db: Session, admin_ids: List[str], now: datetime) -> Lis
                 for uid in admin_ids:
                     notification_service.create(db, user_id=uid, type="warning",
                                                 title=title, body=body,
-                                                action_url="/datos/macro?tab=publicaciones")
-                _mark_notified(db, akey)
+                                                action_url="/datos/macro?tab=publicaciones",
+                                                commit=False)
+                _mark_notified(db, akey, commit=False)
+                db.commit()
                 alerted.append(key)
             except Exception as e:  # noqa: BLE001
                 db.rollback()
@@ -267,11 +275,15 @@ def run_freshness_audit(db: Session) -> Dict:
                     f"(cadencia esperada: cada {interval} h).")
         # Aislado por fuente: una falla al notificar (p.ej. un transitorio de DB) no debe
         # abortar la auditoría de las demás ni dejar avisos a medias sin marcar (re-spam).
+        # Por eso los avisos y el marcador entran en UNA transacción: comprometidos por
+        # separado, un marcador que no entraba dejaba los avisos escritos igual.
         try:
             for uid in admin_ids:
                 notification_service.create(db, user_id=uid, type="warning", title=title,
-                                            body=body, action_url="/datos/operaciones")
-            _mark_notified(db, name)
+                                            body=body, action_url="/datos/operaciones",
+                                            commit=False)
+            _mark_notified(db, name, commit=False)
+            db.commit()
             notified += 1
         except Exception as e:  # noqa: BLE001
             db.rollback()
