@@ -65,13 +65,17 @@ class NotificationService:
     """Buzón in-app por usuario: crear (persistido), listar, marcar leído."""
 
     def create(self, db: Session, *, user_id: str, type: str, title: str,
-               body: str = "", action_url: Optional[str] = None) -> Notification:
+               body: str = "", action_url: Optional[str] = None,
+               commit: bool = True) -> Notification:
         """Persiste una notificación para un usuario. Devuelve la fila creada.
-        ``action_url``: ruta interna del frontend a la que navega el click (opcional)."""
+        ``action_url``: ruta interna del frontend a la que navega el click (opcional).
+        ``commit=False`` la deja en la transacción del llamador: quien además marca un dedup
+        necesita que las dos escrituras entren juntas o ninguna."""
         row = Notification(user_id=user_id, type=type, title=title, body=body, read=False,
                            action_url=action_url)
         db.add(row)
-        db.commit()
+        if commit:
+            db.commit()
         logger.info("NOTIFICATION [%s] to user %s: %s", type, user_id, title)
         return row
 

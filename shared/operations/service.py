@@ -26,7 +26,7 @@ from sqlalchemy import update
 from sqlalchemy.orm import Session
 
 from shared.database.session import SessionLocal
-from shared.settings.models import AppSetting
+from shared.settings.models import AppSetting, clave_acotada
 from shared.operations.models import OperationRun, OperationSchedule
 from shared.observability.llm_ledger import attributed_to
 
@@ -53,7 +53,9 @@ def _dt():
 
 
 def _key(op: str) -> str:
-    return f"op_status:{op}"
+    # Acotada como toda clave con una parte variable: el nombre de una operación no tiene
+    # largo máximo y `app_setting.key` sí (que SQLite no aplica).
+    return clave_acotada("op_status", op)
 
 
 def _spawn(target: Callable[[], None]) -> None:

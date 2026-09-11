@@ -24,7 +24,7 @@ from typing import Any, Optional
 
 from sqlalchemy.orm import Session
 
-from shared.settings.models import AppSetting
+from shared.settings.models import AppSetting, clave_acotada
 
 logger = logging.getLogger("sdq.alerts.observaciones")
 
@@ -33,8 +33,9 @@ PREFIJO = "alert_obs"
 
 def clave(sector_key: str, subject: str, metrica: str) -> str:
     """Identidad de la cosa observada. Misma forma que la clave de dedup para que las dos
-    se puedan leer juntas cuando haya que diagnosticar por qué algo no avisó."""
-    return f"{PREFIJO}:{sector_key}:{subject}:{metrica}"
+    se puedan leer juntas cuando haya que diagnosticar por qué algo no avisó — y acotada
+    igual: el sujeto es un UUID y la métrica puede llevar una clave de informe entera."""
+    return clave_acotada(PREFIJO, f"{sector_key}:{subject}:{metrica}")
 
 
 def leer(db: Session, k: str) -> Optional[Any]:

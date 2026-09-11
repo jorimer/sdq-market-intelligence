@@ -220,6 +220,58 @@ def test_una_condicion_que_nadie_pudo_EVALUAR_no_se_da_por_resuelta(db):
     assert db.query(Notification).count() == 1     # sigue callada: nunca se resolvió
 
 
+# ── Lo que deja rastro se escribe JUNTO, o no se escribe ─────────────────────
+
+def test_si_el_marcador_no_persiste_no_queda_NADA_entregado(db, monkeypatch):
+    """El 2026-09-10 Postgres rechazó el marcador de dedup (119 caracteres en un VARCHAR(100))
+    DESPUÉS de que la notificación y el correo encolado ya estaban comprometidos y el webhook
+    ya había salido. Sin marcador, cada barrido volvía a avisar lo mismo por los tres canales.
+
+    SQLite no aplica el largo, así que acá la base rechaza por un listener: lo que se verifica
+    no es el largo (eso lo vigila `shared/tests/test_lo_que_sqlite_no_vigila.py`) sino el
+    ORDEN — cualquier motivo por el que el marcador no entre tiene que llevarse la entrega.
+    """
+    from sqlalchemy import event
+
+    from shared.alerts.models import AlertDelivery
+
+    AlertDelivery.__table__.create(db.get_bind())
+    _activar(db, ProductTier.pulse)
+    u = _user(db)
+    _vigilar(db, u)
+    sub = db.query(AlertSubscription).one()
+    sub.channels = [service.CANAL_INAPP, service.CANAL_EMAIL, service.CANAL_WEBHOOK]
+    db.commit()
+
+    webhooks = []
+    monkeypatch.setattr(entrega, "_despachar_webhook",
+                        lambda db, evento_id, uid: webhooks.append(uid) or 1)
+
+    def rechaza_el_marcador(session, flush_context, instances):
+        if any(isinstance(o, AppSetting) and str(o.key).startswith("alert_sent:")
+               for o in session.new):
+            raise RuntimeError("value too long for type character varying(100)")
+
+    motor.register_producer(EJE, _productor([_evento()]))
+    event.listen(db, "before_flush", rechaza_el_marcador)
+    try:
+        res = motor.run_alerts_sweep(db)
+    finally:
+        event.remove(db, "before_flush", rechaza_el_marcador)
+
+    assert res["entregadas"] == 0
+    assert db.query(Notification).count() == 0
+    assert db.query(AlertDelivery).count() == 0
+    assert webhooks == []
+
+    # La base vuelve a aceptar: se entrega UNA vez por los tres canales, y el siguiente calla.
+    motor.run_alerts_sweep(db)
+    motor.run_alerts_sweep(db)
+    assert db.query(Notification).count() == 1
+    assert db.query(AlertDelivery).count() == 1
+    assert webhooks == [u.id]
+
+
 # ── Filtros de la vigilancia ─────────────────────────────────────────────────
 
 def test_la_severidad_minima_filtra(db):

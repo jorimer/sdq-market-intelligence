@@ -94,33 +94,42 @@ def entregar(db: Session, evento: AlertEvent,
         if cupo.get(uid, 0) >= MAX_POR_USUARIO_POR_BARRIDO:
             excedidas.append(uid)
             continue
+        canales = list(sub.channels or [])
+        # **La notificación, el correo encolado y el marcador se escriben en UNA transacción.**
+        # Antes cada uno comprometía por su cuenta y el marcador iba último: el 2026-09-10
+        # PostgreSQL lo rechazó (clave de 119 caracteres en un VARCHAR(100)) con la
+        # notificación y el correo ya escritos y el webhook ya enviado, y cada barrido volvía
+        # a avisar lo mismo por los tres canales. Juntos, un marcador que no entra se lleva la
+        # entrega entera y el próximo barrido la reintenta limpia.
         try:
-            canales = list(sub.channels or [])
             if service.CANAL_INAPP in canales:
                 notification_service.create(
                     db, user_id=uid, type=_tipo(evento.severidad), title=evento.titulo,
-                    body=_cuerpo(evento), action_url=ACTION_URL)
+                    body=_cuerpo(evento), action_url=ACTION_URL, commit=False)
             if service.CANAL_EMAIL in canales and evento_id:
                 # El correo no se manda desde acá aunque sea "inmediato": se ENCOLA. Una
                 # conexión SMTP dentro del barrido lo vuelve tan lento como el servidor de
                 # correo, y un SMTP caído se comería el aviso sin dejar rastro. La fila
                 # pendiente es a la vez la cola del digest y la del reintento.
                 _encolar_email(db, evento_id, uid, str(sub.digest))
-            if service.CANAL_WEBHOOK in canales and evento_id:
-                # El webhook SÍ sale en el momento, y la asimetría con el correo es
-                # deliberada: quien integra por webhook lo hace para reaccionar, no para
-                # leer un resumen mañana. La entrega ya corre en hilo aparte y la máquina de
-                # la Data API cuenta los fallos y desactiva sola un endpoint muerto, así que
-                # el barrido no queda atado a la red del cliente.
-                _despachar_webhook(db, evento_id, uid)
-            DEDUP.marcar(db, clave)
-            cupo[uid] = cupo.get(uid, 0) + 1
-            entregadas.append(uid)
+            DEDUP.marcar(db, clave, commit=False)
+            db.commit()
         except Exception as e:  # noqa: BLE001
             # Aislado por destinatario: un transitorio de base con uno no puede abortar la
             # entrega a los demás ni dejar marcadores a medias (que causarían re-spam).
             db.rollback()
             logger.warning("alerts: no se pudo entregar %s a %s: %s", evento.clave_dedup, uid, e)
+            continue
+        cupo[uid] = cupo.get(uid, 0) + 1
+        entregadas.append(uid)
+        if service.CANAL_WEBHOOK in canales and evento_id:
+            # El webhook SÍ sale en el momento, y la asimetría con el correo es deliberada:
+            # quien integra por webhook lo hace para reaccionar, no para leer un resumen
+            # mañana. Sale DESPUÉS del commit porque no se puede deshacer: si saliera antes,
+            # una transacción que no entra lo dejaría enviado y sin marcador. La entrega ya
+            # corre en hilo aparte y no levanta, así que el barrido no queda atado a la red
+            # del cliente.
+            _despachar_webhook(db, evento_id, uid)
 
     return {"entregadas": entregadas, "calladas": calladas, "filtradas": filtradas,
             "excedidas": excedidas,
@@ -157,7 +166,10 @@ def _cuerpo(evento: AlertEvent) -> str:
 
 
 def _encolar_email(db: Session, evento_id: str, user_id: str, digest: str) -> None:
-    """Deja la entrega por correo PENDIENTE. Idempotente por (evento, usuario, canal)."""
+    """Deja la entrega por correo PENDIENTE. Idempotente por (evento, usuario, canal).
+
+    No compromete: la fila entra en la transacción de :func:`entregar`, junto con la
+    notificación y el marcador de dedup."""
     from shared.alerts.models import AlertDelivery
 
     ya = (db.query(AlertDelivery)
@@ -170,7 +182,6 @@ def _encolar_email(db: Session, evento_id: str, user_id: str, digest: str) -> No
     db.add(AlertDelivery(event_id=evento_id, user_id=user_id,
                          canal=service.CANAL_EMAIL, digest=digest,
                          enviado_at=None, intentos=0))
-    db.commit()
 
 
 def _despachar_webhook(db: Session, evento_id: str, user_id: str) -> int:
