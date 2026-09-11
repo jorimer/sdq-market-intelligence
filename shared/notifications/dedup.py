@@ -19,7 +19,7 @@ from datetime import datetime, timezone
 
 from sqlalchemy.orm import Session
 
-from shared.settings.models import AppSetting
+from shared.settings.models import AppSetting, clave_acotada
 
 
 class Dedup:
@@ -31,9 +31,12 @@ class Dedup:
 
     def __init__(self, prefijo: str) -> None:
         self.prefijo = prefijo.rstrip(":")
+        clave_acotada(self.prefijo, "")   # un prefijo sin lugar para la huella falla acá
 
     def _key(self, clave: str) -> str:
-        return f"{self.prefijo}:{clave}"
+        # Acotada: la clave la arma el consumidor (dos UUIDs y un nombre de regla, en las
+        # alertas) y `app_setting.key` tiene largo fijo que SQLite no aplica.
+        return clave_acotada(self.prefijo, clave)
 
     def avisado_recientemente(self, db: Session, clave: str, intervalo_horas: float) -> bool:
         """¿Ya se avisó por *clave* dentro de su última cadencia?
@@ -50,7 +53,9 @@ class Dedup:
             return False
         return (datetime.now(timezone.utc) - ultimo).total_seconds() < intervalo_horas * 3600
 
-    def marcar(self, db: Session, clave: str) -> None:
+    def marcar(self, db: Session, clave: str, *, commit: bool = True) -> None:
+        """Deja el marcador. ``commit=False`` lo suma a la transacción del llamador, para que
+        el aviso y su marcador se escriban juntos o no se escriba ninguno."""
         key = self._key(clave)
         ahora = datetime.now(timezone.utc).isoformat()
         row = db.query(AppSetting).filter(AppSetting.key == key).first()
@@ -62,7 +67,8 @@ class Dedup:
             row.is_secret = False  # type: ignore[assignment]
         else:
             db.add(AppSetting(key=key, value=ahora, is_secret=False))
-        db.commit()
+        if commit:
+            db.commit()
 
     def limpiar(self, db: Session, clave: str) -> None:
         """La condición se resolvió → borrar el marcador para poder re-avisar si recae."""
