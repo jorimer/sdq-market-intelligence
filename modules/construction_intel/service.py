@@ -6,6 +6,7 @@ index (ICC) for the latest COMPLETE year and persists it. A partial current year
 of permits, not a full year) is dropped — never annualized.
 """
 import logging
+from datetime import date
 from typing import Any, Dict, List, Optional
 
 from sqlalchemy.orm import Session
@@ -159,6 +160,72 @@ CLAVE_DEL_FEED = "mivhed_mensual"
 _INVERSION_ES_REDUNDANTE_CON_LOS_M2 = True
 
 
+#: Clave de configuración donde la sonda deja su última verificación EXITOSA. Clave propia y
+#: no el `last_result` de la operación: una corrida fallida sobrescribe el resultado, y la
+#: fecha de «la última vez que miramos la fuente y la leímos» no puede borrarse porque la
+#: siguiente no llegó.
+CLAVE_VERIFICACION = "construction.mivhed.ultima_verificacion"
+
+
+def guardar_verificacion(db: Session, registro: Dict[str, Any]) -> None:
+    """Persiste la última verificación exitosa de la fuente del feed. Commitea."""
+    import json
+
+    from shared.settings.models import AppSetting
+
+    valor = json.dumps(registro, ensure_ascii=False, default=str)
+    row = db.query(AppSetting).filter(AppSetting.key == CLAVE_VERIFICACION).first()
+    if row is None:
+        db.add(AppSetting(key=CLAVE_VERIFICACION, value=valor, is_secret=False))
+    else:
+        # `AppSetting` es del estilo `Column` y el checker ve `Column[str]` donde hay un `str`:
+        # el mismo ruido que el baseline carga ~1.300 veces, no un error de tipo real.
+        row.value = valor  # type: ignore[assignment]
+    db.commit()
+
+
+def leer_verificacion(db: Session) -> Optional[Dict[str, Any]]:
+    import json
+
+    from shared.settings.models import AppSetting
+
+    row = db.query(AppSetting).filter(AppSetting.key == CLAVE_VERIFICACION).first()
+    if row is None or not row.value:
+        return None
+    try:
+        dato = json.loads(str(row.value))
+    except (TypeError, ValueError):
+        return None
+    return dato if isinstance(dato, dict) else None
+
+
+def ultima_descarga_del_feed(db: Session) -> Optional[date]:
+    """La fecha más reciente en que DESCARGAMOS la fuente del feed y la leímos, o ``None``.
+
+    Hay dos descargas que cuentan, y se toma la más nueva: la de la SONDA diaria, que baja el
+    CSV para comparar sin ingerir, y la del SYNC, que reescribe las observaciones (su
+    `created_at` es la hora de esa ingesta, porque la ingesta borra y reescribe).
+    """
+    from datetime import datetime
+
+    from sqlalchemy import func
+
+    from shared.observations.models import SectorObservation
+
+    candidatas: List[date] = []
+    fila = (db.query(func.max(SectorObservation.created_at))
+            .filter(SectorObservation.sector_key == SECTOR_KEY_OBS).first())
+    if fila and fila[0]:
+        candidatas.append(fila[0].date() if isinstance(fila[0], datetime) else fila[0])
+    verif = leer_verificacion(db) or {}
+    try:
+        if verif.get("verificado_el"):
+            candidatas.append(date.fromisoformat(str(verif["verificado_el"])[:10]))
+    except ValueError:
+        pass
+    return max(candidatas) if candidatas else None
+
+
 def ingest_observaciones_mensuales(db: Session,
                                    mensual: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
     """Persiste el flujo MENSUAL de licencias del MIVHED en la tabla de observaciones.
@@ -184,8 +251,19 @@ def ingest_observaciones_mensuales(db: Session,
         return {"periodos": 0, "filas": 0, "sin_mes": sin_mes,
                 "motivo": "el MIVHED no devolvió ningún mes legible"}
 
+    from datetime import date as _date
+
     from shared.data.mivhed_client import mivhed_client as _mc
     emisor, licencia = _mc.source, _mc.license
+    # CUÁNDO publicó el emisor esta edición. Es lo que permite declarar «la fuente no publica
+    # desde tal fecha» computándolo, en vez de escribir la fecha a mano. Una fecha ilegible
+    # queda en NULL: se declara que no se sabe.
+    publicado_el = None
+    try:
+        crudo = (mensual or {}).get("publicado_el")
+        publicado_el = _date.fromisoformat(str(crudo)[:10]) if crudo else None
+    except ValueError:
+        publicado_el = None
 
     for codigo in (SERIE_PERMISOS, SERIE_SQM):
         obs.borrar_serie(db, sector_key=SECTOR_KEY_OBS, series_code=codigo)
@@ -196,7 +274,8 @@ def ingest_observaciones_mensuales(db: Session,
                                       (SERIE_SQM, rec.get("sqm"), "m2")):
             obs.upsert(db, sector_key=SECTOR_KEY_OBS, series_code=codigo, period=periodo,
                        value=None if valor is None else float(valor), unit=unidad,
-                       frequency="monthly", nature=FLOW, source=emisor, license=licencia)
+                       frequency="monthly", nature=FLOW, source=emisor, license=licencia,
+                       published_at=publicado_el)
             filas += 1
         # El microdato por dimensión, que el agregado anual descartaba. Es la diferencia
         # entre «el sector creció» y «tal plaza concentra tal cosa».
@@ -206,13 +285,15 @@ def ingest_observaciones_mensuales(db: Session,
                 obs.upsert(db, sector_key=SECTOR_KEY_OBS, series_code=SERIE_SQM,
                            period=periodo, value=float(d.get("sqm") or 0.0), unit="m2",
                            frequency="monthly", nature=FLOW, source=emisor,
-                           license=licencia, **{campo: nombre[:80]})
+                           license=licencia, published_at=publicado_el,
+                           **{campo: nombre[:80]})
                 filas += 1
     db.commit()
     logger.info("MIVHED mensual: %d período(s), %d fila(s), %d permiso(s) sin mes legible",
                 len(periodos), filas, sin_mes)
     return {"periodos": len(periodos), "filas": filas, "sin_mes": sin_mes,
-            "ultimo_periodo": max(periodos)}
+            "ultimo_periodo": max(periodos),
+            "publicado_el": publicado_el.isoformat() if publicado_el else None}
 
 
 def backfill_scores(

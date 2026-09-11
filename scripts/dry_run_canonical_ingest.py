@@ -38,6 +38,7 @@ def main() -> int:
     from sqlalchemy.orm import sessionmaker
 
     from shared.database.base import Base
+    from shared.database.conexion import connect_args_para
     from shared.database.paths import ensure_sqlite_directory
     from modules.macro_monitor.models.models import MacroSeries  # noqa: F401 — registra la tabla
     from modules.macro_monitor import service
@@ -47,7 +48,8 @@ def main() -> int:
     # ── base scratch: mismo esquema, vacía ────────────────────────────────
     # SQLite no crea el directorio del fichero: sin esto falla toda conexión.
     ensure_sqlite_directory(f"sqlite:///{SCRATCH_DB}")
-    scratch_engine = create_engine(f"sqlite:///{SCRATCH_DB}")
+    scratch_url = f"sqlite:///{SCRATCH_DB}"
+    scratch_engine = create_engine(scratch_url, connect_args=connect_args_para(scratch_url))
     Base.metadata.create_all(scratch_engine, tables=[MacroSeries.__table__])
     ScratchSession = sessionmaker(autocommit=False, autoflush=False, bind=scratch_engine)
     scratch = ScratchSession()

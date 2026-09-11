@@ -2,6 +2,7 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 
 from shared.config.settings import settings
+from shared.database.conexion import connect_args_para
 from shared.database.paths import ensure_sqlite_directory
 
 # SQLite no crea el directorio del fichero: sin esto, un árbol recién clonado (donde
@@ -22,9 +23,11 @@ _pool_kwargs = {} if _es_sqlite else {
     "pool_pre_ping": True,
 }
 
+# `connect_args_para` fija el reloj de la base en UTC (ver shared/database/conexion.py). Todo
+# engine de la plataforma pasa por ahí, y un guard lo exige.
 engine = create_engine(
     settings.DATABASE_URL,
-    connect_args={"check_same_thread": False} if _es_sqlite else {},
+    connect_args=connect_args_para(settings.DATABASE_URL),
     echo=settings.DEBUG,
     **_pool_kwargs,
 )

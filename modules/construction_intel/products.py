@@ -20,6 +20,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+from datetime import date
 from typing import Any, Dict, List, Optional
 
 from sqlalchemy.orm import Session
@@ -53,7 +54,7 @@ _SECTION_TITLES = {
     "construction_assessment": "Evaluación de Coyuntura (ICC)",
     "positioning": "Posición y Trayectoria",
     "recommendation": "Lectura para Decisión",
-    "delta_mensual": "Movimiento del Mes (licencias MIVHED)",
+    "delta_mensual": "Movimiento mensual de licencias (MIVHED)",
     "limitations": "Limitaciones",
 }
 _LIMITATIONS = (
@@ -330,22 +331,26 @@ class ConstructionProduct:
     def _delta_mensual(self) -> Optional[Dict[str, Any]]:
         """El movimiento del último mes observado, o ``None`` si no hay sección que publicar.
 
-        **La frescura VETA, y `indeterminada` también.** La sección se apoya en un feed
-        mensual; si su fuente dejó de publicar, la lectura del "último mes" describiría un
-        mes viejo con cara de actual — y en un documento fechado eso es una afirmación falsa,
-        no un dato incompleto. Un veredicto que no se puede computar tampoco publica: «no sé
-        de cuándo es» y «está al día» son cosas distintas.
+        **Con la fuente atrasada, la lectura SE PUBLICA con su mes nombrado y la declaración
+        al lado** (decisión del dueño, 2026-09-10). El primer diseño vetaba la sección: temía
+        describir un mes viejo con cara de actual. Pero la lectura nombra su período, así que
+        no se hace pasar por el mes en curso; y que el emisor lleve semanas sin publicar es en
+        sí información que el lector quiere. Callarla —o esconder la lectura— la perdía.
 
-        Lo vetado NO desaparece en silencio: vuelve con `no_publicable` y su motivo, que la
-        sección imprime. Un bloque que se esfuma se lee como que el eje no tiene nada que
-        decir este mes, que es una afirmación distinta y falsa.
+        La declaración viaja como DATO computado (`fuente_del_feed`) y no como prosa: la fecha
+        de la última publicación sale de `published_at`, que se captura del portal al ingerir.
+        Nunca se escribe a mano.
+
+        **`indeterminada` sí veta.** Ahí no se sabe cuándo publicó la fuente, así que no hay
+        declaración honesta que poner al lado: publicar la lectura sin ella sería presentarla
+        como vigente sin saberlo. Vuelve con `no_publicable` y su motivo, que la sección imprime.
         """
         from modules.construction_intel.service import (
             CLAVE_DEL_FEED, ETIQUETAS_DEL_FEED)
         from shared.observations import service as obs
         from shared.observations.delta import leer_delta
         from shared.operations.fuentes_congeladas import (
-            AL_DIA, veredicto_de_la_fuente)
+            AL_DIA, CONGELADA, veredicto_de_la_fuente)
 
         try:
             db = self._require_db()
@@ -354,12 +359,23 @@ class ConstructionProduct:
                 return None            # sin feed no hay sección: no aparece vacía
             veredicto = veredicto_de_la_fuente(db, sector_key=SECTOR_KEY,
                                                clave=CLAVE_DEL_FEED)
-            if veredicto is None or veredicto.estado != AL_DIA:
+            if veredicto is None or veredicto.estado not in (AL_DIA, CONGELADA):
                 return {"no_publicable": self._motivo_en_castellano(veredicto),
                         "ultimo_periodo_observado": ultimo}
             bloque = leer_delta(db, sector_key=SECTOR_KEY, period=ultimo,
                                 etiquetas=ETIQUETAS_DEL_FEED)
             bloque["emisor"] = "MIVHED (datos.gob.do)"
+            # La frescura de la FUENTE, como dato. Sin `dias`: una cifra calculada contra hoy
+            # cambiaría el payload cada día e invalidaría la caché sin que el dato cambie, y
+            # dentro de un documento envejecería sola. Lo estable es el período, la fecha de
+            # publicación y el veredicto — que cambia, a lo sumo, una vez por edición.
+            publicada = obs.ultima_publicacion(db, sector_key=SECTOR_KEY)
+            bloque["fuente_del_feed"] = {
+                "al_dia": veredicto.estado == AL_DIA,
+                "ultimo_periodo": ultimo,
+                "ultima_publicacion": publicada.isoformat() if publicada else None,
+                "cadencia": "mensual",
+            }
             bloque["provincias"] = obs.por_dimension(
                 db, sector_key=SECTOR_KEY, series_code="mivhed.licencias.metros_cuadrados",
                 period=ultimo, campo="provincia")[:5]
@@ -597,7 +613,81 @@ class ConstructionProduct:
             context=construction_delta_context(delta, snapshot.period),
             template="construction_delta", mode="standard",
             axis="construction_intel", audience="inversionista")
+        # SIN encabezado: lo que se devuelve acá se GUARDA en la caché, y el encabezado lleva
+        # la fecha de la última descarga, que cambia con cada verificación. Lo agrega
+        # `completar_en_vivo`, que corre después de la caché en cada entrega.
         return res.text
+
+    #: Cómo empieza el encabezado. Sirve para reconocer uno ya grabado en la caché por la
+    #: versión anterior —que lo metía en el texto cacheado, con la frase vieja— y reemplazarlo
+    #: en vez de apilar dos.
+    _INICIO_DEL_ENCABEZADO = "Movimiento de "
+
+    def completar_en_vivo(self, tier: ProductTier, snapshot: ProductSnapshot,
+                          narratives: Dict[str, str]) -> Dict[str, str]:
+        """Antepone el encabezado del movimiento con la fecha de la última descarga, en vivo.
+
+        Corre después de la caché (ver `assembler`), así que la fecha puede cambiar a diario
+        sin regenerar el informe. Reemplaza un encabezado viejo si la caché trae uno: la
+        versión anterior lo grababa con la frase «no figura en la fuente a la fecha de este
+        informe», que afirmaba sobre el estado ACTUAL de la fuente algo que solo se sabía de la
+        última descarga — falso durante hasta 30 días si el emisor publicaba entre dos syncs.
+        """
+        delta = (snapshot.payload or {}).get("delta_mensual")
+        texto = narratives.get("delta_mensual")
+        if not delta or not isinstance(texto, str) or delta.get("no_publicable"):
+            return narratives
+        if texto.startswith(self._INICIO_DEL_ENCABEZADO):
+            _, sep, resto = texto.partition("\n\n")
+            texto = resto if sep else ""
+        from modules.construction_intel.service import ultima_descarga_del_feed
+
+        descarga = None
+        try:
+            descarga = ultima_descarga_del_feed(self._require_db())
+        except Exception:  # noqa: BLE001 — sin fecha de descarga se dice lo que se sabe
+            logger.warning("fecha de la última descarga del MIVHED no disponible",
+                           exc_info=True)
+        encabezado = self._encabezado_del_movimiento(delta, descarga)
+        if not encabezado:
+            return narratives
+        return {**narratives,
+                "delta_mensual": f"{encabezado}\n\n{texto}" if texto else encabezado}
+
+    @staticmethod
+    def _encabezado_del_movimiento(delta: Dict[str, Any],
+                                   ultima_descarga: Optional[date] = None) -> str:
+        """El mes nombrado y, si la fuente está atrasada, la declaración. Determinista.
+
+        Va en CÓDIGO y no pedido al modelo: una declaración que tiene que aparecer no puede
+        depender de que el narrador se acuerde. Todo sale del dato — ninguna fecha a mano.
+
+        **Afirma solo lo que se sabe.** No dice que la edición siguiente «no figura en la
+        fuente»: eso es el estado ACTUAL de la fuente, y lo único verificado es que no estaba
+        en la ÚLTIMA DESCARGA. Por eso la frase nombra esa descarga y su fecha.
+        """
+        from shared.narrative.formato import fecha_larga_es, mes_largo_es, mes_siguiente
+
+        fuente = delta.get("fuente_del_feed") or {}
+        mes = mes_largo_es(fuente.get("ultimo_periodo") or delta.get("periodo"))
+        if not mes:
+            return ""
+        lead = f"Movimiento de {mes}."
+        if fuente.get("al_dia", True):
+            return lead
+        publicada = fecha_larga_es(fuente.get("ultima_publicacion"))
+        falta = mes_largo_es(mes_siguiente(fuente.get("ultimo_periodo")))
+        if not falta:
+            return lead
+        descarga = (fecha_larga_es(ultima_descarga.isoformat())
+                    if isinstance(ultima_descarga, date) else None)
+        no_estaba = (f"la de {falta}, de cadencia mensual, no figuraba en la fuente en nuestra "
+                     f"última descarga, del {descarga}." if descarga else
+                     f"la de {falta}, de cadencia mensual, no figuraba en la fuente en nuestra "
+                     f"última descarga.")
+        if publicada:
+            return f"{lead} Es la última edición que publicó el MIVHED, el {publicada}; {no_estaba}"
+        return f"{lead} Es la última edición disponible del MIVHED; {no_estaba}"
 
     # ── Render (sin DB, renderer genérico) ──
     async def render(self, tier: ProductTier, snapshot: ProductSnapshot,

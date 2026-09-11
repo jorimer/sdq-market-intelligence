@@ -54,3 +54,50 @@ def numero_para_prosa(valor: Optional[float], unidad: Optional[str] = None) -> O
     entero = entero.replace(",", _MILES)
     texto = entero + (f"{_DECIMAL}{frac}" if frac else "")
     return f"-{texto}" if v < 0 else texto
+
+
+#: Nombres de los meses en castellano, para ESCRIBIR una fecha. Los conectores tienen el mapa
+#: inverso (nombre → número) para LEER las del emisor; éste es el que faltaba.
+MESES_ES = ("enero", "febrero", "marzo", "abril", "mayo", "junio", "julio", "agosto",
+            "septiembre", "octubre", "noviembre", "diciembre")
+
+
+def mes_largo_es(periodo: Optional[str]) -> Optional[str]:
+    """``"2026-06"`` → ``"junio de 2026"``. ``None`` ante un período que no es mensual.
+
+    No adivina: un período trimestral o anual no tiene nombre de mes, y darle uno inventaría
+    una precisión que el dato no tiene.
+    """
+    p = str(periodo or "").strip()
+    if len(p) != 7 or p[4] != "-" or not (p[:4].isdigit() and p[5:].isdigit()):
+        return None
+    mes = int(p[5:])
+    if not 1 <= mes <= 12:
+        return None
+    return f"{MESES_ES[mes - 1]} de {p[:4]}"
+
+
+def fecha_larga_es(iso: Optional[str]) -> Optional[str]:
+    """``"2026-07-21"`` → ``"21 de julio de 2026"``. ``None`` ante una fecha ilegible."""
+    t = str(iso or "").strip()[:10]
+    if len(t) != 10 or t[4] != "-" or t[7] != "-":
+        return None
+    try:
+        anio, mes, dia = int(t[:4]), int(t[5:7]), int(t[8:10])
+    except ValueError:
+        return None
+    if not (1 <= mes <= 12 and 1 <= dia <= 31):
+        return None
+    return f"{dia} de {MESES_ES[mes - 1]} de {anio}"
+
+
+def mes_siguiente(periodo: Optional[str]) -> Optional[str]:
+    """``"2026-06"`` → ``"2026-07"``; ``"2026-12"`` → ``"2027-01"``. ``None`` si no es mensual."""
+    p = str(periodo or "").strip()
+    if len(p) != 7 or p[4] != "-" or not (p[:4].isdigit() and p[5:].isdigit()):
+        return None
+    anio, mes = int(p[:4]), int(p[5:])
+    if not 1 <= mes <= 12:
+        return None
+    return f"{anio + (mes == 12):04d}-{1 if mes == 12 else mes + 1:02d}"
+

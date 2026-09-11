@@ -544,6 +544,26 @@ async def _content_from_snapshot(
             "2026-09-02: era esquivable reintentando y costaba el informe entero).",
             product.sector_key, tier.value, scope or "", snapshot.period or "",
             len(relaciones_pendientes), relaciones_pendientes)
+    # TEXTO EN VIVO, DESPUÉS DE LA CACHÉ. Un producto puede completar sus secciones con un
+    # dato que cambia más seguido que su contenido —«la última descarga de la fuente fue el
+    # 10 de septiembre»— sin meterlo en el payload. Si entrara al payload, la huella de la
+    # caché cambiaría cada vez que cambia ese dato y el informe ENTERO se regeneraría, con las
+    # secciones que no cambiaron incluidas: una verificación diaria costaría un Deep Dive
+    # diario. Acá corre en cada entrega —con caché y sin ella— y lo heredan el JSON de la app
+    # y el PDF/Word, igual que el glosario y las secciones estándar de abajo.
+    #
+    # Va DESPUÉS del control de degradación: un encabezado agregado antes podía tapar la
+    # detección de un texto de respaldo. Y nunca tumba la entrega: si falla, se sirve lo que
+    # había.
+    completar = getattr(product, "completar_en_vivo", None)
+    if callable(completar):
+        try:
+            completado = completar(tier, snapshot, dict(narratives))
+            if isinstance(completado, dict):
+                narratives = completado
+        except Exception:  # noqa: BLE001 — completar en vivo jamás rompe una entrega
+            logger.exception("completar_en_vivo de %s falló; se sirve el texto sin completar",
+                             product.sector_key)
     # Glosario automático (audiencia mixta): detecta las siglas/términos técnicos que la
     # narrativa YA REDACTADA usa y anexa su definición. Va ANTES del merge de las secciones
     # estándar (metodología/fuentes no llevan jerga propia del eje). Punto único: lo
