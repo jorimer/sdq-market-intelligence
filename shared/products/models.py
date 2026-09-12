@@ -5,6 +5,9 @@ SQLite↔Postgres (Float para scores, JSON para linaje, String acotado).
 """
 from __future__ import annotations
 
+from datetime import datetime
+from uuid import uuid4
+
 from sqlalchemy import (
     Boolean,
     Column,
@@ -14,10 +17,13 @@ from sqlalchemy import (
     Index,
     JSON,
     String,
+    Text,
     UniqueConstraint,
     false,
+    func,
     true,
 )
+from sqlalchemy.orm import Mapped, mapped_column
 
 from shared.database.base import Base, UUIDMixin
 
@@ -179,3 +185,45 @@ class ProductReportCache(UUIDMixin, Base):
                          name="uq_product_report_cache_key"),
         Index("ix_product_report_cache_key", "sector_key", "tier", "scope", "period", "lang"),
     )
+
+
+class FeedDeltaCache(Base):
+    """Caché de la sección del DELTA de un feed sub-anual, por (eje, feed, período, nivel, idioma).
+
+    Separada de ``ProductReportCache`` a propósito: aquélla guarda TODAS las secciones del
+    informe en un solo JSON con la huella del payload entero, así que un mes nuevo del feed
+    —que solo cambia esta sección— regeneraba el Deep Dive completo (seis llamadas al modelo
+    en vez de una). Con clave propia, el delta se regenera solo cuando cambia SU período o SU
+    receta, y el informe del índice sigue siendo HIT. Sin TTL, como la otra: la invalida la
+    huella (``shared/products/feed_delta.huella_del_delta``).
+
+    ``feed_clave`` y ``feed_period`` admiten un COMPUESTO (``a+b``, ``2026-06+2026-03``) cuando
+    el eje tiene más de un emisor en la misma sección. Estilo tipado de SQLAlchemy 2.0 como
+    ``SectorObservation``: código nuevo no suma deuda al baseline de mypy.
+    """
+
+    __tablename__ = "feed_delta_cache"
+    __table_args__ = (
+        UniqueConstraint("sector_key", "feed_clave", "feed_period", "tier", "lang",
+                         name="uq_feed_delta_cache_key"),
+        Index("ix_feed_delta_cache_key", "sector_key", "feed_clave", "feed_period", "tier",
+              "lang"),
+    )
+
+    id: Mapped[str] = mapped_column(String, primary_key=True, default=lambda: str(uuid4()))
+    created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now(),
+                                                 nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now(),
+                                                 onupdate=func.now(), nullable=False)
+    sector_key: Mapped[str] = mapped_column(String(40), nullable=False)
+    #: La clave del feed (``SenalDeFuente.clave``), o varias unidas con ``+``.
+    feed_clave: Mapped[str] = mapped_column(String(120), nullable=False)
+    #: El período del feed narrado, o varios unidos con ``+``.
+    feed_period: Mapped[str] = mapped_column(String(80), nullable=False)
+    tier: Mapped[str] = mapped_column(String(20), nullable=False)
+    lang: Mapped[str] = mapped_column(String(8), nullable=False, default="es",
+                                      server_default="es")
+    #: sha256 del contexto + nivel + idioma + receta + constructor del contexto.
+    fingerprint: Mapped[str] = mapped_column(String(64), nullable=False)
+    #: El texto del MODELO, sin el encabezado vivo (que se antepone al servir).
+    texto: Mapped[str] = mapped_column(Text, nullable=False)

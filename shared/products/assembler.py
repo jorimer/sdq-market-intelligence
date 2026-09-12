@@ -332,6 +332,12 @@ class ProductContent:
     snapshot: ProductSnapshot
     narratives: Dict[str, str]
     section_order: tuple = ()
+    #: Secciones que el ensamblador decidió NO servir, con su motivo (`{seccion, motivo,
+    #: detalle}`). Hoy solo la del delta de feeds: se omite —en vez de tumbar el informe del
+    #: índice, que no depende de ella— cuando el motor está degradado, el texto trae una cifra
+    #: sin respaldo o afirma una causa, o no queda presupuesto. Lo omitido se LISTA: un veto
+    #: silencioso se lee como que el eje no tiene feed. La sección de limitaciones lo consume.
+    secciones_omitidas: tuple = ()
 
 
 def _assert_system_payload(product: SectorProduct, tier: ProductTier,
@@ -544,6 +550,18 @@ async def _content_from_snapshot(
             "2026-09-02: era esquivable reintentando y costaba el informe entero).",
             product.sector_key, tier.value, scope or "", snapshot.period or "",
             len(relaciones_pendientes), relaciones_pendientes)
+    # EL MOVIMIENTO DEL MES: sección TRANSVERSAL, narrada acá, con caché PROPIA. Un producto
+    # que declara `feeds_mensuales()` recibe la sección `delta_mensual` sin tocar su `render()`
+    # ni su `narratives()`, y sin que el feed entre al payload: si entrara, la huella del
+    # informe rotaría con cada mes del feed y el Deep Dive entero se regeneraría (seis llamadas
+    # por un dato que cambia una sección). Corre DESPUÉS de los gates del índice y con sus
+    # propios acumuladores del guard: un hallazgo en el delta omite el delta, no el informe.
+    # Lo que se omite se LISTA en `secciones_omitidas`. Y lleva el resto del presupuesto de
+    # ensamblado: no puede empujar el informe por encima del proxy.
+    from shared.products.feed_delta import anexar_delta_de_feeds
+    narratives, secciones_omitidas = await anexar_delta_de_feeds(
+        product, tier, snapshot, narratives, lang,
+        presupuesto_restante_s=PRESUPUESTO_DE_ENSAMBLADO_S - (time.monotonic() - _t0))
     # TEXTO EN VIVO, DESPUÉS DE LA CACHÉ. Un producto puede completar sus secciones con un
     # dato que cambia más seguido que su contenido —«la última descarga de la fuente fue el
     # 10 de septiembre»— sin meterlo en el payload. Si entrara al payload, la huella de la
@@ -586,7 +604,8 @@ async def _content_from_snapshot(
     extra = {**glossary, **std}
     order = orden_de_secciones(level.sections, narratives, extra)
     return ProductContent(level=level, snapshot=snapshot, narratives=narratives,
-                          section_order=order)
+                          section_order=order,
+                          secciones_omitidas=tuple(secciones_omitidas))
 
 
 async def assemble_product_content(

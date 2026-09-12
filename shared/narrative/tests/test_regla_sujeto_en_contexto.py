@@ -88,6 +88,16 @@ def _contextos():
                     ruta = carpeta / el.value
                     if ruta.exists():
                         rutas.add(ruta)
+    # Y los constructores de contexto TRANSVERSALES, que no viven en ningún módulo: la sección
+    # del delta de feeds arma su contexto en `shared/products/feed_delta.py` para todos los
+    # ejes. Se buscan por lo que el código HACE —llamar a `bloque_de_atribucion`, que es lo
+    # que hace todo contexto de IA de este repo— y no por una lista escrita que envejece.
+    for fuente in sorted((RAIZ / "shared").rglob("*.py")):
+        if "tests" in fuente.parts:
+            continue
+        texto = fuente.read_text(encoding="utf-8")
+        if "bloque_de_atribucion(" in texto and "def bloque_de_atribucion(" not in texto:
+            rutas.add(fuente)
     return sorted(rutas)
 
 
@@ -112,6 +122,13 @@ def test_el_lector_recupera_la_lista_COMPLETA_que_el_modulo_declara():
             assert declarado in leidos, (
                 f"banca declara {rel} y la regla del sujeto no lo está leyendo: "
                 f"ese archivo puede publicar una cuota sin población y nada fallaría")
+
+
+def test_el_contexto_transversal_del_delta_esta_cubierto():
+    """El delta de feeds arma su contexto en `shared/`, fuera de todo módulo. Sin esto, una
+    cuota sin población en ese contexto no la vería nadie — y sirve a los diecisiete ejes."""
+    rutas = {str(p.relative_to(RAIZ)) for p in _contextos()}
+    assert "shared/products/feed_delta.py" in rutas
 
 
 def test_banca_esta_cubierta():

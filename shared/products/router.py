@@ -313,6 +313,9 @@ async def get_product_report(
             "audience": level.audience, "cadence": level.cadence,
             # Orden canónico: secciones del nivel + estándar (metodología/fuentes) anexadas.
             "sections": list(content.section_order or level.sections),
+            # Lo que el ensamblador decidió no servir, con su motivo. Se lista: una sección
+            # que falta sin decirlo se lee como que el eje no la tiene.
+            "secciones_omitidas": list(content.secciones_omitidas),
             "staff_preview": access.staff_preview,
         },
     }

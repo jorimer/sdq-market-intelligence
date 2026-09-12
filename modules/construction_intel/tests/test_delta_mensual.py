@@ -1,15 +1,18 @@
-"""La sección del movimiento del mes: cuándo aparece, cuándo NO, y qué no puede tocar.
+"""El feed mensual de construcción, DECLARADO al mecanismo transversal: qué declara, qué no toca.
 
-El criterio de terminado de la rebanada vertical vive acá:
+Desde la Fase 1 del plan de entregables mensuales la sección del movimiento del mes la narra
+el ensamblador (`shared/products/feed_delta`), con caché propia. Lo que queda de este módulo
+es la DECLARACIÓN del feed y sus invariantes:
 
-* **control positivo** — con feed fresco, la sección existe, trae el delta computado y su
-  desglose por provincia y tipología;
-* **control negativo 1** — sin observaciones, el informe sale IDÉNTICO a como salía y la
-  sección **no aparece** (en vez de aparecer vacía);
-* **control negativo 2** — con la fuente congelada, la sección **no publica** y **dice por
-  qué**;
-* **invariante dura** — el ICC anual persistido no se mueve ni un decimal por este trabajo.
+* **control positivo** — con feed fresco, la sección llega al informe ensamblado con el delta
+  computado y su desglose por provincia y tipología, y las mismas cifras de antes;
+* **control negativo** — sin observaciones, el informe sale IDÉNTICO y la sección no aparece;
+* **el ahorro** — un mes nuevo del feed cuesta UNA llamada al modelo, no las del informe
+  entero, y el informe del índice sigue siendo HIT;
+* **invariante dura** — el ICC anual persistido no se mueve ni un decimal por este trabajo, y
+  el delta NO entra al payload (si entrara, la huella del informe rotaría con el feed).
 """
+import asyncio
 from datetime import date
 
 import pytest
@@ -17,6 +20,7 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
 
+import shared.narrative.claude_engine as ce
 from modules.construction_intel.models.models import ConstructionScore
 from modules.construction_intel.products import ConstructionProduct
 from modules.construction_intel.service import (
@@ -27,6 +31,9 @@ from modules.construction_intel.service import (
 )
 from shared.database.base import Base
 from shared.observations import service as obs
+from shared.products.assembler import assemble_product_content
+from shared.products.feed_delta import SECCION_DELTA, bloque_del_delta, contexto_del_delta
+from shared.products.models import FeedDeltaCache, ProductReportCache
 from shared.products.tiers import ProductTier
 
 
@@ -80,74 +87,36 @@ def _feed_fresco(db, hoy=None):
     return f"{fin_anio}-{fin_mes:02d}"
 
 
-# ── Control POSITIVO ─────────────────────────────────────────────────────────────
-
-def test_con_feed_fresco_la_seccion_TRAE_el_movimiento_del_mes(db, icc):
-    ultimo = _feed_fresco(db)
-    payload = ConstructionProduct(db).snapshot(ProductTier.deep_dive, "2025").payload
-
-    d = payload["delta_mensual"]
-    assert d["periodo"] == ultimo
-    assert "no_publicable" not in d
-    permisos = next(s for s in d["series"] if s["serie"] == SERIE_PERMISOS)
-    assert permisos["linea_base"]["tipo"] == "mismo_periodo_del_anio_anterior"
-    assert permisos["movimiento"]["direccion"] == "sube"
-    assert permisos["movimiento"]["variacion_pct"] == pytest.approx(30.0)
-    # El microdato que el agregado anual descartaba.
-    assert d["provincias"][0]["provincia"] == "SANTO DOMINGO"
-    assert d["tipologias"][0]["tipologia"] == "APARTAMENTOS"
+def _feed_atrasado(db, publicado_el="2023-12-20"):
+    periodos = {}
+    for m in range(1, 13):
+        periodos.update(_mes(f"2022-{m:02d}", 100, 50_000.0))
+    for m in range(1, 13):
+        periodos.update(_mes(f"2023-{m:02d}", 130, 65_000.0))
+    ingest_observaciones_mensuales(
+        db, {"periodos": periodos, "sin_mes": 0, "publicado_el": publicado_el})
 
 
-@pytest.mark.asyncio
-async def test_la_seccion_se_ORDENA_y_llega_al_documento(db, icc):
-    """Una sección fuera del manifiesto que no entra al orden NO existe para el cliente: la
-    app dibuja el orden. Le pasó al año-por-trimestres, con el PDF saliendo completo."""
-    from shared.products.assembler import orden_de_secciones
+def _motor(monkeypatch, texto="Las licencias suben frente al mismo mes del año anterior."):
+    """Motor falso que CUENTA llamadas por plantilla. Sin clave de API el real degrada."""
+    llamadas = []
 
-    _feed_fresco(db)
-    p = ConstructionProduct(db)
-    snap = p.snapshot(ProductTier.deep_dive, "2025")
-    declaradas = p.product_manifest().require_level(ProductTier.deep_dive).sections
-    narr = await p.narratives(ProductTier.deep_dive, snap)
+    async def fake(**kw):
+        llamadas.append(kw["template"])
+        return ce.NarrativeResult(text=texto)
 
-    assert "delta_mensual" in narr
-    assert "delta_mensual" in orden_de_secciones(declaradas, narr, {})
+    monkeypatch.setattr(ce.narrative_engine, "generate", fake)
+    return llamadas
 
 
-def test_la_seccion_tiene_TITULO_en_el_documento(db):
-    """Sin entrada en el mapa de títulos, el render imprime la clave técnica."""
-    from modules.construction_intel.products import _SECTION_TITLES
-
-    assert _SECTION_TITLES.get("delta_mensual")
+def _bloque(db):
+    feeds = ConstructionProduct(db).feeds_mensuales()
+    return bloque_del_delta(db, "construction", feeds), feeds
 
 
-# ── Control NEGATIVO 1: sin feed, el informe sale como antes ─────────────────────
-
-def test_SIN_observaciones_la_seccion_NO_aparece(db, icc):
-    """No aparece vacía: no aparece. Una sección presente y sin contenido se lee como que el
-    eje no tuvo nada que decir, que es una afirmación y es falsa."""
-    payload = ConstructionProduct(db).snapshot(ProductTier.deep_dive, "2025").payload
-    assert "delta_mensual" not in payload
-
-
-@pytest.mark.asyncio
-async def test_SIN_observaciones_las_secciones_son_EXACTAMENTE_las_de_antes(db, icc):
-    p = ConstructionProduct(db)
-    snap = p.snapshot(ProductTier.deep_dive, "2025")
-    narr = await p.narratives(ProductTier.deep_dive, snap)
-    declaradas = p.product_manifest().require_level(ProductTier.deep_dive).sections
-    assert set(narr) == set(declaradas), "el informe sin feed cambió de secciones"
-
-
-async def _entregado(p, tier=ProductTier.deep_dive):
-    """El texto como lo ENTREGA la plataforma: lo cacheable más lo que se completa en vivo.
-
-    Desde que la fecha de la última descarga se agrega después de la caché, `narratives()`
-    devuelve solo lo del modelo; probar sobre `narratives()` a secas prueba lo que se guarda,
-    no lo que se sirve.
-    """
-    snap = p.snapshot(tier, "2025")
-    return p.completar_en_vivo(tier, snap, await p.narratives(tier, snap))
+def _entregado(db, tier=ProductTier.deep_dive):
+    """El informe como lo ENSAMBLA la plataforma: índice + delta + estándar, con sus cachés."""
+    return asyncio.run(assemble_product_content(ConstructionProduct(db), tier, period="2025"))
 
 
 def _hoy_utc_largo():
@@ -160,101 +129,230 @@ def _hoy_utc_largo():
     return fecha_larga_es(datetime.now(timezone.utc).date().isoformat())
 
 
+# ── La declaración ────────────────────────────────────────────────────────────────
+
+def test_el_producto_DECLARA_el_feed_con_sus_series_y_su_sujeto_en_las_dimensiones(db):
+    feeds = ConstructionProduct(db).feeds_mensuales()
+    assert len(feeds) == 1
+    f = feeds[0]
+    assert (f.clave, f.cadence, f.axis) == (CLAVE_DEL_FEED, "monthly", "construction_intel")
+    assert set(f.series) == {SERIE_PERMISOS, SERIE_SQM}
+    assert f.emisor_en_prosa == "el MIVHED"
+    assert {d.clave_de_contexto for d in f.dimensiones} == {
+        "metros_cuadrados_licenciados_por_provincia_del_mes",
+        "metros_cuadrados_licenciados_por_tipologia_del_mes"}
+    assert f.fuente is not None and f.fuente.license, "el feed viaja sin licencia del emisor"
+    assert "indicador líder" in f.nota
+
+
+def test_la_declaracion_no_exige_base_de_datos():
+    """El guard de títulos y el catálogo instancian productos sin sesión."""
+    f = ConstructionProduct(None).feeds_mensuales()[0]
+    assert f.clave == CLAVE_DEL_FEED and f.ultima_descarga is None
+
+
+# ── Control POSITIVO ─────────────────────────────────────────────────────────────
+
+def test_con_feed_fresco_el_bloque_TRAE_el_movimiento_del_mes(db, icc):
+    ultimo = _feed_fresco(db)
+    b, feeds = _bloque(db)
+    assert b["periodo"] == ultimo and b["no_publicables"] == []
+    lectura = b["lecturas"][0]
+    permisos = next(s for s in lectura["series"] if s["serie"] == SERIE_PERMISOS)
+    assert permisos["linea_base"]["tipo"] == "mismo_periodo_del_anio_anterior"
+    assert permisos["movimiento"]["direccion"] == "sube"
+    assert permisos["movimiento"]["variacion_pct"] == pytest.approx(30.0)
+    # El microdato que el agregado anual descartaba.
+    dims = lectura["dimensiones"]
+    assert dims["metros_cuadrados_licenciados_por_provincia_del_mes"][0]["provincia"] == "SANTO DOMINGO"
+    assert dims["metros_cuadrados_licenciados_por_tipologia_del_mes"][0]["tipologia"] == "APARTAMENTOS"
+    ctx = contexto_del_delta(b, feeds, "2025")
+    assert ctx["lecturas_por_emisor"][0]["emisor_del_movimiento"] == "MIVHED (datos.gob.do)"
+    assert "MIVHED" in ctx["source"]
+
+
+@pytest.mark.asyncio
+async def test_la_seccion_se_ENSAMBLA_se_ordena_y_llega_al_documento(db, icc, monkeypatch):
+    """Una sección fuera del manifiesto que no entra al orden NO existe para el cliente: la
+    app dibuja el orden."""
+    _feed_fresco(db)
+    _motor(monkeypatch)
+    content = await assemble_product_content(ConstructionProduct(db), ProductTier.deep_dive,
+                                             period="2025")
+    assert SECCION_DELTA in content.narratives
+    assert SECCION_DELTA in content.section_order
+    assert content.secciones_omitidas == ()
+    declaradas = ConstructionProduct(db).product_manifest().require_level(
+        ProductTier.deep_dive).sections
+    assert set(declaradas) < set(content.section_order)
+
+
+def test_la_seccion_tiene_TITULO_en_el_documento(db):
+    """Sin entrada en el mapa de títulos, el render imprime la clave técnica."""
+    from modules.construction_intel.products import _SECTION_TITLES
+
+    assert _SECTION_TITLES.get(SECCION_DELTA)
+
+
+# ── Control NEGATIVO: sin feed, el informe sale como antes ───────────────────────
+
+def test_SIN_observaciones_la_seccion_NO_aparece(db, icc, monkeypatch):
+    """No aparece vacía: no aparece. Una sección presente y sin contenido se lee como que el
+    eje no tuvo nada que decir, que es una afirmación y es falsa."""
+    _motor(monkeypatch)
+    content = _entregado(db)
+    declaradas = ConstructionProduct(db).product_manifest().require_level(
+        ProductTier.deep_dive).sections
+    assert SECCION_DELTA not in content.narratives
+    assert SECCION_DELTA not in content.section_order
+    assert content.secciones_omitidas == ()
+    assert set(declaradas) <= set(content.narratives)
+
+
+# ── El AHORRO: un mes nuevo cuesta UNA llamada y el índice sigue en caché ────────
+
+def test_un_mes_nuevo_del_feed_cuesta_UNA_llamada_y_el_informe_del_indice_es_HIT(
+        db, icc, monkeypatch):
+    """La prueba de la Fase 1. Antes, el delta iba al payload y cada mes regeneraba el Deep
+    Dive entero: N secciones del índice + 1. Ahora, 1."""
+    from shared.narrative.formato import mes_largo_es, mes_siguiente
+
+    ultimo = _feed_fresco(db)
+    llamadas = _motor(monkeypatch)
+    _entregado(db)
+    del_indice = [t for t in llamadas if t != "feed_delta"]
+    assert llamadas.count("feed_delta") == 1 and len(del_indice) >= 2
+    huella_antes = db.query(ProductReportCache).one().fingerprint
+
+    llamadas.clear()
+    _entregado(db)
+    assert llamadas == [], "una segunda entrega sin cambios volvió a generar"
+
+    # Llega el mes siguiente del MIVHED.
+    llamadas.clear()
+    obs.upsert(db, sector_key="construction", series_code=SERIE_PERMISOS,
+               period=mes_siguiente(ultimo), value=150.0, unit="conteo", frequency="monthly",
+               nature="flow", source="MIVHED")
+    obs.upsert(db, sector_key="construction", series_code=SERIE_SQM,
+               period=mes_siguiente(ultimo), value=70_000.0, unit="m2", frequency="monthly",
+               nature="flow", source="MIVHED")
+    db.commit()
+    content = _entregado(db)
+    assert llamadas == ["feed_delta"], f"un mes nuevo del feed costó {llamadas}"
+    assert db.query(ProductReportCache).one().fingerprint == huella_antes, (
+        "el feed movió la huella del informe del índice: el ahorro no existe")
+    assert content.narratives[SECCION_DELTA].startswith(
+        f"Movimiento de {mes_largo_es(mes_siguiente(ultimo))}.")
+    assert db.query(FeedDeltaCache).count() == 2
+
+
+def test_el_delta_NO_entra_al_payload(db, icc):
+    """Si entrara, la huella del informe rotaría con cada mes del feed."""
+    _feed_fresco(db)
+    payload = ConstructionProduct(db).snapshot(ProductTier.deep_dive, "2025").payload
+    assert SECCION_DELTA not in payload
+
+
+def test_el_modulo_ya_NO_narra_el_delta_por_su_cuenta():
+    """Dos mecanismos para la misma sección es cómo uno se queda atrás."""
+    import inspect
+
+    import modules.construction_intel.products as m
+
+    src = inspect.getsource(m)
+    for viejo in ("_delta_mensual", "_narrar_delta", "_encabezado_del_movimiento",
+                  "construction_delta_context", "completar_en_vivo"):
+        assert viejo not in src, f"«{viejo}» sigue en el módulo"
+
+
 # ── Fuente ATRASADA: se publica con el mes nombrado y la declaración al lado ─────
 #
-# Decisión del dueño (2026-09-10). El primer diseño vetaba la sección; se cambió porque la
-# lectura nombra su período —no se hace pasar por el mes en curso— y que el emisor lleve
-# semanas sin publicar es en sí información que el lector quiere.
+# Decisión del dueño (2026-09-10). La lectura nombra su período —no se hace pasar por el mes
+# en curso— y que el emisor lleve semanas sin publicar es en sí información.
 
-def _feed_atrasado(db, publicado_el="2023-12-20"):
-    periodos = {}
-    for m in range(1, 13):
-        periodos.update(_mes(f"2022-{m:02d}", 100, 50_000.0))
-    for m in range(1, 13):
-        periodos.update(_mes(f"2023-{m:02d}", 130, 65_000.0))
-    ingest_observaciones_mensuales(
-        db, {"periodos": periodos, "sin_mes": 0, "publicado_el": publicado_el})
-
-
-def test_con_la_fuente_ATRASADA_la_seccion_SE_PUBLICA_con_su_delta(db, icc):
+def test_con_la_fuente_ATRASADA_el_bloque_SE_PUBLICA_con_su_delta(db, icc):
     _feed_atrasado(db)
-    d = ConstructionProduct(db).snapshot(ProductTier.deep_dive, "2025").payload["delta_mensual"]
-    assert "no_publicable" not in d, "la fuente atrasada volvió a vetar la sección"
-    assert d["periodo"] == "2023-12"
-    assert d["series"], "se publicó la sección sin la lectura"
-    assert d["fuente_del_feed"]["al_dia"] is False
-    assert d["fuente_del_feed"]["ultima_publicacion"] == "2023-12-20"
+    b, _ = _bloque(db)
+    assert b["no_publicables"] == [], "la fuente atrasada volvió a vetar la sección"
+    lectura = b["lecturas"][0]
+    assert lectura["periodo"] == "2023-12" and lectura["series"]
+    assert lectura["fuente_del_feed"]["al_dia"] is False
+    assert lectura["fuente_del_feed"]["ultima_publicacion"] == "2023-12-20"
 
 
-@pytest.mark.asyncio
-async def test_el_texto_NOMBRA_el_mes_y_DECLARA_la_ultima_publicacion(db, icc):
+def test_el_texto_NOMBRA_el_mes_y_DECLARA_la_ultima_publicacion(db, icc, monkeypatch):
+    """La MISMA frase que servía el módulo antes de la migración."""
     _feed_atrasado(db)
-    texto = (await _entregado(ConstructionProduct(db)))["delta_mensual"]
+    _motor(monkeypatch)
+    texto = _entregado(db).narratives[SECCION_DELTA]
     assert texto.startswith("Movimiento de diciembre de 2023.")
-    assert "el 20 de diciembre de 2023" in texto
-    assert "la de enero de 2024" in texto
+    assert "Es la última edición que publicó el MIVHED, el 20 de diciembre de 2023" in texto
+    assert "la de enero de 2024, de cadencia mensual" in texto
     assert f"no figuraba en la fuente en nuestra última descarga, del {_hoy_utc_largo()}." in texto
+    assert "a la fecha de este informe" not in texto
+    for clave in ("monthly", "quarterly", "annual"):
+        assert clave not in texto, f"la clave de máquina «{clave}» llegó al informe"
 
 
-@pytest.mark.asyncio
-async def test_la_fecha_declarada_se_COMPUTA_de_la_publicacion_y_no_esta_escrita(db, icc):
-    """Una fecha transcrita se desincroniza con la primera edición nueva. Con otra fecha de
-    publicación en el dato, el texto tiene que decir OTRA fecha."""
+def test_la_fecha_declarada_se_COMPUTA_de_la_publicacion_y_no_esta_escrita(db, icc, monkeypatch):
     _feed_atrasado(db, publicado_el="2024-01-05")
-    texto = (await _entregado(ConstructionProduct(db)))["delta_mensual"]
-    assert "el 5 de enero de 2024" in texto
-    assert "20 de diciembre" not in texto
+    _motor(monkeypatch)
+    texto = _entregado(db).narratives[SECCION_DELTA]
+    assert "el 5 de enero de 2024" in texto and "20 de diciembre" not in texto
 
 
-@pytest.mark.asyncio
-async def test_con_la_fuente_AL_DIA_se_nombra_el_mes_SIN_declaracion(db, icc):
-    """La declaración de atraso no puede aparecer cuando no hay atraso."""
-    ultimo = _feed_fresco(db)
-    texto = (await _entregado(ConstructionProduct(db)))["delta_mensual"]
+def test_con_la_fuente_AL_DIA_se_nombra_el_mes_SIN_declaracion(db, icc, monkeypatch):
     from shared.narrative.formato import mes_largo_es
 
+    ultimo = _feed_fresco(db)
+    _motor(monkeypatch)
+    texto = _entregado(db).narratives[SECCION_DELTA]
     assert texto.startswith(f"Movimiento de {mes_largo_es(ultimo)}.")
     assert "no figuraba en la fuente" not in texto
 
 
-@pytest.mark.asyncio
-async def test_sin_fecha_de_publicacion_la_declaracion_NO_inventa_una(db, icc):
-    """Si el portal no declaró la fecha, se dice lo que se sabe: el mes que falta."""
+def test_sin_fecha_de_publicacion_la_declaracion_NO_inventa_una(db, icc, monkeypatch):
     _feed_atrasado(db, publicado_el=None)
-    texto = (await _entregado(ConstructionProduct(db)))["delta_mensual"]
-    assert "última edición disponible" in texto
+    _motor(monkeypatch)
+    texto = _entregado(db).narratives[SECCION_DELTA]
+    assert "Es la última edición disponible de el MIVHED" in texto or \
+        "última edición disponible" in texto
     assert "la de enero de 2024" in texto
-    assert " el 20 de" not in texto and "publicó el MIVHED, el" not in texto
+    assert "publicó el MIVHED, el" not in texto
+
+
+def test_una_verificacion_de_la_SONDA_mas_nueva_que_la_ingesta_es_la_que_se_cita(
+        db, icc, monkeypatch):
+    """La sonda baja el CSV a diario sin ingerir: su fecha es una descarga, y si es la más
+    nueva es la que el lector necesita. Y como es lo VIVO, cambia SIN regenerar."""
+    from datetime import datetime, timedelta, timezone
+
+    from modules.construction_intel.service import guardar_verificacion
+    from shared.narrative.formato import fecha_larga_es
+
+    _feed_atrasado(db)
+    llamadas = _motor(monkeypatch)
+    _entregado(db)
+    manana = datetime.now(timezone.utc) + timedelta(days=1)
+    guardar_verificacion(db, {"verificado_el": manana.isoformat()})
+    llamadas.clear()
+    texto = _entregado(db).narratives[SECCION_DELTA]
+    assert f"del {fecha_larga_es(manana.date().isoformat())}." in texto
+    assert llamadas == [], "la fecha de la sonda regeneró el delta: lo vivo entró a la huella"
 
 
 # ── Frescura INDETERMINADA: ahí sí se veta, y se dice por qué ────────────────────
 
-def _forzar_indeterminada(monkeypatch):
+def test_con_frescura_INDETERMINADA_lo_vetado_se_ESCRIBE_con_su_causa(db, icc, monkeypatch):
     import shared.operations.fuentes_congeladas as fc
 
-    def indeterminada(db, *, sector_key, clave):
-        return fc.Veredicto(eje=sector_key, estado=fc.INDETERMINADA, cadencia="monthly",
-                            motivo="no se pudo medir", clave=clave)
-
-    monkeypatch.setattr(fc, "veredicto_de_la_fuente", indeterminada)
-
-
-def test_con_frescura_INDETERMINADA_la_seccion_no_publica(db, icc, monkeypatch):
-    """Sin saber cuándo publicó la fuente no hay declaración honesta que poner al lado, y
-    publicar sin ella presentaría la lectura como vigente sin saberlo."""
     _feed_fresco(db)
-    _forzar_indeterminada(monkeypatch)
-    d = ConstructionProduct(db).snapshot(ProductTier.deep_dive, "2025").payload["delta_mensual"]
-    assert "no_publicable" in d and "series" not in d
-
-
-@pytest.mark.asyncio
-async def test_lo_vetado_se_ESCRIBE_con_su_causa_y_sin_claves_de_maquina(db, icc, monkeypatch):
-    _feed_fresco(db)
-    _forzar_indeterminada(monkeypatch)
-    texto = (await _entregado(ConstructionProduct(db)))["delta_mensual"]
-    assert texto.startswith("No se publica")
-    assert "no depende de este feed" in texto
+    llamadas = _motor(monkeypatch)
+    monkeypatch.setattr(fc, "veredicto_de_la_fuente", lambda db, *, sector_key, clave: fc.Veredicto(
+        eje=sector_key, estado=fc.INDETERMINADA, cadencia="monthly", motivo="x", clave=clave))
+    texto = _entregado(db).narratives[SECCION_DELTA]
+    assert texto.startswith("No se publica") and "no depende de este feed" in texto
+    assert "feed_delta" not in llamadas
     for clave in ("monthly", "quarterly", "annual"):
         assert clave not in texto
 
@@ -262,7 +360,6 @@ async def test_lo_vetado_se_ESCRIBE_con_su_causa_y_sin_claves_de_maquina(db, icc
 # ── La invariante dura: el índice no se mueve ────────────────────────────────────
 
 def test_el_feed_NO_toca_el_ICC_persistido(db, icc):
-    """Es la propiedad que hace segura toda la rebanada: el índice publicado no cambia."""
     antes = [(r.period, r.icc_score, r.permits, r.sqm, r.coverage)
              for r in db.query(ConstructionScore).all()]
     _feed_fresco(db)
@@ -272,16 +369,11 @@ def test_el_feed_NO_toca_el_ICC_persistido(db, icc):
 
 
 def test_la_ingesta_es_IDEMPOTENTE(db):
-    """El CSV del MIVHED es un archivo completo en cada descarga, no un incremento: un
-    upsert fila a fila dejaría vivos los meses que el emisor haya retirado."""
     ingest_observaciones_mensuales(db, {"periodos": _mes("2025-01", 10, 100.0), "sin_mes": 0})
     n1 = obs.contar(db, sector_key="construction")
     ingest_observaciones_mensuales(db, {"periodos": _mes("2025-01", 10, 100.0), "sin_mes": 0})
     assert obs.contar(db, sector_key="construction") == n1
-
-    # Y un mes que el emisor RETIRA desaparece, en vez de sobrevivir sin que nadie lo note.
     ingest_observaciones_mensuales(db, {"periodos": _mes("2025-02", 20, 200.0), "sin_mes": 0})
-    assert obs.serie(db, sector_key="construction", series_code=SERIE_PERMISOS) != []
     periodos = {r.period for r in obs.serie(db, sector_key="construction",
                                             series_code=SERIE_SQM)}
     assert periodos == {"2025-02"}
@@ -296,13 +388,6 @@ def test_los_permisos_SIN_MES_se_declaran_y_no_se_reparten(db):
 # ── §5.1: el feed es otra FUENTE, y no toca el gate del índice ───────────────────
 
 def test_el_feed_NO_mueve_el_readiness_del_eje(db, icc):
-    """La decisión del §5.1, hecha comprobable.
-
-    Si el feed se declarara en `DataHealth.cadence` como `monthly`, el índice anual —con dato
-    del cierre— caería a factor de frescura 0 y perdería 0,300 de readiness contra un umbral
-    de activación de 0,85: como el máximo es 1,0, el eje dejaría de publicarse en TODOS sus
-    niveles. Por eso el feed viaja como fuente aparte y no como otra cadencia del mismo eje.
-    """
     from shared.products.readiness import compute_readiness
 
     p = ConstructionProduct(db)
@@ -323,24 +408,17 @@ def test_el_feed_se_declara_como_SENAL_DE_FUENTE_con_su_propia_cadencia(db, icc)
 
 
 def test_el_sensor_juzga_las_DOS_fuentes_del_eje_por_separado(db, icc):
-    """El índice anual al día y el feed mensual congelado son dos hechos, y un veredicto por
-    eje obligaba a elegir cuál contar."""
     from shared.operations.fuentes_congeladas import leer_fuentes_de_los_ejes
 
     periodos = {f"2023-{m:02d}": {"permits": 100, "sqm": 50_000.0} for m in range(1, 13)}
     ingest_observaciones_mensuales(db, {"periodos": periodos, "sin_mes": 0})
     filas = {v.id: v for v in leer_fuentes_de_los_ejes(db) if v.eje == "construction"}
-
     assert set(filas) == {"construction", f"construction:{CLAVE_DEL_FEED}"}
     assert filas["construction"].cadencia == "annual"
     assert filas[f"construction:{CLAVE_DEL_FEED}"].cadencia == "monthly"
 
 
-# ── Lo que el CLIENTE lee ────────────────────────────────────────────────────────
-
 def test_la_metodologia_NOMBRA_las_dos_cadencias(db, icc):
-    """Con la línea sola —«Cadencia: anual»— el documento diría «anual» en una página y
-    traería un mes en la otra: se contradice solo."""
     from shared.products.report_sections import standard_sections
 
     _feed_fresco(db)
@@ -348,85 +426,3 @@ def test_la_metodologia_NOMBRA_las_dos_cadencias(db, icc):
                             as_of=None).get("std_methodology", "")
     assert "**Cadencia:** anual" in met
     assert "Fuentes sub-anuales" in met and "mensual" in met
-
-
-@pytest.mark.asyncio
-async def test_la_declaracion_no_arrastra_la_clave_de_MAQUINA_de_la_cadencia(db, icc):
-    """`cadence` es una clave que elige umbrales, no una palabra en español: publicar «su
-    fuente (monthly)» en un documento en castellano es el defecto que obligó a traducir la
-    cadencia en la metodología."""
-    _feed_atrasado(db)
-    texto = (await _entregado(ConstructionProduct(db)))["delta_mensual"]
-    for clave in ("monthly", "quarterly", "annual"):
-        assert clave not in texto, f"la clave de máquina «{clave}» llegó al informe"
-    assert "mensual" in texto
-
-
-# El título de `delta_mensual` en la app lo vigila, para TODO el catálogo,
-# `shared/products/tests/test_toda_seccion_tiene_titulo_en_la_app.py`.
-
-
-# ── La frase afirma solo lo que se sabe, y se completa DESPUÉS de la caché ───────
-
-@pytest.mark.asyncio
-async def test_lo_que_se_CACHEA_no_trae_el_encabezado(db, icc):
-    """El encabezado lleva la fecha de la última descarga, que cambia con cada verificación.
-    Si quedara en el texto cacheado, esa fecha viajaría congelada en la caché."""
-    _feed_atrasado(db)
-    p = ConstructionProduct(db)
-    cacheable = await p.narratives(ProductTier.deep_dive, p.snapshot(ProductTier.deep_dive, "2025"))
-    assert not cacheable["delta_mensual"].startswith("Movimiento de ")
-
-
-@pytest.mark.asyncio
-async def test_la_frase_NUNCA_afirma_el_estado_actual_de_la_fuente(db, icc):
-    """«No figura en la fuente a la fecha de este informe» afirmaba el estado ACTUAL de la
-    fuente, y lo único verificado era la última descarga: falso durante hasta 30 días si el
-    emisor publicaba entre dos syncs."""
-    _feed_atrasado(db)
-    texto = (await _entregado(ConstructionProduct(db)))["delta_mensual"]
-    assert "a la fecha de este informe" not in texto
-    assert "no figura en la fuente" not in texto
-    assert "en nuestra última descarga" in texto
-
-
-@pytest.mark.asyncio
-async def test_una_verificacion_de_la_SONDA_mas_nueva_que_la_ingesta_es_la_que_se_cita(db, icc):
-    """La sonda baja el CSV a diario sin ingerir: su fecha es una descarga, y si es la más
-    nueva es la que el lector necesita."""
-    from datetime import datetime, timedelta, timezone
-
-    from modules.construction_intel.service import guardar_verificacion
-    from shared.narrative.formato import fecha_larga_es
-
-    _feed_atrasado(db)
-    manana = datetime.now(timezone.utc) + timedelta(days=1)
-    guardar_verificacion(db, {"verificado_el": manana.isoformat()})
-    texto = (await _entregado(ConstructionProduct(db)))["delta_mensual"]
-    assert f"del {fecha_larga_es(manana.date().isoformat())}." in texto
-
-
-def test_un_encabezado_VIEJO_grabado_en_la_cache_se_REEMPLAZA_y_no_se_apila(db, icc):
-    """La versión anterior grababa el encabezado —con la frase falsa— dentro del texto
-    cacheado. Esas filas siguen siendo HIT, porque cambiar products.py no rota la huella: el
-    encabezado viejo se reemplaza al servir."""
-    _feed_atrasado(db)
-    p = ConstructionProduct(db)
-    snap = p.snapshot(ProductTier.deep_dive, "2025")
-    viejo = ("Movimiento de diciembre de 2023. Es la última edición que publicó el MIVHED, "
-             "el 20 de diciembre de 2023; la de enero de 2024, de cadencia mensual, no figura "
-             "en la fuente a la fecha de este informe.\n\n## Flujo de licencias\n\ntexto")
-    texto = p.completar_en_vivo(ProductTier.deep_dive, snap, {"delta_mensual": viejo})["delta_mensual"]
-    assert texto.count("Movimiento de diciembre de 2023.") == 1
-    assert "a la fecha de este informe" not in texto
-    assert texto.endswith("## Flujo de licencias\n\ntexto")
-
-
-def test_lo_VETADO_no_se_toca_al_completar(db, icc, monkeypatch):
-    _feed_fresco(db)
-    _forzar_indeterminada(monkeypatch)
-    p = ConstructionProduct(db)
-    snap = p.snapshot(ProductTier.deep_dive, "2025")
-    veto = {"delta_mensual": "No se publica la lectura del movimiento del mes: x."}
-    assert p.completar_en_vivo(ProductTier.deep_dive, snap, dict(veto)) == veto
-

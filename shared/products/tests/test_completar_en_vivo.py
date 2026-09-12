@@ -44,16 +44,20 @@ def test_un_dato_que_vive_FUERA_del_payload_no_cambia_la_huella():
 
 def test_la_verificacion_diaria_NO_entra_al_payload_de_construccion():
     """Si la fecha de la última descarga llegara al payload, cada verificación regeneraría el
-    informe entero. Se lee el CÓDIGO del snapshot: la clave no puede aparecer ahí."""
+    informe entero. Se lee el CÓDIGO del snapshot: la clave no puede aparecer ahí. Desde la
+    Fase 1 el delta entero vive fuera del payload (`shared/products/feed_delta`), y la fecha
+    viaja en la declaración del feed, que tampoco entra a la huella del delta — eso lo vigila
+    `test_feed_delta.py`."""
     import inspect
 
     from modules.construction_intel.products import ConstructionProduct
 
-    fuente_delta = inspect.getsource(ConstructionProduct._delta_mensual)
-    for prohibida in ("ultima_descarga", "verificado_el", "leer_verificacion"):
-        assert prohibida not in fuente_delta, (
-            f"«{prohibida}» aparece en el armado del payload: la fecha de la verificación "
-            "diaria cambiaría la huella de la caché todos los días")
+    fuente_snapshot = inspect.getsource(ConstructionProduct.snapshot)
+    for prohibida in ("ultima_descarga", "verificado_el", "leer_verificacion", "delta_mensual",
+                      "feeds_mensuales"):
+        assert prohibida not in fuente_snapshot, (
+            f"«{prohibida}» aparece en el armado del payload: el feed o la fecha de la "
+            "verificación diaria cambiarían la huella de la caché del informe entero")
 
 
 class _Producto:
