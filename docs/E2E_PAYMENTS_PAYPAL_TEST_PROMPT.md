@@ -36,7 +36,7 @@ El subsistema vive en `shared/billing/` (router `/api/v1/billing`) + `shared/pro
   levántalo como brecha de servicio y usa cuentas sandbox de comprador/vendedor de PayPal.
 - **Cuentas de la app:** admin `claude@sdqconsulting.com.do` (contraseña en `SDQ_E2E_PASSWORD`) (config, tarifario,
   webhooks) y un usuario de cliente para comprar/suscribir (crear uno free y llevarlo por el
-  flujo). Para verificar acceso post-pago, `reporting-qa@ / Reporting1234` (enterprise).
+  flujo). Para verificar acceso post-pago, `reporting-qa@sdqconsulting.com.do` (contraseña en `SDQ_REPORTING_QA_PASSWORD`) (enterprise).
 - **Cuentas sandbox de PayPal:** usa el **buyer sandbox** de PayPal para aprobar el pago y el
   **business sandbox** como receptor; desde el dashboard de PayPal sandbox se puede además
   **cancelar la suscripción** para probar el lazo de cancelación (§3.D).
