@@ -634,36 +634,10 @@ def run_backfill(force: bool = False, period_start: str = "2021-01",
         db.close()
 
 
-def start_backfill_background(force: bool = False,
-                              only_tipos: Optional[List[str]] = None,
-                              skip_carteras: bool = False) -> Dict:
-    """Start the backfill: via the Celery worker when enabled (survives web
-    restarts, auto-retries on crash), otherwise an in-process thread.
-
-    *only_tipos* restricts the run to the given entity types (targeted re-ingest).
-    *skip_carteras* omits the slow per-quarter loan-cube aggregation (see run_backfill).
-    """
-    from shared.config.settings import settings
-
-    if get_sync_status().get("is_running"):
-        return {"status": "already_running", "message": "Ya hay una sincronización en progreso."}
-
-    msg = ("Backfill SIB iniciado en segundo plano. La extracción es incremental "
-           "(los datos van apareciendo por tipo); puede tardar 10–20 min y el estado "
-           "se actualiza en esta pantalla.")
-
-    if settings.USE_CELERY and settings.REDIS_URL:
-        try:
-            from modules.banking_score.tasks import sib_backfill_task
-            sib_backfill_task.delay(force=force, only_tipos=only_tipos, skip_carteras=skip_carteras)
-            return {"status": "started", "via": "celery", "message": msg}
-        except Exception:  # noqa: BLE001 — fall back to thread if broker unavailable
-            logger.exception("No se pudo encolar en Celery; usando hilo")
-
-    threading.Thread(target=run_backfill,
-                     kwargs={"force": force, "only_tipos": only_tipos,
-                             "skip_carteras": skip_carteras}, daemon=True).start()
-    return {"status": "started", "via": "thread", "message": msg}
+# El disparo desde la pantalla ya no vive acá: `POST /banking-score/data/sib-backfill` dispara
+# la operación de consola `sib-backfill` (banking_score/operations.py), que encola en el worker
+# y ESPERA su desenlace. La versión anterior encolaba y respondía, y un fallo del worker no
+# llegaba a ningún estado que alguien leyera.
 
 
 # ─── Targeted recompute of carteras-cube metrics (one quarter) ───

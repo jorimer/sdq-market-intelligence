@@ -486,11 +486,67 @@ def _run_sib_sync_liviano(params, user_id, set_phase) -> Dict:
     """
     from modules.banking_score.sib_sync import run_backfill
     set_phase("re-ingesta SIB sin el cubo de carteras")
-    return run_backfill(force=True, skip_carteras=True)
+    return _resultado_sib_para_consola(run_backfill(force=True, skip_carteras=True))
+
+
+def _resultado_sib_para_consola(resultado: Dict) -> Dict:
+    """``run_backfill`` dice sus fallos como ``{"status": "error", "message": ...}``, y la
+    consola solo reconoce la clave ``error``. Sin traducir, un backfill que falló —o que no
+    arrancó porque ya había otro— quedaba registrado como «completado» con ``error=None``."""
+    estado = resultado.get("status")
+    if estado in ("error", "already_running") and not resultado.get("error"):
+        return {**resultado, "error": resultado.get("message") or f"backfill SIB: {estado}"}
+    return resultado
+
+
+#: El backfill con el cubo de carteras tarda horas (el broker lo re-entregaría pasadas 6).
+#: Abandonar la mirada no cancela nada: la tarea sigue y su avance queda en `sync-status`.
+_SIB_ESPERA_MAXIMA_SEG = 7 * 3600
+
+
+def _run_sib_backfill(params, user_id, set_phase) -> Dict:  # noqa: ARG001
+    """Backfill SIB completo o dirigido: lo que dispara ``POST /banking-score/data/sib-backfill``.
+
+    La ruta encolaba en el worker y respondía; un fallo del worker no llegaba a ningún estado
+    de la consola. Ahora la ruta dispara ESTA operación, que encola y espera, así que el
+    desenlace queda en ``status.error``. Sin broker corre en este proceso, declarado en ``via``.
+    """
+    from shared.config.settings import settings
+
+    p = params or {}
+    force, skip_carteras = bool(p.get("force")), bool(p.get("skip_carteras"))
+    only_tipos = p.get("only_tipos") or None
+    if not (settings.USE_CELERY and settings.REDIS_URL):
+        from modules.banking_score.sib_sync import run_backfill
+        set_phase("backfill SIB en ESTE proceso (sin broker)")
+        resultado = run_backfill(force=force, only_tipos=only_tipos,
+                                 skip_carteras=skip_carteras)
+        return _resultado_sib_para_consola({**resultado, "via": "proceso_web"})
+
+    from modules.banking_score.tasks import sib_backfill_task
+    from shared.operations.worker import esperar_tarea
+
+    tarea = sib_backfill_task.delay(force=force, only_tipos=only_tipos,
+                                    skip_carteras=skip_carteras)
+    return _resultado_sib_para_consola(esperar_tarea(
+        tarea, set_phase, espera_maxima_seg=_SIB_ESPERA_MAXIMA_SEG, latido_seg=15.0,
+        al_vencer=(f"el backfill SIB sigue en el worker después de "
+                   f"{_SIB_ESPERA_MAXIMA_SEG / 3600:.0f} horas; dejamos de mirar (la tarea no "
+                   f"se cancela y su avance queda en /banking-score/data/sync-status)")))
 
 
 def register() -> None:
     """Register banking-score operations into the shared console (idempotent)."""
+    register_operation(Operation(
+        "sib-backfill", "Backfill SIB (completo o dirigido)",
+        "Re-ingesta desde la SIB con el cubo de carteras incluido (horas), dirigida por tipos "
+        "(params {\"only_tipos\": [\"BAC\"]}) o sin carteras ({\"skip_carteras\": true}). Bajo "
+        "demanda: la dispara la pantalla de Datos de banca. Corre en el WORKER y la consola "
+        "espera su desenlace, así que un fallo queda en status.error.",
+        _run_sib_backfill, default_interval_hours=0,
+        # Misma cascada que `sib-sync-liviano`: dato nuevo → re-validar y re-barrer alertas.
+        triggers=["backtest", "alerts-sweep"],
+    ))
     register_operation(Operation(
         "perfil-sdq-backfill", "Recomputar Perfil SDQ (histórico)",
         "Calcula Ejecución y Resiliencia para todos los períodos desde los sub-componentes "
