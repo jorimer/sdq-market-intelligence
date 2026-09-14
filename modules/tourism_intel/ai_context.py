@@ -6,6 +6,7 @@ series — so prompts stay cheap and honest about provenance. Module-local, mirr
 :mod:`free_zones_intel.ai_context`.
 """
 from typing import Any, Dict, List, Optional
+from shared.data.bcrd_llegadas_client import BCRDLlegadasClient
 from shared.data.tourism_arrivals_client import TourismArrivalsClient
 from shared.narrative.atribucion import Fuente, bloque_de_atribucion
 
@@ -14,6 +15,24 @@ from shared.narrative.atribucion import Fuente, bloque_de_atribucion
 _ONE = Fuente.de_cliente(
     TourismArrivalsClient,
     descripcion="ONE (Oficina Nacional de Estadística), llegadas vía aérea, datos abiertos")
+
+#: El feed MENSUAL del eje (Fase 6): la llegada de no residentes del BCRD. No entra al índice,
+#: que es anual y se arma con la ONE; viaja solo a la sección del movimiento del mes.
+FUENTE_BCRD_LLEGADAS = Fuente.de_cliente(
+    BCRDLlegadasClient, descripcion="BCRD (llegada mensual de pasajeros no residentes vía aérea)")
+
+NOTA_DEL_FEED_LLEGADAS = (
+    "Son personas no residentes que LLEGARON por vía aérea en el mes: un flujo con estación "
+    "marcada, que se mide contra el MISMO mes del año anterior y nunca contra el mes previo. "
+    "Los dominicanos no residentes son la diáspora que visita, no turistas extranjeros: no los "
+    "sumes a los extranjeros como si fueran el mismo público. Las cifras del año en curso son "
+    "preliminares del BCRD. Llegar no es ocupar una habitación ni gastar: no escribas sobre "
+    "ocupación ni divisas a partir de esta serie.")
+
+#: Qué publica HOY el Ministerio de Turismo sobre ocupación, verificado el 2026-09-14. Antes el
+#: texto decía que la ocupación «solo vive en PDFs, sin serie limpia»: era cierto del BCRD, que
+#: la discontinuó en 2018-2019, pero MITUR publica los indicadores en el tablero de SITUR.
+OCUPACION_HOTELERA_VERIFICADA_EL = "2026-09-14"
 
 
 _DIM_LABELS = {
@@ -82,7 +101,6 @@ def tourism_ai_context(index: Dict[str, Any], period: str,
         "note": ("Sobre dato real ONE: llegadas anuales de no residentes vía aérea por "
                  "mercado de origen. Índice de tracción de DEMANDA (volumen, recuperación, "
                  "diversificación de mercados). NO cubre oferta hotelera, ocupación, ni "
-                 "ingresos por turismo (divisas) — el BCRD discontinuó esas series "
-                 "estructuradas en 2018-2019 y hoy solo viven en PDFs narrativos, sin serie "
-                 "limpia; no los inventes. Sin validación retrospectiva de resultados."),
+                 "ingresos por turismo (divisas): este índice no los ingiere; no los "
+                 "inventes. Sin validación retrospectiva de resultados."),
     }

@@ -35,6 +35,7 @@ from shared.products import (
     register_product,
     section_mode,
 )
+from shared.products.feed_delta import FeedDeclarado
 from shared.products.render import render_product_pdf
 from modules.tourism_intel.ai_context import tourism_ai_context
 from modules.tourism_intel.models.models import TourismScore
@@ -51,6 +52,7 @@ _SECTION_TITLES = {
     "tourism_assessment": "Evaluación de Tracción Turística (ITT)",
     "positioning": "Posición y Trayectoria",
     "recommendation": "Lectura para Decisión",
+    "delta_mensual": "Movimiento mensual de las llegadas de no residentes (BCRD)",
     "limitations": "Limitaciones",
 }
 _LIMITATIONS = (
@@ -59,10 +61,10 @@ _LIMITATIONS = (
     "demanda extranjera, resiliencia y recuperación (nivel frente al pico prepandemia) y "
     "diversificación de mercados (HHI por región emisora). Mide la tracción de la demanda "
     "(volumen, recuperación, concentración de origen); no cubre la oferta hotelera, la tasa "
-    "de ocupación ni los ingresos por turismo (divisas en US$), ya que el BCRD discontinuó "
-    "esas series estructuradas en 2018-2019 —el Banco Mundial las refleja igualmente "
-    "desactualizadas— y hoy solo aparecen como cifra suelta en informes PDF, sin serie "
-    "limpia disponible. El dato es anual y agregado nacional, sin desglose por polo "
+    "de ocupación ni los ingresos por turismo (divisas en US$): el BCRD discontinuó sus "
+    "series estructuradas de ocupación e ingresos en 2018-2019, y la ocupación hotelera la "
+    "publica hoy el Ministerio de Turismo en el tablero interactivo de SITUR, que este índice "
+    "no ingiere. El dato es anual y agregado nacional, sin desglose por polo "
     "turístico (Punta Cana, Puerto Plata, etc.). Índice preliminar, aún sin validación "
     "retrospectiva de resultados."
 )
@@ -128,8 +130,7 @@ _SAMPLE_NARRATIVES = {
         "ante un shock en un solo mercado. Se recomienda priorizar tesis ancladas a la "
         "demanda probada y ponderar el riesgo de concentración de origen al dimensionar la "
         "exposición. Nota: esta lectura corresponde a la DEMANDA; la rentabilidad por plaza "
-        "depende también de ocupación y tarifa (divisas), serie que el BCRD discontinuó en "
-        "2018-2019 y actualmente no publica de forma limpia."
+        "depende también de ocupación y tarifa (divisas), que esta lectura no incorpora."
     ),
 }
 
@@ -242,6 +243,51 @@ class TourismProduct:
                           detail=f"ITT {_fmt(s.itt_score)} ({s.band}) en {s.period} · "
                                  f"{int(s.nonresident) if s.nonresident else '—'} no residentes")
 
+    # ── Feed mensual (Fase 6): la llegada de no residentes del BCRD ──
+    def feeds_mensuales(self) -> List[FeedDeclarado]:
+        """El feed mensual del BCRD, declarado para el ensamblador y el sensor."""
+        from shared.data import bcrd_llegadas_client as bl
+        from shared.observations import service as obs
+
+        from modules.tourism_intel.ai_context import FUENTE_BCRD_LLEGADAS, NOTA_DEL_FEED_LLEGADAS
+
+        series = (bl.SERIE_TOTAL, bl.SERIE_EXTRANJEROS, bl.SERIE_DOMINICANOS)
+        descarga = None
+        if self._db is not None:
+            try:
+                # Lo VIVO: cuándo bajamos la fuente por última vez. Va al encabezado, no a la huella.
+                descarga = obs.ultima_escritura(self._db, sector_key=SECTOR_KEY, series=list(series))
+            except Exception:  # noqa: BLE001 — sin fecha se dice lo que se sabe
+                logger.warning("fecha de la última descarga de llegadas no disponible", exc_info=True)
+        return [FeedDeclarado(
+            clave="bcrd_llegadas",
+            etiqueta="BCRD · llegada de no residentes vía aérea",
+            emisor="BCRD (llegada de pasajeros)",
+            emisor_en_prosa="el Banco Central",
+            series=series,
+            etiquetas={
+                bl.SERIE_TOTAL: "llegadas de no residentes vía aérea (total)",
+                bl.SERIE_EXTRANJEROS: "llegadas de extranjeros no residentes",
+                bl.SERIE_DOMINICANOS: "llegadas de dominicanos no residentes (diáspora)",
+            },
+            axis="tourism_intel",
+            fuente=FUENTE_BCRD_LLEGADAS,
+            cadence="monthly",
+            nota=NOTA_DEL_FEED_LLEGADAS,
+            ultima_descarga=descarga,
+        )]
+
+    def senales_de_fuentes(self):
+        """La señal del feed del BCRD para el sensor de fuentes congeladas, con el MISMO
+        criterio que la sección del delta."""
+        from shared.products.feed_delta import senales_de_los_feeds
+
+        try:
+            return senales_de_los_feeds(self._require_db(), SECTOR_KEY, self.feeds_mensuales())
+        except Exception as e:  # noqa: BLE001 — sin feed no hay señal, no hay error
+            logger.warning("feed mensual de turismo no legible: %s", e)
+            return []
+
     def has_engine(self) -> bool:
         return self._latest() is not None
 
@@ -318,6 +364,12 @@ class TourismProduct:
         if tier == ProductTier.pulse:
             return ProductSnapshot(tier=tier, period=s.period, payload=payload,
                                    entity_name=None, entity_roster=())
+        # LA TRAYECTORIA VA EN EL PAYLOAD (plan §2.3): leída de la base en `narratives`, la huella
+        # de la caché no la veía y un año nuevo del ITT dejaba la posición escrita con la vieja.
+        trayectoria = [{"periodo": p, "score": v} for p, v in _trend_series(self._db)
+                       if str(p) <= str(s.period)]
+        if trayectoria:
+            payload["trayectoria_del_itt"] = trayectoria
         return ProductSnapshot(tier=tier, period=s.period, payload=payload, entity_name=DISPLAY)
 
     # ── Muestra sintética (datos demo ilustrativos, sin DB) ──
@@ -370,7 +422,8 @@ class TourismProduct:
         if _cap:
             base_ctx = {**base_ctx, "capacidad_de_pago": _cap}
         audience = "inversionista"
-        trend = _trend_series(self._db)  # trayectoria para la sección de posición (best-effort)
+        # La trayectoria sale del PAYLOAD, que es lo que la huella de la caché ve (plan §2.3).
+        trend = (snapshot.payload or {}).get("trayectoria_del_itt") or []
         templates = {"recommendation": "sector_decision", "positioning": "sector_positioning"}
         out: Dict[str, str] = {}
         # Secciones con cifras → una llamada IA c/u, generadas en PARALELO (asyncio.gather):
@@ -386,7 +439,7 @@ class TourismProduct:
                 ctx["enfoque"] = ("Cierre ACCIONABLE: la palanca de mayor retorno sobre la "
                                   "tracción del destino turístico, dado el cuadro anterior.")
             elif section == "positioning" and trend:
-                ctx["trayectoria"] = [{"periodo": p, "score": v} for p, v in trend]
+                ctx["trayectoria"] = list(trend)
             pending.append((section, dict(
                 context=ctx, template=templates.get(section, "tourism_outlook"),
                 mode=section_mode(tier, section, sections),
