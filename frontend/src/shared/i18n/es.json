@@ -1821,7 +1821,7 @@
         "telecom_assessment": "Desarrollo telecom (IDT)",
         "construction_pulse": "Pulso de construcción",
         "construction_assessment": "Coyuntura de construcción (ICC)",
-        "delta_mensual": "Movimiento mensual de licencias (MIVHED)",
+        "delta_mensual": "Movimiento mensual de licencias y obra pública (MIVHED, DGCP)",
         "trade_pulse": "Pulso comercial",
         "trade_assessment": "Resiliencia comercial",
         "sector_pulse": "Pulso sectorial",
@@ -1898,7 +1898,7 @@
           "recommendation": "Recomendación"
         },
         "energy": {
-          "delta_mensual": "Movimiento mensual de la energía del sistema (OC-SENI)"
+          "delta_mensual": "Movimiento mensual del sistema eléctrico (OC-SENI, DGCP)"
         },
         "insurance": {
           "peer_positioning": "Posición competitiva frente al mercado",

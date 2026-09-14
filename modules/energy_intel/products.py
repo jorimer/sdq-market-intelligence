@@ -54,7 +54,7 @@ _SECTION_TITLES = {
     "energy_assessment": "Evaluación de Resiliencia Eléctrica (IRSE)",
     "positioning": "Posición y Trayectoria",
     "recommendation": "Lectura para Decisión",
-    "delta_mensual": "Movimiento mensual de la energía del sistema (OC-SENI)",
+    "delta_mensual": "Movimiento mensual del sistema eléctrico (OC-SENI, DGCP)",
     "limitations": "Limitaciones",
 }
 _LIMITATIONS = (
@@ -372,7 +372,36 @@ class EnergyProduct:
             cadence="monthly",
             nota=NOTA_DEL_FEED_IMTE,
             ultima_descarga=descarga,
-        )]
+        ), self._feed_obra_electrica()]
+
+    def _feed_obra_electrica(self) -> FeedDeclarado:
+        """La obra pública del sector eléctrico adjudicada (DGCP), segundo feed del eje (Fase 7)."""
+        from shared.data import dgcp_ocds_client as dg
+        from shared.observations import service as obs
+
+        from modules.energy_intel.ai_context import FUENTE_DGCP_ELECTRICA, NOTA_DEL_FEED_OBRA_ELECTRICA
+
+        series = (dg.SERIE_OBRAS_ELECTRICAS, dg.SERIE_MONTO_ELECTRICO)
+        descarga = None
+        if self._db is not None:
+            try:
+                descarga = obs.ultima_escritura(self._db, sector_key=SECTOR_KEY, series=list(series))
+            except Exception:  # noqa: BLE001 — sin fecha se dice lo que se sabe
+                logger.warning("fecha de la última descarga de la DGCP no disponible", exc_info=True)
+        return FeedDeclarado(
+            clave="dgcp_obras_electricas",
+            etiqueta="DGCP · obra pública del sector eléctrico",
+            emisor="DGCP (Contrataciones Públicas, OCDS)",
+            emisor_en_prosa="la DGCP",
+            series=series,
+            etiquetas={dg.SERIE_OBRAS_ELECTRICAS: "obras adjudicadas por las empresas del sector eléctrico",
+                       dg.SERIE_MONTO_ELECTRICO: "monto contratado de esas obras (RD$)"},
+            axis="energy_intel",
+            fuente=FUENTE_DGCP_ELECTRICA,
+            cadence="monthly",
+            nota=NOTA_DEL_FEED_OBRA_ELECTRICA,
+            ultima_descarga=descarga,
+        )
 
     def senales_de_fuentes(self):
         """La señal del feed del IMTE para el sensor de fuentes congeladas, con el MISMO

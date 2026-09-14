@@ -112,6 +112,12 @@ DECLARED: dict = {
     "bcrd.llegadas.no_residentes.total": FLOW,
     "bcrd.llegadas.no_residentes.dominicanos": FLOW,
     "bcrd.llegadas.no_residentes.extranjeros": FLOW,
+    # ── Obra pública adjudicada · DGCP, OCDS (Fase 7) ──
+    # Adjudicaciones del MES y el monto contratado de esas adjudicaciones: flujos de eventos.
+    "dgcp.obras.adjudicaciones": FLOW,
+    "dgcp.obras.monto_contratado_dop": FLOW,
+    "dgcp.obras.sector_electrico.adjudicaciones": FLOW,
+    "dgcp.obras.sector_electrico.monto_contratado_dop": FLOW,
     "ars.ingreso_salud": UNKNOWN,
     "ars.gasto_salud": UNKNOWN,
     "ars.beneficio_neto": UNKNOWN,

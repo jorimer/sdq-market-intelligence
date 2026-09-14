@@ -7,6 +7,7 @@ mirrors :mod:`trade_intel.ai_context`.
 """
 from typing import Any, Dict, List, Optional
 from shared.data.generation_client import GenerationMixClient
+from shared.data.dgcp_ocds_client import DGCPOCDSClient
 from shared.data.oc_seni_client import OCSENIClient
 from shared.data.sie_client import SIEClient
 from shared.narrative.atribucion import Fuente, bloque_de_atribucion
@@ -31,6 +32,18 @@ NOTA_DEL_FEED_IMTE = (
     "el mercado mayorista, no la que facturaron. Las pérdidas son de TRANSMISIÓN —la parte de lo "
     "inyectado que no se retiró— y no las pérdidas de distribución de las EDE, que son otra "
     "cifra y mucho mayor: no las confundas. El índice anual (IRSE) no usa este feed.")
+
+#: El segundo feed mensual del eje (Fase 7): la obra pública que ADJUDICARON las unidades de compra
+#: del sector eléctrico (EDE, ETED, Ministerio de Energía y Minas), del OCDS de la DGCP.
+FUENTE_DGCP_ELECTRICA = Fuente.de_cliente(
+    DGCPOCDSClient,
+    descripcion="DGCP (obra pública adjudicada por las empresas del sector eléctrico, OCDS)")
+
+NOTA_DEL_FEED_OBRA_ELECTRICA = (
+    "Cuenta las obras que adjudicaron en el mes las empresas eléctricas del Estado y el Ministerio "
+    "de Energía y Minas, identificadas por su unidad de compra. Son pocas por mes y un cero es un "
+    "mes sin adjudicaciones, no un dato faltante. Adjudicar no es construir ni poner en servicio: "
+    "no escribas que aumentó la capacidad o la red por una adjudicación.")
 
 
 _DIM_LABELS = {
