@@ -151,6 +151,32 @@ def test_con_el_feed_ATRASADO_la_seccion_nombra_la_publicacion_y_la_descarga(db,
     assert FRASE_SIN_LIMITACIONES not in texto
 
 
+def test_sin_fecha_de_publicacion_la_frase_CONTRAE_el_articulo(db, monkeypatch):
+    """«la última edición disponible de el Emisor» llegó a prod en el encabezado del delta."""
+    feed = _feed(ultima_descarga=date(2026, 9, 12))
+    p = _sin_variable_signals(_Producto(db, feeds=[feed]))
+    _registrar(monkeypatch, p)
+    for m in range(1, 13):
+        _punto(db, f"2023-{m:02d}", 100.0, publicado=None)
+    texto = limitaciones_computadas(p, ProductTier.deep_dive, _snap(p))
+    assert "la última edición disponible del Emisor de prueba" in texto
+    assert "de el " not in texto
+
+
+def test_un_mes_VACIO_no_es_el_que_la_seccion_nombra(db, monkeypatch):
+    """El total de sistema de las ARS con una entidad sin reportar se persiste NULL. Ese mes no
+    es una edición: la sección nombra el último mes con valor."""
+    feed = _feed(ultima_descarga=date(2026, 9, 12))
+    p = _sin_variable_signals(_Producto(db, feeds=[feed]))
+    _registrar(monkeypatch, p)
+    for m in range(1, 13):
+        _punto(db, f"2023-{m:02d}", 100.0, publicado=date(2023, 12, 20))
+    _punto(db, "2024-01", None)
+    texto = limitaciones_computadas(p, ProductTier.deep_dive, _snap(p))
+    assert "corresponde a diciembre de 2023" in texto
+    assert "enero de 2024, la última" not in texto
+
+
 def test_la_fuente_del_INDICE_atrasada_se_nombra_sin_dias(db, monkeypatch):
     p = _sin_variable_signals(_Producto(db, frescura_indice=2000, cadencia_indice="annual"))
     _registrar(monkeypatch, p)

@@ -92,10 +92,13 @@ def _periodo_en_prosa(periodo: Optional[str]) -> Optional[str]:
 
 def frase_de_feed_atrasado(db, sector_key: str, feed: Any) -> Optional[str]:
     """El atraso de UN feed, con la fecha de publicación del emisor y la de nuestra descarga."""
-    from shared.narrative.formato import fecha_larga_es, mes_siguiente
+    from shared.narrative.formato import de_seguido_de, fecha_larga_es, mes_siguiente
     from shared.observations import service as obs
 
-    ultimo = obs.ultimo_periodo(db, sector_key=sector_key, series=list(feed.series))
+    # Con valor: un período cuyas filas son todas NULL no es una edición publicada, y la
+    # sección del delta y el sensor leen el mismo mes (arreglo de la Fase 3).
+    ultimo = obs.ultimo_periodo(db, sector_key=sector_key, series=list(feed.series),
+                                con_valor=True)
     if not ultimo:
         return None
     emisor = feed.emisor_en_prosa or feed.emisor
@@ -108,7 +111,7 @@ def frase_de_feed_atrasado(db, sector_key: str, feed: Any) -> Optional[str]:
 
     base = f"La lectura mensual de {feed.etiqueta} corresponde a {leido}"
     base += (f", la última edición que publicó {emisor}, el {publicada_txt}"
-             if publicada_txt else f", la última edición disponible de {emisor}")
+             if publicada_txt else f", la última edición disponible {de_seguido_de(emisor)}")
     if falta:
         base += (f"; la de {falta} no figuraba en la fuente en nuestra última descarga, "
                  f"del {descarga}." if descarga else
@@ -188,7 +191,8 @@ def limitaciones_computadas(product: Any, tier: ProductTier, snapshot: ProductSn
         for feed in feeds.values():
             try:
                 lecturas.append(obs.ultimo_periodo(db, sector_key=sector_key,
-                                                   series=list(feed.series)))
+                                                   series=list(feed.series),
+                                                   con_valor=True))
             except Exception:  # noqa: BLE001 — un feed ilegible no aporta período
                 continue
         frase = frase_de_periodos(snapshot, lecturas)
