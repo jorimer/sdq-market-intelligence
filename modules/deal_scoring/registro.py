@@ -86,26 +86,33 @@ def registrar_corrida(db: Session, body: Dict[str, Any], result: Dict[str, Any])
                                   deal_type=tipo, sector=sector, country=pais,
                                   label_confidence=LabelConfidence.baja)
             db.add(fila)
-        fila.deal_type = tipo
-        fila.sector = sector
-        fila.country = pais
-        fila.deal_stage = enum_de(DealStage, body.get("deal_stage"))
-        fila.deal_size_usd = num_de(body.get("deal_size_usd"))
-        fila.equity_required_pct = equity_de(body.get("equity_required_pct"))
         dias = num_de(body.get("days_since_first_contact"))
-        fila.days_since_first_contact = None if dias is None else int(max(0, dias))
+        score = result.get("score")
+        confianza = result.get("confidence")
+        valores: Dict[str, Any] = {
+            "deal_type": tipo,
+            "sector": sector,
+            "country": pais,
+            "deal_stage": enum_de(DealStage, body.get("deal_stage")),
+            "deal_size_usd": num_de(body.get("deal_size_usd")),
+            "equity_required_pct": equity_de(body.get("equity_required_pct")),
+            "days_since_first_contact": None if dias is None else int(max(0, dias)),
+            # Ex-ante por construcción: se scoreó antes de conocer el desenlace.
+            "retrospective": False,
+            "closed_successfully": None,
+            "outcome_date": None,
+            "score_rubrica": float(score) if isinstance(score, (int, float)) else None,
+            "score_confianza": None if confianza is None else str(confianza)[:20],
+            "scored_at": datetime.now(timezone.utc).replace(tzinfo=None),
+        }
         for campo in _SENALES_DE_ANALISTA:
             valor = num_de(body.get(campo))
-            setattr(fila, campo, None if valor is None else int(max(0, min(100, valor))))
-        # Ex-ante por construcción: se scoreó antes de conocer el desenlace.
-        fila.retrospective = False
-        fila.closed_successfully = None
-        fila.outcome_date = None
-        score = result.get("score")
-        fila.score_rubrica = float(score) if isinstance(score, (int, float)) else None
-        confianza = result.get("confidence")
-        fila.score_confianza = None if confianza is None else str(confianza)[:20]
-        fila.scored_at = datetime.now(timezone.utc).replace(tzinfo=None)
+            valores[campo] = None if valor is None else int(max(0, min(100, valor)))
+        # `setattr` y no asignación directa: `HistoricalDeal` es del estilo `Column` y el checker
+        # lee `fila.country` como `Column[str]`. Es el ruido que el baseline ya carga en todo el
+        # repo, no un error de tipo real, y un dict evita sumarle deuda sin `type: ignore`.
+        for campo, valor in valores.items():
+            setattr(fila, campo, valor)
         db.commit()
     except Exception as e:  # noqa: BLE001 — guardar la corrida nunca tumba el score
         db.rollback()
