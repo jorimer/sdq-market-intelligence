@@ -123,7 +123,12 @@ class SIEClient:
         import httpx
         url = self._resolve_csv(slug)
         with httpx.Client(timeout=120, follow_redirects=True, headers=_HEADERS) as http:
-            return http.get(url).content.decode("latin-1")
+            r = http.get(url)
+        # Sin esto, una página de error de la SIE (el CSV devolvió 404 el 2026-09-14) se leía
+        # como CSV y el operador veía «field larger than field limit», que no dice qué pasó.
+        if r.status_code != 200:
+            raise RuntimeError(f"SIE: el recurso de '{slug}' respondió HTTP {r.status_code} ({url})")
+        return r.content.decode("latin-1")
 
     def installed_capacity(self) -> Dict[int, float]:
         return parse_installed_capacity(self._fetch_csv(SLUG_CAPACITY))
