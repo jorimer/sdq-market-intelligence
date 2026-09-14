@@ -19,7 +19,15 @@ def _run_sie_energy_sync(params, user_id, set_phase) -> Dict:
     db = SessionLocal()
     try:
         set_phase("calculando IRSE por año (backfill de cobertura plena)")
-        resultado = backfill_scores(db)
+        # EL ÍNDICE Y EL FEED SON INDEPENDIENTES. El 2026-09-14 la SIE retiró el CSV de capacidad
+        # y el backfill del IRSE lanzaba antes de llegar al IMTE: una fuente anual caída dejaba
+        # sin sincronizar la mensual, que no depende de ella. Cada uno falla solo.
+        try:
+            resultado: Dict = dict(backfill_scores(db))
+        except Exception as e:  # noqa: BLE001
+            db.rollback()
+            logger.warning("IRSE no recalculado: %s", e, exc_info=True)
+            resultado = {"irse": {"error": f"{type(e).__name__}: {e}"}}
         # EL FEED MENSUAL NO TUMBA EL ÍNDICE: el IRSE ya quedó escrito y es anual. Si el OC no
         # responde, se registra en el resultado de la corrida y el sensor de fuentes lo verá
         # atrasar; no se reintenta a ciegas ni se pierde el índice.
@@ -30,6 +38,10 @@ def _run_sie_energy_sync(params, user_id, set_phase) -> Dict:
             db.rollback()
             logger.warning("IMTE del OC-SENI no sincronizado: %s", e, exc_info=True)
             resultado = {**resultado, "imte": {"error": f"{type(e).__name__}: {e}"}}
+        if "error" in (resultado.get("irse") or {}) and "error" in (resultado.get("imte") or {}):
+            # Las dos fuentes cayeron: la corrida SÍ falló, y así tiene que verse en la consola.
+            raise RuntimeError(f"energía sin sincronizar: IRSE {resultado['irse']['error']} · "
+                               f"IMTE {resultado['imte']['error']}")
         return resultado
     finally:
         db.close()
