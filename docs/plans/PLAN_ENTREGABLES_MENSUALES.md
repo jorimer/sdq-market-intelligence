@@ -31,7 +31,16 @@ Fase 2 queda reducida a §3.5 (ONE).
 |---|---|---|
 | 1 · hook transversal | ✅ en prod | #1168: Deep Dive de construcción 89,1 s frío y 0,9 s en HIT, delta fuera del payload, mismas cifras y encabezado |
 | 2 · ONE mensual y cuadro 4.8 | ⏸ **abierta por §H** | `one.gob.do` responde 403 con desafío de Cloudflare a clientes automáticos en todo el sitio. La capa ONE ya había desaparecido de prod en el sync del 2026-09-10. No se elude el desafío. Decisión que falta, del dueño: pedir acceso a la ONE o cargar los XLSX a mano. |
-| 3 · seguros | 🚧 en curso | incluye el arreglo de `insurance_series.license`: `sisalril-sfs-sync` y `ars-sync` no persisten en prod desde el 2 y 4 de septiembre |
+| 3 · seguros | ✅ en prod | #1169 + arreglos #1172 (período sin valores, «del», aviso duplicado) y #1174 (ausencias narradas y aviso por código al pie). Verificado por HTTP sobre `53cbbc0b` |
+| 4 · §Limitaciones computada y labels de Deal Scoring | ✅ en prod | #1170, sobre `f79636e6`: §Limitaciones de construcción nombra el atraso del MIVHED con sus dos fechas; cada corrida de Deal Scoring deja su fila automática sin label y la curva no la cuenta. La migración se colgó de la de #1171 (dos cabezas) |
+| 5 · energía (IMTE OC-SENI) y zonas francas | ✅ en prod, ⏸ dos fuentes caídas (§H) | #1175 + arreglo #1177, sobre `a2d7b8d7`: IMTE sincronizado (edición de julio de 2026), `energy:oc_seni_imte` al día, delta en el Deep Dive, trayectoria del IRSE en el payload. **La SIE retiró sus CSV (404) y los recursos del CNZFE en datos.gob.do dan HTTP 500**: el IRSE no se recalcula y los cuatro campos complementarios siguen vacíos. Score IZF sin cambio (49,2) |
+| 6 · turismo | ✅ en prod | #1176, sobre `985cc6d8`: llegadas mensuales del BCRD (`lleg_total.xls`, columnas verificadas contra la tasa que publica el BCRD), `tourism:bcrd_llegadas` al día, delta en el Deep Dive; texto de ocupación corregido (MITUR la publica en SITUR, verificado 2026-09-14) |
+| 7 · obra pública DGCP | ✅ en prod | comprobación #1 positiva: la DGCP puebla `mainProcurementCategory` en todos sus releases. #1180, sobre `0c459a91`: `dgcp-obras-sync` escribe en construcción y en energía (por unidad de compra), sensores al día, deltas con la DGCP |
+| 8 · leyes vía JurisAI | ✅ en prod | jorimer/JurisAi#1311 (`/normas/novedades`, por fecha de ingesta, alcance por corridas) y #1181, sobre `523871cd`: la sección lista lo ingresado en agosto de 2026 que cita la Ley 1-12; `law:jurisai` en el sensor (indeterminada: agosto no concluyente) |
+
+**Queda abierto:** la Fase 2 (decisión del dueño sobre la ONE) y, por §H, la SIE y el CNZFE. Pendiente de revisión: el
+delta narra «faltan N de los doce meses» de la ventana móvil anterior cuando no hay base, que declara un hueco; se corrige
+en el contexto del delta, sin tocar plantillas.
 
 ---
 
