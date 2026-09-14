@@ -203,3 +203,45 @@ def test_macro_pulse_is_anonymous():
                            entity_name=None)
     assert snap.entity_name is None
     enforce_anonymized(snap.payload, entity_roster=snap.entity_roster)  # no debe levantar
+
+
+# ── El Pulse macro le pasa el PANEL al sensor ──
+#
+# El nivel nombrado de este eje es el riesgo-país de un país del panel. Hasta el 2026-09-14 el
+# Pulse salía sin roster, así que un texto de coyuntura que nombrara a Jamaica pasaba. El roster
+# es el panel MENOS RD: RD es el sujeto del Pulse, y nombrarla no filtra nada.
+
+def _ensamblar_pulse(db, monkeypatch, texto):
+    from shared.products import assemble_product_content
+
+    async def _narrativas(product, tier, snapshot, lang, scope):
+        return {"macro_pulse": texto}
+
+    monkeypatch.setattr(MacroProduct, "_signals", lambda self: (_factors(), None))
+    monkeypatch.setattr("shared.products.assembler._narratives_cached", _narrativas)
+    return asyncio.run(assemble_product_content(MacroProduct(db), ProductTier.pulse, period=""))
+
+
+def test_macro_pulse_roster_es_el_panel_sin_rd(db, monkeypatch):
+    _seed_panel(db)
+    monkeypatch.setattr(MacroProduct, "_signals", lambda self: (_factors(), None))
+    snap = MacroProduct(db).snapshot(ProductTier.pulse, "")
+    assert "Jamaica" in snap.entity_roster        # persistido y del conector
+    assert "Chile" in snap.entity_roster          # solo del conector: no sembrado
+    assert "República Dominicana" not in snap.entity_roster
+
+
+@pytest.mark.parametrize("pais", ["Jamaica", "Chile"])
+def test_macro_pulse_que_nombra_un_pais_del_panel_no_se_entrega(db, monkeypatch, pais):
+    from shared.products.anonymization import AnonymizationError
+
+    _seed_panel(db)
+    with pytest.raises(AnonymizationError, match=pais):
+        _ensamblar_pulse(db, monkeypatch, f"La inflación de {pais} corre por encima de la local.")
+
+
+def test_macro_pulse_que_nombra_a_rd_se_entrega(db, monkeypatch):
+    _seed_panel(db)
+    content = _ensamblar_pulse(
+        db, monkeypatch, "La coyuntura de República Dominicana muestra inflación contenida.")
+    assert "República Dominicana" in content.narratives["macro_pulse"]

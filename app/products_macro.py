@@ -51,6 +51,27 @@ SECTOR_KEY = "macro"
 COUNTRY_NAME = "República Dominicana"
 COUNTRY_ISO = "DO"
 
+
+def _roster_del_panel(db: Session) -> tuple:
+    """Los PAÍSES del panel IRMP que el Pulse no puede nombrar: todos menos RD, su sujeto.
+
+    El nivel nombrado de este eje es el riesgo-país de un país del panel, así que un Pulse que
+    lo nombrara regalaría el Insight. Del padrón del conector (`latam_peers`) y de los países
+    persistidos: uno sembrado con otra grafía tampoco pasa. No es payload: no mueve la huella
+    de la caché. Nunca lanza — sin padrón persistido queda el del conector.
+    """
+    from shared.data.latam_peers import PEERS
+
+    nombres = {p.name for p in PEERS if p.iso2 != COUNTRY_ISO}
+    try:
+        from modules.macro_political_risk.models.models import Country
+        with db.begin_nested():
+            nombres.update(str(n) for (iso, n) in db.query(Country.iso_code, Country.name).all()
+                           if n and iso != COUNTRY_ISO)
+    except Exception as e:  # noqa: BLE001 — sin padrón persistido, queda el del conector
+        logger.warning("países del panel no disponibles para el sensor del Pulse macro: %s", e)
+    return tuple(sorted(nombres))
+
 # Etiquetas en español de las dimensiones del IRMP (réplica local; ai_context las
 # tiene private). Para la tabla del reporte de riesgo-país.
 _DIM_LABELS = {
@@ -614,7 +635,8 @@ class MacroProduct:
                    and getattr(snap, "period_end", None) else period)
             irmp_band = (snap.risk_band.value if snap is not None and snap.risk_band else None)
             payload = {"factors": factors, "n_factors": len(factors), "irmp_band": irmp_band}
-            return ProductSnapshot(tier=tier, period=per, payload=payload, entity_name=None)
+            return ProductSnapshot(tier=tier, period=per, payload=payload, entity_name=None,
+                                   entity_roster=_roster_del_panel(db))
 
         # Niveles nombrados: riesgo-país del PAÍS elegido (no RD prestado).
         iso = (scope or "").strip().upper()
