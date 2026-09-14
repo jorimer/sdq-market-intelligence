@@ -113,6 +113,49 @@ def backfill_scores(
             "count": len(persisted), "model_version": MODEL_VERSION}
 
 
+# ── Feed mensual (Fase 6): la llegada de no residentes del BCRD ─────────────────────────
+
+#: El eje en `sector_observations`. Es la misma clave que el producto (`SECTOR_KEY`).
+SECTOR_KEY_OBS = "tourism"
+
+
+def escribir_observaciones_llegadas(db: Session, records, *, publicada, source: str,
+                                    license: str) -> int:
+    """Las llegadas mensuales en `sector_observations`. No commitea.
+
+    Idempotente como el IMTE y el MIVHED: la hoja del BCRD trae la serie ENTERA desde 1978 en
+    cada descarga, así que se borra cada serie y se reescribe. `published_at` es cuándo subió el
+    BCRD el archivo a su CDN (`Last-Modified`), no cuándo lo bajamos nosotros.
+    """
+    from shared.data.series_nature import infer_nature
+    from shared.observations import service as obs
+
+    for codigo in sorted({r.series for r in records}):
+        obs.borrar_serie(db, sector_key=SECTOR_KEY_OBS, series_code=codigo)
+    puntos = {(r.series, r.period): r for r in records}
+    for (codigo, periodo), r in sorted(puntos.items()):
+        obs.upsert(db, sector_key=SECTOR_KEY_OBS, series_code=codigo, period=periodo,
+                   value=r.value, unit=r.unit, frequency="monthly",
+                   nature=infer_nature(r.unit, code=codigo), source=source,
+                   license=license, published_at=publicada)
+    return len(puntos)
+
+
+def sincronizar_llegadas_mensuales(db: Session, client: Any = None) -> Dict[str, Any]:
+    """Baja la hoja de no residentes del BCRD y la persiste. Commitea. Lanza si la fuente
+    falla: decide el llamador, que no deja que el feed tumbe el índice."""
+    from shared.data.bcrd_llegadas_client import BCRDLlegadasClient
+
+    client = client or BCRDLlegadasClient(mode="live")
+    registros, edicion = client.leer_ultima_edicion()
+    n = escribir_observaciones_llegadas(db, registros, publicada=edicion.publicada,
+                                        source=client.source, license=client.license)
+    db.commit()
+    return {"periodo": edicion.periodo, "publicada": (edicion.publicada.isoformat()
+                                                      if edicion.publicada else None),
+            "puntos": n, "modo": client.mode}
+
+
 def get_latest(db: Session, period: Optional[str] = None) -> Optional[TourismScore]:
     q = db.query(TourismScore)
     if period:
