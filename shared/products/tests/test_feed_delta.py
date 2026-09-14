@@ -706,6 +706,9 @@ def test_una_ventana_SIN_base_anterior_viaja_sin_el_motivo_del_hueco():
     crudo = json.dumps(limpia, ensure_ascii=False)
     assert "faltan" not in crudo and "no_disponible" not in crudo
     assert limpia["ventana_movil_12m"]["valor"] == 120.0, "el total de la ventana SÍ es un dato"
+    from shared.products.feed_delta import LECTURA_DE_LA_VENTANA_SIN_BASE
+    assert limpia["ventana_movil_12m"]["se_lee_como"] == LECTURA_DE_LA_VENTANA_SIN_BASE, (
+        "sin la regla de lectura el modelo narra que la comparación no existe (construcción, prod)")
     assert serie["ventana_movil_12m"]["linea_base"]["no_disponible"], "no se muta el dato de origen"
 
 
@@ -731,3 +734,18 @@ def test_el_contexto_del_delta_NO_lleva_meses_faltantes(db, producto):
     bloque = bloque_del_delta(db, EJE, producto.feeds_mensuales())
     crudo = json.dumps(contexto_del_delta(bloque, producto.feeds_mensuales(), "2025"), ensure_ascii=False)
     assert "faltan" not in crudo and "meses_faltantes" not in crudo
+
+
+def test_la_regla_de_la_ventana_sin_base_prohibe_decir_que_la_comparacion_no_existe():
+    from shared.products.feed_delta import LECTURA_DE_LA_VENTANA_SIN_BASE
+
+    assert "total" in LECTURA_DE_LA_VENTANA_SIN_BASE
+    assert "no escribas" in LECTURA_DE_LA_VENTANA_SIN_BASE and "línea base" in LECTURA_DE_LA_VENTANA_SIN_BASE
+    assert not any(c.isdigit() for c in LECTURA_DE_LA_VENTANA_SIN_BASE), "una cifra en la regla la vería el guard"
+
+
+def test_una_ventana_COMPLETA_con_base_no_recibe_la_regla_de_lectura():
+    from shared.products.feed_delta import _serie_para_el_modelo
+
+    ventana = {"disponible": True, "valor": 120.0, "linea_base": {"tipo": "x", "valor": 100.0}}
+    assert "se_lee_como" not in _serie_para_el_modelo({"serie": "x", "ventana_movil_12m": ventana})["ventana_movil_12m"]

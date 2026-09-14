@@ -329,6 +329,14 @@ def _periodo_en_prosa(periodo: Optional[str]) -> str:
     return mes_largo_es(periodo) or str(periodo or "")
 
 
+#: Cómo se lee una ventana de doce meses que no tiene la del año anterior para compararse. Constante
+#: y no literal: una frase partida por ancho de línea deja de existir en el fuente.
+LECTURA_DE_LA_VENTANA_SIN_BASE = (
+    "Es el total de los doce meses y se nombra como total. No se compara con nada: no escribas "
+    "variación, línea base ni que la comparación no existe o no está disponible."
+)
+
+
 def _serie_para_el_modelo(serie: Dict[str, Any]) -> Dict[str, Any]:
     """La serie sin lo que NO se pudo computar de su ventana de doce meses.
 
@@ -347,7 +355,11 @@ def _serie_para_el_modelo(serie: Dict[str, Any]) -> Dict[str, Any]:
         return limpia
     base = ventana.get("linea_base")
     if isinstance(base, dict) and "no_disponible" in base:
-        ventana = {k: v for k, v in ventana.items() if k != "linea_base"}
+        # Sin la base, el modelo igual notaba que esta ventana no se compara y la otra serie de la
+        # misma sección sí, y lo decía: «No se dispone de línea base para la ventana móvil en esta
+        # fuente» (construcción, 2026-09-14, tras quitar el motivo). Se le dice cómo leerla.
+        ventana = {**{k: v for k, v in ventana.items() if k != "linea_base"},
+                   "se_lee_como": LECTURA_DE_LA_VENTANA_SIN_BASE}
     return {**limpia, "ventana_movil_12m": ventana}
 
 
