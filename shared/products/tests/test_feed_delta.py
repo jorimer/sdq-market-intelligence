@@ -13,6 +13,7 @@ Criterio de terminado de la Fase 1 del plan de entregables mensuales:
 * **la ruta** — el entregable sale por HTTP con la sección en `commercial.sections`.
 """
 import asyncio
+import json
 import inspect
 from datetime import date
 from typing import Any, Dict
@@ -688,3 +689,45 @@ def test_sin_aviso_en_el_texto_del_modelo_el_pie_se_AGREGA_y_la_regla_se_lo_proh
     from shared.products.feed_delta import REGLA_DE_LA_ATRIBUCION_DEL_DELTA
 
     assert llamadas[0]["context"]["regla_de_la_atribucion"] == REGLA_DE_LA_ATRIBUCION_DEL_DELTA
+
+
+# ── La ventana de doce meses sin su base no se narra como hueco (2026-09-14) ─────────
+
+def test_una_ventana_SIN_base_anterior_viaja_sin_el_motivo_del_hueco():
+    """«faltan cinco de los doce meses del período equivalente del año anterior» salió en prod."""
+    from shared.products.feed_delta import _serie_para_el_modelo
+
+    serie = {"serie": "x", "valor": 10.0, "ventana_movil_12m": {
+        "disponible": True, "desde": "2025-08", "hasta": "2026-07", "valor": 120.0,
+        "comparable_con": "el índice anual del eje",
+        "linea_base": {"tipo": "mismo_periodo_anio_anterior",
+                       "no_disponible": "faltan 5 de los 12 meses de la ventana (2024-08, …)"}}}
+    limpia = _serie_para_el_modelo(serie)
+    crudo = json.dumps(limpia, ensure_ascii=False)
+    assert "faltan" not in crudo and "no_disponible" not in crudo
+    assert limpia["ventana_movil_12m"]["valor"] == 120.0, "el total de la ventana SÍ es un dato"
+    assert serie["ventana_movil_12m"]["linea_base"]["no_disponible"], "no se muta el dato de origen"
+
+
+def test_una_ventana_NO_disponible_no_viaja():
+    from shared.products.feed_delta import _serie_para_el_modelo
+
+    serie = {"serie": "x", "valor": 10.0, "ventana_movil_12m": {
+        "disponible": False, "meses_faltantes": ["2025-01"], "motivo": "faltan 1 de los 12 meses"}}
+    assert "ventana_movil_12m" not in _serie_para_el_modelo(serie)
+
+
+def test_una_ventana_COMPLETA_con_base_viaja_entera():
+    from shared.products.feed_delta import _serie_para_el_modelo
+
+    ventana = {"disponible": True, "valor": 120.0, "linea_base": {"tipo": "x", "valor": 100.0},
+               "movimiento": {"direccion": "sube", "variacion_pct": 20.0}}
+    assert _serie_para_el_modelo({"serie": "x", "ventana_movil_12m": ventana})["ventana_movil_12m"] == ventana
+
+
+def test_el_contexto_del_delta_NO_lleva_meses_faltantes(db, producto):
+    """Con historia corta, el contexto que ve el modelo no trae ningún motivo de hueco."""
+    _feed_fresco(db)
+    bloque = bloque_del_delta(db, EJE, producto.feeds_mensuales())
+    crudo = json.dumps(contexto_del_delta(bloque, producto.feeds_mensuales(), "2025"), ensure_ascii=False)
+    assert "faltan" not in crudo and "meses_faltantes" not in crudo
