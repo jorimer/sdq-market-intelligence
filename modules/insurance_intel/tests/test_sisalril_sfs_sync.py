@@ -19,9 +19,13 @@ from modules.insurance_intel.sisalril_sync import sisalril_sfs_sync
 def db():
     eng = create_engine("sqlite://", connect_args={"check_same_thread": False},
                         poolclass=StaticPool)
+    # `sector_observations` también: desde la Fase 3 los syncs de SISALRIL y ARS escriben el
+    # feed mensual ahí, en la misma transacción. En prod la tabla existe.
+    from shared.observations.models import SectorObservation
     Base.metadata.create_all(eng, tables=[
         m.InsuranceEntity.__table__, m.InsuranceSeries.__table__,
-        m.InsuranceRating.__table__, m.InsuranceSnapshot.__table__])
+        m.InsuranceRating.__table__, m.InsuranceSnapshot.__table__,
+        SectorObservation.__table__])
     session = sessionmaker(bind=eng)()
     try:
         yield session

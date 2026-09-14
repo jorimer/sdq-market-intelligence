@@ -109,6 +109,29 @@ def ultima_publicacion(db: Session, *, sector_key: str,
     return row[0] if row and row[0] else None
 
 
+def ultima_escritura(db: Session, *, sector_key: str,
+                     series: Optional[List[str]] = None) -> Optional[date]:
+    """La fecha en que se ESCRIBIÓ por última vez el feed, o ``None``.
+
+    Es la fecha de NUESTRA última descarga que se leyó y persistió, no la del emisor: la
+    ingesta borra y reescribe la serie, así que el ``created_at`` más nuevo es esa corrida. Un
+    eje sin sonda propia cita esto como «nuestra última descarga».
+    """
+    from datetime import datetime
+
+    from sqlalchemy import func
+
+    q = (db.query(func.max(SectorObservation.created_at))
+         .filter(SectorObservation.sector_key == sector_key))
+    if series:
+        q = q.filter(SectorObservation.series_code.in_(list(series)))
+    row = q.first()
+    valor = row[0] if row else None
+    if valor is None:
+        return None
+    return valor.date() if isinstance(valor, datetime) else valor
+
+
 def por_dimension(db: Session, *, sector_key: str, series_code: str, period: str,
                   campo: str) -> List[Dict[str, Any]]:
     """Las filas de *period* desagregadas por ``provincia`` o ``tipologia``, de mayor a menor.

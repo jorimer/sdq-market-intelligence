@@ -32,6 +32,7 @@ from shared.products import (
     register_product,
     section_mode,
 )
+from shared.products.feed_delta import FeedDeclarado
 from shared.products.render import render_product_pdf
 from modules.insurance_intel.ai_context import (
     insurance_early_warning_context,
@@ -56,7 +57,22 @@ _SECTION_TITLES = {
     "early_warning": "Alerta Temprana",
     "recommendation": "Lectura para Decisión",
     "limitations": "Limitaciones",
+    # La sección del feed la anexa el ensamblador (`shared/products/feed_delta`); el PDF la
+    # titula con el nombre de ESTE eje. «Movimiento mensual de licencias» no sirve para seguros.
+    "delta_mensual": "Movimiento mensual de la cobertura de salud (SISALRIL)",
 }
+
+#: Lo que el narrador del delta tiene que saber de cada feed. Constantes y no literales
+#: incrustados: la prosa que el modelo debe respetar vive en constantes (CLAUDE.md).
+NOTA_DEL_FEED_SFS = (
+    "La afiliación al Seguro Familiar de Salud es un STOCK: personas cubiertas a una fecha, no "
+    "altas del mes. Se compara contra el último nivel publicado, no contra el mismo mes del año "
+    "anterior. Una variación de afiliados no es una variación de primas ni de siniestros.")
+NOTA_DEL_FEED_ARS = (
+    "Son SALDOS de balance agregados de todas las ARS que aparecen en la descarga del BDFINAC, "
+    "al cierre del mes. Un período en el que alguna ARS no reportó no tiene total y se declara. "
+    "Los ingresos, gastos y beneficios de las ARS no se leen aquí: SISALRIL los publica "
+    "acumulados en el año.")
 
 _LIMITATIONS = (
     "El Índice de Solidez de Aseguradora (ISF) integra cinco dimensiones sobre dato público de "
@@ -146,6 +162,25 @@ def _pulse(db: Session, as_of: Optional[str] = None) -> Optional[Dict[str, Any]]
     except Exception as e:  # noqa: BLE001
         logger.warning("Pulso de seguros no disponible: %s", e)
         return None
+
+
+def _roster(db: Session) -> tuple:
+    """Nombres de aseguradoras y ARS que un Pulse no puede publicar. Nunca lanza.
+
+    Del roster persistido y de los nombres oficiales de las ARS del conector: una ARS que aún no
+    se sembró tampoco puede aparecer en el nivel abierto.
+    """
+    from shared.data.sisalril_ars_client import ARS_NAMES
+
+    from modules.insurance_intel.models.models import InsuranceEntity
+
+    nombres = set(ARS_NAMES.values())
+    try:
+        with db.begin_nested():
+            nombres.update(n for (n,) in db.query(InsuranceEntity.name).all() if n)
+    except Exception as e:  # noqa: BLE001 — sin roster persistido, queda el del conector
+        logger.warning("roster de seguros no disponible para el sensor del Pulse: %s", e)
+    return tuple(sorted(nombres))
 
 
 def _isf_results(db: Session) -> List[Dict[str, Any]]:
@@ -386,6 +421,91 @@ class InsuranceProduct:
             coverage=round(cov, 4), freshness_days=self._freshness_days(db),
             sources=("SIS", "datos.gob.do"), detail=detail, cadence="quarterly")
 
+    # ── Los feeds sub-anuales: otras FUENTES del eje, con su propia cadencia ──
+    #
+    # NO se declaran en `DataHealth.cadence`, que sigue "quarterly": ese campo escala los umbrales
+    # de G1 y declarar "monthly" despublica el eje. La SECCIÓN del movimiento la narra el
+    # ensamblador con caché propia; acá solo se DECLARAN.
+    def feeds_mensuales(self) -> List[FeedDeclarado]:
+        """Afiliación SFS (CNSS) y saldos de sistema de las ARS (BDFINAC), declarados."""
+        from shared.data.sisalril_ars_client import SISALRILARSClient
+        from shared.data.sisalril_client import SISALRILClient
+        from shared.narrative.atribucion import Fuente
+        from shared.observations import service as obs
+
+        from modules.insurance_intel.ars_sync import STOCKS_DE_SISTEMA
+
+        series_sfs = ("sfs.afiliacion.total", "sfs.afiliacion.contributivo",
+                      "sfs.afiliacion.subsidiado")
+        series_ars = tuple(STOCKS_DE_SISTEMA.values())
+
+        def descarga(series):
+            # Lo VIVO: cuándo bajamos la fuente por última vez. Va al encabezado, no a la huella.
+            if self._db is None:
+                return None
+            try:
+                return obs.ultima_escritura(self._db, sector_key=SECTOR_KEY, series=list(series))
+            except Exception:  # noqa: BLE001 — sin fecha se dice lo que se sabe
+                logger.warning("fecha de la última descarga del feed no disponible", exc_info=True)
+                return None
+
+        return [
+            FeedDeclarado(
+                clave="sisalril_sfs",
+                etiqueta="CNSS / SISALRIL · afiliación al SFS",
+                emisor="CNSS / SISALRIL (datos abiertos)",
+                emisor_en_prosa="el CNSS",
+                series=series_sfs,
+                etiquetas={
+                    "sfs.afiliacion.total": "personas afiliadas al SFS (total)",
+                    "sfs.afiliacion.contributivo": "personas afiliadas al régimen contributivo",
+                    "sfs.afiliacion.subsidiado": "personas afiliadas al régimen subsidiado",
+                },
+                axis="insurance_intel",
+                fuente=Fuente.de_cliente(
+                    SISALRILClient, descripcion="CNSS / SISALRIL (afiliación al SFS), datos abiertos"),
+                cadence="monthly",
+                nota=NOTA_DEL_FEED_SFS,
+                ultima_descarga=descarga(series_sfs),
+            ),
+            FeedDeclarado(
+                clave="sisalril_ars",
+                etiqueta="SISALRIL · BDFINAC · saldos de sistema de las ARS",
+                emisor="SISALRIL (Portal Estadístico, BDFINAC)",
+                emisor_en_prosa="SISALRIL",
+                series=series_ars,
+                etiquetas={
+                    "ars.sistema.patrimonio": "patrimonio del sistema de ARS",
+                    "ars.sistema.activo_total": "activo total del sistema de ARS",
+                    "ars.sistema.margen_inversiones":
+                        "inversiones que avalan el margen de solvencia del sistema de ARS",
+                    "ars.sistema.margen_requerido":
+                        "margen de solvencia requerido del sistema de ARS",
+                },
+                axis="insurance_intel",
+                fuente=Fuente.de_cliente(
+                    SISALRILARSClient,
+                    descripcion="SISALRIL (estados financieros de las ARS, BDFINAC)"),
+                cadence="monthly",
+                nota=NOTA_DEL_FEED_ARS,
+                ultima_descarga=descarga(series_ars),
+            ),
+        ]
+
+    def senales_de_fuentes(self):
+        """Las señales de los dos feeds para el sensor de fuentes congeladas.
+
+        Se derivan de `feeds_mensuales` con el helper compartido: el sensor y la sección juzgan
+        la frescura con el MISMO criterio.
+        """
+        from shared.products.feed_delta import senales_de_los_feeds
+
+        try:
+            return senales_de_los_feeds(self._require_db(), SECTOR_KEY, self.feeds_mensuales())
+        except Exception as e:  # noqa: BLE001 — sin feed no hay señal, no hay error
+            logger.warning("feeds mensuales de seguros no legibles: %s", e)
+            return []
+
     def has_engine(self) -> bool:
         db = self._require_db()
         pulse = _pulse(db)
@@ -433,9 +553,13 @@ class InsuranceProduct:
             if not pulse or not pulse.get("has_data"):
                 return ProductSnapshot(tier=tier, period=period or "—",
                                        payload={"has_data": False}, entity_name=None)
+            # EL ROSTER VIAJA AL SENSOR DE ANONIMIZACIÓN. Sin él, `enforce_anonymized` solo mira
+            # claves reservadas y un Pulse cuyo texto nombrara una aseguradora o una ARS pasaba.
+            # Con el feed de ARS entrando al nivel abierto eso deja de ser teórico. No es payload:
+            # no mueve la huella de la caché del Pulse.
             return ProductSnapshot(tier=tier, period=pulse.get("period") or "—",
                                    payload={"has_data": True, "pulse": pulse},
-                                   entity_name=None)
+                                   entity_name=None, entity_roster=_roster(db))
 
         # Niveles nombrados (Insight / Deep Dive): ISF por aseguradora (estados auditados).
         # Sin scope se LANZA (contrato del registro, como banca/pensiones/ESG): devolver un
