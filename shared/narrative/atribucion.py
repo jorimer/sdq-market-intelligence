@@ -103,7 +103,11 @@ def bloque_de_atribucion(*fuentes: Fuente) -> Dict[str, str]:
     — si dos emisores la exigen, hay que nombrar a los dos.
     """
     vivas = [f for f in fuentes if f is not None]
-    textos = [f.atribucion for f in vivas if f.atribucion]
+    # Se deduplican los textos IDÉNTICOS, conservando el orden. Dos emisores con licencias
+    # distintas se nombran los dos; dos feeds del mismo emisor con la misma licencia no repiten
+    # el aviso. Salió de un informe de seguros en prod que cerraba con la misma línea de
+    # atribución dos veces (afiliación SFS y ARS, ambos SISALRIL bajo ODbL).
+    textos = list(dict.fromkeys(f.atribucion for f in vivas if f.atribucion))
     return {
         "source": _SEPARADOR.join(f.descripcion for f in vivas),
         "atribucion_obligatoria": _SEPARADOR.join(textos),
