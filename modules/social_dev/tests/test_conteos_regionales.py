@@ -87,5 +87,8 @@ def test_la_fuente_declara_que_el_numero_es_un_COMPUTO_nuestro():
     ss._sync_conteos_regionales(db, lambda _: None)
     assert db.escrito, "el caso tiene que producir escrituras o el test no prueba nada"
     assert all("cómputo sdq" in e["source"].lower() for e in db.escrito)
-    assert all(len(e["source"]) <= 40 for e in db.escrito), (
-        "`sd_indicators.source` es varchar(40): Postgres rechaza el commit entero")
+    from modules.social_dev.models.models import SocialIndicator
+
+    tope = SocialIndicator.__table__.c.source.type.length
+    assert all(len(e["source"]) <= tope for e in db.escrito), (
+        f"`sd_indicators.source` es varchar({tope}): Postgres rechaza el commit entero")

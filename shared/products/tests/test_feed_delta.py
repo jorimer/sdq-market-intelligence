@@ -612,3 +612,79 @@ def test_por_HTTP_el_informe_trae_la_seccion_en_el_orden_y_lista_lo_omitido(db, 
     assert r2.status_code == 200
     assert SECCION_DELTA not in r2.json()["narratives"]
     assert [o["motivo"] for o in r2.json()["commercial"]["secciones_omitidas"]] == [OMITIDA_CAUSAL]
+
+
+# ── Segundo arreglo de prod (2026-09-14): ausencias narradas y el aviso repetido ─────────
+
+def _fuentes_sisalril():
+    from shared.data.sisalril_ars_client import SISALRILARSClient
+    from shared.data.sisalril_client import SISALRILClient
+    from shared.narrative.atribucion import Fuente
+
+    return (Fuente.de_cliente(SISALRILClient, descripcion="afiliación al SFS"),
+            Fuente.de_cliente(SISALRILARSClient, descripcion="saldos de las ARS"))
+
+
+def _producto_con_dos_feeds_sisalril(db, monkeypatch):
+    from shared.products import registry
+
+    sfs, ars = _fuentes_sisalril()
+    feeds = [_feed(clave="uno", fuente=sfs),
+             _feed(clave="dos", etiqueta="Emisor de prueba · stock", series=(SERIE_STOCK,),
+                   etiquetas={SERIE_STOCK: "personas en stock"}, fuente=ars)]
+    p = _Producto(db, feeds=feeds)
+    monkeypatch.setitem(registry._REGISTRY, EJE, lambda _db: p)
+    ultimo = _feed_fresco(db)
+    _punto(db, ultimo, 50.0, code=SERIE_STOCK, nature="stock")
+    anio, mes = (int(x) for x in ultimo.split("-"))
+    previo = f"{anio}-{mes - 1:02d}" if mes > 1 else f"{anio - 1}-12"
+    _punto(db, previo, 40.0, code=SERIE_STOCK, nature="stock")
+    return p, sfs.atribucion
+
+
+def test_una_serie_SIN_VALOR_no_llega_al_contexto_del_modelo(db, monkeypatch):
+    """«el margen de solvencia requerido del sistema no cuenta con observación» salió en prod:
+    la serie vacía viajaba en `series_sin_lectura` y la plantilla pedía declararla."""
+    import json
+
+    feed = _feed(series=(SERIE, SERIE_STOCK),
+                 etiquetas={SERIE: "cosas contadas", SERIE_STOCK: "personas en stock"})
+    from shared.products import registry
+
+    p = _Producto(db, feeds=[feed])
+    monkeypatch.setitem(registry._REGISTRY, EJE, lambda _db: p)
+    ultimo = _feed_fresco(db)
+    _punto(db, ultimo, None, code=SERIE_STOCK, nature="stock")
+    bloque = bloque_del_delta(db, EJE, [feed])
+    assert bloque is not None and bloque["lecturas"][0].get("sin_lectura"), (
+        "el caso dejó de reproducirse: el bloque ya no trae una serie sin lectura")
+    ctx = contexto_del_delta(bloque, [feed], "2025")
+    crudo = json.dumps(ctx, ensure_ascii=False)
+    assert "sin_lectura" not in crudo
+    assert "personas en stock" not in crudo
+
+
+def test_el_aviso_EXIGIDO_sale_UNA_vez_al_pie_aunque_el_modelo_lo_escriba_en_cada_bloque(
+        db, monkeypatch):
+    p, aviso = _producto_con_dos_feeds_sisalril(db, monkeypatch)
+    assert aviso, "el control dejó de servir: SISALRIL ya no exige aviso"
+    _motor(monkeypatch, texto=(f"## Uno\n\nTexto del primero.\n\n*{aviso}*\n\n---\n\n"
+                               f"## Dos\n\nTexto del segundo.\n\n*{aviso}*\n\n---"))
+    narr, omitidas = _anexar(p)
+    seccion = narr[SECCION_DELTA]
+    assert omitidas == []
+    assert seccion.count(aviso) == 1, seccion
+    assert seccion.endswith(f"*{aviso}*"), seccion
+    assert "Texto del primero." in seccion and "Texto del segundo." in seccion
+    assert "---\n\n*" not in seccion, "quedó un separador huérfano antes del pie"
+
+
+def test_sin_aviso_en_el_texto_del_modelo_el_pie_se_AGREGA_y_la_regla_se_lo_prohibe(
+        db, monkeypatch):
+    p, aviso = _producto_con_dos_feeds_sisalril(db, monkeypatch)
+    llamadas = _motor(monkeypatch, texto="Texto sin fuente.")
+    narr, _ = _anexar(p)
+    assert narr[SECCION_DELTA].endswith("Texto sin fuente.\n\n" + f"*{aviso}*")
+    from shared.products.feed_delta import REGLA_DE_LA_ATRIBUCION_DEL_DELTA
+
+    assert llamadas[0]["context"]["regla_de_la_atribucion"] == REGLA_DE_LA_ATRIBUCION_DEL_DELTA
