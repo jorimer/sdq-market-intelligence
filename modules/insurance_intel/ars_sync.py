@@ -137,11 +137,16 @@ def escribir_agregados_de_sistema(db: Session, records, *, source: str,
     completos = incompletos = 0
     for (destino, periodo), valores in sorted(por_periodo.items()):
         faltan = [a for a in universo if valores.get(a) is None]
+        # Se materializan los valores antes de sumar: `faltan` ya garantiza que ninguno es
+        # nulo, pero escribirlo así lo hace evidente para quien lee y para el checker, en vez
+        # de depender de una invariante que vive una línea más arriba.
+        presentes = [float(v) for v in (valores.get(a) for a in universo) if v is not None]
+        valor: Optional[float]
         if faltan:
             valor = None
             incompletos += 1
         else:
-            valor = round(sum(float(valores[a]) for a in universo), 2)
+            valor = round(sum(presentes), 2)
             completos += 1
         obs.upsert(db, sector_key=SECTOR_KEY_OBS, series_code=destino, period=periodo,
                    value=valor, unit="RD$", frequency="monthly",

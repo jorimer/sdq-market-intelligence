@@ -181,9 +181,11 @@ def _conectores_que_escriben(modelo: str, carpeta: str):
         if f"{modelo}(" not in texto:
             continue
         for nodo in ast.walk(ast.parse(texto)):
-            if not (isinstance(nodo, ast.ImportFrom) and (nodo.module or "").startswith("shared.data.")):
+            modulo = nodo.module if isinstance(nodo, ast.ImportFrom) else None
+            if not modulo or not modulo.startswith("shared.data."):
                 continue
-            mod = importlib.import_module(nodo.module)
+            assert isinstance(nodo, ast.ImportFrom)
+            mod = importlib.import_module(modulo)
             for alias in nodo.names:
                 obj = getattr(mod, alias.name, None)
                 lic = getattr(obj, "license", None)
