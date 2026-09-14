@@ -107,10 +107,19 @@ class TestConBrokerEsperaAlWorker:
 
 def test_la_operacion_esta_registrada_bajo_demanda():
     from shared.operations.service import OPERATIONS, is_on_demand
-    ops.register()
-    op = OPERATIONS["sib-backfill"]
-    assert op.runner is ops._run_sib_backfill
-    assert is_on_demand(op) is True        # no se agenda sola: el completo tarda horas
+
+    # `register()` reemplaza las operaciones del módulo por objetos nuevos y les borra los
+    # `triggers` que `enganchar_cascada()` agregó al arrancar: sin restaurar, este test
+    # rompía `test_cascada` al correr antes que él.
+    guardadas = dict(OPERATIONS)
+    try:
+        ops.register()
+        op = OPERATIONS["sib-backfill"]
+        assert op.runner is ops._run_sib_backfill
+        assert is_on_demand(op) is True        # no se agenda sola: el completo tarda horas
+    finally:
+        OPERATIONS.clear()
+        OPERATIONS.update(guardadas)
 
 
 class TestLaRutaDisparaLaOperacion:

@@ -135,11 +135,20 @@ def test_la_cobertura_lee_si_corre_de_la_CONSOLA(monkeypatch):
 
 def test_las_operaciones_estan_registradas_bajo_demanda():
     from shared.operations.service import OPERATIONS, is_on_demand
-    ops.register()
-    assert OPERATIONS["macro-excel-batch"].runner is ops._run_excel_batch
-    assert OPERATIONS["macro-canonical-ingest-manual"].runner is ops._run_canonical_ingest_manual
-    assert is_on_demand(OPERATIONS["macro-excel-batch"]) is True
-    assert is_on_demand(OPERATIONS["macro-canonical-ingest-manual"]) is True
+
+    # `register()` reemplaza las operaciones del módulo y les borra los `triggers` que
+    # `enganchar_cascada()` agregó al arrancar: sin restaurar, rompía `test_cascada`.
+    guardadas = dict(OPERATIONS)
+    try:
+        ops.register()
+        assert OPERATIONS["macro-excel-batch"].runner is ops._run_excel_batch
+        assert (OPERATIONS["macro-canonical-ingest-manual"].runner
+                is ops._run_canonical_ingest_manual)
+        assert is_on_demand(OPERATIONS["macro-excel-batch"]) is True
+        assert is_on_demand(OPERATIONS["macro-canonical-ingest-manual"]) is True
+    finally:
+        OPERATIONS.clear()
+        OPERATIONS.update(guardadas)
 
 
 class TestLasRutasDisparanLaOperacion:
