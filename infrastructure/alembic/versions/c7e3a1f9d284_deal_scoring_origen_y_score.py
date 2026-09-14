@@ -15,14 +15,14 @@ se perdían por defecto.
 Las filas existentes quedan `manual` por `server_default`: son el registro curado.
 
 Revision ID: c7e3a1f9d284
-Revises: b1d4e8c2f607
+Revises: c7e2a9d4f153
 Create Date: 2026-09-14
 """
 import sqlalchemy as sa
 from alembic import op
 
 revision = "c7e3a1f9d284"
-down_revision = "b1d4e8c2f607"
+down_revision = "c7e2a9d4f153"
 branch_labels = None
 depends_on = None
 
