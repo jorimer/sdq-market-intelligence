@@ -417,15 +417,23 @@ def ingest_excel_file(
 
 
 # ── Batch run over the catalog + coverage report ──────────────────
-# In-process status (mirrors the SIB sync). Survives within a web process; the
-# persisted ExcelFileReport rows are the durable record across restarts.
-_excel_batch_status: Dict[str, Any] = {
-    "is_running": False, "done": 0, "total": 0, "started_at": None, "last_error": None,
-}
+#: La operación de consola que corre el barrido. Su estado —no un dict en memoria— es el que
+#: dice si corre: el dict vivía en el proceso web y, con Celery, el worker nunca lo tocaba.
+#: Las filas ExcelFileReport siguen siendo el registro por archivo.
+OPERACION_EXCEL_BATCH = "macro-excel-batch"
 
 
-def excel_batch_status() -> Dict[str, Any]:
-    return dict(_excel_batch_status)
+def excel_batch_status(db: Session) -> Dict[str, Any]:
+    """Estado del barrido leído de la consola, con las claves que la pantalla ya usa.
+
+    ``done``/``total`` quedan en 0: el avance por archivo lo da ``reported`` de la cobertura
+    (la pantalla ya cae ahí cuando ``total`` es 0), y la fase legible viaja en ``phase``."""
+    from shared.operations.service import get_status
+
+    st = get_status(db, OPERACION_EXCEL_BATCH)
+    return {"is_running": bool(st.get("is_running")), "done": 0, "total": 0,
+            "started_at": st.get("started_at"), "phase": st.get("phase"),
+            "error": st.get("error")}
 
 
 def _flags_del_reporte(report) -> List[Dict[str, Any]]:
@@ -456,10 +464,14 @@ def _upsert_excel_report(db: Session, fields: Dict[str, Any]) -> None:
 def run_excel_batch(
     db: Session, *, sector: Optional[str] = None, limit: Optional[int] = None,
     use_claude: bool = True, persist_series: bool = False, force: bool = False,
+    progreso: Any = None,
 ) -> Dict[str, Any]:
     """Run the engine over the catalog (or one *sector*), upserting a per-file
     report. Idempotent: without *force*, files already reported are skipped
     (resume). With *persist_series*, also upserts the extracted records.
+
+    *progreso* (``str -> None``) recibe «archivo N de M» antes de cada archivo: la operación
+    de consola lo muestra como fase, y en el worker viaja por ``update_state``.
     """
     from modules.macro_monitor.models.models import ExcelFileReport
     from shared.data.bcrd_excel.catalog import load_catalog
@@ -480,41 +492,38 @@ def run_excel_batch(
         }
 
     cache = SpecCache()
-    _excel_batch_status.update(is_running=True, done=0, total=len(entries), last_error=None)
+    avisar = progreso or (lambda _frase: None)
+    total = len(entries)
     ok = flagged = failed = 0
-    try:
-        for e in entries:
-            if e.url in done_urls:
-                _excel_batch_status["done"] += 1
-                continue
-            try:
-                r = ingest_excel(e, cache=cache, use_claude=use_claude)
-                status = "ok" if r.report.ok else "flagged"
-                persisted = _upsert_records(db, r.records) if persist_series else 0
-                _upsert_excel_report(db, {
-                    "file_url": e.url, "filename": e.filename, "sector": e.sector,
-                    "status": status, "method": r.spec.method,
-                    "orientation": r.spec.orientation, "frequency": r.spec.frequency,
-                    "confidence": r.spec.confidence, "n_records": len(r.records),
-                    "n_series": len(r.report.series), "n_flagged": len(r.report.flagged),
-                    "persisted": persisted, "error": None,
-                    "flags": _flags_del_reporte(r.report),
-                })
-                ok += status == "ok"
-                flagged += status == "flagged"
-            except Exception as ex:  # noqa: BLE001 — record the failure, continue the batch
-                # A failed upsert (e.g. a DB constraint) leaves the session in a
-                # poisoned transaction; roll back before the next DB write, or the
-                # failure-report write below ALSO throws and aborts the whole batch.
-                db.rollback()
-                failed += 1
-                _upsert_excel_report(db, {
-                    "file_url": e.url, "filename": e.filename, "sector": e.sector,
-                    "status": "failed", "error": str(ex)[:500],
-                })
-            _excel_batch_status["done"] += 1
-    finally:
-        _excel_batch_status["is_running"] = False
+    for i, e in enumerate(entries, 1):
+        if e.url in done_urls:
+            continue
+        avisar(f"archivo {i} de {total}: {e.filename}")
+        try:
+            r = ingest_excel(e, cache=cache, use_claude=use_claude)
+            status = "ok" if r.report.ok else "flagged"
+            persisted = _upsert_records(db, r.records) if persist_series else 0
+            _upsert_excel_report(db, {
+                "file_url": e.url, "filename": e.filename, "sector": e.sector,
+                "status": status, "method": r.spec.method,
+                "orientation": r.spec.orientation, "frequency": r.spec.frequency,
+                "confidence": r.spec.confidence, "n_records": len(r.records),
+                "n_series": len(r.report.series), "n_flagged": len(r.report.flagged),
+                "persisted": persisted, "error": None,
+                "flags": _flags_del_reporte(r.report),
+            })
+            ok += status == "ok"
+            flagged += status == "flagged"
+        except Exception as ex:  # noqa: BLE001 — record the failure, continue the batch
+            # A failed upsert (e.g. a DB constraint) leaves the session in a
+            # poisoned transaction; roll back before the next DB write, or the
+            # failure-report write below ALSO throws and aborts the whole batch.
+            db.rollback()
+            failed += 1
+            _upsert_excel_report(db, {
+                "file_url": e.url, "filename": e.filename, "sector": e.sector,
+                "status": "failed", "error": str(ex)[:500],
+            })
     logger.info("[macro] batch Excel: %d ok, %d marcados, %d fallidos", ok, flagged, failed)
     return {"processed": len(entries), "ok": ok, "flagged": flagged, "failed": failed}
 
@@ -820,33 +829,8 @@ def ingest_canonical(db: Session, *, persist: bool = False,
             "cadence_mismatches": discrepancias}
 
 
-def start_canonical_ingest_background(*, persist: bool = False) -> Dict[str, Any]:
-    """Launch the canonical ingest in the worker/thread — it runs the engine over
-    ~20 files (some via Claude), too long for a synchronous request."""
-    import threading
-
-    from shared.config.settings import settings
-
-    msg = ("Ingesta del set canónico iniciada en segundo plano (≈1-2 min). El estado "
-           "de cada serie se actualiza en el catálogo canónico al recargar.")
-    if settings.USE_CELERY and settings.REDIS_URL:
-        try:
-            from modules.macro_monitor.tasks import ingest_canonical_task
-            ingest_canonical_task.delay(persist=persist)
-            return {"status": "started", "via": "celery", "message": msg}
-        except Exception:  # noqa: BLE001
-            logger.exception("No se pudo encolar la ingesta canónica; usando hilo")
-
-    def _run() -> None:
-        from shared.database.session import SessionLocal
-        db = SessionLocal()
-        try:
-            ingest_canonical(db, persist=persist)
-        finally:
-            db.close()
-
-    threading.Thread(target=_run, daemon=True).start()
-    return {"status": "started", "via": "thread", "message": msg}
+# El disparo desde la pantalla vive en la operación `macro-canonical-ingest-manual`
+# (macro_monitor/operations.py), que encola en el worker y ESPERA su desenlace.
 
 
 def cross_validate_excel(db: Session) -> Dict[str, Any]:
@@ -929,44 +913,8 @@ def get_excel_coverage(db: Session) -> Dict[str, Any]:
         "by_method": dict(by_method),
         "by_frequency": dict(by_freq),
         "attention": attention,
-        "status": excel_batch_status(),
+        "status": excel_batch_status(db),
     }
-
-
-def start_excel_batch_background(
-    *, sector: Optional[str] = None, limit: Optional[int] = None,
-    use_claude: bool = True, persist_series: bool = False, force: bool = False,
-) -> Dict[str, Any]:
-    """Launch the batch in the Celery worker (survives web restarts) or a thread."""
-    import threading
-
-    from shared.config.settings import settings
-
-    if _excel_batch_status.get("is_running"):
-        return {"status": "already_running", "message": "Ya hay un barrido en progreso."}
-    msg = ("Barrido del corpus Excel iniciado en segundo plano. Puede tardar varios "
-           "minutos (descarga + inferencia, con Claude en los layouts difíciles); el "
-           "avance se actualiza en esta pantalla.")
-    kwargs = dict(sector=sector, limit=limit, use_claude=use_claude,
-                  persist_series=persist_series, force=force)
-    if settings.USE_CELERY and settings.REDIS_URL:
-        try:
-            from modules.macro_monitor.tasks import excel_batch_task
-            excel_batch_task.delay(**kwargs)
-            return {"status": "started", "via": "celery", "message": msg}
-        except Exception:  # noqa: BLE001 — fall back to a thread if the broker is down
-            logger.exception("No se pudo encolar el batch Excel; usando hilo")
-
-    def _run() -> None:
-        from shared.database.session import SessionLocal
-        db = SessionLocal()
-        try:
-            run_excel_batch(db, **kwargs)
-        finally:
-            db.close()
-
-    threading.Thread(target=_run, daemon=True).start()
-    return {"status": "started", "via": "thread", "message": msg}
 
 
 _Q_END = {1: (3, 31), 2: (6, 30), 3: (9, 30), 4: (12, 31)}

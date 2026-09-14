@@ -242,11 +242,7 @@ async def sib_backfill(
     skip_carteras: bool = Query(False, description="Omite la agregación del cubo de carteras (el cuello de botella de 504s). Re-ingesta income/balance/indicadores/solvencia y preserva las métricas de carteras existentes. Útil para recalibraciones que solo tocan el estado de resultados (p.ej. cost-to-income)."),
     current_user: User = Depends(get_current_user),
 ):
-    if not role_satisfies(current_user.role, UserRole.admin):
-        raise HTTPException(status_code=403, detail="Se requiere rol admin")
-    from modules.banking_score.sib_sync import start_backfill_background
-    only_tipos = [t.strip() for t in tipos.split(",") if t.strip()] if tipos else None
-    return start_backfill_background(force=force, only_tipos=only_tipos, skip_carteras=skip_carteras)
+    return _disparar_backfill(current_user, force, tipos, skip_carteras)
 
 
 # Backward-compatible alias for /sib-sync → triggers the same backfill.
@@ -257,11 +253,32 @@ async def sync_from_sib(
     skip_carteras: bool = Query(False, description="Omite la agregación del cubo de carteras (504s). Re-ingesta income/balance/indicadores/solvencia y preserva las métricas de carteras existentes."),
     current_user: User = Depends(get_current_user),
 ):
+    return _disparar_backfill(current_user, force, tipos, skip_carteras)
+
+
+_MENSAJE_BACKFILL = (
+    "Backfill SIB iniciado en segundo plano. La extracción es incremental (los datos van "
+    "apareciendo por tipo) y el estado se actualiza en esta pantalla; el desenlace, o el "
+    "error, queda en la consola de operaciones («sib-backfill»).")
+
+
+def _disparar_backfill(current_user: User, force: bool, tipos: Optional[str],
+                       skip_carteras: bool) -> Dict:
+    """Dispara la operación `sib-backfill` en vez de encolar directo.
+
+    Encolar y responder dejaba el desenlace del worker sin ningún estado que lo recogiera.
+    La operación encola y espera, así que un fallo llega a ``status.error``. La ruta sigue
+    respondiendo al instante: esperar dentro del request lo cortaría el proxy.
+    """
     if not role_satisfies(current_user.role, UserRole.admin):
         raise HTTPException(status_code=403, detail="Se requiere rol admin")
-    from modules.banking_score.sib_sync import start_backfill_background
+    from shared.operations.worker import disparar_desde_ruta
+
     only_tipos = [t.strip() for t in tipos.split(",") if t.strip()] if tipos else None
-    return start_backfill_background(force=force, only_tipos=only_tipos, skip_carteras=skip_carteras)
+    return disparar_desde_ruta(
+        "sib-backfill", user_id=current_user.id,
+        params={"force": force, "only_tipos": only_tipos, "skip_carteras": skip_carteras},
+        mensaje=_MENSAJE_BACKFILL)
 
 
 # ─── Rescore (recompute ratings from existing data, no re-ingest) ─

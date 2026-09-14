@@ -32,6 +32,25 @@ _PROFUNDIDAD = 4
 #: ``"archivo::runner"`` → por qué ese runner puede despachar y volver sin esperar.
 EXCEPCIONES: dict[str, str] = {}
 
+_VERBOS = ("get", "post", "put", "delete", "patch")
+_PORTADORES = ("router", "app")
+
+_POR_DOCUMENTO = (
+    "Es una lectura POR DOCUMENTO, y un encargo puede tener varias en paralelo: no cabe en "
+    "una operación de consola, que admite una corrida a la vez. El trabajo es su fila "
+    "BrandExtraction: el worker registra ahí el error (`jobs._fail`) o la cancelación, y la "
+    "pantalla lo lee con GET .../extractions/{id}/status. Lo que sigue abierto es el "
+    "vigilante de un worker que MUERE sin escribir (queda en `reading`), que es otro hueco.")
+
+#: ``"archivo::función"`` → por qué esa RUTA puede encolar y responder sin que el desenlace
+#: llegue a un estado que alguien lea. Una ruta no puede esperar al worker dentro del
+#: request (el proxy corta a los ~270 s): lo correcto es disparar una operación de consola
+#: cuyo runner espere, como hace ``POST /banking-score/data/rescore``.
+EXCEPCIONES_RUTAS: dict[str, str] = {
+    "modules/brand_intel/api/router.py::ingest_pdf": _POR_DOCUMENTO,
+    "modules/brand_intel/api/router.py::resume_extraction": _POR_DOCUMENTO,
+}
+
 
 # ── Índice del árbol ────────────────────────────────────────────────────────────
 
@@ -63,9 +82,22 @@ def _def_de_nivel_superior(archivo: str, nombre: str, indice):
     return None
 
 
+_CACHE_IMPORTS: dict[tuple[int, str], tuple[dict, dict]] = {}
+
+
 def _importados(archivo: str, indice) -> tuple[dict, dict]:
     """(nombre → (módulo, nombre original), alias → módulo) de TODO import del archivo,
-    incluidos los que viven dentro de funciones — el patrón del repo es importar tarde."""
+    incluidos los que viven dentro de funciones — el patrón del repo es importar tarde.
+
+    Cacheado por (índice, archivo): sin caché, barrer ~300 rutas releía el árbol de cada
+    archivo en cada llamada resuelta y el test pasaba de 13 s a 100 s."""
+    clave = (id(indice), archivo)
+    if clave not in _CACHE_IMPORTS:
+        _CACHE_IMPORTS[clave] = _leer_imports(archivo, indice)
+    return _CACHE_IMPORTS[clave]
+
+
+def _leer_imports(archivo: str, indice) -> tuple[dict, dict]:
     nombres, modulos = {}, {}
     for n in ast.walk(indice[archivo]):
         if isinstance(n, ast.ImportFrom) and n.module and n.level == 0:
@@ -182,11 +214,10 @@ def _runners_registrados(indice):
     return out, sin_resolver
 
 
-def _barrido(indice):
-    """(runners, sin_resolver, {clave: encolados}, {clave: sin esperar})."""
-    runners, sin_resolver = _runners_registrados(indice)
+def _clasificar(pares, indice):
+    """({clave: encolados}, {clave: encolados sin esperar}) de cada ``(archivo, def)``."""
     que_encolan, sin_esperar = {}, {}
-    for archivo, fn in runners:
+    for archivo, fn in pares:
         clave = f"{archivo}::{fn.name}"
         enc = _encolados(archivo, fn, indice)
         if enc:
@@ -194,11 +225,40 @@ def _barrido(indice):
         malos = [d for d, ok in enc if not ok]
         if malos:
             sin_esperar[clave] = malos
-    return runners, sin_resolver, que_encolan, sin_esperar
+    return que_encolan, sin_esperar
+
+
+def _barrido(indice):
+    """(runners, sin_resolver, {clave: encolados}, {clave: sin esperar})."""
+    runners, sin_resolver = _runners_registrados(indice)
+    return (runners, sin_resolver, *_clasificar(runners, indice))
+
+
+def _rutas_declaradas(indice):
+    """``(archivo, def)`` de toda función decorada con ``@router.<verbo>``/``@app.<verbo>``."""
+    out = []
+    for archivo, arbol in indice.items():
+        for n in ast.walk(arbol):
+            if not isinstance(n, (ast.FunctionDef, ast.AsyncFunctionDef)):
+                continue
+            for d in n.decorator_list:
+                c = d.func if isinstance(d, ast.Call) else d
+                if (isinstance(c, ast.Attribute) and c.attr in _VERBOS
+                        and isinstance(c.value, ast.Name) and c.value.id in _PORTADORES):
+                    out.append((archivo, n))
+                    break
+    return out
+
+
+def _barrido_de_rutas(indice):
+    """(rutas, {clave: encolados}, {clave: sin esperar})."""
+    rutas = _rutas_declaradas(indice)
+    return (rutas, *_clasificar(rutas, indice))
 
 
 _INDICE = _indice()
 _RUNNERS, _SIN_RESOLVER, _QUE_ENCOLAN, _SIN_ESPERAR = _barrido(_INDICE)
+_RUTAS, _RUTAS_QUE_ENCOLAN, _RUTAS_SIN_ESPERAR = _barrido_de_rutas(_INDICE)
 
 
 # ── Tests ───────────────────────────────────────────────────────────────────────
@@ -229,6 +289,30 @@ def test_las_excepciones_no_estan_rancias():
     rancias = [k for k in EXCEPCIONES if k not in _SIN_ESPERAR]
     assert not rancias, f"EXCEPCIONES que ya no despachan-y-vuelven (borralas): {rancias}"
     assert all(r.strip() for r in EXCEPCIONES.values()), "toda excepción declara su razón"
+
+
+def test_el_barrido_de_rutas_ve_las_que_encolan():
+    """Piso: si el barrido deja de ver la ruta de brand_intel, que encola de verdad, la
+    regla de abajo pasaría en verde sin mirar nada."""
+    assert len(_RUTAS) >= 300, f"el barrido encontró {len(_RUTAS)} rutas"
+    assert "modules/brand_intel/api/router.py::ingest_pdf" in _RUTAS_QUE_ENCOLAN, (
+        f"el barrido no ve que ingest_pdf encola; vio {sorted(_RUTAS_QUE_ENCOLAN)}")
+
+
+def test_ninguna_ruta_encola_sin_que_el_desenlace_llegue_a_un_estado():
+    malas = {k: v for k, v in _RUTAS_SIN_ESPERAR.items() if k not in EXCEPCIONES_RUTAS}
+    assert not malas, (
+        "Estas rutas encolan en Celery y responden: si el worker falla, el error no llega a "
+        "ningún estado que alguien lea. Disparen una operación de consola cuyo runner use "
+        "shared.operations.worker.esperar_tarea (ver `rescore`), o declárenlas en "
+        "EXCEPCIONES_RUTAS con la razón:\n"
+        + "\n".join(f"  {k}: {', '.join(v)}" for k, v in sorted(malas.items())))
+
+
+def test_las_excepciones_de_rutas_no_estan_rancias():
+    rancias = [k for k in EXCEPCIONES_RUTAS if k not in _RUTAS_SIN_ESPERAR]
+    assert not rancias, f"EXCEPCIONES_RUTAS que ya no encolan sin esperar: {rancias}"
+    assert all(r.strip() for r in EXCEPCIONES_RUTAS.values())
 
 
 def test_el_detector_distingue_despachar_de_esperar():

@@ -40,8 +40,6 @@ from modules.macro_monitor.service import (
     get_snapshot,
     ingest_excel_file,
     ingest_series,
-    start_canonical_ingest_background,
-    start_excel_batch_background,
 )
 
 logger = logging.getLogger("sdq.api.macro_monitor")
@@ -548,7 +546,15 @@ def excel_ingest_canonical(
     persist: bool = Query(False, description="Upsert de las series a MacroSeries"),
     current_user: User = Depends(require_role(UserRole.admin)),
 ) -> Dict[str, Any]:
-    return start_canonical_ingest_background(persist=persist)
+    # Dispara una operación que encola y ESPERA: encolar y responder dejaba el desenlace del
+    # worker sin ningún estado que lo recogiera. Esperar acá lo cortaría el proxy.
+    from shared.operations.worker import disparar_desde_ruta
+
+    return disparar_desde_ruta(
+        "macro-canonical-ingest-manual", user_id=current_user.id, params={"persist": persist},
+        mensaje=("Ingesta del set canónico iniciada en segundo plano (≈1-2 min). El estado de "
+                 "cada serie se actualiza en el catálogo canónico al recargar; el desenlace, "
+                 "o el error, queda en la consola de operaciones."))
 
 
 @router.get(
@@ -601,10 +607,20 @@ def excel_batch(
     force: bool = Query(False, description="Re-procesar archivos ya reportados"),
     current_user: User = Depends(require_role(UserRole.admin)),
 ) -> Dict[str, Any]:
-    return start_excel_batch_background(
-        sector=sector, limit=limit, use_claude=use_claude,
-        persist_series=persist, force=force,
-    )
+    # Dispara una operación que encola y ESPERA. El estado del barrido vivía en un dict en
+    # memoria del web que el worker nunca tocaba, y un fallo del worker no quedaba en ningún
+    # lado. El avance por archivo sigue en /excel/coverage.
+    from modules.macro_monitor.service import OPERACION_EXCEL_BATCH
+    from shared.operations.worker import disparar_desde_ruta
+
+    return disparar_desde_ruta(
+        OPERACION_EXCEL_BATCH, user_id=current_user.id,
+        params={"sector": sector, "limit": limit, "use_claude": use_claude,
+                "persist_series": persist, "force": force},
+        mensaje=("Barrido del corpus Excel iniciado en segundo plano. Puede tardar varios "
+                 "minutos (descarga + inferencia, con Claude en los layouts difíciles); el "
+                 "avance se actualiza en esta pantalla y el desenlace, o el error, queda en "
+                 "la consola de operaciones."))
 
 
 # ── Publicaciones BCRD (informes oficiales en PDF, digest IA) ──────
