@@ -4,13 +4,13 @@ Registers the ONE social sync into the shared operation console
 (:mod:`shared.operations`) so it is triggerable / monitorable / schedulable from
 the UI (Gate F).
 """
-import time
 from typing import Dict
 
 from modules.social_dev import digepres_sync
 from modules.social_dev.digepres_sync import run_digepres_salud
 from shared.database.session import SessionLocal
 from shared.operations import Operation, register_operation
+from shared.operations.worker import esperar_tarea
 
 #: Cuánto esperamos al worker antes de soltar la mirada. La corrida completa son
 #: trece documentos y ~20 minutos; el margen es holgado porque abandonar temprano no
@@ -140,27 +140,13 @@ def _run_digepres_salud(params, user_id, set_phase) -> Dict:  # noqa: ARG001
     from modules.social_dev.tasks import digepres_salud_funcional_task
 
     tarea = digepres_salud_funcional_task.delay(force=force)
-    set_phase("encolada en el worker")
-    espera, visto = 0.0, None
-    while espera < _ESPERA_MAXIMA_SEG:
-        if tarea.ready():
-            break
-        info = tarea.info if isinstance(tarea.info, dict) else None
-        frase = (info or {}).get("phase")
-        if frase and frase != visto:
-            set_phase(f"worker: {frase}")
-            visto = frase
-        time.sleep(_LATIDO_SEG)
-        espera += _LATIDO_SEG
-    if not tarea.ready():
-        # No se cancela: la tarea sigue y persiste año por año. Lo que se declara es que
-        # DEJAMOS de mirar, que no es lo mismo que que haya fallado.
-        return {"error": f"el worker sigue leyendo después de {_ESPERA_MAXIMA_SEG/60:.0f} "
-                         f"minutos; la serie se completa igual y la próxima corrida "
-                         f"arranca donde ésta quedó"}
-    if tarea.failed():
-        return {"error": f"la tarea del worker falló: {tarea.result}"}
-    return {**(tarea.result or {}), "via": "worker"}
+    # No se cancela al vencer: la tarea sigue y persiste año por año. Lo que se declara es
+    # que DEJAMOS de mirar, que no es lo mismo que que haya fallado.
+    return esperar_tarea(
+        tarea, set_phase, espera_maxima_seg=_ESPERA_MAXIMA_SEG, latido_seg=_LATIDO_SEG,
+        al_vencer=(f"el worker sigue leyendo después de {_ESPERA_MAXIMA_SEG/60:.0f} minutos; "
+                   f"la serie se completa igual y la próxima corrida arranca donde ésta "
+                   f"quedó; dejamos de mirar"))
 
 
 def _run_tramites(params, user_id, set_phase):
@@ -180,8 +166,13 @@ def _run_tramites(params, user_id, set_phase):
     from modules.social_dev.tasks import tramites_registro_unico_task
 
     tarea = tramites_registro_unico_task.delay(force=force)
-    set_phase("encolada en el worker")
-    return {"via": "worker", "task_id": tarea.id}
+    # Despachar y volver dejaba «completado» con error=None mientras el worker seguía
+    # leyendo (2026-09-14): un fallo del worker nunca llegaba a status.error.
+    return esperar_tarea(
+        tarea, set_phase, espera_maxima_seg=_ESPERA_MAXIMA_SEG, latido_seg=_LATIDO_SEG,
+        al_vencer=(f"el worker sigue leyendo el catálogo después de "
+                   f"{_ESPERA_MAXIMA_SEG/60:.0f} minutos; dejamos de mirar (la tarea no se "
+                   f"cancela y persiste al terminar)"))
 
 
 def register() -> None:
