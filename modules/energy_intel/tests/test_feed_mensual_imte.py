@@ -115,12 +115,13 @@ def test_el_producto_DECLARA_el_feed_y_el_sensor_lo_mide(db):
 
     _sincronizar(db)
     p = EnergyProduct(db)
-    (feed,) = p.feeds_mensuales()
+    # Desde la Fase 7 el eje declara DOS feeds (IMTE y obra pública eléctrica): se elige por clave.
+    feed = next(f for f in p.feeds_mensuales() if f.clave == "oc_seni_imte")
     assert set(feed.series) == {s for s, _ in oc.FILAS_IMTE.values()}
     assert feed.fuente is not None and feed.fuente.atribucion, (
         "la licencia del OC-SENI no está en el registro o no exige aviso")
     assert _SECTION_TITLES.get("delta_mensual")
-    (senal,) = p.senales_de_fuentes()
+    (senal,) = [s for s in p.senales_de_fuentes() if s.clave == "oc_seni_imte"]
     assert "2026-07" in senal.detalle
 
 

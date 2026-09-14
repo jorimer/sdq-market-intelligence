@@ -133,7 +133,9 @@ def _hoy_utc_largo():
 
 def test_el_producto_DECLARA_el_feed_con_sus_series_y_su_sujeto_en_las_dimensiones(db):
     feeds = ConstructionProduct(db).feeds_mensuales()
-    assert len(feeds) == 1
+    # Desde la Fase 7 el eje declara también la obra pública adjudicada (DGCP). El MIVHED sigue
+    # primero: es el feed cuya forma fija este test.
+    assert [x.clave for x in feeds] == [CLAVE_DEL_FEED, "dgcp_obras"]
     f = feeds[0]
     assert (f.clave, f.cadence, f.axis) == (CLAVE_DEL_FEED, "monthly", "construction_intel")
     assert set(f.series) == {SERIE_PERMISOS, SERIE_SQM}

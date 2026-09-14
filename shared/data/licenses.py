@@ -454,6 +454,23 @@ LICENCIAS: Dict[str, Licencia] = {
               "sí sola: se declara reutilizable con atribución porque los términos leídos no "
               "dicen otra cosa."),
     ),
+    ("DGCP — datos de contrataciones públicas en OCDS, publicados bajo Open Data "
+               "Commons Open Database License (ODbL) v1.0 (declarada por el registro de OCP para "
+               "la publicación 22): exige el aviso de atribución, y el share-alike alcanza a las "
+               "bases DERIVADAS; un informe es «Produced Work» y no lo dispara."): Licencia(
+        terminos_url="https://data.open-contracting.org/en/publication/22",
+        verificado_el="2026-09-14",
+        atribucion=("Fuente: Dirección General de Contrataciones Públicas (DGCP), datos en el "
+                    "Estándar de Datos de Contrataciones Abiertas vía Open Contracting "
+                    "Partnership. Contiene información disponible bajo la Open Database License "
+                    "(ODbL)."),
+        nota=("`shared.data.dgcp_ocds_client`, Fase 7. Se leyó la página de la publicación 22 del "
+              "registro de OCP el 2026-09-14: su `<h1>` es «Dominican Republic: Dirección General "
+              "de Contrataciones Públicas (DGCP)» y declara ODbL. ⚠️ La página de búsqueda del "
+              "registro pega el «See details» de una tarjeta al nombre de la siguiente: por esa "
+              "vía salía la 49 (Denmark OpenTender, CC BY-NC-SA) como si fuera la DGCP. Se verificó "
+              "leyendo el título de cada publicación."),
+    ),
     ("gob.do (OGTIC) — catálogo de trámites del Portal Único de Servicios. Información "
      "pública dominicana: reutilizable con atribución por Ley 200-04, Decreto 103-22 y "
      "NORTIC A3. `robots.txt` permite el rastreo completo (Allow: /)."): Licencia(
