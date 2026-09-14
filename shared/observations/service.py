@@ -76,16 +76,24 @@ def codigos(db: Session, *, sector_key: str) -> List[str]:
 
 
 def ultimo_periodo(db: Session, *, sector_key: str,
-                   series: Optional[List[str]] = None) -> Optional[str]:
+                   series: Optional[List[str]] = None,
+                   con_valor: bool = False) -> Optional[str]:
     """El período más reciente observado del eje, o ``None`` si no hay ninguno.
 
     ``series`` acota a un FEED: un eje con dos emisores en la tabla (las licencias del MIVHED y
     las de la ONE, que publica con más rezago) tiene dos «últimos períodos», y el de uno no
     describe al otro.
+
+    ``con_valor`` descarta los períodos cuyas filas son todas NULL. Un NULL declara que falta
+    el dato —un total del sistema de ARS con una entidad sin reportar se persiste así—, y un
+    período sin ningún valor no es una edición publicada. Sin esto, el sensor daba «al día» a
+    las ARS midiendo un julio vacío y la sección del delta narraba su ausencia en prod.
     """
     q = db.query(SectorObservation.period).filter(SectorObservation.sector_key == sector_key)
     if series:
         q = q.filter(SectorObservation.series_code.in_(list(series)))
+    if con_valor:
+        q = q.filter(SectorObservation.value.isnot(None))
     row = q.order_by(SectorObservation.period.desc()).first()
     return row[0] if row else None
 
