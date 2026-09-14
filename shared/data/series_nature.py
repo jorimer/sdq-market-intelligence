@@ -106,6 +106,12 @@ DECLARED: dict = {
     "oc_seni.imte.retiros_distribuidoras_gwh": FLOW,
     # Las pérdidas de transmisión son una PROPORCIÓN de lo inyectado: se mueven en puntos.
     "oc_seni.imte.perdidas_transmision_pct": RATE,
+    # ── Turismo · BCRD, llegada mensual de no residentes (Fase 6) ──
+    # Personas que LLEGAN en el mes: flujo estacional puro. La base es el mismo mes del año
+    # anterior; contra el mes previo se leería la temporada como si fuera tendencia.
+    "bcrd.llegadas.no_residentes.total": FLOW,
+    "bcrd.llegadas.no_residentes.dominicanos": FLOW,
+    "bcrd.llegadas.no_residentes.extranjeros": FLOW,
     "ars.ingreso_salud": UNKNOWN,
     "ars.gasto_salud": UNKNOWN,
     "ars.beneficio_neto": UNKNOWN,

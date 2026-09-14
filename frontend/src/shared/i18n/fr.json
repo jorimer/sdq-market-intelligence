@@ -1910,6 +1910,9 @@
         "pension": {
           "peer_positioning": "Position concurrentielle face aux AFP"
         },
+        "tourism": {
+          "delta_mensual": "Mouvement mensuel des arrivées de non-résidents (BCRD)"
+        },
         "valuation": {
           "limitations": "Limites et conditions"
         }
