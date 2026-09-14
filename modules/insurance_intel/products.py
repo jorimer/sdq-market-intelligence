@@ -552,7 +552,8 @@ class InsuranceProduct:
             pulse = _pulse(db, as_of=period or None)
             if not pulse or not pulse.get("has_data"):
                 return ProductSnapshot(tier=tier, period=period or "—",
-                                       payload={"has_data": False}, entity_name=None)
+                                       payload={"has_data": False}, entity_name=None,
+                                       entity_roster=_roster(db))
             # EL ROSTER VIAJA AL SENSOR DE ANONIMIZACIÓN. Sin él, `enforce_anonymized` solo mira
             # claves reservadas y un Pulse cuyo texto nombrara una aseguradora o una ARS pasaba.
             # Con el feed de ARS entrando al nivel abierto eso deja de ser teórico. No es payload:

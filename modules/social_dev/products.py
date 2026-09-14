@@ -191,6 +191,24 @@ def _fmt(v: Optional[float]) -> str:
     return "—" if v is None else f"{v:.1f}"
 
 
+def _roster_de_demarcaciones() -> tuple:
+    """Los nombres de las regiones de desarrollo que un Pulse no puede publicar.
+
+    El nivel nombrado de este eje ES la región, así que un Pulse que la nombrara regalaría el
+    Insight. Del catálogo del conector —el mismo que siembra el panel— y no de las filas con
+    score: una región sin IDM este año tampoco puede aparecer en el agregado. Un nombre
+    compuesto («Ozama o Metropolitana») entra además por su primera forma, que es como lo
+    escribe la prosa. No es payload: no mueve la huella de la caché.
+    """
+    from shared.data.one_client import region_catalog
+
+    nombres = set()
+    for _slug, nombre in region_catalog():
+        nombres.add(nombre)
+        nombres.add(nombre.split(" o ")[0])
+    return tuple(sorted(nombres))
+
+
 def _safe(db: Optional[Session], fn, default):
     """Lectura en SAVEPOINT: el recompute de readiness itera TODOS los sectores en una
     sola sesión, así que un eje que falla no puede envenenar la transacción del que
@@ -949,17 +967,18 @@ class SocialDevProduct:
             entity = None if tier == ProductTier.pulse else DISPLAY
             return ProductSnapshot(tier=tier, period=period or "—",
                                    payload={"has_score": False}, entity_name=entity,
-                                   entity_roster=())
+                                   entity_roster=_roster_de_demarcaciones())
 
         dist = distribution_stats([r.development_score for r in panel])
         resolved_period = panel[0].period
         if tier == ProductTier.pulse:
-            # Agregado de sistema: sin nombres de demarcación (el sensor de anonimización
-            # del ensamblador lo verifica contra el roster).
+            # Agregado de sistema: sin nombres de demarcación. El sensor de anonimización del
+            # ensamblador lo verifica contra el roster — que hasta el 2026-09-14 viajaba VACÍO,
+            # así que este comentario afirmaba una verificación que no ocurría.
             return ProductSnapshot(
                 tier=tier, period=resolved_period,
                 payload={"has_score": True, "distribution": dist, "n_entities": len(panel)},
-                entity_name=None, entity_roster=())
+                entity_name=None, entity_roster=_roster_de_demarcaciones())
 
         if not scope:
             raise ValueError(

@@ -88,6 +88,17 @@ def year_review_manifest() -> SectorProductManifest:
     )
 
 
+def _roster_de_entidades(db: Session) -> tuple:
+    """Los nombres que el año del sistema no puede publicar: TODO el padrón de entidades.
+
+    El padrón entero y no las calificadas del año, a propósito: una entidad absorbida o
+    liquidada en el ejercicio tampoco puede aparecer nombrada en el nivel abierto. Viaja al
+    sensor de anonimización del ensamblador, que sin él solo mira claves reservadas y deja
+    pasar un TEXTO que nombra a una entidad. No es payload: no mueve la huella de la caché.
+    """
+    return tuple(sorted({str(n) for (n,) in db.query(Bank.name).all() if n}))
+
+
 def _anio_del_sistema_anonimo(anuario: Dict[str, Any]) -> Dict[str, Any]:
     """El año del sistema SIN identificadores, para el nivel abierto.
 
@@ -452,7 +463,8 @@ class BankingYearReviewProduct:
             except Exception:  # noqa: BLE001 — el snapshot nunca depende de esta tabla
                 logger.exception("Mapa del sistema omitido en el año %s", anio)
             return ProductSnapshot(tier=tier, period=str(anio),
-                                   payload=payload_sistema, entity_name=None)
+                                   payload=payload_sistema, entity_name=None,
+                                   entity_roster=_roster_de_entidades(db))
 
         if not scope:
             raise ValueError("Se requiere una entidad para la Revisión Anual.")
