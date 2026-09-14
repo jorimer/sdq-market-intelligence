@@ -11,6 +11,7 @@ from sqlalchemy import (
     Index,
     JSON,
     String,
+    Text,
     UniqueConstraint,
 )
 
@@ -30,9 +31,11 @@ class SocialIndicator(UUIDMixin, Base):
     disaggregation = Column(String(60), nullable=True)  # sexo / region / quintil …
     entity_key = Column(String(60), nullable=True)      # region/group the value belongs to
     unit = Column(String(40), nullable=True)
-    source = Column(String(40), nullable=True)
+    # `source` 120 y `license` TEXT: el Registro Único de trámites declara 66 y 225, y el sync
+    # los recortaba a 40/120 para que PostgreSQL no rechazara el INSERT (migración c7e2a9d4f153).
+    source = Column(String(120), nullable=True)
     published_at = Column(Date, nullable=True)
-    license = Column(String(120), nullable=True)
+    license = Column(Text, nullable=True)
 
 
 class DevelopmentScore(UUIDMixin, Base):

@@ -294,6 +294,16 @@ def leer_fuentes_de_los_ejes(db: Optional[Session] = None) -> List[Veredicto]:
     return salida
 
 
+def veredictos_del_eje(db: Optional[Session], sector_key: str) -> List[Veredicto]:
+    """El veredicto de la fuente del índice y de cada feed de UN eje. Nunca lanza.
+
+    Lo necesita §Limitaciones (`shared/products/limitaciones.py`), que computa lo que un
+    informe tiene que declarar de sus fuentes. Mismo criterio que el panel: se leen las
+    mismas funciones, no una copia.
+    """
+    return [_veredicto_del_eje(sector_key, db), *_veredictos_de_los_feeds(sector_key, db)]
+
+
 def veredicto_de_la_fuente(db: Optional[Session], *, sector_key: str,
                            clave: str) -> Optional[Veredicto]:
     """El veredicto de UNA fuente de un eje, para que su sección pueda vetarse a sí misma.
