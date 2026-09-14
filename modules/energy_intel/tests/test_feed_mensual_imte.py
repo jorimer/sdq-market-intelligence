@@ -235,3 +235,21 @@ def test_una_pagina_de_error_de_la_SIE_no_se_parsea_como_CSV(monkeypatch):
     monkeypatch.setattr(SIEClient, "_resolve_csv", lambda self, slug: "https://sie.gob.do/x.csv")
     with pytest.raises(RuntimeError, match="HTTP 404"):
         SIEClient().installed_capacity()
+
+
+
+def test_la_nota_del_IMTE_prohibe_llamar_DEMANDA_a_las_inyecciones():
+    """En prod (2026-09-14) el delta abrió con «La demanda del sistema eléctrico nacional se acentúa»:
+    las inyecciones son energía entregada al sistema, no la demanda de los usuarios finales."""
+    from modules.energy_intel.ai_context import NOTA_DEL_FEED_IMTE
+
+    assert "No uses la palabra «demanda»" in NOTA_DEL_FEED_IMTE
+    assert "energía inyectada" in NOTA_DEL_FEED_IMTE and "energía retirada" in NOTA_DEL_FEED_IMTE
+
+
+def test_la_nota_viaja_en_el_feed_que_ve_el_modelo(db):
+    from modules.energy_intel.ai_context import NOTA_DEL_FEED_IMTE
+    from modules.energy_intel.products import EnergyProduct
+
+    feed = next(f for f in EnergyProduct(db).feeds_mensuales() if f.clave == "oc_seni_imte")
+    assert feed.nota == NOTA_DEL_FEED_IMTE

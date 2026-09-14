@@ -4,21 +4,21 @@
 `alcance=PERSISTIBLES_VERIFICADOS`: la corrida en seco del 2026-09-03 encontró 29.427 empates
 (misma serie y período, valores distintos) que `_upsert_records` resuelve por orden de lectura
 y sin dejar marca. Pero `POST /api/v1/macro-monitor/excel/ingest-canonical?persist=true`
-—por el hilo o por la tarea Celery `ingest_canonical_task`— llamaba
-`ingest_canonical(db, persist=persist)` SIN alcance, y `None` significa «todo». Un admin que
-apretaba el botón reescribía en `MacroSeries` (que sirve la Data API que consume PMS) justo lo
-que la sincronización agendada se cuida de no escribir: hoy, las hojas no habilitadas de los
-libros que el mapa acota por hoja.
+—que dispara `macro-canonical-ingest-manual`, en este proceso o en la tarea Celery
+`ingest_canonical_task`— llamaba `ingest_canonical(db, persist=persist)` SIN alcance, y `None`
+significa «todo». Un admin que apretaba el botón reescribía en `MacroSeries` (que sirve la Data
+API que consume PMS) justo lo que la sincronización agendada se cuida de no escribir: hoy, las
+hojas no habilitadas de los libros que el mapa acota por hoja.
 
 `persist=false` sigue LEYENDO y reportando todo: el alcance acota lo que se escribe, no lo que
 se lee, y el reporte completo es con lo que se decide qué habilitar después.
 
-Los tests piden por HTTP (la ruta), y por la tarea del worker: un test del motor no es un test
-de la ruta. El estructural cierra el patrón para el próximo llamador de `ingest_canonical`.
+Los tests piden por HTTP (la ruta corre el runner real de la operación), y por la tarea del
+worker: un test del motor no es un test de la ruta. El estructural cierra el patrón para el
+próximo llamador de `ingest_canonical`.
 """
 import ast
 import pathlib
-import threading
 from datetime import date
 from types import SimpleNamespace
 
@@ -29,6 +29,7 @@ from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
 
 from app.main import app
+from modules.macro_monitor import operations as ops
 from modules.macro_monitor.models.models import ExcelFileReport, MacroSeries  # noqa: F401
 from shared.auth.dependencies import get_current_user
 from shared.auth.models import User, UserRole
@@ -39,6 +40,7 @@ from shared.data.lineage import Lineage
 from shared.database.base import Base
 
 HOJA_FUERA = "hoja_no_habilitada"
+OPERACION = "macro-canonical-ingest-manual"
 
 
 @pytest.fixture()
@@ -47,7 +49,8 @@ def db(monkeypatch):
                            poolclass=StaticPool)
     Base.metadata.create_all(bind=engine)
     session = sessionmaker(bind=engine)()
-    # El lanzador y la tarea abren su propia sesión: que sea ésta.
+    # La operación y la tarea abren su propia sesión: que sea ésta.
+    monkeypatch.setattr(ops, "SessionLocal", lambda: session)
     monkeypatch.setattr("shared.database.session.SessionLocal", lambda: session)
     monkeypatch.setattr("shared.data.bcrd_excel.engine.ingest_excel", _motor_falso)
     try:
@@ -91,27 +94,28 @@ def _escritos(db):
     return {r.series_code for r in db.query(MacroSeries).all()}
 
 
-class _HiloEnLinea(threading.Thread):
-    """Corre en línea SOLO el hilo del lanzador; el resto de los hilos (TestClient) igual."""
-
-    def start(self):
-        if "start_canonical_ingest_background" in getattr(self._target, "__qualname__", ""):
-            self.run()
-        else:
-            super().start()
-
-
 @pytest.fixture()
 def cliente(db, monkeypatch):
+    """La ruta dispara la operación; acá el disparo corre el runner REAL, en línea y sin
+    broker, en vez de dejarlo en la consola."""
     from shared.config.settings import settings
+    from shared.operations.service import OPERATIONS
 
     monkeypatch.setattr(settings, "USE_CELERY", False)
-    monkeypatch.setattr(threading, "Thread", _HiloEnLinea)
+    corridas = []
+
+    def trigger(name, origin="manual", user_id=None, params=None):
+        assert name == OPERACION
+        assert OPERATIONS[name].runner is ops._run_canonical_ingest_manual
+        corridas.append(ops._run_canonical_ingest_manual(params, user_id, lambda _f: None))
+        return {"started": True, "operation": name, "run_id": "run-1"}
+
+    monkeypatch.setattr("shared.operations.service.trigger", trigger)
     guardados = dict(app.dependency_overrides)
     app.dependency_overrides[get_current_user] = lambda: User(
         id="u1", email="t@sdq.do", password_hash="x", full_name="T", role=UserRole.admin)
     try:
-        yield TestClient(app)
+        yield TestClient(app), corridas
     finally:
         app.dependency_overrides.clear()
         app.dependency_overrides.update(guardados)
@@ -124,16 +128,20 @@ def test_el_caso_es_representativo():
 
 
 def test_la_ruta_con_persist_escribe_solo_lo_verificado(cliente, db):
-    r = cliente.post("/api/v1/macro-monitor/excel/ingest-canonical?persist=true")
+    c, corridas = cliente
+    r = c.post("/api/v1/macro-monitor/excel/ingest-canonical?persist=true")
     assert r.status_code == 200, r.text
-    assert r.json()["via"] == "thread"
+    assert r.json()["operation"] == OPERACION
+    assert [x["via"] for x in corridas] == ["proceso_web"]
     permitidos = _lo_que_el_alcance_permite()
     assert permitidos and _escritos(db) == permitidos
 
 
 def test_la_ruta_en_seco_lee_y_reporta_todo_sin_escribir(cliente, db):
-    r = cliente.post("/api/v1/macro-monitor/excel/ingest-canonical?persist=false")
+    c, corridas = cliente
+    r = c.post("/api/v1/macro-monitor/excel/ingest-canonical?persist=false")
     assert r.status_code == 200, r.text
+    assert len(corridas) == 1
     assert _escritos(db) == set()
     assert db.query(ExcelFileReport).count() == len(
         {s.source_file for s in canonical.registry()})
@@ -210,7 +218,6 @@ def test_el_barrido_ENCUENTRA_los_llamadores():
                          getattr(n.func, "id", None)) == "ingest_canonical"
                          for n in ast.walk(arbol))}
     assert {"modules/macro_monitor/operations.py",
-            "modules/macro_monitor/service.py",
             "modules/macro_monitor/tasks.py"} <= llamadores
     assert set(EXCEPCIONES) <= llamadores, "una excepción que ya no llama es una excepción muerta"
 

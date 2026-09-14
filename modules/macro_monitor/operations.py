@@ -313,7 +313,101 @@ def _run_macro_forecast_emit(params, user_id, set_phase) -> Dict:
         db.close()
 
 
+#: Cuánto se espera al worker. El barrido del corpus son ~708 planillas, algunas con Claude;
+#: abandonar la mirada no cancela nada, solo deja de contar la verdad y lo declara.
+_MACRO_ESPERA_MAXIMA_SEG = 4 * 3600
+
+
+def _run_excel_batch(params, user_id, set_phase) -> Dict:  # noqa: ARG001
+    """Barrido del motor sobre el catálogo Excel del BCRD: lo que dispara ``POST /excel/batch``.
+
+    La ruta encolaba y respondía, y el estado del barrido vivía en un dict EN MEMORIA del
+    proceso web que el worker nunca tocaba: con Celery, «corriendo» nunca era verdad y un
+    fallo del worker entero no quedaba en ningún lado. Ahora la ruta dispara esta operación,
+    que encola y espera; el desenlace queda en ``status.error``.
+    """
+    from shared.config.settings import settings
+    from modules.macro_monitor.service import run_excel_batch
+
+    p = params or {}
+    sector, limit = p.get("sector") or None, p.get("limit")
+    use_claude = bool(p.get("use_claude", True))
+    persist_series, force = bool(p.get("persist_series")), bool(p.get("force"))
+    if not (settings.USE_CELERY and settings.REDIS_URL):
+        set_phase("barrido Excel en ESTE proceso (sin broker)")
+        db = SessionLocal()
+        try:
+            resultado = run_excel_batch(db, sector=sector, limit=limit, use_claude=use_claude,
+                                        persist_series=persist_series, force=force,
+                                        progreso=set_phase)
+            return {**resultado, "via": "proceso_web"}
+        finally:
+            db.close()
+
+    from modules.macro_monitor.tasks import excel_batch_task
+    from shared.operations.worker import esperar_tarea
+
+    tarea = excel_batch_task.delay(sector=sector, limit=limit, use_claude=use_claude,
+                                   persist_series=persist_series, force=force)
+    return esperar_tarea(
+        tarea, set_phase, espera_maxima_seg=_MACRO_ESPERA_MAXIMA_SEG, latido_seg=10.0,
+        al_vencer=(f"el barrido Excel sigue en el worker después de "
+                   f"{_MACRO_ESPERA_MAXIMA_SEG / 3600:.0f} horas; dejamos de mirar (no se "
+                   f"cancela: cada archivo queda reportado en /excel/coverage)"))
+
+
+def _run_canonical_ingest_manual(params, user_id, set_phase) -> Dict:  # noqa: ARG001
+    """Ingesta del set canónico pedida desde la pantalla: lo que dispara ``POST /excel/ingest-canonical``.
+
+    NO es ``macro-canonical-sync``: no poda, no puntúa pronósticos ni rehace el snapshot. Pero
+    con ``persist`` escribe con el MISMO alcance, ``PERSISTIBLES_VERIFICADOS``: sin él,
+    ``None`` escribe todo el canónico y el botón reintroduce los empates que la agendada evita.
+    Con ``persist=False`` el alcance no cambia nada —acota lo que se escribe, no lo que se
+    lee— y el reporte sale completo. En el worker, el alcance lo resuelve la propia tarea.
+    """
+    from shared.config.settings import settings
+
+    persist = bool((params or {}).get("persist"))
+    if not (settings.USE_CELERY and settings.REDIS_URL):
+        from shared.data.bcrd_excel.canonical import PERSISTIBLES_VERIFICADOS
+        from modules.macro_monitor.service import ingest_canonical
+
+        set_phase("ingesta canónica en ESTE proceso (sin broker)")
+        db = SessionLocal()
+        try:
+            return {**ingest_canonical(db, persist=persist, alcance=PERSISTIBLES_VERIFICADOS),
+                    "via": "proceso_web"}
+        finally:
+            db.close()
+
+    from modules.macro_monitor.tasks import ingest_canonical_task
+    from shared.operations.worker import esperar_tarea
+
+    tarea = ingest_canonical_task.delay(persist=persist)
+    return esperar_tarea(
+        tarea, set_phase, espera_maxima_seg=_MACRO_ESPERA_MAXIMA_SEG, latido_seg=10.0,
+        al_vencer=(f"la ingesta canónica sigue en el worker después de "
+                   f"{_MACRO_ESPERA_MAXIMA_SEG / 3600:.0f} horas; dejamos de mirar"))
+
+
 def register() -> None:
+    from modules.macro_monitor.service import OPERACION_EXCEL_BATCH
+
+    register_operation(Operation(
+        OPERACION_EXCEL_BATCH, "Barrido del motor sobre el catálogo Excel del BCRD",
+        "Corre el motor sobre el catálogo (o un sector) y deja un reporte por archivo en "
+        "/excel/coverage. Idempotente: sin `force` omite los ya reportados. Params: sector, "
+        "limit, use_claude, persist_series, force. Bajo demanda: la dispara la pantalla de "
+        "cobertura. Corre en el WORKER y la consola espera su desenlace.",
+        _run_excel_batch, default_interval_hours=0,
+    ))
+    register_operation(Operation(
+        "macro-canonical-ingest-manual", "Ingerir set canónico BCRD (desde la pantalla)",
+        "La ingesta del set canónico que se dispara desde el catálogo canónico, con `persist` "
+        "opcional. A diferencia de `macro-canonical-sync` no poda, no puntúa pronósticos ni "
+        "rehace el snapshot. Corre en el WORKER y la consola espera su desenlace.",
+        _run_canonical_ingest_manual, default_interval_hours=0,
+    ))
     register_operation(Operation(
         "macro-live-sync", "Sincronizar macro en vivo (API BCRD)",
         "Consulta el API autenticado del BCRD (MacroVariables: inflación, agregados "
