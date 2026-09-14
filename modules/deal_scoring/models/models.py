@@ -23,14 +23,16 @@ from sqlalchemy import (
     Boolean,
     Column,
     Date,
+    DateTime,
     Enum,
+    false,
+    Float,
     Index,
     Integer,
     Numeric,
     String,
     Text,
     UniqueConstraint,
-    false,
 )
 
 from shared.database.base import Base, UUIDMixin
@@ -121,6 +123,16 @@ class HistoricalDeal(UUIDMixin, Base):
     retrospective = Column(Boolean, nullable=False, default=False,
                            server_default=false())
 
+    # Quién registró la fila: `manual` (el registro curado, «Guardar al registro» o el import)
+    # o `automatico` (cada corrida de `POST /score`). No se mezclan: la pantalla lista el
+    # curado, y la curva cuenta UNA fila por deal prefiriendo la curada. `String(12)` y no un
+    # ENUM: un ENUM nuevo en PostgreSQL exige su propio `CREATE TYPE`.
+    origen = Column(String(12), nullable=False, default="manual", server_default="manual")
+    # El score de la corrida que registró la fila. NULL si no lo hubo: la brecha se declara.
+    score_rubrica = Column(Float, nullable=True)
+    score_confianza = Column(String(20), nullable=True)   # "alta" | "media" | "baja"
+    scored_at = Column(DateTime, nullable=True)
+
     # Trazabilidad / calidad del label
     source_folder = Column(Text, nullable=True)
     label_confidence = Column(Enum(LabelConfidence, name="label_confidence"),
@@ -128,7 +140,8 @@ class HistoricalDeal(UUIDMixin, Base):
     note = Column(Text, nullable=True)
 
     __table_args__ = (
-        UniqueConstraint("deal_name", name="uq_historical_deals_name"),
+        # Por (nombre, origen): el mismo deal puede estar en el curado Y en el automático.
+        UniqueConstraint("deal_name", "origen", name="uq_historical_deals_name_origen"),
         Index("ix_historical_deals_type_country", "deal_type", "country"),
         Index("ix_historical_deals_outcome", "closed_successfully"),
     )

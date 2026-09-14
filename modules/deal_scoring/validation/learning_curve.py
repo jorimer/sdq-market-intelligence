@@ -93,9 +93,16 @@ def _cv_auc(deals: List[Any], n_boot: int) -> Optional[Dict[str, Any]]:
 def build_report(db: Session, n_boot: int = 1000) -> Dict[str, Any]:
     from modules.deal_scoring.models.models import HistoricalDeal
 
-    labeled = db.query(HistoricalDeal).filter(
+    etiquetadas = db.query(HistoricalDeal).filter(
         HistoricalDeal.closed_successfully.isnot(None)
     ).all()
+    # UNA fila por deal. Desde que cada corrida de scoring deja su fila automática, el mismo
+    # deal puede estar etiquetado en el registro curado y en el automático; contarlo dos veces
+    # mete a la validación cruzada dos observaciones que no son independientes. Gana la curada.
+    por_deal: Dict[str, Any] = {}
+    for d in sorted(etiquetadas, key=lambda x: 0 if (x.origen or "manual") == "manual" else 1):
+        por_deal.setdefault(str(d.deal_name), d)
+    labeled = list(por_deal.values())
     n = len(labeled)
     n_pos = sum(1 for d in labeled if d.closed_successfully)
     n_neg = n - n_pos
