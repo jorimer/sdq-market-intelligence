@@ -10,9 +10,14 @@ import json
 import sys
 import urllib.request
 
+try:  # `python scripts/<script>.py` pone scripts/ en sys.path; `-m scripts.<script>`, la raíz
+    from e2e_credentials import e2e_password
+except ImportError:  # pragma: no cover
+    from scripts.e2e_credentials import e2e_password
+
 BASE = "https://sdq-market-intelligence-production.up.railway.app"
 EMAIL = "claude@sdqconsulting.com.do"
-PASSWORD = "Claude1234"
+PASSWORD = e2e_password()
 AUDIENCES = ["comite_credito", "entidad", "inversionista", "supervisor"]
 WANT = ["popular", "bhd", "santa cruz", "bdi", "reservas"]
 

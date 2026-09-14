@@ -36,9 +36,9 @@ def _credentials() -> tuple:
     if email and password:
         return email, password
     sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-    from scripts.seed_e2e_user import E2E_EMAIL, E2E_PASSWORD
+    from scripts.e2e_credentials import E2E_EMAIL, e2e_password
 
-    return E2E_EMAIL, E2E_PASSWORD
+    return E2E_EMAIL, e2e_password()
 
 
 def _con_reintento(fn, *, intentos: int = 6, espera: int = 15):
