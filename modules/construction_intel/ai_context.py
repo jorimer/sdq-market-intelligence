@@ -6,6 +6,7 @@ series — so prompts stay cheap and honest about provenance. Module-local, mirr
 :mod:`free_zones_intel.ai_context`.
 """
 from typing import Any, Dict, List, Optional
+from shared.data.dgcp_ocds_client import DGCPOCDSClient
 from shared.data.bcrd_sectors import BCRDSectorsClient
 from shared.data.mivhed_client import MIVHEDClient
 from shared.narrative.atribucion import Fuente, bloque_de_atribucion
@@ -29,6 +30,19 @@ NOTA_DEL_FEED_MIVHED = (
     "lo que apenas licenció. Los m² por provincia y por tipología son del mes, no del año. La "
     "inversión del MIVHED no se sirve: es un costo estándar derivado de los m² con una tarifa "
     "fija, no un valor tasado.")
+
+
+#: El feed de OBRA PÚBLICA ADJUDICADA (Fase 7): el OCDS de la DGCP. No entra al índice; viaja
+#: solo a la sección del movimiento del mes, al lado de las licencias del MIVHED.
+FUENTE_DGCP = Fuente.de_cliente(
+    DGCPOCDSClient, descripcion="DGCP (obra pública adjudicada, OCDS vía Open Contracting Partnership)")
+
+NOTA_DEL_FEED_OBRA_PUBLICA = (
+    "Cuenta las obras que el Estado ADJUDICÓ en el mes —procesos cuya categoría es obra— y suma "
+    "el monto de los contratos de esas adjudicaciones. Adjudicar no es empezar la obra ni "
+    "ejecutarla, y el monto es el contratado, no el pagado: no escribas que se construyó lo que "
+    "se adjudicó. Es un conteo de eventos: una sola adjudicación grande mueve el monto del mes "
+    "sin que cambie la actividad, así que no leas el monto como tendencia del sector.")
 
 
 _DIM_LABELS = {
