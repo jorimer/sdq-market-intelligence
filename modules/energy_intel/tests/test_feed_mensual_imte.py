@@ -162,3 +162,75 @@ def test_la_trayectoria_del_IRSE_viaja_en_el_PAYLOAD_y_el_contexto_la_lee_de_ahi
     asyncio.run(p.narratives(ProductTier.deep_dive, snap))
     posicion = [k for k in vistos if k["template"] == "sector_positioning"]
     assert posicion and posicion[0]["context"]["trayectoria"] == snap.payload["trayectoria_del_irse"]
+
+
+def test_si_la_SIE_falla_el_IMTE_se_sincroniza_igual(monkeypatch):
+    """El 2026-09-14 la SIE retiró el CSV de capacidad y el feed mensual quedó sin correr."""
+    from modules.energy_intel import operations, service
+
+    def sie_caida(_db):
+        raise RuntimeError("SIE: el recurso respondió HTTP 404")
+
+    monkeypatch.setattr(service, "backfill_scores", sie_caida)
+    monkeypatch.setattr(service, "sincronizar_imte", lambda _db, client=None: {"edicion": "2026-07"})
+
+    class _Sesion:
+        def rollback(self):
+            pass
+
+        def close(self):
+            pass
+
+    monkeypatch.setattr(operations, "SessionLocal", _Sesion)
+    out = operations._run_sie_energy_sync({}, None, lambda _m: None)
+    assert out["imte"] == {"edicion": "2026-07"}
+    assert "404" in out["irse"]["error"]
+
+
+def test_si_caen_las_DOS_la_corrida_falla_a_la_vista(monkeypatch):
+    from modules.energy_intel import operations, service
+
+    def revienta(*a, **k):
+        raise RuntimeError("caída")
+
+    monkeypatch.setattr(service, "backfill_scores", revienta)
+    monkeypatch.setattr(service, "sincronizar_imte", revienta)
+
+    class _Sesion:
+        def rollback(self):
+            pass
+
+        def close(self):
+            pass
+
+    monkeypatch.setattr(operations, "SessionLocal", _Sesion)
+    with pytest.raises(RuntimeError, match="energía sin sincronizar"):
+        operations._run_sie_energy_sync({}, None, lambda _m: None)
+
+
+def test_una_pagina_de_error_de_la_SIE_no_se_parsea_como_CSV(monkeypatch):
+    import httpx
+
+    from shared.data.sie_client import SIEClient
+
+    class _Resp:
+        status_code = 404
+        content = b"<html>" + b"x" * 200000
+
+    class _Cliente:
+        def __init__(self, *a, **k):
+            pass
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *a):
+            return False
+
+        def get(self, *a, **k):
+            return _Resp()
+
+    monkeypatch.setattr(httpx, "Client", _Cliente)
+    monkeypatch.setattr(SIEClient, "_resolve_csv", lambda self, slug: "https://sie.gob.do/x.csv")
+    with pytest.raises(RuntimeError, match="HTTP 404"):
+        SIEClient().installed_capacity()
