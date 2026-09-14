@@ -749,3 +749,85 @@ def test_una_ventana_COMPLETA_con_base_no_recibe_la_regla_de_lectura():
 
     ventana = {"disponible": True, "valor": 120.0, "linea_base": {"tipo": "x", "valor": 100.0}}
     assert "se_lee_como" not in _serie_para_el_modelo({"serie": "x", "ventana_movil_12m": ventana})["ventana_movil_12m"]
+
+
+# ── Términos vetados: se vigilan en código, no solo en la nota (2026-09-14) ─────────
+
+def _motor_secuencia(monkeypatch, textos):
+    """Un motor falso que devuelve *textos* en orden y registra el contexto de cada llamada."""
+    llamadas = []
+
+    async def fake(**kw):
+        llamadas.append(kw)
+        return ce.NarrativeResult(text=textos[min(len(llamadas) - 1, len(textos) - 1)])
+
+    monkeypatch.setattr(ce.narrative_engine, "generate", fake)
+    return llamadas
+
+
+def _producto_con_veto(db, monkeypatch, terminos=("demanda",)):
+    from shared.products import registry
+
+    p = _Producto(db, feeds=[_feed(terminos_vetados=terminos)])
+    monkeypatch.setitem(registry._REGISTRY, EJE, lambda _db: p)
+    _feed_fresco(db)
+    return p
+
+
+def test_el_termino_vetado_se_detecta_como_PALABRA_entera():
+    from shared.products.feed_delta import terminos_vetados_en
+
+    feeds = [_feed(terminos_vetados=("demanda",))]
+    assert terminos_vetados_en("La Demanda del sistema se acentúa.", feeds) == ["demanda"]
+    assert terminos_vetados_en("La parte demandante no aplica; demandas no.", feeds) == []
+    assert terminos_vetados_en("La demanda.", [_feed()]) == [], "sin veto declarado no se vigila nada"
+
+
+def test_con_un_termino_vetado_se_narra_OTRA_vez_con_la_correccion(db, monkeypatch):
+    p = _producto_con_veto(db, monkeypatch)
+    llamadas = _motor_secuencia(monkeypatch, ["La demanda crece.", "Las cosas contadas suben."])
+    narr, omitidas = _anexar(p)
+    assert omitidas == []
+    assert narr[SECCION_DELTA].endswith("Las cosas contadas suben.")
+    assert len(llamadas) == 2
+    assert "«demanda»" in llamadas[1]["context"]["correccion_de_terminos"]
+    assert "correccion_de_terminos" not in llamadas[0]["context"]
+
+
+def test_si_el_termino_persiste_la_seccion_se_OMITE_y_no_se_cachea(db, monkeypatch):
+    from shared.products.feed_delta import OMITIDA_TERMINO
+
+    p = _producto_con_veto(db, monkeypatch)
+    _motor_secuencia(monkeypatch, ["La demanda crece.", "La demanda sigue creciendo."])
+    narr, omitidas = _anexar(p)
+    assert SECCION_DELTA not in narr
+    assert [o["motivo"] for o in omitidas] == [OMITIDA_TERMINO]
+    assert db.query(FeedDeltaCache).count() == 0
+
+
+def test_un_texto_CACHEADO_con_el_termino_no_se_sirve(db, monkeypatch):
+    p = _producto_con_veto(db, monkeypatch)
+    _motor_secuencia(monkeypatch, ["Las cosas contadas suben."])
+    _anexar(p)
+    fila = db.query(FeedDeltaCache).one()
+    fila.texto = "La demanda del sistema se acentúa."
+    db.commit()
+    llamadas = _motor_secuencia(monkeypatch, ["Las cosas contadas suben de nuevo."])
+    narr, _ = _anexar(p)
+    assert len(llamadas) == 1, "sirvió el texto cacheado con el término vetado"
+    assert "demanda" not in narr[SECCION_DELTA].lower()
+
+
+def test_el_feed_del_IMTE_veta_DEMANDA(db):
+    from modules.energy_intel.products import EnergyProduct
+
+    feed = next(f for f in EnergyProduct(db).feeds_mensuales() if f.clave == "oc_seni_imte")
+    assert "demanda" in feed.terminos_vetados
+
+
+def test_el_contexto_nombra_los_terminos_vetados_solo_si_el_feed_los_declara(db, monkeypatch):
+    p = _producto_con_veto(db, monkeypatch)
+    llamadas = _motor_secuencia(monkeypatch, ["Las cosas contadas suben."])
+    _anexar(p)
+    lectura = llamadas[0]["context"]["lecturas_por_emisor"][0]
+    assert lectura["terminos_que_no_describen_estas_series"] == ["demanda"]
