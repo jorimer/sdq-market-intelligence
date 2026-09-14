@@ -313,3 +313,24 @@ async def barrido_del_guard(
 
     _require_admin(current_user)
     return bg.barrido_del_guard(db, sector=sector, limite=limite)
+
+
+@router.get("/anonimizacion-en-cache",
+            summary="Corre el sensor de anonimización sobre los Pulses YA cacheados (sin generar)")
+async def anonimizacion_en_cache(
+    sector: Optional[str] = Query(None, description="Acotar a un producto"),
+    limite: int = Query(2000, ge=1, le=2000, description="Tope de filas leídas"),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Qué Pulse guardado nombra a una entidad del roster vigente — antes de que alguien lo pida.
+
+    Desde #1173 el sensor recibe el roster de cada eje, pero la caché de narrativas no tiene TTL
+    y guarda textos escritos cuando el roster viajaba vacío. Uno así que nombre a una entidad
+    responde 500 la próxima vez que se pida. Pedir cada período para averiguarlo GENERA los que
+    no están en caché; este escaneo lee la caché y rearma solo el snapshot (base de datos).
+    """
+    from shared.observability import anonimizacion_en_cache as ac
+
+    _require_admin(current_user)
+    return ac.escanear_pulses_cacheados(db, sector=sector, limite=limite)
