@@ -211,7 +211,8 @@ def senales_de_los_feeds(db: Session, sector_key: str,
     salida: List[Any] = []
     for feed in feeds:
         try:
-            ultimo = obs.ultimo_periodo(db, sector_key=sector_key, series=list(feed.series))
+            ultimo = obs.ultimo_periodo(db, sector_key=sector_key, series=list(feed.series),
+                                        con_valor=True)
         except Exception as e:  # noqa: BLE001 — sin feed no hay señal, no hay error
             logger.warning("feed «%s» de %s no legible: %s", feed.clave, sector_key, e)
             continue
@@ -260,7 +261,11 @@ def bloque_del_feed(db: Session, sector_key: str, feed: FeedDeclarado) -> Option
         AL_DIA, CONGELADA, veredicto_de_la_fuente)
     from shared.products.report_sections import CADENCIA_ES
 
-    ultimo = obs.ultimo_periodo(db, sector_key=sector_key, series=list(feed.series))
+    # Con valor: un período cuyas filas son todas NULL no es una edición publicada. El sensor
+    # (`senales_de_los_feeds`) lee el mismo período, así que la sección y el panel no se
+    # contradicen.
+    ultimo = obs.ultimo_periodo(db, sector_key=sector_key, series=list(feed.series),
+                                con_valor=True)
     if not ultimo:
         return None
     cabecera = {"clave": feed.clave, "etiqueta": feed.etiqueta, "emisor": feed.emisor}
@@ -384,7 +389,7 @@ def encabezado_del_movimiento(bloque: Dict[str, Any], feeds: Sequence[FeedDeclar
     eso es el estado ACTUAL de la fuente, y lo único verificado es que no estaba en la ÚLTIMA
     DESCARGA. Por eso la frase nombra esa descarga y su fecha.
     """
-    from shared.narrative.formato import fecha_larga_es, mes_siguiente
+    from shared.narrative.formato import de_seguido_de, fecha_larga_es, mes_siguiente
 
     lecturas = bloque.get("lecturas") or []
     if not lecturas:
@@ -417,7 +422,7 @@ def encabezado_del_movimiento(bloque: Dict[str, Any], feeds: Sequence[FeedDeclar
         if publicada:
             frases.append(f"Es la última edición que publicó {emisor}, el {publicada}; {no_estaba}")
         else:
-            frases.append(f"Es la última edición disponible de {emisor}; {no_estaba}")
+            frases.append(f"Es la última edición disponible {de_seguido_de(emisor)}; {no_estaba}")
     return " ".join(frases)
 
 
