@@ -18,6 +18,7 @@ from typing import Any, Dict, List, Optional
 
 from sqlalchemy.orm import Session
 
+from modules.law_intel.novedades import MARCADOR_NOVEDADES, SECCION_NOVEDADES, consultar_novedades
 from modules.law_intel.ai_context import law_ai_context, secciones_sin_dato
 from modules.law_intel.campo import imposibles_por_el_instrumento
 from modules.law_intel.ratificacion import exigir_servible
@@ -130,6 +131,7 @@ _SECTION_TITLES = {
     "verificabilidad": "Quién produce la evidencia con la que se juzga",
     "brechas": "Qué parte de la ley este informe no puede juzgar",
     "recomendaciones": "Qué se puede exigir, y con qué instrumento",
+    "novedades_normativas": "Lo que entró este mes al marco normativo",
 }
 
 #: Qué sección lleva la profundidad en el Deep Dive. Se declara en vez de dejar el default
@@ -142,7 +144,15 @@ _SIN_DATO = ("El informe no puede pronunciarse sobre esta sección con la cobert
 # Exemplar curado de la muestra. Se redacta a mano, sobre un instrumento FICTICIO, y muestra
 # las cuatro cosas que distinguen a este producto: la cobertura declarada en la primera línea,
 # el veredicto sin eufemismo, la brecha con responsable y la recomendación con base legal.
+#: Secciones que NO pasan por el modelo y por eso no tienen plantilla: se redactan en código. Se
+#: declaran para que el test de «cada sección, su plantilla» sepa que la ausencia es a propósito.
+SECCIONES_SIN_MODELO = (SECCION_NOVEDADES,)
+
 _SAMPLE_NARRATIVES = {
+    "novedades_normativas": (
+        "En agosto de 2026 entraron a la base normativa 2 normas que citan la Ley 000-00:\n"
+        "- Decreto 000-26 — Que establece el reglamento de aplicación (ingresó el 2026-08-14)\n"
+        "- Resolución 00-26 — Que fija el procedimiento de reporte (ingresó el 2026-08-27)"),
     "estado_de_la_ley": (
         "La Ley 000-00 se propuso tres fines y se fijó 30 indicadores para probarlos. Esta "
         "evaluación mide 12 de esos 30, y con ellos puede caracterizar dos de los tres "
@@ -231,7 +241,7 @@ def law_manifest() -> SectorProductManifest:
             ProductTier.insight: TierLevelSpec(
                 tier=ProductTier.insight, granularity=Granularity.named_entity,
                 sections=("estado_de_la_ley", "logrado", "no_logrado", "pendiente",
-                          "brechas"),
+                          "brechas", "novedades_normativas"),
                 narrative_templates=("sector_decision", "sector_positioning"),
                 audience="cliente / comisión", cadence="recurring", price_band="suscripción"),
             # Deep Dive: lo mismo con profundidad de trayectoria, más de dónde sale la
@@ -241,7 +251,7 @@ def law_manifest() -> SectorProductManifest:
                 tier=ProductTier.deep_dive, granularity=Granularity.named_entity,
                 sections=("estado_de_la_ley", "logrado", "no_logrado", "pendiente",
                           "coherencia_proceso", "verificabilidad", "brechas",
-                          "recomendaciones"),
+                          "recomendaciones", "novedades_normativas"),
                 narrative_templates=("sector_decision", "sector_positioning"),
                 audience="cliente / comisión", cadence="on_demand", price_band="a medida"),
         })
@@ -477,6 +487,10 @@ class LawProduct:
             if sec in sin_dato:
                 out[sec] = _SIN_DATO
                 continue
+            # Lo que entró este mes al marco se redacta EN VIVO al servir: acá solo el marcador.
+            if sec == SECCION_NOVEDADES:
+                out[sec] = MARCADOR_NOVEDADES
+                continue
             propio = dict(ctx)
             propio["seccion_pedida"] = _SECTION_TITLES.get(sec, sec)
             pendientes.append((sec, dict(
@@ -493,6 +507,44 @@ class LawProduct:
         for sec, texto in await asyncio.gather(*(_gen(s_, k) for s_, k in pendientes)):
             out[sec] = texto
         return out
+
+    # ── Fase 8: lo que entró este mes al marco (JurisAI), en vivo ──
+    def completar_en_vivo(self, tier: ProductTier, snapshot: ProductSnapshot,
+                          narratives: Dict[str, str]) -> Dict[str, str]:
+        """Reemplaza el marcador de la sección por la consulta del mes cerrado a JurisAI."""
+        if narratives.get(SECCION_NOVEDADES) != MARCADOR_NOVEDADES or self._db is None:
+            return narratives
+        norma = ((snapshot.payload or {}).get("instrumento") or {}).get("norma") or ""
+        texto, _ = consultar_novedades(self._db, norma=norma)
+        return {**narratives, SECCION_NOVEDADES: texto}
+
+    def senales_de_fuentes(self):
+        """JurisAI como fuente del eje, con el veredicto del mes cerrado.
+
+        La frescura es la del ÚLTIMO mes que el emisor declara concluyente: si el mes cerrado lo
+        es, cuenta desde su fin; si no, no se sabe, y `None` es lo honesto —el sensor lo lee
+        como indeterminada, que es distinto de al día—.
+        """
+        from datetime import date as _date
+
+        from shared.operations.fuentes_congeladas import SenalDeFuente
+
+        from modules.law_intel.novedades import ventana_del_mes_cerrado
+
+        disponibles = expedientes()
+        if not disponibles or self._db is None:
+            return []
+        norma = cargar(disponibles[0]).norma
+        _, respuesta = consultar_novedades(self._db, norma=norma)
+        _, hasta = ventana_del_mes_cerrado(_date.today())
+        concluyente = bool(((respuesta or {}).get("alcance") or {}).get("vacio_es_concluyente"))
+        frescura = (_date.today() - hasta).days if concluyente else None
+        detalle = ("sin respuesta de JurisAI" if respuesta is None else
+                   f"mes cerrado hasta {hasta.isoformat()} · "
+                   f"{'concluyente' if concluyente else 'no concluyente'} · "
+                   f"{len((respuesta or {}).get('resultados') or [])} normas nuevas que citan la {norma}")
+        return [SenalDeFuente(clave="jurisai", etiqueta="JurisAI", cadence="monthly",
+                              freshness_days=frescura, detalle=detalle)]
 
     # ── Muestra de conversión ──
     def sample_narratives(self, tier: ProductTier) -> Dict[str, str]:
