@@ -169,11 +169,34 @@ def _index_dict(s: FreeZoneScore) -> Dict[str, Any]:
     return {"fz_score": s.fz_score, "band": s.band, "coverage": s.coverage,
             "dimensions": bd.get("dimensions", {}), "exports": bd.get("exports", {}),
             "investment": bd.get("investment", {}), "employment": bd.get("employment", {}),
-            "productivity": bd.get("productivity", {}), "levels": bd.get("levels", {})}
+            "productivity": bd.get("productivity", {}), "levels": bd.get("levels", {}),
+            "complementarios": bd.get("complementarios") or {}}
 
 
 def _fmt(v: Optional[float]) -> str:
     return "—" if v is None else f"{v:.1f}"
+
+
+#: Cómo se titula en la tabla cada campo complementario, con su unidad.
+_ETIQUETAS_COMPLEMENTARIAS = {
+    "salario_semanal_de_un_operario_de_zona_franca_rd": "Salario semanal de un operario (RD$)",
+    "salario_semanal_de_un_tecnico_de_zona_franca_rd": "Salario semanal de un técnico (RD$)",
+    "gasto_operativo_local_de_las_zonas_francas_musd": "Gasto operativo local (millones US$)",
+    "area_de_naves_ocupada_en_zonas_francas_pies2": "Área de naves ocupada (pies²)",
+}
+
+
+def filas_complementarias(complementarios: Dict[str, Any]) -> List[List[str]]:
+    """Filas de la tabla de los campos que no entran al índice. Solo los que tienen valor: un
+    campo ausente no se lista (el documento no declara huecos)."""
+    filas = []
+    for clave, etiqueta in _ETIQUETAS_COMPLEMENTARIAS.items():
+        valor = complementarios.get(clave)
+        if valor is None:
+            continue
+        filas.append([etiqueta, f"{valor:,.0f}".replace(",", ".") if abs(valor) >= 100
+                      else f"{valor:.1f}".replace(".", ",")])
+    return filas
 
 
 def _trend_series(db: Optional[Session]):
@@ -412,6 +435,10 @@ class FreeZoneProduct:
             tables.append(("Dimensiones del IZF", rows))
             items = [(labels.get(k, k), (d or {}).get("score")) for k, d in dims.items()]
             charts.append({"title": "Dimensiones del IZF (score 0-100)", "items": items})
+        filas = filas_complementarias(index.get("complementarios") or {})
+        if filas:
+            tables.append(("Variables del sector que no entran al IZF (CNZFE)",
+                           [["Variable", "Valor"]] + filas))
         trend = _trend_series(None if sample else self._db)
         if len(trend) >= 2:
             charts.append({"kind": "line", "title": "Tendencia del IZF (por año)", "items": trend})

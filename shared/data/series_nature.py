@@ -98,6 +98,14 @@ DECLARED: dict = {
     #
     # ⚠️ No alcanza con dejarlos fuera de esta tabla: la unidad «RD$» decide antes que nada y
     # `infer_nature` los devuelve `flow`. Se comprobó así, y por eso la declaración existe.
+    # ── Energía · OC-SENI, IMTE (Fase 5) ──
+    # La energía inyectada y retirada en el MES es un flujo: su base es el mismo mes del año
+    # anterior. «GWh» no dice nada a la inferencia por unidad, por eso se declara.
+    "oc_seni.imte.inyecciones_gwh": FLOW,
+    "oc_seni.imte.retiros_totales_gwh": FLOW,
+    "oc_seni.imte.retiros_distribuidoras_gwh": FLOW,
+    # Las pérdidas de transmisión son una PROPORCIÓN de lo inyectado: se mueven en puntos.
+    "oc_seni.imte.perdidas_transmision_pct": RATE,
     "ars.ingreso_salud": UNKNOWN,
     "ars.gasto_salud": UNKNOWN,
     "ars.beneficio_neto": UNKNOWN,

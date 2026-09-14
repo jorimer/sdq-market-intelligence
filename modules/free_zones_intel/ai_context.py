@@ -69,6 +69,13 @@ def free_zones_ai_context(index: Dict[str, Any], period: str,
         "exports_musd": levels.get("exports_musd"),
         "investment_musd": levels.get("investment_musd"),
         "parks": levels.get("parks"),
+        # Contexto del sector que NO entra al IZF (plan §3.4). El sujeto y la unidad van en la
+        # clave: «el salario semanal» suelto se reatribuye a la economía entera.
+        **(index.get("complementarios") or {}),
+        "complementarios_no_entran_al_indice": (
+            "El salario semanal de operarios y técnicos, el gasto operativo local y el área de "
+            "naves ocupada describen al sector, pero NO son dimensiones del IZF: no expliques "
+            "el score con ellos."),
         "score_global": index.get("fz_score"),
         **_financiamiento(perfil),
         **bloque_de_atribucion(_CNZFE),
