@@ -75,15 +75,23 @@ def codigos(db: Session, *, sector_key: str) -> List[str]:
     return sorted(r[0] for r in rows)
 
 
-def ultimo_periodo(db: Session, *, sector_key: str) -> Optional[str]:
-    """El período más reciente observado del eje, o ``None`` si no hay ninguno."""
-    row = (db.query(SectorObservation.period)
-           .filter(SectorObservation.sector_key == sector_key)
-           .order_by(SectorObservation.period.desc()).first())
+def ultimo_periodo(db: Session, *, sector_key: str,
+                   series: Optional[List[str]] = None) -> Optional[str]:
+    """El período más reciente observado del eje, o ``None`` si no hay ninguno.
+
+    ``series`` acota a un FEED: un eje con dos emisores en la tabla (las licencias del MIVHED y
+    las de la ONE, que publica con más rezago) tiene dos «últimos períodos», y el de uno no
+    describe al otro.
+    """
+    q = db.query(SectorObservation.period).filter(SectorObservation.sector_key == sector_key)
+    if series:
+        q = q.filter(SectorObservation.series_code.in_(list(series)))
+    row = q.order_by(SectorObservation.period.desc()).first()
     return row[0] if row else None
 
 
-def ultima_publicacion(db: Session, *, sector_key: str) -> Optional[date]:
+def ultima_publicacion(db: Session, *, sector_key: str,
+                       series: Optional[List[str]] = None) -> Optional[date]:
     """La fecha más reciente en que el EMISOR publicó algo de este eje, o ``None``.
 
     Es otra medida que ``ultimo_periodo``: el período dice a qué mes pertenece el dato, la
@@ -93,8 +101,11 @@ def ultima_publicacion(db: Session, *, sector_key: str) -> Optional[date]:
     """
     from sqlalchemy import func
 
-    row = (db.query(func.max(SectorObservation.published_at))
-           .filter(SectorObservation.sector_key == sector_key).first())
+    q = (db.query(func.max(SectorObservation.published_at))
+         .filter(SectorObservation.sector_key == sector_key))
+    if series:
+        q = q.filter(SectorObservation.series_code.in_(list(series)))
+    row = q.first()
     return row[0] if row and row[0] else None
 
 

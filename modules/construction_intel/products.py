@@ -38,6 +38,7 @@ from shared.products import (
     register_product,
     section_mode,
 )
+from shared.products.feed_delta import Dimension, FeedDeclarado
 from shared.products.render import render_product_pdf
 from modules.construction_intel.ai_context import construction_ai_context
 from modules.construction_intel.models.models import ConstructionScore
@@ -244,34 +245,60 @@ class ConstructionProduct:
     # declarar `monthly` en un índice anual cuesta 0,300 de readiness contra un umbral de
     # activación de 0,85: como el máximo es 1,0, el eje deja de publicarse en TODOS sus
     # niveles. El índice sigue siendo anual porque lo es; el feed es otra fuente.
-    def senales_de_fuentes(self):
-        """La señal del feed mensual del MIVHED para el sensor de fuentes congeladas."""
-        from datetime import date
+    #
+    # La SECCIÓN del movimiento del mes la narra el ENSAMBLADOR (`shared/products/feed_delta`),
+    # con caché propia: acá solo se DECLARA el feed. Antes el módulo la narraba y su bloque
+    # iba al payload, así que cada mes nuevo regeneraba el Deep Dive entero.
+    def feeds_mensuales(self) -> List[FeedDeclarado]:
+        """El feed mensual del MIVHED, declarado para el ensamblador y el sensor."""
+        from modules.construction_intel.ai_context import (
+            FUENTE_MIVHED, NOTA_DEL_FEED_MIVHED)
+        from modules.construction_intel.service import (
+            CLAVE_DEL_FEED, ETIQUETAS_DEL_FEED, SERIE_PERMISOS, SERIE_SQM,
+            ultima_descarga_del_feed)
 
-        from modules.construction_intel.service import CLAVE_DEL_FEED
-        from shared.observations import service as obs
-        from shared.operations.fuentes_congeladas import SenalDeFuente
+        # Lo VIVO: cuándo bajamos la fuente por última vez. Va al encabezado, no a la huella.
+        descarga = None
+        if self._db is not None:
+            try:
+                descarga = ultima_descarga_del_feed(self._db)
+            except Exception:  # noqa: BLE001 — sin fecha de descarga se dice lo que se sabe
+                logger.warning("fecha de la última descarga del MIVHED no disponible",
+                               exc_info=True)
+        return [FeedDeclarado(
+            clave=CLAVE_DEL_FEED,
+            etiqueta="MIVHED · licencias emitidas",
+            emisor="MIVHED (datos.gob.do)",
+            emisor_en_prosa="el MIVHED",
+            series=(SERIE_PERMISOS, SERIE_SQM),
+            etiquetas=ETIQUETAS_DEL_FEED,
+            axis="construction_intel",
+            fuente=FUENTE_MIVHED,
+            cadence="monthly",
+            nota=NOTA_DEL_FEED_MIVHED,
+            # El microdato que el agregado anual descartaba. El sujeto viaja en la clave.
+            dimensiones=(
+                Dimension("metros_cuadrados_licenciados_por_provincia_del_mes", SERIE_SQM,
+                          "provincia"),
+                Dimension("metros_cuadrados_licenciados_por_tipologia_del_mes", SERIE_SQM,
+                          "tipologia"),
+            ),
+            ultima_descarga=descarga,
+        )]
+
+    def senales_de_fuentes(self):
+        """La señal del feed mensual del MIVHED para el sensor de fuentes congeladas.
+
+        Se deriva de `feeds_mensuales` con el helper compartido: así el sensor y la sección
+        juzgan la frescura con el MISMO criterio.
+        """
+        from shared.products.feed_delta import senales_de_los_feeds
 
         try:
-            ultimo = obs.ultimo_periodo(self._require_db(), sector_key=SECTOR_KEY)
+            return senales_de_los_feeds(self._require_db(), SECTOR_KEY, self.feeds_mensuales())
         except Exception as e:  # noqa: BLE001 — sin feed no hay señal, no hay error
             logger.warning("feed mensual de construcción no legible: %s", e)
             return []
-        if not ultimo:
-            return []
-        # La antigüedad es la del PERÍODO del dato, no la de la fila: un sync que corre en
-        # verde contra un archivo que ya no se actualiza no mueve el período.
-        try:
-            anio, mes = int(str(ultimo)[:4]), int(str(ultimo)[5:7])
-            fin = date(anio + (mes == 12), 1 if mes == 12 else mes + 1, 1)
-            dias = max(0, (date.today() - fin).days)
-        except (ValueError, IndexError):
-            dias = None
-        return [SenalDeFuente(
-            clave=CLAVE_DEL_FEED,
-            etiqueta="MIVHED · licencias emitidas",
-            cadence="monthly", freshness_days=dias,
-            detalle=f"último mes con licencias observadas: {ultimo}")]
 
     def has_engine(self) -> bool:
         return self._latest() is not None
@@ -304,89 +331,6 @@ class ConstructionProduct:
                                      "amplitud geográfica sobre dato real.")
 
     # ── Snapshot por nivel ──
-    @staticmethod
-    def _motivo_en_castellano(veredicto) -> str:
-        """El porqué del veto, redactado para el CLIENTE.
-
-        El `motivo` que trae el veredicto está escrito para el operador del panel y arrastra
-        la clave de máquina de la cadencia ("monthly"): pegarlo tal cual publicaba «su fuente
-        (monthly)» dentro de un documento en español. Es el mismo defecto que obligó a
-        traducir la cadencia en la sección de metodología. Los HECHOS se copian del veredicto;
-        la frase se escribe acá.
-        """
-        from shared.products.report_sections import CADENCIA_ES
-
-        if veredicto is None:
-            return ("el eje no declara este feed, así que no hay veredicto de frescura que "
-                    "lo respalde")
-        cad = CADENCIA_ES.get((veredicto.cadencia or "").lower(), veredicto.cadencia or "—")
-        dias = veredicto.dias_desde_el_periodo_del_dato
-        tope = veredicto.tope_de_dias_de_la_cadencia
-        if dias is None or tope is None:
-            return ("no se pudo determinar la antigüedad del dato de esta fuente, y una "
-                    "frescura indeterminada no es una frescura verificada")
-        return (f"el dato más reciente de esta fuente de cadencia {cad} tiene {dias} días, "
-                f"cuando una edición nueva debía haber aparecido a los {tope}")
-
-    def _delta_mensual(self) -> Optional[Dict[str, Any]]:
-        """El movimiento del último mes observado, o ``None`` si no hay sección que publicar.
-
-        **Con la fuente atrasada, la lectura SE PUBLICA con su mes nombrado y la declaración
-        al lado** (decisión del dueño, 2026-09-10). El primer diseño vetaba la sección: temía
-        describir un mes viejo con cara de actual. Pero la lectura nombra su período, así que
-        no se hace pasar por el mes en curso; y que el emisor lleve semanas sin publicar es en
-        sí información que el lector quiere. Callarla —o esconder la lectura— la perdía.
-
-        La declaración viaja como DATO computado (`fuente_del_feed`) y no como prosa: la fecha
-        de la última publicación sale de `published_at`, que se captura del portal al ingerir.
-        Nunca se escribe a mano.
-
-        **`indeterminada` sí veta.** Ahí no se sabe cuándo publicó la fuente, así que no hay
-        declaración honesta que poner al lado: publicar la lectura sin ella sería presentarla
-        como vigente sin saberlo. Vuelve con `no_publicable` y su motivo, que la sección imprime.
-        """
-        from modules.construction_intel.service import (
-            CLAVE_DEL_FEED, ETIQUETAS_DEL_FEED)
-        from shared.observations import service as obs
-        from shared.observations.delta import leer_delta
-        from shared.operations.fuentes_congeladas import (
-            AL_DIA, CONGELADA, veredicto_de_la_fuente)
-
-        try:
-            db = self._require_db()
-            ultimo = obs.ultimo_periodo(db, sector_key=SECTOR_KEY)
-            if not ultimo:
-                return None            # sin feed no hay sección: no aparece vacía
-            veredicto = veredicto_de_la_fuente(db, sector_key=SECTOR_KEY,
-                                               clave=CLAVE_DEL_FEED)
-            if veredicto is None or veredicto.estado not in (AL_DIA, CONGELADA):
-                return {"no_publicable": self._motivo_en_castellano(veredicto),
-                        "ultimo_periodo_observado": ultimo}
-            bloque = leer_delta(db, sector_key=SECTOR_KEY, period=ultimo,
-                                etiquetas=ETIQUETAS_DEL_FEED)
-            bloque["emisor"] = "MIVHED (datos.gob.do)"
-            # La frescura de la FUENTE, como dato. Sin `dias`: una cifra calculada contra hoy
-            # cambiaría el payload cada día e invalidaría la caché sin que el dato cambie, y
-            # dentro de un documento envejecería sola. Lo estable es el período, la fecha de
-            # publicación y el veredicto — que cambia, a lo sumo, una vez por edición.
-            publicada = obs.ultima_publicacion(db, sector_key=SECTOR_KEY)
-            bloque["fuente_del_feed"] = {
-                "al_dia": veredicto.estado == AL_DIA,
-                "ultimo_periodo": ultimo,
-                "ultima_publicacion": publicada.isoformat() if publicada else None,
-                "cadencia": "mensual",
-            }
-            bloque["provincias"] = obs.por_dimension(
-                db, sector_key=SECTOR_KEY, series_code="mivhed.licencias.metros_cuadrados",
-                period=ultimo, campo="provincia")[:5]
-            bloque["tipologias"] = obs.por_dimension(
-                db, sector_key=SECTOR_KEY, series_code="mivhed.licencias.metros_cuadrados",
-                period=ultimo, campo="tipologia")[:5]
-            return bloque
-        except Exception:  # noqa: BLE001 — el informe anual nunca depende de esta sección
-            logger.exception("Delta mensual omitido en el snapshot de construcción")
-            return None
-
     def snapshot(self, tier: ProductTier, period: str,
                  scope: Optional[str] = None) -> ProductSnapshot:
         s = _latest_score(self._require_db(), period or None)
@@ -396,14 +340,10 @@ class ConstructionProduct:
                                    payload={"has_score": False}, entity_name=entity,
                                    entity_roster=())
         payload: Dict[str, Any] = {"has_score": True, "index": _index_dict(s)}
-        # EL MOVIMIENTO DEL MES. Va al PAYLOAD y no solo al contexto del narrador: el
-        # fingerprint de la caché de narrativas es del payload, así que un dato que llega
-        # solo al contexto cambia sin que la caché se entere y el informe sigue sirviendo la
-        # lectura vieja. Es el agujero que ya existe en energía (la serie de tendencia entra
-        # al contexto de `positioning` sin estar en el payload) y no se replica acá.
-        _delta = self._delta_mensual()
-        if _delta:
-            payload["delta_mensual"] = _delta
+        # EL MOVIMIENTO DEL MES NO VA AL PAYLOAD. La huella de la caché del informe es del
+        # payload entero: con el delta adentro, cada mes nuevo del feed regeneraba el Deep
+        # Dive completo (seis llamadas por un dato que cambia una sección). La sección la
+        # narra el ensamblador con su propia caché a partir de la declaración del feed.
         # EL FINANCIAMIENTO DEL SECTOR, que este eje no tenía de ninguna forma. Mide
         # permisos, m² y concentración geográfica; cuánto crédito recibe la construcción, a
         # qué tasa y con qué mora venía del cubo de la SIB y no salía de banca.
@@ -582,112 +522,11 @@ class ConstructionProduct:
 
         for section, text in await asyncio.gather(*(_gen(s, k) for s, k in pending)):
             out[section] = text
-
-        # EL MOVIMIENTO DEL MES: sección PROPIA, con contexto PROPIO.
-        #
-        # No entra al contexto de `positioning` ni de `construction_assessment`. Son dos
-        # sujetos —el índice del año y el flujo del mes— y meterlos en un mismo prompt hace
-        # que el modelo elija uno; es la razón por la que banca sirve su mapa sectorial como
-        # sección aparte y no dentro del año. Y no está en el manifiesto a propósito: depende
-        # del PERÍODO del feed, no del nivel, así que la anexa `orden_de_secciones`.
-        delta = (snapshot.payload or {}).get("delta_mensual")
-        if delta:
-            out["delta_mensual"] = await self._narrar_delta(delta, snapshot)
+        # EL MOVIMIENTO DEL MES no se narra acá: es una sección TRANSVERSAL que anexa el
+        # ensamblador con caché propia (`shared/products/feed_delta`). No entra al contexto de
+        # `positioning` ni de `construction_assessment`: son dos sujetos —el índice del año y
+        # el flujo del mes— y meterlos en un mismo prompt hace que el modelo elija uno.
         return out
-
-    async def _narrar_delta(self, delta: Dict[str, Any],
-                            snapshot: ProductSnapshot) -> str:
-        """La lectura del movimiento del mes. Determinista cuando está vetada."""
-        from modules.construction_intel.ai_context import construction_delta_context
-        from shared.narrative.claude_engine import narrative_engine
-
-        no_publicable = delta.get("no_publicable")
-        if no_publicable:
-            # Prosa determinista: no se le pide al modelo que redacte una ausencia. El texto
-            # NOMBRA la causa — un bloque que dice «no disponible» y calla el porqué se lee
-            # como un fallo nuestro, y acá el hecho es del emisor.
-            return (f"No se publica la lectura del movimiento del mes: {no_publicable}. "
-                    f"El índice anual de este informe no depende de este feed y no se ve "
-                    f"afectado.")
-        res = await narrative_engine.generate(
-            context=construction_delta_context(delta, snapshot.period),
-            template="construction_delta", mode="standard",
-            axis="construction_intel", audience="inversionista")
-        # SIN encabezado: lo que se devuelve acá se GUARDA en la caché, y el encabezado lleva
-        # la fecha de la última descarga, que cambia con cada verificación. Lo agrega
-        # `completar_en_vivo`, que corre después de la caché en cada entrega.
-        return res.text
-
-    #: Cómo empieza el encabezado. Sirve para reconocer uno ya grabado en la caché por la
-    #: versión anterior —que lo metía en el texto cacheado, con la frase vieja— y reemplazarlo
-    #: en vez de apilar dos.
-    _INICIO_DEL_ENCABEZADO = "Movimiento de "
-
-    def completar_en_vivo(self, tier: ProductTier, snapshot: ProductSnapshot,
-                          narratives: Dict[str, str]) -> Dict[str, str]:
-        """Antepone el encabezado del movimiento con la fecha de la última descarga, en vivo.
-
-        Corre después de la caché (ver `assembler`), así que la fecha puede cambiar a diario
-        sin regenerar el informe. Reemplaza un encabezado viejo si la caché trae uno: la
-        versión anterior lo grababa con la frase «no figura en la fuente a la fecha de este
-        informe», que afirmaba sobre el estado ACTUAL de la fuente algo que solo se sabía de la
-        última descarga — falso durante hasta 30 días si el emisor publicaba entre dos syncs.
-        """
-        delta = (snapshot.payload or {}).get("delta_mensual")
-        texto = narratives.get("delta_mensual")
-        if not delta or not isinstance(texto, str) or delta.get("no_publicable"):
-            return narratives
-        if texto.startswith(self._INICIO_DEL_ENCABEZADO):
-            _, sep, resto = texto.partition("\n\n")
-            texto = resto if sep else ""
-        from modules.construction_intel.service import ultima_descarga_del_feed
-
-        descarga = None
-        try:
-            descarga = ultima_descarga_del_feed(self._require_db())
-        except Exception:  # noqa: BLE001 — sin fecha de descarga se dice lo que se sabe
-            logger.warning("fecha de la última descarga del MIVHED no disponible",
-                           exc_info=True)
-        encabezado = self._encabezado_del_movimiento(delta, descarga)
-        if not encabezado:
-            return narratives
-        return {**narratives,
-                "delta_mensual": f"{encabezado}\n\n{texto}" if texto else encabezado}
-
-    @staticmethod
-    def _encabezado_del_movimiento(delta: Dict[str, Any],
-                                   ultima_descarga: Optional[date] = None) -> str:
-        """El mes nombrado y, si la fuente está atrasada, la declaración. Determinista.
-
-        Va en CÓDIGO y no pedido al modelo: una declaración que tiene que aparecer no puede
-        depender de que el narrador se acuerde. Todo sale del dato — ninguna fecha a mano.
-
-        **Afirma solo lo que se sabe.** No dice que la edición siguiente «no figura en la
-        fuente»: eso es el estado ACTUAL de la fuente, y lo único verificado es que no estaba
-        en la ÚLTIMA DESCARGA. Por eso la frase nombra esa descarga y su fecha.
-        """
-        from shared.narrative.formato import fecha_larga_es, mes_largo_es, mes_siguiente
-
-        fuente = delta.get("fuente_del_feed") or {}
-        mes = mes_largo_es(fuente.get("ultimo_periodo") or delta.get("periodo"))
-        if not mes:
-            return ""
-        lead = f"Movimiento de {mes}."
-        if fuente.get("al_dia", True):
-            return lead
-        publicada = fecha_larga_es(fuente.get("ultima_publicacion"))
-        falta = mes_largo_es(mes_siguiente(fuente.get("ultimo_periodo")))
-        if not falta:
-            return lead
-        descarga = (fecha_larga_es(ultima_descarga.isoformat())
-                    if isinstance(ultima_descarga, date) else None)
-        no_estaba = (f"la de {falta}, de cadencia mensual, no figuraba en la fuente en nuestra "
-                     f"última descarga, del {descarga}." if descarga else
-                     f"la de {falta}, de cadencia mensual, no figuraba en la fuente en nuestra "
-                     f"última descarga.")
-        if publicada:
-            return f"{lead} Es la última edición que publicó el MIVHED, el {publicada}; {no_estaba}"
-        return f"{lead} Es la última edición disponible del MIVHED; {no_estaba}"
 
     # ── Render (sin DB, renderer genérico) ──
     async def render(self, tier: ProductTier, snapshot: ProductSnapshot,
