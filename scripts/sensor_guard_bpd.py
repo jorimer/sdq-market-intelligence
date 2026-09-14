@@ -5,6 +5,11 @@ import json
 import sys
 import urllib.request
 
+try:  # `python scripts/<script>.py` pone scripts/ en sys.path; `-m scripts.<script>`, la raíz
+    from e2e_credentials import e2e_password
+except ImportError:  # pragma: no cover
+    from scripts.e2e_credentials import e2e_password
+
 BASE = "https://sdq-market-intelligence-production.up.railway.app"
 BID = "4997e543-d846-4600-a5de-a07355f1a756"
 AUDIENCES = ["comite_credito", "entidad", "inversionista", "supervisor"]
@@ -21,7 +26,7 @@ def _req(method, path, token=None, body=None):
 
 
 token = _req("POST", "/api/v1/auth/login",
-             body={"email": "claude@sdqconsulting.com.do", "password": "Claude1234"})["access_token"]
+             body={"email": "claude@sdqconsulting.com.do", "password": e2e_password()})["access_token"]
 ctx = _req("GET", f"/api/v1/banking-score/{BID}/insight?with_ai=false", token)
 ctx.pop("ai_insight", None)
 out = [{"entity": "banco_popular_dominicano", "name": ctx.get("bank_name"), "context": ctx}]

@@ -177,7 +177,7 @@ pero estaba "encerrada" en los PDF. Se surfacó in-app con un patrón reutilizab
    drill-down/IA del Eje 1 es replicable a los demás ejes.
 
 ### Cómo operar (prod)
-- Login E2E: `claude@sdqconsulting.com.do` / `Claude1234`. Base: `sdq-market-intelligence-production.up.railway.app`.
+- Login E2E: `claude@sdqconsulting.com.do`, contraseña en `SDQ_E2E_PASSWORD`. Base: `sdq-market-intelligence-production.up.railway.app`.
 - Re-score sin re-ingesta: `POST /api/v1/banking-score/data/rescore?only_sib=true`. Backfill: `POST .../data/sib-backfill?force=true` (¡fuera de ventana de deploy! dedup de 15 min).
 - Tests: `/opt/anaconda3/bin/python -m pytest modules/banking_score/ -q` (~285). Lint: `ruff check` (corré sobre TODO el changeset, incl. tests).
 - Frontend lo sirve el mismo app (FastAPI SPAStaticFiles sobre `frontend/dist`); build en el Dockerfile.
@@ -427,7 +427,7 @@ cierre del desarrollo.
 ```
 BASE=https://sdq-market-intelligence-production.up.railway.app
 TOKEN=$(curl -s -X POST $BASE/api/v1/auth/login -H 'Content-Type: application/json' \
-  -d '{"email":"claude@sdqconsulting.com.do","password":"Claude1234"}' | jq -r .access_token)
+  -d "{\"email\":\"claude@sdqconsulting.com.do\",\"password\":\"$SDQ_E2E_PASSWORD\"}" | jq -r .access_token)
 curl -s $BASE/api/v1/banking-score/data/overview -H "Authorization: Bearer $TOKEN"      # entidades/registros/sib_records/ratings
 curl -s $BASE/api/v1/banking-score/data/sync-status -H "Authorization: Bearer $TOKEN"   # is_running/phase/alerts/result
 curl -s -X POST "$BASE/api/v1/banking-score/data/sib-backfill?force=true" -H "Authorization: Bearer $TOKEN"  # disparar

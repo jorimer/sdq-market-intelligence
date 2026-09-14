@@ -34,7 +34,7 @@ El subsistema vive en `shared/billing/` (router `/api/v1/billing`) + `shared/pro
   crea en el dashboard de PayPal). Si faltan, el checkout de suscripción devuelve 503
   "Falta el billing plan de PayPal". Verifica su estado ANTES de probar; si faltan,
   levántalo como brecha de servicio y usa cuentas sandbox de comprador/vendedor de PayPal.
-- **Cuentas de la app:** admin `claude@sdqconsulting.com.do / Claude1234` (config, tarifario,
+- **Cuentas de la app:** admin `claude@sdqconsulting.com.do` (contraseña en `SDQ_E2E_PASSWORD`) (config, tarifario,
   webhooks) y un usuario de cliente para comprar/suscribir (crear uno free y llevarlo por el
   flujo). Para verificar acceso post-pago, `reporting-qa@ / Reporting1234` (enterprise).
 - **Cuentas sandbox de PayPal:** usa el **buyer sandbox** de PayPal para aprobar el pago y el
