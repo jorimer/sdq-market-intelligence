@@ -372,6 +372,8 @@ class EnergyProduct:
             cadence="monthly",
             nota=NOTA_DEL_FEED_IMTE,
             ultima_descarga=descarga,
+            # Las inyecciones son energía entregada al sistema, no demanda: se vigila en código.
+            terminos_vetados=("demanda",),
         ), self._feed_obra_electrica()]
 
     def _feed_obra_electrica(self) -> FeedDeclarado:
