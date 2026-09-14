@@ -55,7 +55,7 @@ _SECTION_TITLES = {
     "construction_assessment": "Evaluación de Coyuntura (ICC)",
     "positioning": "Posición y Trayectoria",
     "recommendation": "Lectura para Decisión",
-    "delta_mensual": "Movimiento mensual de licencias (MIVHED)",
+    "delta_mensual": "Movimiento mensual de licencias y obra pública (MIVHED, DGCP)",
     "limitations": "Limitaciones",
 }
 _LIMITATIONS = (
@@ -284,7 +284,36 @@ class ConstructionProduct:
                           "tipologia"),
             ),
             ultima_descarga=descarga,
-        )]
+        ), self._feed_obra_publica()]
+
+    def _feed_obra_publica(self) -> FeedDeclarado:
+        """La obra pública adjudicada (DGCP), segundo feed del eje (Fase 7)."""
+        from shared.data import dgcp_ocds_client as dg
+        from shared.observations import service as obs
+
+        from modules.construction_intel.ai_context import FUENTE_DGCP, NOTA_DEL_FEED_OBRA_PUBLICA
+
+        series = (dg.SERIE_OBRAS, dg.SERIE_MONTO)
+        descarga = None
+        if self._db is not None:
+            try:
+                descarga = obs.ultima_escritura(self._db, sector_key=SECTOR_KEY, series=list(series))
+            except Exception:  # noqa: BLE001 — sin fecha se dice lo que se sabe
+                logger.warning("fecha de la última descarga de la DGCP no disponible", exc_info=True)
+        return FeedDeclarado(
+            clave="dgcp_obras",
+            etiqueta="DGCP · obra pública adjudicada",
+            emisor="DGCP (Contrataciones Públicas, OCDS)",
+            emisor_en_prosa="la DGCP",
+            series=series,
+            etiquetas={dg.SERIE_OBRAS: "obras públicas adjudicadas en el mes",
+                       dg.SERIE_MONTO: "monto contratado de las obras adjudicadas en el mes (RD$)"},
+            axis="construction_intel",
+            fuente=FUENTE_DGCP,
+            cadence="monthly",
+            nota=NOTA_DEL_FEED_OBRA_PUBLICA,
+            ultima_descarga=descarga,
+        )
 
     def senales_de_fuentes(self):
         """La señal del feed mensual del MIVHED para el sensor de fuentes congeladas.

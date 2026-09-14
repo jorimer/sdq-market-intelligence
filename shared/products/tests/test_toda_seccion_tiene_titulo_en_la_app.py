@@ -72,7 +72,7 @@ TITULO_QUE_REPRESENTA_LA_GENERAL: Dict[str, Optional[str]] = {
     "peer_positioning": None,
     # La sección del feed la anexa el ensamblador en todo eje que declare feeds, y cada eje la
     # titula con SU fuente. La general sigue representando a construcción, el primer eje.
-    "delta_mensual": "Movimiento mensual de licencias (MIVHED)",
+    "delta_mensual": "Movimiento mensual de licencias y obra pública (MIVHED, DGCP)",
 }
 
 
