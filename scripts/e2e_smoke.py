@@ -24,9 +24,9 @@ import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+from scripts.e2e_credentials import e2e_password  # noqa: E402
 
 E2E_EMAIL = "claude@sdqconsulting.com.do"
-E2E_PASSWORD = "Claude1234"
 
 _PASS, _FAIL = [], []
 
@@ -73,7 +73,7 @@ def run() -> int:
     print("Salud & Auth")
     r = c.get("/api/v1/health")
     check("health 200", r.status_code == 200)
-    r = c.post("/api/v1/auth/login", json={"email": E2E_EMAIL, "password": E2E_PASSWORD})
+    r = c.post("/api/v1/auth/login", json={"email": E2E_EMAIL, "password": e2e_password()})
     check("login usuario E2E 200", r.status_code == 200, f"status={r.status_code}")
     if r.status_code != 200:
         print("\nNo hay sesión; abortando. ¿Corriste scripts/seed_e2e_user.py en la DB destino?")
