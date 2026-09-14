@@ -101,7 +101,7 @@ def build_report(db: Session, n_boot: int = 1000) -> Dict[str, Any]:
     # mete a la validación cruzada dos observaciones que no son independientes. Gana la curada.
     por_deal: Dict[str, Any] = {}
     for d in sorted(etiquetadas, key=lambda x: 0 if (x.origen or "manual") == "manual" else 1):
-        por_deal.setdefault(d.deal_name, d)
+        por_deal.setdefault(str(d.deal_name), d)
     labeled = list(por_deal.values())
     n = len(labeled)
     n_pos = sum(1 for d in labeled if d.closed_successfully)
