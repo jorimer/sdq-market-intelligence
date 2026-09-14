@@ -22,6 +22,24 @@ from modules.insurance_intel.models.models import (
     InsuranceRating,
     InsuranceSeries,
 )
+# A nivel de módulo: `Base.metadata` tiene que conocer la tabla al arrancar.
+from shared.observations.models import SectorObservation  # noqa: F401
+
+#: Clave del eje en la tabla transversal de observaciones.
+SECTOR_KEY_OBS = "insurance"
+
+#: Cuentas de BALANCE de las ARS que se agregan a nivel SISTEMA para el feed mensual, con el
+#: sujeto en el código de destino (`ars.sistema.*`, no `patrimonio` suelto). Son saldos al
+#: cierre del mes (plan 0 del BDFINAC), así que sumarlos entre ARS es un total del sistema.
+#:
+#: Los ingresos, gastos y el beneficio NO entran: son acumulados al mes (crecen dentro del año),
+#: y su naturaleza está declarada `unknown` en `shared/data/series_nature.py`.
+STOCKS_DE_SISTEMA = {
+    "ars.patrimonio": "ars.sistema.patrimonio",
+    "ars.activo_total": "ars.sistema.activo_total",
+    "ars.margen_inversiones": "ars.sistema.margen_inversiones",
+    "ars.margen_requerido": "ars.sistema.margen_requerido",
+}
 
 logger = logging.getLogger("sdq.insurance_intel.ars_sync")
 
@@ -89,6 +107,55 @@ def _persist_ratings(db: Session) -> int:
     return written
 
 
+def escribir_agregados_de_sistema(db: Session, records, *, source: str,
+                                  license: str) -> Dict[str, int]:
+    """Los saldos de SISTEMA de las ARS en `sector_observations`, por período. No commitea.
+
+    **Un total del sistema exige a TODAS las ARS.** El universo son las ARS que aparecen en la
+    descarga; un período en el que alguna no reporta la cuenta se persiste con `value=None` y se
+    cuenta como incompleto. Sumar 17 de 18 publicaría un sistema más chico con el nombre de
+    completo, y el delta leería esa ARS ausente como una caída del sector.
+
+    Idempotente: se borran las series de sistema y se reescriben desde el lote.
+    `published_at` queda en NULL: el conector no sabe cuándo publicó SISALRIL, solo cuándo
+    descargamos.
+    """
+    from shared.data.series_nature import infer_nature
+    from shared.observations import service as obs
+
+    universo = sorted({r.dimension for r in records if r.dimension})
+    por_periodo: Dict[tuple, Dict[str, Optional[float]]] = {}
+    for r in records:
+        destino = STOCKS_DE_SISTEMA.get(r.series)
+        if destino is None or not r.dimension:
+            continue
+        por_periodo.setdefault((destino, r.period), {})[r.dimension] = r.value
+
+    for destino in STOCKS_DE_SISTEMA.values():
+        obs.borrar_serie(db, sector_key=SECTOR_KEY_OBS, series_code=destino)
+
+    completos = incompletos = 0
+    for (destino, periodo), valores in sorted(por_periodo.items()):
+        faltan = [a for a in universo if valores.get(a) is None]
+        # Se materializan los valores antes de sumar: `faltan` ya garantiza que ninguno es
+        # nulo, pero escribirlo así lo hace evidente para quien lee y para el checker, en vez
+        # de depender de una invariante que vive una línea más arriba.
+        presentes = [float(v) for v in (valores.get(a) for a in universo) if v is not None]
+        valor: Optional[float]
+        if faltan:
+            valor = None
+            incompletos += 1
+        else:
+            valor = round(sum(presentes), 2)
+            completos += 1
+        obs.upsert(db, sector_key=SECTOR_KEY_OBS, series_code=destino, period=periodo,
+                   value=valor, unit="RD$", frequency="monthly",
+                   nature=infer_nature("RD$", code=destino), source=source,
+                   license=license, published_at=None)
+    return {"ars_en_el_universo": len(universo), "puntos_completos": completos,
+            "puntos_con_ars_faltantes": incompletos}
+
+
 def ars_sync(db: Session, set_phase: Optional[Callable[[str], None]] = None,
              mode: str = "live") -> Dict:
     """Ingest ARS financial series (BDFINAC) → roster + series + ISARS ratings."""
@@ -116,7 +183,11 @@ def ars_sync(db: Session, set_phase: Optional[Callable[[str], None]] = None,
 
     set_phase("Índice de Solidez de ARS (ISARS)")
     ratings = _persist_ratings(db)
+    set_phase("Feed mensual: saldos de sistema de las ARS")
+    agregados = escribir_agregados_de_sistema(db, records, source=client.source,
+                                              license=client.license)
     db.commit()
     set_phase("Completado")
     return {"ars": len(ars_ids), "entities_created": created, "series_rows": rows,
-            "ratings_written": ratings, "source": client.source, "mode": used}
+            "ratings_written": ratings, "agregados_de_sistema": agregados,
+            "source": client.source, "mode": used}

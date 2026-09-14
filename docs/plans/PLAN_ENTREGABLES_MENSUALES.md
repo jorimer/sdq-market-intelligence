@@ -18,12 +18,20 @@ Fases 1 a 8 es [`PROMPT_FASES_1_A_8.md`](PROMPT_FASES_1_A_8.md).
 | §5.5 techo en herramientas | ✅ decidido: NO todavía | solo contador; se reabre con meses de uso real |
 | §3.1 MIVHED microdato provincial/tipológico | ✅ persistido y en contexto | `ingest_observaciones_mensuales` escribe m² por provincia y tipología; el contexto del delta los pasa (top 5) |
 | Sección de delta narrada | ✅ (Fase 1 la generaliza) | hasta #1164 vivía en `construction_intel/products.py`; la Fase 1 la mueve a `shared/products/feed_delta.py` con caché propia |
-| §1/§2.2 hook transversal narrado con caché propia | ❌ NO existía → **Fase 1** | el delta de construcción vivía en `ProductReportCache` con todo el informe: cada mes nuevo del feed regeneraba el Deep Dive ENTERO (6 llamadas, no 1) |
+| §1/§2.2 hook transversal narrado con caché propia | ✅ **Fase 1 en prod** (#1168, 2026-09-14) | `shared/products/feed_delta.py`: el producto declara `feeds_mensuales()`, el ensamblador narra con caché propia `feed_delta_cache`. Medido: un mes nuevo cuesta 1 redacción; la generación fría del Deep Dive de construcción son 4 |
 | Fuente atrasada | ✅ decidido | se publica con el mes nombrado y la frase «no figuraba en la fuente en nuestra última descarga, del <fecha>»; indeterminada sigue vetando |
 | Sonda diaria de la fuente | ✅ | `mivhed-vigilancia` (24 h), no ingiere; con novedad dispara el sync |
 
 Consecuencia: la Fase 1 que queda es la generalización, no el andamiaje desde cero. Y la
 Fase 2 queda reducida a §3.5 (ONE).
+
+### Avance de la corrida de las Fases 1 a 8 (actualizado 2026-09-14)
+
+| fase | estado | evidencia |
+|---|---|---|
+| 1 · hook transversal | ✅ en prod | #1168: Deep Dive de construcción 89,1 s frío y 0,9 s en HIT, delta fuera del payload, mismas cifras y encabezado |
+| 2 · ONE mensual y cuadro 4.8 | ⏸ **abierta por §H** | `one.gob.do` responde 403 con desafío de Cloudflare a clientes automáticos en todo el sitio. La capa ONE ya había desaparecido de prod en el sync del 2026-09-10. No se elude el desafío. Decisión que falta, del dueño: pedir acceso a la ONE o cargar los XLSX a mano. |
+| 3 · seguros | 🚧 en curso | incluye el arreglo de `insurance_series.license`: `sisalril-sfs-sync` y `ars-sync` no persisten en prod desde el 2 y 4 de septiembre |
 
 ---
 

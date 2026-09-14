@@ -1898,7 +1898,8 @@
           "recommendation": "Recomendación"
         },
         "insurance": {
-          "peer_positioning": "Posición competitiva frente al mercado"
+          "peer_positioning": "Posición competitiva frente al mercado",
+          "delta_mensual": "Movimiento mensual de la cobertura de salud (SISALRIL)"
         },
         "macro": {
           "risk_assessment": "Evaluación de riesgo-país (IRMP)"

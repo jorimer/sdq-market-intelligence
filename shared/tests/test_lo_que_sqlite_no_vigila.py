@@ -156,6 +156,69 @@ def test_la_procedencia_ENTRA_en_sector_observations():
             f"StringDataRightTruncation y el feed no persiste nada.")
 
 
+# ── La procedencia de los conectores de SEGUROS entra en `insurance_series` ────────
+#
+# El 2026-09-02 y el 2026-09-04 `sisalril-sfs-sync` y `ars-sync` dejaron de persistir en prod:
+# la licencia ODbL de SISALRIL mide 245 caracteres y `insurance_series.license` era
+# `VARCHAR(160)`. El guard de arriba —nacido con #1160— medía los conectores solo contra
+# `sector_observations`, y esta tabla quedó afuera. Es la tercera vez de la misma familia.
+#
+# Los escritores de la tabla se buscan por lo que el código HACE —módulos que construyen
+# `InsuranceSeries(` y los clientes de `shared.data` que importan— y no por una lista escrita:
+# un sync nuevo con su conector queda cubierto sin que nadie se acuerde de esta línea.
+
+
+def _conectores_que_escriben(modelo: str, carpeta: str):
+    """`{clase: (source, license)}` de los clientes que importan los módulos que crean *modelo*."""
+    import ast
+    import importlib
+
+    salida = {}
+    for ruta in sorted((RAIZ / carpeta).rglob("*.py")):
+        if "tests" in ruta.parts:
+            continue
+        texto = ruta.read_text(encoding="utf-8")
+        if f"{modelo}(" not in texto:
+            continue
+        for nodo in ast.walk(ast.parse(texto)):
+            modulo = nodo.module if isinstance(nodo, ast.ImportFrom) else None
+            if not modulo or not modulo.startswith("shared.data."):
+                continue
+            assert isinstance(nodo, ast.ImportFrom)
+            mod = importlib.import_module(modulo)
+            for alias in nodo.names:
+                obj = getattr(mod, alias.name, None)
+                lic = getattr(obj, "license", None)
+                if isinstance(obj, type) and isinstance(lic, str):
+                    salida[alias.name] = (str(getattr(obj, "source", "") or ""), lic)
+    return salida
+
+
+def test_el_barrido_ENCUENTRA_los_conectores_de_seguros():
+    """Sin esto, el guard de abajo pasaría en verde con un barrido ciego."""
+    encontrados = _conectores_que_escriben("InsuranceSeries", "modules/insurance_intel")
+    for esperado in ("SISClient", "SISALRILClient", "SISALRILARSClient", "SISSolvencyClient"):
+        assert esperado in encontrados, (
+            f"el barrido no ve {esperado}, que escribe `insurance_series`: {sorted(encontrados)}")
+
+
+def test_la_procedencia_de_seguros_ENTRA_en_insurance_series():
+    from modules.insurance_intel.models.models import InsuranceSeries
+
+    encontrados = _conectores_que_escriben("InsuranceSeries", "modules/insurance_intel")
+    columnas = InsuranceSeries.__table__.c
+    no_entran = []
+    for clase, (source, lic) in sorted(encontrados.items()):
+        for campo, valor in (("source", source), ("license", lic)):
+            tope = getattr(columnas[campo].type, "length", None)
+            if tope is not None and len(valor) > tope:
+                no_entran.append(f"{clase}.{campo}: {len(valor)} > {tope}")
+    assert not no_entran, (
+        "estos conectores escriben `insurance_series` con procedencia más larga que la columna. "
+        "En SQLite el UPDATE pasa; en PostgreSQL el sync entero falla con "
+        f"StringDataRightTruncation y no persiste nada: {no_entran}")
+
+
 # ── Toda clave que se escribe en `app_setting` ENTRA en su columna ───────────────
 #
 # El 2026-09-10 Postgres rechazó tres veces en 40 minutos el MISMO marcador de dedup de una
