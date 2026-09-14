@@ -28,7 +28,8 @@ FUENTE_OC_SENI = Fuente.de_cliente(
 NOTA_DEL_FEED_IMTE = (
     "Las inyecciones son la energía que las centrales entregaron al sistema en el MES y los "
     "retiros la que salió de él: son flujos de energía, no capacidad instalada ni demanda de los "
-    "usuarios finales. Los retiros de las distribuidoras son la energía que compraron las EDE en "
+    "usuarios finales. No uses la palabra «demanda» ni digas que la demanda crece o se acentúa: "
+    "escribí «energía inyectada» o «energía retirada», que es lo que miden. Los retiros de las distribuidoras son la energía que compraron las EDE en "
     "el mercado mayorista, no la que facturaron. Las pérdidas son de TRANSMISIÓN —la parte de lo "
     "inyectado que no se retiró— y no las pérdidas de distribución de las EDE, que son otra "
     "cifra y mucho mayor: no las confundas. El índice anual (IRSE) no usa este feed.")
