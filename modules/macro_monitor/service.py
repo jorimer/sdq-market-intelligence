@@ -838,10 +838,15 @@ def start_canonical_ingest_background(*, persist: bool = False) -> Dict[str, Any
             logger.exception("No se pudo encolar la ingesta canónica; usando hilo")
 
     def _run() -> None:
+        from shared.data.bcrd_excel.canonical import PERSISTIBLES_VERIFICADOS
         from shared.database.session import SessionLocal
         db = SessionLocal()
         try:
-            ingest_canonical(db, persist=persist)
+            # El mismo alcance que `macro-canonical-sync`: sin él, `None` escribe TODO el
+            # canónico y el botón manual reintroduce los empates que la agendada evita. Con
+            # `persist=False` no cambia nada: el alcance acota lo que se escribe, no lo que se
+            # lee, y el reporte sale completo.
+            ingest_canonical(db, persist=persist, alcance=PERSISTIBLES_VERIFICADOS)
         finally:
             db.close()
 
