@@ -156,69 +156,6 @@ def test_la_procedencia_ENTRA_en_sector_observations():
             f"StringDataRightTruncation y el feed no persiste nada.")
 
 
-# ── La procedencia de los conectores de SEGUROS entra en `insurance_series` ────────
-#
-# El 2026-09-02 y el 2026-09-04 `sisalril-sfs-sync` y `ars-sync` dejaron de persistir en prod:
-# la licencia ODbL de SISALRIL mide 245 caracteres y `insurance_series.license` era
-# `VARCHAR(160)`. El guard de arriba —nacido con #1160— medía los conectores solo contra
-# `sector_observations`, y esta tabla quedó afuera. Es la tercera vez de la misma familia.
-#
-# Los escritores de la tabla se buscan por lo que el código HACE —módulos que construyen
-# `InsuranceSeries(` y los clientes de `shared.data` que importan— y no por una lista escrita:
-# un sync nuevo con su conector queda cubierto sin que nadie se acuerde de esta línea.
-
-
-def _conectores_que_escriben(modelo: str, carpeta: str):
-    """`{clase: (source, license)}` de los clientes que importan los módulos que crean *modelo*."""
-    import ast
-    import importlib
-
-    salida = {}
-    for ruta in sorted((RAIZ / carpeta).rglob("*.py")):
-        if "tests" in ruta.parts:
-            continue
-        texto = ruta.read_text(encoding="utf-8")
-        if f"{modelo}(" not in texto:
-            continue
-        for nodo in ast.walk(ast.parse(texto)):
-            modulo = nodo.module if isinstance(nodo, ast.ImportFrom) else None
-            if not modulo or not modulo.startswith("shared.data."):
-                continue
-            assert isinstance(nodo, ast.ImportFrom)
-            mod = importlib.import_module(modulo)
-            for alias in nodo.names:
-                obj = getattr(mod, alias.name, None)
-                lic = getattr(obj, "license", None)
-                if isinstance(obj, type) and isinstance(lic, str):
-                    salida[alias.name] = (str(getattr(obj, "source", "") or ""), lic)
-    return salida
-
-
-def test_el_barrido_ENCUENTRA_los_conectores_de_seguros():
-    """Sin esto, el guard de abajo pasaría en verde con un barrido ciego."""
-    encontrados = _conectores_que_escriben("InsuranceSeries", "modules/insurance_intel")
-    for esperado in ("SISClient", "SISALRILClient", "SISALRILARSClient", "SISSolvencyClient"):
-        assert esperado in encontrados, (
-            f"el barrido no ve {esperado}, que escribe `insurance_series`: {sorted(encontrados)}")
-
-
-def test_la_procedencia_de_seguros_ENTRA_en_insurance_series():
-    from modules.insurance_intel.models.models import InsuranceSeries
-
-    encontrados = _conectores_que_escriben("InsuranceSeries", "modules/insurance_intel")
-    columnas = InsuranceSeries.__table__.c
-    no_entran = []
-    for clase, (source, lic) in sorted(encontrados.items()):
-        for campo, valor in (("source", source), ("license", lic)):
-            tope = getattr(columnas[campo].type, "length", None)
-            if tope is not None and len(valor) > tope:
-                no_entran.append(f"{clase}.{campo}: {len(valor)} > {tope}")
-    assert not no_entran, (
-        "estos conectores escriben `insurance_series` con procedencia más larga que la columna. "
-        "En SQLite el UPDATE pasa; en PostgreSQL el sync entero falla con "
-        f"StringDataRightTruncation y no persiste nada: {no_entran}")
-
-
 # ── Toda clave que se escribe en `app_setting` ENTRA en su columna ───────────────
 #
 # El 2026-09-10 Postgres rechazó tres veces en 40 minutos el MISMO marcador de dedup de una
@@ -553,4 +490,249 @@ def test_todo_buzon_de_dedup_ACOTA_su_clave():
             assert len(clave) <= tope, (prefijo, largo, len(clave))
         # Lo que ya entraba conserva su forma: los marcadores persistidos siguen valiendo.
         assert buzon._key("corta") == f"{prefijo}:corta"
+
+
+# ── La procedencia entra en TODA tabla que la guarda, medida contra quien la ESCRIBE ──────
+#
+# Tercera vez de la misma familia en diez días: `rb_country_aggregates.metric` (#1160),
+# `sector_observations.license` (MIVHED, 278 > 200) y `insurance_series.license` (#1169,
+# SISALRIL 245 > 160, dos syncs de prod sin persistir desde el 2026-09-02). Cada arreglo
+# vigiló SU tabla, y la siguiente reventó en otra. Este guard no nombra tablas: toma TODO
+# modelo con `period` y `source`/`license`, busca los módulos que lo escriben por lo que el
+# código HACE —`Modelo(` o `.source =`/`.license =`— y mide contra la columna:
+#
+#   · los conectores de `shared.data` que importan esos módulos, y los de los módulos que
+#     importan a un escritor (el `service` que recibe las filas armadas por su `*_sync`);
+#   · los literales y constantes que aparecen en el lado derecho de la escritura.
+#
+# Medir contra el conector MÁS largo del catálogo es demasiado estricto (un ONE de 82 no
+# escribe `ti_flows`); medir solo lo que efectivamente escribe es lo que dice si PostgreSQL
+# rechaza el INSERT. También veta RECORTAR la procedencia en la escritura (`licencia[:120]`):
+# eso no cura la truncación, la vuelve silenciosa y publica una licencia mutilada.
+#
+# Lo que queda afuera: procedencia armada fuera de `shared.data` y de los literales del
+# escritor (un parámetro que viaja más de un salto), y escrituras por SQL crudo.
+
+_CAMPOS_DE_PROCEDENCIA = ("source", "license")
+_NOMBRE_DE_CONSTANTE = {
+    "source": re.compile(r"(?i)(^|_)(source|fuente)(_|$)"),
+    "license": re.compile(r"(?i)(^|_)(license|licen[cs]e|licencia)(_|$)"),
+}
+
+#: Tablas con procedencia que HOY no tienen escritor en el código. Cada entrada dice por qué;
+#: si aparece un escritor, el guard exige quitarla para que la mida.
+SIN_ESCRITOR_EN_EL_CODIGO = {
+    "esg_indicators": "el módulo ESG solo la BORRA (`api/router.py`, reset); nada la llena",
+}
+
+
+def _tablas_con_procedencia():
+    """`{clase: tabla}` de todo modelo mapeado con `period` y `source` o `license`."""
+    import app.main  # noqa: F401 — registra los modelos de todos los módulos
+    from shared.database.base import Base
+
+    salida = {}
+    for mapper in Base.registry.mappers:
+        cols = mapper.local_table.c
+        if "period" in cols and any(c in cols for c in _CAMPOS_DE_PROCEDENCIA):
+            salida[mapper.class_.__name__] = mapper.local_table
+    return salida
+
+
+def _nombre_llamado(llamada):
+    f = llamada.func
+    return f.id if hasattr(f, "id") else getattr(f, "attr", None)
+
+
+class _LectorDeProcedencia:
+    """Lo que UN módulo escribe como procedencia de un modelo, leído del AST."""
+
+    def __init__(self, ruta: pathlib.Path, texto: str) -> None:
+        import ast
+
+        self.ruta = ruta
+        self.arbol = ast.parse(texto)
+        self.constantes = {
+            t.id: n.value.value
+            for n in self.arbol.body if isinstance(n, ast.Assign)
+            and isinstance(n.value, ast.Constant) and isinstance(n.value.value, str)
+            for t in n.targets if isinstance(t, ast.Name)}
+
+    def escrituras(self, modelo: str, menciona_modelo: bool):
+        """`[(campo, expr)]`: `Modelo(campo=...)`, `Lineage(campo=...)` y `x.campo = ...`.
+
+        La asignación por atributo solo cuenta en módulos que nombran el modelo: `x.source =`
+        es genérico y sin esa condición el barrido le atribuiría escrituras de otras tablas.
+        """
+        import ast
+
+        salida = []
+        construye = False
+        for n in ast.walk(self.arbol):
+            if isinstance(n, ast.Call) and _nombre_llamado(n) in (modelo, "Lineage"):
+                construye |= _nombre_llamado(n) == modelo
+                salida += [(k.arg, k.value) for k in n.keywords
+                           if k.arg in _CAMPOS_DE_PROCEDENCIA]
+            elif isinstance(n, ast.Assign) and menciona_modelo:
+                salida += [(t.attr, n.value) for t in n.targets
+                           if isinstance(t, ast.Attribute) and t.attr in _CAMPOS_DE_PROCEDENCIA]
+        return construye, salida
+
+    def conectores_importados(self, campos):
+        """`[(origen, campo, valor)]` de lo que el módulo importa de `shared.data`."""
+        import ast
+        import importlib
+        import types
+
+        salida = []
+        for n in ast.walk(self.arbol):
+            if not (isinstance(n, ast.ImportFrom) and n.module
+                    and n.module.startswith("shared.data")):
+                continue
+            mod = importlib.import_module(n.module)
+            for alias in n.names:
+                obj = getattr(mod, alias.name, None)
+                # Funciones y submódulos no declaran procedencia; clases, instancias
+                # (`sipen_client`) y constantes (`SOURCE`, `LICENSE`) sí.
+                if isinstance(obj, types.ModuleType) or (
+                        callable(obj) and not isinstance(obj, type)):
+                    continue
+                for campo in campos:
+                    if isinstance(obj, str):
+                        if _NOMBRE_DE_CONSTANTE[campo].search(alias.name):
+                            salida.append((f"{n.module}.{alias.name}", campo, obj))
+                    else:
+                        valor = getattr(obj, campo, None)
+                        if isinstance(valor, str) and valor:
+                            salida.append((f"{n.module}.{alias.name}", campo, valor))
+        return salida
+
+    def literales(self, campo, expr):
+        """Literales y constantes del módulo en el lado derecho, y si la escritura RECORTA."""
+        import ast
+
+        valores, recorta = [], False
+        for n in ast.walk(expr):
+            if isinstance(n, ast.Constant) and isinstance(n.value, str) and n.value:
+                valores.append(n.value)
+            elif isinstance(n, ast.Name) and n.id in self.constantes:
+                valores.append(self.constantes[n.id])
+            elif isinstance(n, ast.Subscript) and isinstance(n.slice, ast.Slice):
+                recorta = True
+        return valores, recorta
+
+
+def _procedencia_por_tabla():
+    """`{tabla: {"columnas", "escritores", "medidas", "recortes"}}` de todo el código."""
+    import ast
+
+    tablas = _tablas_con_procedencia()
+    archivos = []
+    for carpeta in _CARPETAS_CON_ESCRITORES:
+        for ruta in sorted((RAIZ / carpeta).rglob("*.py")):
+            if not _es_archivo_de_test(ruta) and "models" not in ruta.parts:
+                archivos.append((ruta, ruta.read_text(encoding="utf-8")))
+
+    # Quién importa a quién, para seguir un salto: el `service` que persiste lo que arma su
+    # `*_sync` no importa el conector; lo importa el que lo llama.
+    importadores = {}
+    for ruta, texto in archivos:
+        for n in ast.walk(ast.parse(texto)):
+            if isinstance(n, ast.ImportFrom) and n.module:
+                importadores.setdefault(n.module, set()).add(ruta)
+    textos = dict(archivos)
+
+    salida = {}
+    for modelo, tabla in sorted(tablas.items()):
+        campos_tabla = [c for c in _CAMPOS_DE_PROCEDENCIA if c in tabla.c]
+        info = {"columnas": {c: getattr(tabla.c[c].type, "length", None) for c in campos_tabla},
+                "escritores": [], "medidas": [], "recortes": []}
+        for ruta, texto in archivos:
+            if modelo not in texto:
+                continue
+            lector = _LectorDeProcedencia(ruta, texto)
+            construye, escrituras = lector.escrituras(modelo, menciona_modelo=True)
+            asigna = any(isinstance(n, ast.Assign) and any(
+                isinstance(t, ast.Attribute) and t.attr in campos_tabla for t in n.targets)
+                for n in ast.walk(lector.arbol))
+            if not (construye or asigna):
+                continue
+            sitio = ruta.relative_to(RAIZ).as_posix()
+            campos = sorted({c for c, _ in escrituras if c in campos_tabla})
+            info["escritores"].append(sitio)
+            for campo, expr in escrituras:
+                if campo not in campos_tabla:
+                    continue
+                valores, recorta = lector.literales(campo, expr)
+                info["medidas"] += [(f"{sitio} (literal)", campo, v) for v in valores]
+                if recorta:
+                    info["recortes"].append(f"{sitio}: {campo} = {ast.unparse(expr)}")
+            info["medidas"] += lector.conectores_importados(campos)
+            modulo = _modulo_de(ruta)
+            for otro in importadores.get(modulo, ()):
+                info["medidas"] += _LectorDeProcedencia(otro, textos[otro]) \
+                    .conectores_importados(campos)
+        salida[tabla.name] = info
+    return salida
+
+
+def _no_entran(procedencia, topes=None):
+    """`[texto]` de cada valor que no entra en su columna (con *topes* se simula un largo)."""
+    salida = set()
+    for nombre, info in procedencia.items():
+        for origen, campo, valor in info["medidas"]:
+            tope = (topes or {}).get(f"{nombre}.{campo}", info["columnas"].get(campo))
+            if tope is not None and len(valor) > tope:
+                salida.add((f"{nombre}.{campo}", f"{origen}: {len(valor)} > {tope}"))
+    return sorted(salida)
+
+
+def test_el_barrido_de_procedencia_ENCUENTRA_escritores_en_cada_tabla():
+    """Un barrido ciego pasa en verde: toda tabla con procedencia tiene que tener escritor y
+    algo MEDIDO en cada campo que se escribe, salvo las declaradas sin escritor."""
+    procedencia = _procedencia_por_tabla()
+    assert len(procedencia) >= 10, (
+        f"solo {len(procedencia)} tablas con `period` y procedencia: el registro de modelos "
+        f"no se cargó entero: {sorted(procedencia)}")
+
+    ciegas = {n for n, i in procedencia.items() if not i["escritores"] or not i["medidas"]}
+    sin_declarar = ciegas - set(SIN_ESCRITOR_EN_EL_CODIGO)
+    assert not sin_declarar, (
+        "el barrido no encontró escritores o no midió nada en estas tablas. O el lector se "
+        "quedó ciego, o la tabla no tiene escritor y va a SIN_ESCRITOR_EN_EL_CODIGO con el "
+        f"motivo: { {n: procedencia[n]['escritores'] for n in sorted(sin_declarar)} }")
+    sobrantes = set(SIN_ESCRITOR_EN_EL_CODIGO) - ciegas
+    assert not sobrantes, (
+        f"SIN_ESCRITOR_EN_EL_CODIGO declara tablas que ya tienen escritor medido: {sobrantes}")
+
+    # Los escritores que ya reventaron en prod tienen que estar a la vista, o el lector
+    # cambió de forma sin que nadie lo note.
+    seguros = {o for o, _, _ in procedencia["insurance_series"]["medidas"]}
+    for esperado in ("SISClient", "SISALRILClient", "SISALRILARSClient", "SISSolvencyClient"):
+        assert any(o.endswith(f".{esperado}") for o in seguros), (esperado, sorted(seguros))
+
+
+def test_el_guard_de_procedencia_NO_dice_que_si_a_todo():
+    """Se acorta una columna que hoy entra: el guard tiene que nombrarla."""
+    procedencia = _procedencia_por_tabla()
+    assert not [f for f, _ in _no_entran(procedencia) if f.startswith("ti_partner_chapters")]
+    simulado = _no_entran(procedencia, topes={"ti_partner_chapters.license": 10})
+    assert any(f == "ti_partner_chapters.license" for f, _ in simulado), simulado
+
+
+def test_la_procedencia_ENTRA_en_toda_tabla_que_la_guarda():
+    procedencia = _procedencia_por_tabla()
+    no_entran = _no_entran(procedencia)
+    assert not no_entran, (
+        "estos escritores guardan procedencia más larga que su columna. En SQLite el INSERT "
+        "pasa; en PostgreSQL el sync entero falla con StringDataRightTruncation y la consola "
+        "sigue mostrando el `last_result` de la corrida buena anterior. `license` va a TEXT y "
+        f"`source` a String(120), con migración `batch_alter_table`: {no_entran}")
+
+
+def test_ninguna_escritura_RECORTA_la_procedencia():
+    """`licencia[:120]` no cura la truncación: la vuelve silenciosa y publica una licencia
+    mutilada como si fuera la del emisor. Se agranda la columna; la cadena viaja entera."""
+    recortes = [r for info in _procedencia_por_tabla().values() for r in info["recortes"]]
+    assert not recortes, recortes
 
