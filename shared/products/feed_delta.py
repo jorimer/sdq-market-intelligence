@@ -335,12 +335,13 @@ def contexto_del_delta(bloque: Dict[str, Any], feeds: Sequence[FeedDeclarado],
 
     Todas las relaciones vienen resueltas (dirección, variación con su medida, línea base y
     su tipo) de ``shared/observations/delta.py``; acá se reetiquetan. Cada cifra viaja con su
-    sujeto y su medida. Lo que no se pudo leer viaja también (``series_sin_lectura``): una
-    lista que solo trae lo que salió bien se lee como que todo salió bien.
+    sujeto y su medida. Lo que no se pudo leer NO viaja: el bloque lo conserva
+    (``sin_lectura``), pero una serie sin valor puesta en el contexto el modelo la narra como
+    ausencia, y el documento no declara huecos (decisión del dueño, 2026-08-31). Llegó a prod:
+    «el margen de solvencia requerido del sistema no cuenta con observación».
 
     **No lleva la fecha de la última descarga**: es lo vivo, y lo vivo no entra a la huella.
     """
-    from shared.narrative.atribucion import bloque_de_atribucion
     from shared.narrative.formato import fecha_larga_es
 
     por_clave = {f.clave: f for f in feeds}
@@ -361,7 +362,6 @@ def contexto_del_delta(bloque: Dict[str, Any], feeds: Sequence[FeedDeclarado],
             "fuente_al_dia": bool(fuente.get("al_dia", True)),
             "ultima_publicacion_de_la_fuente": fecha_larga_es(fuente.get("ultima_publicacion")),
             "series_del_periodo": b.get("series") or [],
-            "series_sin_lectura": b.get("sin_lectura") or [],
             **(b.get("dimensiones") or {}),
             "nota_del_emisor": feed.nota if feed else "",
         })
@@ -371,10 +371,65 @@ def contexto_del_delta(bloque: Dict[str, Any], feeds: Sequence[FeedDeclarado],
         "lecturas_por_emisor": lecturas,
         "lecturas_no_publicables": [{"emisor": n["emisor"], "motivo": n["motivo"]}
                                     for n in bloque.get("no_publicables") or []],
-        **bloque_de_atribucion(*fuentes),
+        **_atribucion_del_delta(fuentes),
         "regla_de_alcance": REGLA_DE_ALCANCE,
         "note": NOTA_GENERAL,
     }
+
+
+#: Qué se le dice al modelo en el delta cuando la licencia EXIGE nombrar a la fuente. El aviso lo
+#: pone el CÓDIGO al pie: pedírselo al modelo lo dejó dos veces en el Deep Dive de seguros en prod
+#: (2026-09-14), una por subsección, y la segunda bajo el bloque de las ARS nombrando al SFS.
+REGLA_DE_LA_ATRIBUCION_DEL_DELTA = (
+    "El aviso de `atribucion_obligatoria` lo agrega el sistema al pie de esta sección, una sola "
+    "vez y con el texto exacto: NO escribas ninguna línea de fuente ni ese aviso."
+)
+
+
+def _atribucion_del_delta(fuentes: Sequence[Any]) -> Dict[str, str]:
+    """Las claves de procedencia del contexto, con la regla del delta si hay aviso exigido."""
+    from shared.narrative.atribucion import bloque_de_atribucion
+
+    bloque = bloque_de_atribucion(*fuentes)
+    if bloque["atribucion_obligatoria"]:
+        bloque["regla_de_la_atribucion"] = REGLA_DE_LA_ATRIBUCION_DEL_DELTA
+    return bloque
+
+
+def _textos_de_atribucion(feeds: Sequence[FeedDeclarado]) -> List[str]:
+    """Los avisos que las licencias de los feeds exigen, sin repetir y en orden."""
+    textos = (getattr(f.fuente, "atribucion", "") for f in feeds if f.fuente is not None)
+    return [t for t in dict.fromkeys(textos) if t]
+
+
+def _plano(texto: str) -> str:
+    return " ".join(re.sub(r"[*_`]", " ", str(texto or "")).lower().split())
+
+
+def pie_de_atribucion(feeds: Sequence[FeedDeclarado]) -> str:
+    """El aviso que la licencia exige, una vez y con su texto exacto. Vacío si no exige ninguno."""
+    return "\n".join(f"*{t}*" for t in _textos_de_atribucion(feeds))
+
+
+def sin_lineas_de_atribucion(texto: str, feeds: Sequence[FeedDeclarado]) -> str:
+    """El texto del modelo sin las líneas de fuente que haya escrito, cuando el pie las pone.
+
+    Se aplica al SERVIR y no al generar: así corrige también los textos que ya están en caché.
+    Sin aviso exigido no toca nada — ahí la cita la escribe el modelo y no hay pie que la repita.
+    """
+    avisos = [_plano(t) for t in _textos_de_atribucion(feeds)]
+    if not avisos:
+        return texto
+    lineas: List[str] = []
+    for linea in str(texto or "").splitlines():
+        plano = _plano(linea)
+        if plano and (any(a in plano for a in avisos) or plano.startswith("fuente:")):
+            continue
+        lineas.append(linea)
+    # El separador que quedó huérfano al final, y los blancos que dejó lo quitado.
+    while lineas and lineas[-1].strip() in ("", "---"):
+        lineas.pop()
+    return re.sub(r"\n{3,}", "\n\n", "\n".join(lineas)).strip()
 
 
 # ── La prosa determinista: encabezado y veto ─────────────────────────────────────────
@@ -621,5 +676,6 @@ async def anexar_delta_de_feeds(
     # cada entrega y nunca se guarda. Y lo vetado de un feed se declara al pie aunque otro
     # se publique.
     encabezado = encabezado_del_movimiento(bloque, feeds)
-    partes = [p for p in (encabezado, texto, nota_de_los_no_publicables(bloque)) if p]
+    partes = [p for p in (encabezado, sin_lineas_de_atribucion(texto, feeds),
+                          nota_de_los_no_publicables(bloque), pie_de_atribucion(feeds)) if p]
     return {**narratives, SECCION_DELTA: "\n\n".join(partes)}, []
