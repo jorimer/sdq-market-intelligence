@@ -329,6 +329,28 @@ def _periodo_en_prosa(periodo: Optional[str]) -> str:
     return mes_largo_es(periodo) or str(periodo or "")
 
 
+def _serie_para_el_modelo(serie: Dict[str, Any]) -> Dict[str, Any]:
+    """La serie sin lo que NO se pudo computar de su ventana de doce meses.
+
+    `shared/observations/delta.py` declara el motivo cuando la ventana o su base del año anterior no
+    existen («faltan 5 de los 12 meses»), y eso queda en el DATO. Pero puesto en el contexto, el
+    modelo lo narra, y el documento termina declarando un hueco —lo que la decisión del dueño del
+    2026-08-31 prohíbe—. Salió así en prod en energía y construcción (2026-09-14). Acá:
+    * ventana no disponible → la clave no viaja;
+    * ventana disponible sin base anterior → viaja el total, sin la base.
+    """
+    ventana = serie.get("ventana_movil_12m")
+    if not isinstance(ventana, dict):
+        return serie
+    limpia = {k: v for k, v in serie.items() if k != "ventana_movil_12m"}
+    if not ventana.get("disponible"):
+        return limpia
+    base = ventana.get("linea_base")
+    if isinstance(base, dict) and "no_disponible" in base:
+        ventana = {k: v for k, v in ventana.items() if k != "linea_base"}
+    return {**limpia, "ventana_movil_12m": ventana}
+
+
 def contexto_del_delta(bloque: Dict[str, Any], feeds: Sequence[FeedDeclarado],
                        periodo_del_informe: str) -> Dict[str, Any]:
     """Bloque CERRADO: el modelo lo copia.
@@ -361,7 +383,7 @@ def contexto_del_delta(bloque: Dict[str, Any], feeds: Sequence[FeedDeclarado],
             # para que lo repita.
             "fuente_al_dia": bool(fuente.get("al_dia", True)),
             "ultima_publicacion_de_la_fuente": fecha_larga_es(fuente.get("ultima_publicacion")),
-            "series_del_periodo": b.get("series") or [],
+            "series_del_periodo": [_serie_para_el_modelo(s) for s in (b.get("series") or [])],
             **(b.get("dimensiones") or {}),
             "nota_del_emisor": feed.nota if feed else "",
         })
