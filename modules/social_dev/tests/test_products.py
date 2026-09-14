@@ -157,9 +157,43 @@ def test_pulse_es_agregado_sin_nombres_de_demarcacion(db):
     """El sensor de anonimización del ensamblador exige que el Pulse no filtre sujetos."""
     _seed(db)
     snap = get_product(SECTOR_KEY, db).snapshot(ProductTier.pulse, "")
-    assert snap.entity_name is None and snap.entity_roster == ()
+    assert snap.entity_name is None
+    # El roster viaja CON nombres. Este test afirmaba `entity_roster == ()` —el hueco escrito
+    # como invariante— mientras el comentario del producto decía que el sensor verificaba
+    # contra el roster. Con uno vacío, el sensor solo mira claves reservadas.
+    assert "Enriquillo" in snap.entity_roster and "Ozama" in snap.entity_roster
     assert snap.payload["distribution"]["n"] == 2
     assert "enriquillo" not in str(snap.payload)
+
+
+def _ensamblar_pulse_con_texto(db, monkeypatch, texto):
+    import asyncio
+
+    from shared.products import assemble_product_content
+
+    async def _narrativas(product, tier, snapshot, lang, scope):
+        return {"social_pulse": texto}
+
+    monkeypatch.setattr("shared.products.assembler._narratives_cached", _narrativas)
+    return asyncio.run(assemble_product_content(get_product(SECTOR_KEY, db), ProductTier.pulse,
+                                                period=""))
+
+
+@pytest.mark.parametrize("nombre", ["Enriquillo", "Ozama"])
+def test_un_pulse_cuyo_TEXTO_nombra_una_region_no_se_entrega(db, monkeypatch, nombre):
+    from shared.products import AnonymizationError
+
+    _seed(db)
+    with pytest.raises(AnonymizationError, match=nombre):
+        _ensamblar_pulse_con_texto(
+            db, monkeypatch, f"La región {nombre} registra el menor desarrollo del panel.")
+
+
+def test_un_pulse_anonimo_se_entrega(db, monkeypatch):
+    _seed(db)
+    content = _ensamblar_pulse_con_texto(
+        db, monkeypatch, "La distribución del desarrollo entre regiones sigue dispersa.")
+    assert content.narratives["social_pulse"].startswith("La distribución")
 
 
 def test_nivel_nombrado_exige_scope_y_lo_valida(db):
