@@ -562,6 +562,14 @@ async def _content_from_snapshot(
     narratives, secciones_omitidas = await anexar_delta_de_feeds(
         product, tier, snapshot, narratives, lang,
         presupuesto_restante_s=PRESUPUESTO_DE_ENSAMBLADO_S - (time.monotonic() - _t0))
+    # §LIMITACIONES COMPUTADA. Lo que el informe sabe de sí mismo —fuentes atrasadas o sin
+    # verificar, secciones omitidas, cortes distintos— se redacta en código y se antepone al
+    # texto fijo del producto, que queda como párrafo de cierre. Va después de la caché por la
+    # misma razón que el delta: un veredicto cambia más seguido que el contenido. Y después del
+    # anexo del delta, para saber si se omitió. Nunca tumba la entrega.
+    from shared.products.limitaciones import completar_limitaciones
+    narratives = completar_limitaciones(product, tier, snapshot, narratives,
+                                        secciones_omitidas)
     # TEXTO EN VIVO, DESPUÉS DE LA CACHÉ. Un producto puede completar sus secciones con un
     # dato que cambia más seguido que su contenido —«la última descarga de la fuente fue el
     # 10 de septiembre»— sin meterlo en el payload. Si entrara al payload, la huella de la

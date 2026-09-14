@@ -136,4 +136,10 @@ async def score(
             ai = await _narrative(ctx, body.get("audience") or "comite_inversion",
                                   bool(body.get("deep")))
         result["ai_insight"] = ai
+    # LA CORRIDA SE REGISTRA. Sin esto, los labels que deciden si la rúbrica gradúa a modelo
+    # dependían de que alguien apretara «Guardar al registro». Se guarda sin desenlace, como
+    # fila automática, y el label llega después por PATCH. Nunca tumba el score: `registrar_corrida`
+    # no lanza y dice en `registro` si guardó o por qué no.
+    from modules.deal_scoring.registro import registrar_corrida
+    result["registro"] = registrar_corrida(db, body, result)
     return result

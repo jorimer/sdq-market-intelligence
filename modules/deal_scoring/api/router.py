@@ -24,44 +24,21 @@ from shared.database.session import get_db
 from modules.deal_scoring.models.models import (
     DealStage, DealType, HistoricalDeal, LabelConfidence, Sector,
 )
+from modules.deal_scoring.parseo import bool_de, enum_de, equity_de, num_de
+from modules.deal_scoring.registro import ORIGEN_AUTOMATICO, ORIGEN_MANUAL, ORIGENES
 
 logger = logging.getLogger("sdq.deal_scoring.registry")
 
 router = APIRouter()
 
 
-def _enum(enum_cls, val, default=None):
-    v = (str(val).strip().lower() if val is not None else "")
-    try:
-        return enum_cls(v) if v else default
-    except ValueError:
-        return default
-
-
-def _bool(val) -> Optional[bool]:
-    s = str(val).strip().lower()
-    if s in ("1", "true", "sí", "si", "yes", "cerrado"):
-        return True
-    if s in ("0", "false", "no", "perdido"):
-        return False
-    return None
-
-
-def _num(val):
-    s = str(val).strip()
-    if not s:
-        return None
-    try:
-        return float(s)
-    except ValueError:
-        return None
-
-
-def _equity(val):
-    """equity_required_pct va a Numeric(5,2) → acotar a [0, 999.99] para no reventar
-    en Postgres (en SQLite pasa silencioso — gap de parity conocido)."""
-    v = _num(val)
-    return None if v is None else max(0.0, min(999.99, v))
+# La validación de los campos vive en `modules/deal_scoring/parseo.py` y la comparten el
+# registro curado y el automático (`registro.py`): dos copias divergen. Se conservan los
+# nombres viejos como alias para no reescribir los llamadores de este archivo.
+_enum = enum_de
+_bool = bool_de
+_num = num_de
+_equity = equity_de
 
 
 @router.post("/import", summary="Cargar deals por CSV (admin)")
@@ -142,7 +119,7 @@ async def save_deal(
     sec = _enum(Sector, body.get("sector"))
     if not name or dt is None or sec is None:
         raise HTTPException(status_code=400, detail="Se requiere deal_name, deal_type y sector válidos.")
-    if db.query(HistoricalDeal).filter_by(deal_name=name).first():
+    if db.query(HistoricalDeal).filter_by(deal_name=name, origen=ORIGEN_MANUAL).first():
         raise HTTPException(status_code=409, detail="Ya existe un deal con ese nombre.")
     d = HistoricalDeal(
         deal_name=name, deal_type=dt, sector=sec,
@@ -176,13 +153,16 @@ async def list_deals(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ) -> Dict[str, Any]:
-    rows = db.query(HistoricalDeal).order_by(HistoricalDeal.created_at.desc()).all()
-    n_labeled = sum(1 for d in rows if d.closed_successfully is not None)
-    n_ex_ante = sum(1 for d in rows if not d.retrospective)
-    return {
-        "count": len(rows), "n_labeled": n_labeled, "n_ex_ante": n_ex_ante,
-        "n_open": sum(1 for d in rows if d.closed_successfully is None),
-        "deals": [{
+    todas = db.query(HistoricalDeal).order_by(HistoricalDeal.created_at.desc()).all()
+    # El registro CURADO y el AUTOMÁTICO se listan por separado. `deals` y sus conteos siguen
+    # siendo el curado —es lo que muestra la pantalla—; lo que registra la herramienta sola va
+    # en `deals_automaticos`, con sus propios conteos. Mezclarlos inflaría el registro que el
+    # equipo cura con corridas que nadie revisó.
+    rows = [d for d in todas if (d.origen or ORIGEN_MANUAL) == ORIGEN_MANUAL]
+    automaticos = [d for d in todas if d.origen == ORIGEN_AUTOMATICO]
+
+    def _fila(d):
+        return {
             "deal_name": d.deal_name, "deal_type": d.deal_type.value if d.deal_type else None,
             "sector": d.sector.value if d.sector else None, "country": d.country,
             "deal_stage": d.deal_stage.value if d.deal_stage else None,
@@ -190,7 +170,20 @@ async def list_deals(
             "outcome_date": d.outcome_date.isoformat() if d.outcome_date else None,
             "retrospective": d.retrospective,
             "label_confidence": d.label_confidence.value if d.label_confidence else None,
-        } for d in rows],
+            "origen": d.origen or ORIGEN_MANUAL,
+            "score_rubrica": d.score_rubrica,
+            "scored_at": d.scored_at.isoformat() if d.scored_at else None,
+        }
+
+    return {
+        "count": len(rows),
+        "n_labeled": sum(1 for d in rows if d.closed_successfully is not None),
+        "n_ex_ante": sum(1 for d in rows if not d.retrospective),
+        "n_open": sum(1 for d in rows if d.closed_successfully is None),
+        "deals": [_fila(d) for d in rows],
+        "count_automaticos": len(automaticos),
+        "n_labeled_automaticos": sum(1 for d in automaticos if d.closed_successfully is not None),
+        "deals_automaticos": [_fila(d) for d in automaticos],
     }
 
 
@@ -198,6 +191,7 @@ async def list_deals(
 async def resolve_outcome(
     deal_name: str,
     body: Dict[str, Any] = Body(...),
+    origen: str = ORIGEN_MANUAL,
     db: Session = Depends(get_db),
     current_user: User = Depends(require_role(UserRole.admin)),
 ) -> Dict[str, Any]:
@@ -210,7 +204,12 @@ async def resolve_outcome(
 
     `require_role` jerárquico: super_admin también pasa (alinea con el front, que muestra
     los botones con `hasRole("admin")` jerárquico → evita 403 silenciosos en go-live)."""
-    d = db.query(HistoricalDeal).filter_by(deal_name=deal_name).one_or_none()
+    # Sin `origen`, el curado: es lo que manda la pantalla actual. `?origen=automatico`
+    # etiqueta la fila que dejó una corrida de scoring.
+    if origen not in ORIGENES:
+        raise HTTPException(status_code=400,
+                            detail="El origen debe ser «manual» o «automatico».")
+    d = db.query(HistoricalDeal).filter_by(deal_name=deal_name, origen=origen).one_or_none()
     if d is None:
         raise HTTPException(status_code=404, detail="No existe un deal con ese nombre.")
     closed = _bool(body.get("closed_successfully"))

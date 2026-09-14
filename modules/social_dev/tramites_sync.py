@@ -135,8 +135,11 @@ def _upsert(db: Any, tema: str, periodo: str, valor: float, fuente: str,
     fila.value = valor
     fila.unit = UNIDADES[tema]
     fila.disaggregation = nota[:60]
-    fila.source = fuente[:40]
-    fila.license = licencia[:120]
+    # La procedencia viaja ENTERA. Se recortaba a 40/120 para caber en la columna, y así se
+    # publicaba «Portal Único de Servicios del Gobierno» como fuente y una licencia cortada a
+    # mitad de la base legal que autoriza reutilizarla. Se agrandó la columna, no la mentira.
+    fila.source = fuente
+    fila.license = licencia
     fila.published_at = _dt.date.today()
 
 
