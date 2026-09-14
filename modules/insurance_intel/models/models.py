@@ -24,6 +24,7 @@ from sqlalchemy import (
     JSON,
     String,
     UniqueConstraint,
+    Text,
 )
 
 from shared.database.base import Base, UUIDMixin
@@ -66,9 +67,13 @@ class InsuranceSeries(UUIDMixin, Base):
     entity_slug = Column(String(80), nullable=True)    # NULL = market; set = per-entity
     dimension = Column(String(40), nullable=True)      # ramo slug (line of business), when split
     # Lineage
-    source = Column(String(40), nullable=True)         # "SIS" / "SISALRIL"
+    # 120 y TEXT, no 40 y 160: los cuatro conectores que escriben esta tabla declaran licencias
+    # de 189 a 306 caracteres, y con VARCHAR(160) `sisalril-sfs-sync` y `ars-sync` dejaron de
+    # persistir en prod (StringDataRightTruncation, 2026-09-02/04) mientras SQLite dejaba los
+    # tests en verde. Lo vigila `shared/tests/test_lo_que_sqlite_no_vigila.py`.
+    source = Column(String(120), nullable=True)        # "SIS" / "SISALRIL"
     published_at = Column(Date, nullable=True)
-    license = Column(String(160), nullable=True)
+    license = Column(Text, nullable=True)
 
 
 class InsuranceRating(UUIDMixin, Base):

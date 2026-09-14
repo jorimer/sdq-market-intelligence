@@ -74,6 +74,33 @@ DECLARED: dict = {
     "reserves": STOCK,              # saldo de reservas
     "external_debt": STOCK,
     "fx_rate": FLOW,                # nivel del tipo de cambio
+    # ── Seguros · SISALRIL (Fase 3 del plan de entregables mensuales) ──
+    # Se declaran por código COMPLETO, nunca por la hoja: «total» o «patrimonio» sueltos
+    # atraparían series de otros ejes que no miden esto.
+    #
+    # La afiliación SFS son PERSONAS CUBIERTAS a una fecha: un saldo, no lo que entró en el
+    # mes. Su base es el último nivel; compararla contra el mismo mes del año anterior como a un
+    # flujo mediría estación donde no la hay. Sin declarar, `infer_nature("personas")` salía
+    # `unknown` y la sección del delta no la computaba.
+    "sfs.afiliacion.total": STOCK,
+    "sfs.afiliacion.contributivo": STOCK,
+    "sfs.afiliacion.subsidiado": STOCK,
+    # Agregados de SISTEMA de las ARS (suma de las 18 del roster, solo si reportan todas):
+    # cuentas de balance del plan 0 del BDFINAC, saldos al cierre del mes.
+    "ars.sistema.patrimonio": STOCK,
+    "ars.sistema.activo_total": STOCK,
+    "ars.sistema.margen_inversiones": STOCK,
+    "ars.sistema.margen_requerido": STOCK,
+    # Los ACUMULADOS AL MES se declaran `unknown`, explícitamente. En el fixture real CRECEN mes
+    # a mes dentro del año (ingreso de una ARS: 267,9 M → 409,1 M → 553,3 M de febrero a abril).
+    # Tratarlos como `flow` haría que la ventana móvil de doce meses SUME acumulados: una cifra
+    # falsa con cara de medición.
+    #
+    # ⚠️ No alcanza con dejarlos fuera de esta tabla: la unidad «RD$» decide antes que nada y
+    # `infer_nature` los devuelve `flow`. Se comprobó así, y por eso la declaración existe.
+    "ars.ingreso_salud": UNKNOWN,
+    "ars.gasto_salud": UNKNOWN,
+    "ars.beneficio_neto": UNKNOWN,
 }
 
 
