@@ -258,7 +258,10 @@ def test_por_HTTP_lo_indeterminado_se_LISTA_aparte(db):
     """Un veto silencioso se lee como que el eje no tiene problema."""
     cuerpo = _cliente(db).get("/api/v1/operations/fuentes").json()
     assert cuerpo["indeterminadas"], "los ejes sin dato desaparecieron de la respuesta"
-    listados = {e["eje"] for e in cuerpo["ejes"]}
+    # La lista va por `id` (eje:fuente), como dice `resumen_de_fuentes`: un eje puede tener su
+    # índice al día y un feed indeterminado. Comparar contra los ejes solo pasaba mientras ningún
+    # FEED quedaba indeterminado; con JurisAI sin credencial, `law:jurisai` lo es.
+    listados = {e["id"] for e in cuerpo["ejes"]}
     assert set(cuerpo["indeterminadas"]) <= listados
 
 

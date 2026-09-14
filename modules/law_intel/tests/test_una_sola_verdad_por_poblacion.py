@@ -191,9 +191,12 @@ class TestCadaSeccionContestaUNAPregunta:
     """
 
     def test_TODA_seccion_de_TODO_nivel_tiene_su_propia_plantilla(self):
-        from modules.law_intel.products import _SECTION_TEMPLATES, law_manifest
+        from modules.law_intel.products import SECCIONES_SIN_MODELO, _SECTION_TEMPLATES, law_manifest
+        # Las que se redactan en código (lo que entró este mes, vía JurisAI) no piden plantilla:
+        # están declaradas, y `test_una_seccion_SIN_MODELO_no_se_le_pide_al_modelo` lo vigila.
         sin_propia = {
-            tier.value: [s for s in nivel.sections if s not in _SECTION_TEMPLATES]
+            tier.value: [s for s in nivel.sections
+                         if s not in _SECTION_TEMPLATES and s not in SECCIONES_SIN_MODELO]
             for tier, nivel in law_manifest().levels.items()}
         assert not any(sin_propia.values()), (
             "secciones que caerían en la plantilla genérica y producirían otro resumen "
