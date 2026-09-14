@@ -1897,6 +1897,9 @@
         "banking": {
           "recommendation": "Recommandation"
         },
+        "energy": {
+          "delta_mensual": "Mouvement mensuel de l'énergie du système (OC-SENI)"
+        },
         "insurance": {
           "peer_positioning": "Position concurrentielle face au marché",
           "delta_mensual": "Mouvement mensuel de la couverture santé (SISALRIL)"

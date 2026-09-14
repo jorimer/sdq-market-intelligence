@@ -151,6 +151,54 @@ def backfill_scores(
     return {**last, "periods": persisted, "model_version": MODEL_VERSION}
 
 
+# ── Feed mensual (Fase 5): el IMTE del OC-SENI ─────────────────────────────────────────
+
+#: El eje en `sector_observations`. Es la misma clave que el producto (`SECTOR_KEY`).
+SECTOR_KEY_OBS = "energy"
+
+
+def escribir_observaciones_imte(db: Session, records, *, publicada, source: str,
+                                license: str) -> int:
+    """Las series del IMTE en `sector_observations`. No commitea.
+
+    Idempotente como el MIVHED y el SFS: el libro resumen trae el año en curso y el anterior
+    ENTEROS en cada edición, así que se borra cada serie y se reescribe. Un upsert fila a fila
+    dejaría vivo un mes que el OC haya corregido a vacío.
+
+    `published_at` es la fecha en que el OC PUBLICÓ la edición —la del listado, no la de nuestra
+    descarga—, y el encabezado del delta la cita como «la última edición que publicó». La
+    naturaleza se lee de `shared/data/series_nature.py`, que es donde se declara.
+    """
+    from shared.data.series_nature import infer_nature
+    from shared.observations import service as obs
+
+    for codigo in sorted({r.series for r in records}):
+        obs.borrar_serie(db, sector_key=SECTOR_KEY_OBS, series_code=codigo)
+    puntos = {(r.series, r.period): r for r in records}
+    for (codigo, periodo), r in sorted(puntos.items()):
+        obs.upsert(db, sector_key=SECTOR_KEY_OBS, series_code=codigo, period=periodo,
+                   value=r.value, unit=r.unit, frequency="monthly",
+                   nature=infer_nature(r.unit, code=codigo), source=source,
+                   license=license, published_at=publicada)
+    return len(puntos)
+
+
+def sincronizar_imte(db: Session, client: Any = None) -> Dict[str, Any]:
+    """Baja la última edición del IMTE y la persiste. Commitea. Lanza si la fuente falla:
+    decide el llamador, que no deja que el feed tumbe el índice."""
+    from shared.data.oc_seni_client import OCSENIClient
+
+    client = client or OCSENIClient(mode="live")
+    client.check_license()
+    registros, edicion = client.leer_ultima_edicion()
+    n = escribir_observaciones_imte(db, registros, publicada=edicion.publicada,
+                                    source=client.source, license=client.license)
+    db.commit()
+    return {"edicion": edicion.periodo, "publicada": (edicion.publicada.isoformat()
+                                                      if edicion.publicada else None),
+            "archivo": edicion.nombre_archivo, "puntos": n, "modo": client.mode}
+
+
 def get_latest(db: Session, period: Optional[str] = None) -> Optional[EnergyScore]:
     q = db.query(EnergyScore)
     if period:

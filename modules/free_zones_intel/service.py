@@ -32,11 +32,33 @@ def assemble_free_zone_dataset(
         raise ValueError("CNZFE no devolvió variables del sector.")
     index = compute_free_zone_index(vars_by_year)
     period = str(max(vars_by_year))
-    return {"period": period, "index": index}
+    return {"period": period, "index": index, "variables": vars_by_year}
 
 
-def _write_score(db: Session, period: str, index: Dict[str, Any]) -> FreeZoneScore:
-    """Upsert (sin commit) la fila IZF de un período. Reusado por compute y backfill."""
+#: Los cuatro campos del CNZFE que el conector ya parseaba y nadie usaba (plan §3.4), con el
+#: SUJETO y la UNIDAD en la clave. NO entran al IZF: cambiar los insumos de un score sin
+#: validación retrospectiva está prohibido por la doctrina de validación. Viajan al informe
+#: como contexto del sector, no como dimensión.
+CAMPOS_COMPLEMENTARIOS = {
+    "wage_operator_rd": "salario_semanal_de_un_operario_de_zona_franca_rd",
+    "wage_technician_rd": "salario_semanal_de_un_tecnico_de_zona_franca_rd",
+    "local_spend_musd": "gasto_operativo_local_de_las_zonas_francas_musd",
+    "occupied_area_sqft": "area_de_naves_ocupada_en_zonas_francas_pies2",
+}
+
+
+def complementarios_del_anio(variables: Optional[Dict[str, float]]) -> Dict[str, Optional[float]]:
+    """Los cuatro campos del año, con su nombre con sujeto. Ausente = ``None``, nunca 0."""
+    variables = variables or {}
+    return {clave: variables.get(campo) for campo, clave in CAMPOS_COMPLEMENTARIOS.items()}
+
+
+def _write_score(db: Session, period: str, index: Dict[str, Any],
+                 variables: Optional[Dict[str, float]] = None) -> FreeZoneScore:
+    """Upsert (sin commit) la fila IZF de un período. Reusado por compute y backfill.
+
+    *variables* son las del CNZFE para ESE año: de ahí salen los campos complementarios, que
+    se guardan en el breakdown y no tocan el score."""
     row = db.query(FreeZoneScore).filter_by(period=period).first()
     if row is None:
         row = FreeZoneScore(period=period)
@@ -51,7 +73,8 @@ def _write_score(db: Session, period: str, index: Dict[str, Any]) -> FreeZoneSco
     row.companies = levels.get("companies")
     row.breakdown = {"dimensions": index["dimensions"], "exports": index["exports"],
                      "investment": index["investment"], "employment": index["employment"],
-                     "productivity": index["productivity"], "levels": levels}
+                     "productivity": index["productivity"], "levels": levels,
+                     "complementarios": complementarios_del_anio(variables)}
     row.model_version = MODEL_VERSION
     return row
 
@@ -66,7 +89,7 @@ def compute_and_persist(
     asm = assemble_free_zone_dataset(vars_by_year)
     period, index = asm["period"], asm["index"]
 
-    row = _write_score(db, period, index)
+    row = _write_score(db, period, index, (asm.get("variables") or {}).get(int(period)))
     db.commit()
     db.refresh(row)
     payload = {"period": period, "fz_score": index["fz_score"], "band": index["band"]}
@@ -100,7 +123,7 @@ def backfill_scores(
         index = compute_free_zone_index(subset)
         if index["fz_score"] is None:  # sin base de CAGR aún → no se persiste fila vacía
             continue
-        _write_score(db, str(y), index)
+        _write_score(db, str(y), index, vars_by_year.get(y))
         persisted.append(str(y))
         last = {"period": str(y), "fz_score": index["fz_score"], "band": index["band"]}
     db.commit()

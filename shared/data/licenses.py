@@ -431,6 +431,29 @@ LICENCIAS: Dict[str, Licencia] = {
               "excepción. Acá no hay excepción — hay una plantilla de portal que "
               "contradice al Decreto 103-22, que obliga a esa misma institución."),
     ),
+    ("OC-SENI — informe mensual de transacciones económicas (IMTE) publicado sin login "
+               "en apps.oc.org.do. Los Términos de uso del sitio (plantilla del CMS) no "
+               "restringen la reutilización del dato; el IMTE es una publicación que el OC hace "
+               "en cumplimiento de la Ley General de Electricidad 125-01. Reutilizable con "
+               "atribución."): Licencia(
+        terminos_url="https://www.oc.org.do/Terms",
+        verificado_el="2026-09-14",
+        atribucion=("Fuente: Organismo Coordinador del Sistema Eléctrico Nacional Interconectado "
+                    "(OC-SENI), Informe Mensual de Transacciones Económicas. Información pública "
+                    "de la República Dominicana."),
+        nota=("`shared.data.oc_seni_client`, Fase 5 del plan de entregables mensuales. Se leyeron "
+              "los Términos de uso del sitio del OC el 2026-09-14: son la plantilla genérica del "
+              "CMS (acuerdo de uso del sitio, servicios de comunicación, descargo de "
+              "responsabilidad) y NO tienen cláusula de uso personal o no comercial ni reserva "
+              "sobre la reutilización del dato. La única limitación de difusión que nombran es la "
+              "de los materiales que suben los USUARIOS a los foros, no la de las publicaciones "
+              "del OC. El IMTE es la publicación que el OC hace del resultado de las "
+              "transacciones del mercado mayorista, y una cifra de energía es un hecho, no una "
+              "obra. El OC no es un órgano del Poder Ejecutivo —lo crea la Ley 125-01 como "
+              "coordinador del sistema—, así que la presunción del encabezado no se aplica por "
+              "sí sola: se declara reutilizable con atribución porque los términos leídos no "
+              "dicen otra cosa."),
+    ),
     ("gob.do (OGTIC) — catálogo de trámites del Portal Único de Servicios. Información "
      "pública dominicana: reutilizable con atribución por Ley 200-04, Decreto 103-22 y "
      "NORTIC A3. `robots.txt` permite el rastreo completo (Allow: /)."): Licencia(

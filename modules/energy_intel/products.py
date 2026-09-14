@@ -37,6 +37,7 @@ from shared.products import (
     register_product,
     section_mode,
 )
+from shared.products.feed_delta import FeedDeclarado
 from shared.products.render import render_product_pdf
 from modules.energy_intel.ai_context import energy_ai_context
 from modules.energy_intel.models.models import EnergyScore
@@ -53,6 +54,7 @@ _SECTION_TITLES = {
     "energy_assessment": "Evaluación de Resiliencia Eléctrica (IRSE)",
     "positioning": "Posición y Trayectoria",
     "recommendation": "Lectura para Decisión",
+    "delta_mensual": "Movimiento mensual de la energía del sistema (OC-SENI)",
     "limitations": "Limitaciones",
 }
 _LIMITATIONS = (
@@ -326,7 +328,62 @@ class EnergyProduct:
         if tier == ProductTier.pulse:
             return ProductSnapshot(tier=tier, period=s.period, payload=payload,
                                    entity_name=None, entity_roster=())
+        # LA TRAYECTORIA VA EN EL PAYLOAD. Antes `narratives` la leía de la base y la metía en
+        # el contexto de `positioning` sin pasar por acá: la huella de la caché de narrativas
+        # (payload + receta + contexto declarado) no la veía, así que un año nuevo del IRSE
+        # dejaba servida la posición escrita con la trayectoria vieja (plan §2.3).
+        trayectoria = [{"periodo": p, "score": v} for p, v in _trend_series(self._db)
+                       if str(p) <= str(s.period)]
+        if trayectoria:
+            payload["trayectoria_del_irse"] = trayectoria
         return ProductSnapshot(tier=tier, period=s.period, payload=payload, entity_name=DISPLAY)
+
+    # ── Feed mensual (Fase 5): el IMTE del OC-SENI ──
+    def feeds_mensuales(self) -> List[FeedDeclarado]:
+        """El feed mensual del OC-SENI, declarado para el ensamblador y el sensor."""
+        from shared.data import oc_seni_client as oc
+        from shared.observations import service as obs
+
+        from modules.energy_intel.ai_context import FUENTE_OC_SENI, NOTA_DEL_FEED_IMTE
+
+        series = (oc.SERIE_INYECCIONES, oc.SERIE_RETIROS, oc.SERIE_RETIROS_DISTRIBUIDORAS,
+                  oc.SERIE_PERDIDAS)
+        descarga = None
+        if self._db is not None:
+            try:
+                # Lo VIVO: cuándo bajamos la fuente por última vez. Va al encabezado, no a la huella.
+                descarga = obs.ultima_escritura(self._db, sector_key=SECTOR_KEY, series=list(series))
+            except Exception:  # noqa: BLE001 — sin fecha se dice lo que se sabe
+                logger.warning("fecha de la última descarga del IMTE no disponible", exc_info=True)
+        return [FeedDeclarado(
+            clave="oc_seni_imte",
+            etiqueta="OC-SENI · energía del sistema eléctrico",
+            emisor="OC-SENI (IMTE)",
+            emisor_en_prosa="el Organismo Coordinador del SENI",
+            series=series,
+            etiquetas={
+                oc.SERIE_INYECCIONES: "energía inyectada al SENI (GWh)",
+                oc.SERIE_RETIROS: "energía retirada del SENI (GWh)",
+                oc.SERIE_RETIROS_DISTRIBUIDORAS: "energía retirada por las distribuidoras (GWh)",
+                oc.SERIE_PERDIDAS: "pérdidas de transmisión del SENI (% de lo inyectado)",
+            },
+            axis="energy_intel",
+            fuente=FUENTE_OC_SENI,
+            cadence="monthly",
+            nota=NOTA_DEL_FEED_IMTE,
+            ultima_descarga=descarga,
+        )]
+
+    def senales_de_fuentes(self):
+        """La señal del feed del IMTE para el sensor de fuentes congeladas, con el MISMO
+        criterio que la sección del delta."""
+        from shared.products.feed_delta import senales_de_los_feeds
+
+        try:
+            return senales_de_los_feeds(self._require_db(), SECTOR_KEY, self.feeds_mensuales())
+        except Exception as e:  # noqa: BLE001 — sin feed no hay señal, no hay error
+            logger.warning("feed mensual de energía no legible: %s", e)
+            return []
 
     # ── Muestra sintética (datos demo ilustrativos, sin DB) ──
     def sample_snapshot(self, tier: ProductTier) -> ProductSnapshot:
@@ -371,7 +428,8 @@ class EnergyProduct:
         if _cap:
             base_ctx = {**base_ctx, "capacidad_de_pago": _cap}
         audience = "inversionista"
-        trend = _trend_series(self._db)  # trayectoria para la sección de posición (best-effort)
+        # La trayectoria sale del PAYLOAD, que es lo que la huella de la caché ve (plan §2.3).
+        trend = (snapshot.payload or {}).get("trayectoria_del_irse") or []
         templates = {"recommendation": "sector_decision", "positioning": "sector_positioning"}
         out: Dict[str, str] = {}
         # Secciones con cifras → una llamada IA c/u, generadas en PARALELO (asyncio.gather):
@@ -388,7 +446,7 @@ class EnergyProduct:
                                   "servicio, la palanca con mayor retorno sobre la resiliencia "
                                   "eléctrica, dado el cuadro anterior.")
             elif section == "positioning" and trend:
-                ctx["trayectoria"] = [{"periodo": p, "score": v} for p, v in trend]
+                ctx["trayectoria"] = list(trend)
             pending.append((section, dict(
                 context=ctx, template=templates.get(section, "energy_outlook"),
                 mode=section_mode(tier, section, sections),

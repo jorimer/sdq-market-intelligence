@@ -7,6 +7,7 @@ mirrors :mod:`trade_intel.ai_context`.
 """
 from typing import Any, Dict, List, Optional
 from shared.data.generation_client import GenerationMixClient
+from shared.data.oc_seni_client import OCSENIClient
 from shared.data.sie_client import SIEClient
 from shared.narrative.atribucion import Fuente, bloque_de_atribucion
 
@@ -16,6 +17,20 @@ _SIE = Fuente.de_cliente(
     SIEClient, descripcion="SIE (capacidad instalada y reclamaciones), datos abiertos")
 _ONE_GEN = Fuente.de_cliente(
     GenerationMixClient, descripcion="ONE (generación por tecnología), datos abiertos")
+
+#: El feed MENSUAL del eje (Fase 5): el IMTE del Organismo Coordinador del SENI. No entra al
+#: índice, que es anual; viaja solo a la sección del movimiento del mes.
+FUENTE_OC_SENI = Fuente.de_cliente(
+    OCSENIClient,
+    descripcion="OC-SENI (Informe Mensual de Transacciones Económicas del mercado eléctrico)")
+
+NOTA_DEL_FEED_IMTE = (
+    "Las inyecciones son la energía que las centrales entregaron al sistema en el MES y los "
+    "retiros la que salió de él: son flujos de energía, no capacidad instalada ni demanda de los "
+    "usuarios finales. Los retiros de las distribuidoras son la energía que compraron las EDE en "
+    "el mercado mayorista, no la que facturaron. Las pérdidas son de TRANSMISIÓN —la parte de lo "
+    "inyectado que no se retiró— y no las pérdidas de distribución de las EDE, que son otra "
+    "cifra y mucho mayor: no las confundas. El índice anual (IRSE) no usa este feed.")
 
 
 _DIM_LABELS = {
