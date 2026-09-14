@@ -98,6 +98,20 @@ def buscar(base: str, clave: str, *, desde: str, hasta: str,
         "numero": numero, "vence": vence, "limite": limite})
 
 
+def novedades(base: str, clave: str, *, desde: str, hasta: str,
+              cita_a: Optional[str] = None, limite: Optional[int] = None) -> Dict[str, Any]:
+    """Normas que ENTRARON al corpus de JurisAI entre `desde` y `hasta` (fecha de ingesta).
+
+    La otra búsqueda filtra por la fecha de la norma; esta responde «qué hay de nuevo este mes».
+    Su `alcance.vacio_es_concluyente` lo calcula el emisor sobre las corridas de ingesta de cada
+    fuente: solo con él un mes sin resultados autoriza a escribir «no se promulgó nada».
+    """
+    if not desde or not hasta:
+        raise JurisAIUnavailable("`desde` y `hasta` son obligatorios en las novedades.")
+    return _pedir(base, "/normas/novedades", clave, {
+        "desde": desde, "hasta": hasta, "cita_a": cita_a, "limite": limite})
+
+
 def obtener(base: str, clave: str, norma_id: str,
             as_of: Optional[str] = None) -> Dict[str, Any]:
     """Trae una norma por su id canónico (`do:decreto:134-14`).
