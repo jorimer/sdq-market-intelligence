@@ -91,6 +91,19 @@ def fecha_larga_es(iso: Optional[str]) -> Optional[str]:
     return f"{dia} de {MESES_ES[mes - 1]} de {anio}"
 
 
+def de_seguido_de(frase: Optional[str]) -> str:
+    """«de» antepuesto a *frase*, contraído si empieza con el artículo «el» en minúscula.
+
+    ``"el CNSS"`` → ``"del CNSS"``; ``"SISALRIL"`` → ``"de SISALRIL"``. Solo contrae el ARTÍCULO:
+    ``"El Salvador"`` es un nombre propio y queda ``"de El Salvador"``. Salió de un encabezado
+    publicado en prod: «la última edición disponible de el CNSS».
+    """
+    t = str(frase or "").strip()
+    if t.startswith("el "):
+        return "del " + t[3:]
+    return "de " + t
+
+
 def mes_siguiente(periodo: Optional[str]) -> Optional[str]:
     """``"2026-06"`` → ``"2026-07"``; ``"2026-12"`` → ``"2027-01"``. ``None`` si no es mensual."""
     p = str(periodo or "").strip()
