@@ -276,20 +276,32 @@ def _methodology_md(sig, val, as_of: Optional[str] = None, *,
     return "\n\n".join(lines)
 
 
-def _provenance_md(product) -> str:
+def _provenance_md(product, as_of: Optional[str] = None) -> str:
     """Párrafo de procedencia por-variable desde ``variable_signals`` del producto.
 
     Se construye un ``AxisRegistry`` efímero solo con lo que el producto declara — sin DB
     y sin recorrer el catálogo completo (esto corre dentro del render de un reporte).
-    Producto sin ``variable_signals`` → cadena vacía: silencio honesto, nunca inventar."""
+    Producto sin ``variable_signals`` → cadena vacía: silencio honesto, nunca inventar.
+
+    ``as_of`` es el CORTE del informe, y se le pasa al producto que lo acepta. Sin él, la
+    procedencia se leía del último período del panel: el Deep Dive 2025 de Banco Múltiple Santa
+    Cruz (2026-09-15) declaró que la concentración top-10 y el HHI sectorial «no tienen dato en
+    este período» —el de junio de 2026, sin cubo de cartera— mientras su propio texto citaba las
+    dos cifras de diciembre de 2025."""
     fn = getattr(product, "variable_signals", None)
     if not callable(fn):
         return ""
     try:
+        import inspect
+
         from shared.registry.provenance import provenance_paragraph
         from shared.registry.signals import AxisRegistry
 
-        raw = fn()
+        try:
+            acepta_corte = "as_of" in inspect.signature(fn).parameters
+        except (TypeError, ValueError):
+            acepta_corte = False
+        raw = fn(as_of=as_of) if (acepta_corte and as_of) else fn()
         signals = tuple(raw.get("signals", ()) if isinstance(raw, dict) else (raw or ()))
         if not signals:
             return ""
@@ -342,7 +354,7 @@ def standard_sections(product, tier: ProductTier,
     # Procedencia POR VARIABLE, generada del registro en vivo — nunca prosa escrita a
     # mano (lección Hallazgo 7: la prosa que afirma procedencia envejece con cada
     # conector; la generada no puede divergir del estado real porque ES el estado real).
-    provenance = _provenance_md(product)
+    provenance = _provenance_md(product, as_of)
     if provenance:
         methodology += f"\n\n**Procedencia por variable:** {provenance}"
     out: Dict[str, str] = {METHODOLOGY_KEY: methodology}

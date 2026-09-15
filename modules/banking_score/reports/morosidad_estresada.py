@@ -133,6 +133,9 @@ def morosidad_estresada_al_corte(db: Session, bank: Bank,
         "universo_del_resto_del_sistema": SISTEMA_LABEL,
         "excluye_a_la_entidad_evaluada": True,
         "diferencia_con_la_mediana_del_resto_pp": diferencia,
+        # El MÚLTIPLO, computado: servido solo como diferencia, el texto escribió «ya duplica
+        # ampliamente la mediana» sobre 1,9 veces (Santa Cruz, 2026-09-15).
+        "veces_la_mediana_del_resto": (round(total / mediana, 2) if mediana > 0 else None),
         "posicion_frente_a_la_mediana_del_resto": (
             "en línea" if abs(diferencia) < MATERIALIDAD_PP
             else "por encima" if diferencia > 0 else "por debajo"),
