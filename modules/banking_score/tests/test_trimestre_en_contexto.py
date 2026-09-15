@@ -101,6 +101,20 @@ def test_el_q2_sin_precedente_propio_pero_igual_al_sistema(db):
     assert q2["se_destaca"] is True
 
 
+def test_el_rango_intercuartil_se_sirve_como_la_MITAD_central(db):
+    """El Deep Dive de Santa Cruz regenerado (2026-09-15) escribió «el 75 % de las
+    instituciones concentradas entre −2,17 y −0,22»: leyó `p75` como un porcentaje de
+    entidades. Entre el percentil 25 y el 75 está la MITAD. El nombre de la clave y la cifra
+    tienen que decirlo, o el modelo vuelve a llenar el hueco."""
+    ent = _siembra(db, cambio_sistema_q2=-3.5)
+    ref = _por_tramo(tc.contexto_de_los_tramos(db, ent, ANIO, _TRAMOS))[
+        "segundo trimestre"]["sistema_en_el_mismo_trimestre"]
+    assert not any(k.startswith(("p25", "p75")) for k in ref), ref
+    assert ref["la_mitad_central_del_resto_va_desde"] <= ref["mediana_del_cambio_del_resto"]
+    assert ref["la_mitad_central_del_resto_va_hasta"] >= ref["mediana_del_cambio_del_resto"]
+    assert ref["pct_del_resto_dentro_de_la_mitad_central"] == 50
+
+
 def test_si_el_sistema_no_cayo_el_q2_es_atipico_tambien_frente_al_sistema(db):
     ent = _siembra(db, cambio_sistema_q2=0.0)
     q2 = _por_tramo(tc.contexto_de_los_tramos(db, ent, ANIO, _TRAMOS))["segundo trimestre"]
