@@ -54,7 +54,7 @@ import json
 import logging
 import pathlib
 import re
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import date, timedelta
 from typing import Any, Dict, List, Mapping, Optional, Sequence, Tuple
 
@@ -84,7 +84,6 @@ OMITIDA_SIN_RESPALDO = "cifra_sin_respaldo"
 OMITIDA_CAUSAL = "afirmacion_causal"
 OMITIDA_TIEMPO = "tiempo"
 OMITIDA_ILEGIBLE = "feed_no_legible"
-OMITIDA_TERMINO = "termino_vetado"
 
 #: La prosa que el modelo debe respetar vive en CONSTANTES (CLAUDE.md): un literal partido por
 #: ancho de línea deja de existir en el fuente y un test que lo busque falla sin motivo.
@@ -148,10 +147,14 @@ class FeedDeclarado:
     dimensiones: Tuple[Dimension, ...] = ()
     ultima_descarga: Optional[date] = None
     audience: str = "inversionista"
-    #: Palabras que NO describen las series de este feed y el texto no puede usar. Se vigilan en
-    #: código, no solo en la nota: «La demanda del sistema eléctrico se acentúa» salió en prod
-    #: (2026-09-14) con la nota diciendo que las inyecciones no son demanda.
-    terminos_vetados: Tuple[str, ...] = ()
+    #: ``{término: motivo}`` que NO describen las series de este feed. Se vigilan en código, no
+    #: solo en la nota: «La demanda del sistema eléctrico se acentúa» salió en prod (2026-09-14)
+    #: con la nota diciendo que las inyecciones no son demanda. Se declaran en el contexto bajo
+    #: la clave de ``shared.narrative.terminos_vetados`` y los repara el lazo del guard del MOTOR
+    #: (un solo mecanismo); el motivo es la instrucción de reescritura que lee el modelo.
+    terminos_vetados: Mapping[str, str] = field(default_factory=dict)
+    #: Palabras que empiezan como un término vetado y no lo son («demandante»).
+    excepciones_de_terminos: Tuple[str, ...] = ()
 
 
 # ── Declaración ──────────────────────────────────────────────────────────────────────
@@ -403,12 +406,9 @@ def contexto_del_delta(bloque: Dict[str, Any], feeds: Sequence[FeedDeclarado],
             "series_del_periodo": [_serie_para_el_modelo(s) for s in (b.get("series") or [])],
             **(b.get("dimensiones") or {}),
             "nota_del_emisor": feed.nota if feed else "",
-            # Solo si el feed veta algo: así la huella de los feeds sin veto no cambia. El guard
-            # de código lo vigila igual; esto evita gastar la redacción que va a vetar.
-            **({"terminos_que_no_describen_estas_series": list(feed.terminos_vetados)}
-               if feed and feed.terminos_vetados else {}),
         })
     fuentes = [f.fuente for f in feeds if f.fuente is not None]
+    leidos = [por_clave[b["clave"]] for b in bloque.get("lecturas") or [] if b["clave"] in por_clave]
     return {
         "periodo_del_indice_anual_del_informe": periodo_del_informe,
         "lecturas_por_emisor": lecturas,
@@ -417,7 +417,20 @@ def contexto_del_delta(bloque: Dict[str, Any], feeds: Sequence[FeedDeclarado],
         **_atribucion_del_delta(fuentes),
         "regla_de_alcance": REGLA_DE_ALCANCE,
         "note": NOTA_GENERAL,
+        **_terminos_vetados_del_delta(leidos),
     }
+
+
+def _terminos_vetados_del_delta(feeds: Sequence[FeedDeclarado]) -> Dict[str, Any]:
+    """Los términos que vetan los feeds LEÍDOS, bajo las claves que lee el lazo del guard del
+    motor. La sección es UN texto, así que el veto es de la sección. Vacío sin veto: así la
+    huella de los feeds que no vetan nada no cambia."""
+    from shared.narrative.terminos_vetados import CLAVE, CLAVE_EXCEPCIONES
+
+    terminos = {t: m for f in feeds for t, m in f.terminos_vetados.items()}
+    excepciones = list(dict.fromkeys(e for f in feeds for e in f.excepciones_de_terminos))
+    return {**({CLAVE: terminos} if terminos else {}),
+            **({CLAVE_EXCEPCIONES: excepciones} if terminos and excepciones else {})}
 
 
 #: Qué se le dice al modelo en el delta cuando la licencia EXIGE nombrar a la fuente. El aviso lo
@@ -614,46 +627,6 @@ def _omitida(motivo: str, detalle: str) -> Dict[str, str]:
     return {"seccion": SECCION_DELTA, "motivo": motivo, "detalle": detalle}
 
 
-def terminos_vetados_en(texto: str, feeds: Sequence[FeedDeclarado]) -> List[str]:
-    """Los términos vetados por los feeds que aparecen en *texto* como palabra entera."""
-    halladas: List[str] = []
-    for feed in feeds:
-        for termino in feed.terminos_vetados:
-            patron = r"(?<![\wáéíóúñ])" + re.escape(termino) + r"(?![\wáéíóúñ])"
-            if re.search(patron, str(texto or ""), re.IGNORECASE) and termino not in halladas:
-                halladas.append(termino)
-    return halladas
-
-
-#: Lo que se le agrega al contexto en el segundo intento cuando el texto usó un término vetado.
-CORRECCION_DE_TERMINOS = ("El texto anterior usó términos que no describen estas series: {terminos}. "
-                          "No los uses: nombrá cada serie con su etiqueta.")
-
-
-async def _narrar_sin_terminos_vetados(
-        contexto: Dict[str, Any], feeds: Sequence[FeedDeclarado], lang: str,
-        presupuesto_s: Optional[float]) -> Tuple[Optional[str], Optional[Dict[str, str]]]:
-    """Narra; si el texto usa un término vetado, narra UNA vez más con la corrección; si sigue, omite."""
-    texto, omision = await _narrar(contexto, feeds[0], lang, presupuesto_s)
-    if omision is not None or texto is None:
-        return texto, omision
-    vetados = terminos_vetados_en(texto, feeds)
-    if not vetados:
-        return texto, None
-    logger.warning("delta con términos vetados %s; se narra de nuevo con la corrección", vetados)
-    corregido = {**contexto, "correccion_de_terminos": CORRECCION_DE_TERMINOS.format(
-        terminos=", ".join(f"«{v}»" for v in vetados))}
-    texto, omision = await _narrar(corregido, feeds[0], lang, presupuesto_s)
-    if omision is not None or texto is None:
-        return texto, omision
-    persistentes = terminos_vetados_en(texto, feeds)
-    if persistentes:
-        return None, _omitida(OMITIDA_TERMINO,
-                              "el texto usa términos que no describen las series ("
-                              + ", ".join(f"«{v}»" for v in persistentes) + ") tras corregirlo")
-    return texto, None
-
-
 async def _narrar(contexto: Dict[str, Any], feed: FeedDeclarado, lang: str,
                   presupuesto_s: Optional[float]) -> Tuple[Optional[str], Optional[Dict[str, str]]]:
     """Una llamada al modelo, con sus propios acumuladores del guard. (texto, omisión)."""
@@ -729,8 +702,11 @@ async def anexar_delta_de_feeds(
     key = dict(sector_key=sector_key, feed_clave=clave, feed_period=periodo,
                tier=tier.value, lang=lang)
     texto = _leer_cache(db, key, fp)
-    if texto is not None and terminos_vetados_en(texto, feeds):
-        # Un texto cacheado ANTES del guard puede traer el término: no se sirve, se regenera.
+    from shared.narrative.terminos_vetados import terminos_en
+
+    if texto is not None and terminos_en(contexto, texto):
+        # Un texto cacheado ANTES del guard puede traer el término: no se sirve, se regenera. Es
+        # el MISMO detector del motor, leído del mismo contexto: no un segundo criterio.
         logger.warning("caché del delta con términos vetados en %s: se ignora y regenera", sector_key)
         texto = None
     if texto is not None:
@@ -743,8 +719,8 @@ async def anexar_delta_de_feeds(
                 f"quedaban {presupuesto_restante_s:.0f} s del presupuesto de ensamblado y "
                 f"narrar el delta necesita al menos {MINIMO_PARA_NARRAR_S:.0f}")]
         try:
-            texto, omision = await _narrar_sin_terminos_vetados(contexto, feeds, lang,
-                                                                presupuesto_restante_s)
+            # Los términos vetados los repara el motor: están declarados en `contexto`.
+            texto, omision = await _narrar(contexto, feeds[0], lang, presupuesto_restante_s)
         except Exception as e:  # noqa: BLE001
             logger.exception("narración del delta de %s falló; se omite", sector_key)
             texto, omision = None, _omitida(OMITIDA_DEGRADADA, f"el motor falló: {e}")

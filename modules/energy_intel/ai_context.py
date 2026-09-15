@@ -34,6 +34,15 @@ NOTA_DEL_FEED_IMTE = (
     "inyectado que no se retiró— y no las pérdidas de distribución de las EDE, que son otra "
     "cifra y mucho mayor: no las confundas. El índice anual (IRSE) no usa este feed.")
 
+#: Por qué el feed del IMTE veta «demanda». Lo lee el modelo en el aviso de corrección del motor
+#: (`shared.narrative.terminos_vetados`): es la instrucción de reescritura, no un comentario.
+#: «La demanda del sistema eléctrico se acentúa» salió en prod (2026-09-14) con la nota diciéndolo.
+MOTIVO_SIN_DEMANDA_IMTE = (
+    "las series del IMTE son energía inyectada al sistema y energía retirada de él, no demanda de "
+    "los usuarios finales: escribí «energía inyectada» o «energía retirada»")
+#: «demandante» empieza como «demanda» y no lo es: el veto alcanza las flexiones por la raíz.
+PALABRAS_QUE_NO_SON_DEMANDA = ("demandante",)
+
 #: El segundo feed mensual del eje (Fase 7): la obra pública que ADJUDICARON las unidades de compra
 #: del sector eléctrico (EDE, ETED, Ministerio de Energía y Minas), del OCDS de la DGCP.
 FUENTE_DGCP_ELECTRICA = Fuente.de_cliente(
