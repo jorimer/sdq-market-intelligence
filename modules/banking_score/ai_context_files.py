@@ -29,6 +29,9 @@ AI_CONTEXT_FILES = (
     # Cada trimestre contra su historia y contra el sistema (2026-09-15): el rótulo que decide
     # si un tramo es hallazgo viaja al contexto.
     "reports/trimestre_en_contexto.py",
+    # HECHOS Y LECTURA (2026-09-15): escribe las frases con cifras del año y del mapa, y arma el
+    # contexto sin números que lee el modelo. Un cambio en cualquiera de las dos es receta.
+    "reports/hechos_y_lectura.py",
     # Las anclas del HHI viajan al contexto para que el modelo NO cite umbrales de memoria:
     # el boletín del 2026-09-06 publicó las bandas del DOJ, que esta plataforma descartó tras
     # medirlas. Si alguien recalibra los estratos, la caché tiene que enterarse.

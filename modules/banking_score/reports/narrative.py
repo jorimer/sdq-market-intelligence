@@ -111,6 +111,8 @@ _CEREBRO_TEMPLATES = frozenset({
     # Y las tres del boletín regional, por lo mismo: registradas en `THIN_TEMPLATES` pero
     # ausentes de acá, el motor las mandaría por la ruta legacy y saldrían con relleno.
     "boletin_rd", "boletin_sistemas", "boletin_armonizado",
+    # La lectura del mapa sectorial en el año por dentro (hechos y lectura, 2026-09-15).
+    "banking_sector_map_lectura",
 })
 
 # Profundidad POR SECCIÓN (alineada con shared.products.section_mode), para que el deep dive

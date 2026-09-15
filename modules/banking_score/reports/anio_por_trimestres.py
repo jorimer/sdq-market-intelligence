@@ -53,17 +53,22 @@ _TRAMO_LABEL = {3: "primer trimestre", 6: "segundo trimestre",
 #: presupuesto del motor. Los términos se buscan como palabra, con sus flexiones y sin depender
 #: de la tilde: «estacional» cubre «estacionalidad»; «de calendario», los «factores intraanuales».
 MOTIVO_ESTACIONAL = (
-    "un patrón que se repite solo se afirma con el rótulo de 'contexto_de_los_tramos' que lo "
+    "un patrón que se repite solo se afirma con el 'rotulo' de 'cada_trimestre' que lo "
     "respalda: copiá el rótulo de cada trimestre en vez de atribuirle una causa de calendario")
 MOTIVO_UMBRAL_MINIMO = (
     "el nivel de referencia del modelo no es el mínimo de nadie: nombralo como nivel de "
     "referencia")
+#: «semestre» (v5 de Santa Cruz: «factores que cedieron en el semestre siguiente», hablando de
+#: un trimestre). La serie es trimestral y no hay ningún dato semestral servido.
+MOTIVO_SEMESTRE = ("la serie de este informe es trimestral: nombrá el trimestre, que es la "
+                   "unidad que el contexto trae")
 TERMINOS_VETADOS_DEL_ANIO: Dict[str, str] = {
     "estacional": MOTIVO_ESTACIONAL,
     "de calendario": MOTIVO_ESTACIONAL,
     "efecto calendario": MOTIVO_ESTACIONAL,
     "umbral mínimo": MOTIVO_UMBRAL_MINIMO,
     "umbrales mínimos": MOTIVO_UMBRAL_MINIMO,
+    "semestre": MOTIVO_SEMESTRE,
 }
 
 #: Un MÚLTIPLO afirmado contra la razón servida. «una mora estresada que ya duplica ampliamente
@@ -72,7 +77,7 @@ TERMINOS_VETADOS_DEL_ANIO: Dict[str, str] = {
 #: mordería prosa real. «duplic» es la raíz: cubre «duplica», «duplicó», «duplicar».
 MOTIVO_MULTIPLO = (
     "la morosidad estresada al cierre no alcanza ese múltiplo de la mediana del resto del "
-    "sistema: si comparás, citá 'veces_la_mediana_del_resto' tal cual")
+    "sistema: si comparás, copiá 'multiplo_de_la_mediana_del_resto' tal cual")
 _MULTIPLOS = ((2.0, ("duplic", "el doble", "del doble")),
               (3.0, ("triplic", "el triple", "del triple")))
 

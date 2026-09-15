@@ -161,7 +161,8 @@ def test_el_lazo_del_motor_repara_con_el_motivo_del_anio(monkeypatch):
     assert CLAVE in llamadas[0], "el modelo tiene que leer el veto desde el primer intento"
     assert len(llamadas) == 2, "un intento y una reparación"
     aviso = llamadas[1].partition("CORRECCIÓN OBLIGATORIA — TÉRMINOS")[2]
-    assert "contexto_de_los_tramos" in aviso, "el aviso tiene que traer el MOTIVO del término"
+    assert "'rotulo' de 'cada_trimestre'" in aviso, \
+        "el aviso tiene que traer el MOTIVO del término"
     assert "estacional" not in texto and "atípico frente a su historia" in texto
 
 

@@ -1397,32 +1397,52 @@ class BankingProduct:
         # la anexa; el gate de degradación la cubre igual (ver `assembler`).
         dentro = snapshot.payload.get("anio_por_trimestres")
         if dentro:
+            from modules.banking_score.reports.hechos_y_lectura import (
+                TERMINOS_VETADOS_DEL_MAPA, TITULO_HECHOS_DEL_ANIO, TITULO_HECHOS_DEL_MAPA,
+                TITULO_LECTURA_DEL_ANIO, TITULO_LECTURA_DEL_MAPA, componer,
+                contexto_de_la_lectura_del_anio, contexto_de_la_lectura_del_mapa,
+                hechos_del_anio, hechos_del_mapa)
             from modules.banking_score.reports.anio_por_trimestres import (
                 terminos_vetados_del_anio)
+            from shared.narrative.claude_engine import STATIC_FALLBACK_MODEL
             from shared.narrative.terminos_vetados import CLAVE as CLAVE_TERMINOS_VETADOS
-            ctx = {"period": snapshot.period, "entity_name": snapshot.entity_name,
-                   "anio_por_trimestres": dentro,
-                   # LENGUAJE QUE EL DATO NIEGA (2026-09-15, Santa Cruz): se declara en el
-                   # contexto y lo repara el lazo del guard del motor. Se computa ACÁ, desde el
-                   # año servido, y no dentro del payload: un snapshot armado antes de este
-                   # cambio no traería la lista, y el veto desaparecería sin aviso.
+
+            def _seccion(res, hechos: str, titulo_lectura: str, titulo_hechos: str) -> str:
+                # Un relleno estático se entrega TAL CUAL: el gate de degradación del
+                # ensamblador lo reconoce por coincidencia exacta, y envuelto en los hechos
+                # dejaría pasar un Deep Dive sin lectura.
+                if getattr(res, "model_used", None) == STATIC_FALLBACK_MODEL:
+                    return res.text
+                return componer(hechos, res.text, titulo_lectura, titulo_hechos)
+
+            # HECHOS Y LECTURA (2026-09-15, Santa Cruz): cinco regeneraciones, cinco errores
+            # distintos en frases con número. Las cifras y sus relaciones las escribe
+            # `hechos_y_lectura`; el modelo lee un contexto SIN números y escribe solo la
+            # interpretación, sin dígitos (lo hace cumplir el lazo del guard del motor).
+            ctx = {**contexto_de_la_lectura_del_anio(dentro, snapshot.entity_name),
+                   # LENGUAJE QUE EL DATO NIEGA: se declara en el contexto y lo repara el mismo
+                   # lazo. Se computa ACÁ, desde el año servido, y no dentro del payload: un
+                   # snapshot armado antes de este cambio no traería la lista.
                    CLAVE_TERMINOS_VETADOS: terminos_vetados_del_anio(dentro)}
             res = await narrative_engine.generate(
                 context=ctx, template="anio_por_trimestres", mode="deep",
                 axis="banking", audience="comite_credito")
-            salida = {"anio_por_trimestres": res.text}
+            salida = {"anio_por_trimestres": _seccion(
+                res, hechos_del_anio(dentro), TITULO_LECTURA_DEL_ANIO,
+                TITULO_HECHOS_DEL_ANIO)}
             # El mapa, cuando el cierre lo tiene. Va como sección propia y no dentro del
             # contexto del año: son dos sujetos —la serie del score y el libro por sector— y
             # meterlos en un mismo prompt hace que el modelo elija uno.
             mapa = snapshot.payload.get("mapa_sectorial")
             if mapa:
                 res_m = await narrative_engine.generate(
-                    context={"period": snapshot.period,
-                             "entity_name": snapshot.entity_name,
-                             "mapa_sectorial": mapa},
-                    template="banking_sector_map", mode="deep",
+                    context={**contexto_de_la_lectura_del_mapa(mapa, snapshot.entity_name),
+                             CLAVE_TERMINOS_VETADOS: dict(TERMINOS_VETADOS_DEL_MAPA)},
+                    template="banking_sector_map_lectura", mode="deep",
                     axis="banking", audience="comite_credito")
-                salida["mapa_sectorial"] = res_m.text
+                salida["mapa_sectorial"] = _seccion(
+                    res_m, hechos_del_mapa(mapa), TITULO_LECTURA_DEL_MAPA,
+                    TITULO_HECHOS_DEL_MAPA)
             return salida
 
         scoring_result = snapshot.payload["scoring_result"]
