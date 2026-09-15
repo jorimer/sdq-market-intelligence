@@ -1383,7 +1383,28 @@ class BankingProduct:
             res = await narrative_engine.generate(
                 context=ctx, template="anio_por_trimestres", mode="deep",
                 axis="banking", audience="comite_credito")
-            salida = {"anio_por_trimestres": res.text}
+            texto = res.text
+            # LENGUAJE QUE EL DATO NIEGA, vigilado en código (2026-09-15, Santa Cruz): se
+            # regenera UNA vez con la corrección; si insiste, se quita solo esa oración.
+            from modules.banking_score.reports.anio_por_trimestres import (
+                CORRECCION_DE_TERMINOS_DEL_ANIO, quitar_oraciones_con_terminos_vetados,
+                terminos_vetados_en_el_anio)
+            vetados = terminos_vetados_en_el_anio(texto)
+            if vetados:
+                logger.warning("Año por trimestres de %s con términos vetados %s: se regenera "
+                               "con la corrección", snapshot.entity_name, vetados)
+                res = await narrative_engine.generate(
+                    context={**ctx, "correccion_de_terminos": CORRECCION_DE_TERMINOS_DEL_ANIO
+                             .format(terminos=", ".join(f"«{v}»" for v in vetados))},
+                    template="anio_por_trimestres", mode="deep",
+                    axis="banking", audience="comite_credito")
+                texto = res.text
+                persistentes = terminos_vetados_en_el_anio(texto)
+                if persistentes:
+                    logger.warning("Año por trimestres de %s: %s persisten tras corregir; se "
+                                   "quitan esas oraciones", snapshot.entity_name, persistentes)
+                    texto = quitar_oraciones_con_terminos_vetados(texto)
+            salida = {"anio_por_trimestres": texto}
             # El mapa, cuando el cierre lo tiene. Va como sección propia y no dentro del
             # contexto del año: son dos sujetos —la serie del score y el libro por sector— y
             # meterlos en un mismo prompt hace que el modelo elija uno.
@@ -1526,7 +1547,7 @@ class BankingProduct:
                 "anio_por_trimestres", snapshot.entity_name or "Entidad",
                 # El mapa viaja en el `scoring_result` porque es de ahí que el generador
                 # lo lee para dibujar su tabla; sin él saldría el párrafo sin las columnas.
-                {"overall_score": cierre.get("score") or 0,
+                {"overall_score": cierre.get("score_global") or 0,
                  "banda_ejecucion": None, "banda_resiliencia": cierre.get("banda"),
                  "sub_components": {}, "indicators": {},
                  **({"mapa_sectorial": snapshot.payload["mapa_sectorial"]}
