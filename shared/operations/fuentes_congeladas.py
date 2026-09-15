@@ -44,7 +44,8 @@ from __future__ import annotations
 import logging
 from datetime import datetime
 from dataclasses import dataclass, replace
-from typing import Any, Dict, List, Optional, Tuple
+from datetime import date
+from typing import Any, Callable, Dict, List, Optional, Tuple
 
 from sqlalchemy.orm import Session
 
@@ -277,6 +278,161 @@ def _veredictos_de_los_feeds(eje: str, db: Optional[Session]) -> List[Veredicto]
     return salida
 
 
+#: Las fuentes COMPARTIDAS no son de un eje: se listan bajo este nombre.
+EJE_COMPARTIDAS = "compartidas"
+
+
+@dataclass(frozen=True)
+class FuenteCompartida:
+    """Una fuente regional o sectorial que leen VARIOS ejes y que ningún eje declara como suya.
+
+    **Por qué hace falta.** El sensor preguntaba a cada producto por la antigüedad de SU dato,
+    y las capas que se repartieron en el plan de enriquecimiento sectorial —el cubo de crédito
+    de la SIB, la ENCFT por dominio, el IPC por quintil, el salario TSS— viajan DENTRO de
+    informes de otros ejes sin que ninguno las declare. Medido en producción el 2026-09-15: el
+    cubo iba 168 días atrás, la ocupación por rama seguía en 2024 (ONE 403) y SIUBEN servía una
+    instantánea, y el sensor no tenía una sola fila para ninguna. Una fuente sin fila se cae
+    en silencio.
+    """
+
+    clave: str
+    etiqueta: str
+    emisor: str
+    cadence: str
+    #: Devuelve el período del dato más nuevo (``AAAA``, ``AAAA-Qn``, ``AAAA-MM`` o
+    #: ``AAAA-MM-DD``) o ``None`` si no hay dato.
+    medir: Callable[[Session], Optional[str]]
+
+
+def fin_del_periodo(periodo: Optional[str]) -> Optional[date]:
+    """El último día que cubre un período. ``None`` si no se puede leer — nunca una fecha inventada."""
+    import calendar
+    t = str(periodo or "").strip()
+    try:
+        if len(t) >= 10:
+            return date.fromisoformat(t[:10])
+        if len(t) == 7 and t[4] == "-" and t[5] in "Qq":
+            # Un trimestre fuera de 1-4 da un mes inválido y `date()` lo rechaza: cae a None.
+            mes = int(t[6]) * 3
+            return date(int(t[:4]), mes, calendar.monthrange(int(t[:4]), mes)[1])
+        if len(t) == 7 and t[4] == "-":
+            anio, mes = int(t[:4]), int(t[5:7])
+            return date(anio, mes, calendar.monthrange(anio, mes)[1])
+        if len(t) == 4 and t.isdigit():
+            return date(int(t), 12, 31)
+    except (ValueError, IndexError):
+        return None
+    return None
+
+
+def _ultimo_corte_del_cubo(db: Session) -> Optional[str]:
+    from sqlalchemy import func
+
+    from shared.reference.cartera_sectorial import CarteraSectorial
+    valor = db.query(func.max(CarteraSectorial.period_end)).scalar()
+    return valor.isoformat() if valor else None
+
+
+def _ultimo_de_tema(tema: str) -> Callable[[Session], Optional[str]]:
+    def medir(db: Session) -> Optional[str]:
+        from sqlalchemy import func
+
+        from modules.social_dev.models.models import SocialIndicator
+        valor = (db.query(func.max(SocialIndicator.period))
+                 .filter(SocialIndicator.theme == tema, SocialIndicator.value.isnot(None))
+                 .scalar())
+        return str(valor) if valor else None
+    return medir
+
+
+def _ultimo_de_serie_macro(prefijo: str) -> Callable[[Session], Optional[str]]:
+    def medir(db: Session) -> Optional[str]:
+        from sqlalchemy import func
+
+        from modules.macro_monitor.models.models import MacroSeries
+        valor = (db.query(func.max(MacroSeries.period))
+                 .filter(MacroSeries.series_code.like(prefijo + "%"),
+                         MacroSeries.value.isnot(None))
+                 .scalar())
+        return str(valor) if valor else None
+    return medir
+
+
+def _ultimo_de_variable(dimension: str) -> Callable[[Session], Optional[str]]:
+    def medir(db: Session) -> Optional[str]:
+        from sqlalchemy import func
+
+        from shared.reference.sector_variables import SectorVariable
+        valor = (db.query(func.max(SectorVariable.period))
+                 .filter(SectorVariable.dimension == dimension).scalar())
+        return str(valor) if valor else None
+    return medir
+
+
+def _anio_del_salario_tss(db: Session) -> Optional[str]:
+    import json
+
+    from shared.settings.models import AppSetting
+    fila = db.query(AppSetting).filter(AppSetting.key == "sector_operating_cost").first()
+    if not fila or not fila.value:
+        return None
+    try:
+        anio = json.loads(str(fila.value)).get("year")
+    except (TypeError, ValueError, AttributeError):
+        return None
+    return str(anio) if anio else None
+
+
+def _fuentes_compartidas() -> Tuple[FuenteCompartida, ...]:
+    from shared.capacidad_de_pago import _PREFIJO, _PREFIJO_CANASTA, _TEMA_SALARIO_REFERENCIA
+    from shared.reference.sector_variables import LABOR_ENCFT_DIMENSION
+    return (
+        FuenteCompartida("cubo_de_credito", "Cubo de crédito por sector y provincia",
+                         "SIB", "quarterly", _ultimo_corte_del_cubo),
+        FuenteCompartida("encft_por_dominio", "ENCFT por dominio geográfico (anual)",
+                         "BCRD · ENCFT", "annual",
+                         _ultimo_de_tema("subutilizacion_su4_regional_anual")),
+        FuenteCompartida("encft_trimestral", "ENCFT trimestral (informalidad, SU1-SU4)",
+                         "BCRD · ENCFT", "quarterly",
+                         _ultimo_de_tema("informality_rate_trimestral")),
+        FuenteCompartida("ipc_por_quintil", "IPC por quintil de ingreso", "BCRD", "monthly",
+                         _ultimo_de_serie_macro(_PREFIJO)),
+        FuenteCompartida("canasta_por_quintil", "Costo de la canasta por quintil", "BCRD",
+                         "monthly", _ultimo_de_serie_macro(_PREFIJO_CANASTA)),
+        FuenteCompartida("salario_minimo", "Salario mínimo de referencia", "MHE", "monthly",
+                         _ultimo_de_tema(_TEMA_SALARIO_REFERENCIA)),
+        FuenteCompartida("salario_tss", "Salario promedio cotizable por actividad", "TSS",
+                         "annual", _anio_del_salario_tss),
+        FuenteCompartida("encft_ocupacion_por_rama", "Ocupados por rama de actividad",
+                         "ONE · ENCFT", "annual", _ultimo_de_variable(LABOR_ENCFT_DIMENSION)),
+        FuenteCompartida("siuben_provincial", "Indicadores del padrón por provincia", "SIUBEN",
+                         "quarterly", _ultimo_de_tema("siuben_illiteracy_head_share")),
+        FuenteCompartida("minerd_cobertura", "Cobertura educativa por región", "MINERD",
+                         "annual", _ultimo_de_tema("secondary_coverage")),
+    )
+
+
+def _veredictos_compartidos(db: Optional[Session],
+                            hoy: Optional[date] = None) -> List[Veredicto]:
+    """Un veredicto por fuente compartida, con el MISMO criterio que el de los ejes. Nunca lanza."""
+    hoy = hoy or date.today()
+    salida: List[Veredicto] = []
+    for f in _fuentes_compartidas():
+        periodo: Optional[str] = None
+        try:
+            periodo = f.medir(db) if db is not None else None
+        except Exception as e:  # noqa: BLE001 — una fuente que revienta no aborta el barrido
+            logger.warning("no se pudo medir la fuente compartida «%s»: %s", f.clave, e)
+        fin = fin_del_periodo(periodo)
+        v = evaluar_fuente(eje=EJE_COMPARTIDAS,
+                           freshness_days=(hoy - fin).days if fin else None,
+                           cadence=f.cadence, fuentes=(f.emisor,),
+                           detalle=(f"último período observado: {periodo}" if periodo
+                                    else "sin dato persistido"))
+        salida.append(replace(v, clave=f.clave, etiqueta=f.etiqueta))
+    return salida
+
+
 def leer_fuentes_de_los_ejes(db: Optional[Session] = None) -> List[Veredicto]:
     """El veredicto de cada fuente de cada eje del catálogo, en orden de catálogo. Solo lee.
 
@@ -291,6 +447,8 @@ def leer_fuentes_de_los_ejes(db: Optional[Session] = None) -> List[Veredicto]:
     for entrada in PRODUCT_CATALOG:
         salida.append(_veredicto_del_eje(entrada.sector_key, db))
         salida.extend(_veredictos_de_los_feeds(entrada.sector_key, db))
+    # Las fuentes que leen varios ejes y ninguno declara: al final, con su propia fila.
+    salida.extend(_veredictos_compartidos(db))
     return salida
 
 
