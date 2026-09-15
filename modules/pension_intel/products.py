@@ -525,6 +525,20 @@ AI_CONTEXT_FILES = (
 )
 
 
+def contexto_de_la_afp(payload: Dict[str, Any], rating: Dict[str, Any],
+                       peers: List[Dict[str, Any]]) -> Dict[str, Any]:
+    """El contexto base de la AFP, con la capacidad de pago si el snapshot la trae.
+
+    La plantilla `pension_entity` YA pide `capacidad_de_pago` —la capacidad de cotizar—, pero
+    el contexto no la llevaba: estaba en el payload y el modelo nunca la vio. Verificado en
+    producción el 2026-09-15 (AFP Reservas, cero menciones)."""
+    ctx = pension_entity_context(rating, peers)
+    cap = (payload or {}).get("capacidad_de_pago")
+    if cap:
+        ctx["capacidad_de_pago"] = cap
+    return ctx
+
+
 class PensionProduct:
     """``SectorProduct`` de Pensiones. ``db`` opcional: las muestras sintéticas usan
     solo ``narratives``/``render`` (sin DB)."""
@@ -793,7 +807,7 @@ class PensionProduct:
         rating = snapshot.payload["rating"]
         peers = snapshot.payload.get("peers") or [rating]
         entity = snapshot.entity_name or rating.get("name") or "AFP"
-        base_ctx = pension_entity_context(rating, peers)
+        base_ctx = contexto_de_la_afp(snapshot.payload, rating, peers)
         # Enriquecer el contexto base con trayectoria (tendencia real) para que el análisis
         # de las dimensiones lea la trayectoria, no un punto.
         trend = snapshot.payload.get("trend") or []

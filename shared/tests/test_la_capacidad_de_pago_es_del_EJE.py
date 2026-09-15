@@ -138,3 +138,43 @@ def test_la_huella_resuelve_una_ruta_COMPARTIDA():
     from shared.products.assembler import ruta_de_contexto
     assert ruta_de_contexto("shared/capacidad_de_pago.py", "banking_score").is_file()
     assert ruta_de_contexto("products.py", "banking_score").is_file()
+
+
+
+#: Pedirla en la plantilla no alcanza si el contexto no la lleva. Producción, 2026-09-15: el
+#: bloque estaba completo en el payload de seguros y de pensiones y la prosa lo mencionó cero
+#: veces, porque `insurance_entity_context` y `pension_entity_context` no lo copiaban.
+_CAPA = {"inflacion_del_deudor": {"hasta": "2025-12"}, "salario_minimo": {"meses_sin_ajuste": 8}}
+
+
+@pytest.mark.parametrize("modulo,funcion", [
+    ("modules.insurance_intel.products", "contexto_de_la_aseguradora"),
+    ("modules.pension_intel.products", "contexto_de_la_afp"),
+])
+def test_el_contexto_de_la_entidad_LLEVA_el_bloque_que_la_plantilla_pide(modulo, funcion):
+    import importlib
+    mod = importlib.import_module(modulo)
+    rating = {"slug": "x", "name": "X", "overall_score": 60.0, "band": "B", "coverage": 1.0,
+              "period": "2025", "dimensions": []}
+    ctx = getattr(mod, funcion)({"capacidad_de_pago": _CAPA}, rating, [rating])
+    assert ctx.get("capacidad_de_pago") == _CAPA
+    sin = getattr(mod, funcion)({}, rating, [rating])
+    assert "capacidad_de_pago" not in sin, "sin el bloque en el snapshot no se inventa uno vacío"
+
+
+@pytest.mark.parametrize("archivo,funcion", [
+    ("modules/insurance_intel/products.py", "contexto_de_la_aseguradora"),
+    ("modules/pension_intel/products.py", "contexto_de_la_afp"),
+])
+def test_la_narrativa_USA_el_contexto_que_lleva_el_bloque(archivo, funcion):
+    """Sin esto, la función existe, pasa su test, y `narratives()` sigue llamando al contexto
+    viejo — un guard en la función equivocada."""
+    import ast
+    arbol = ast.parse((REPO / archivo).read_text())
+    narr = next(n for n in ast.walk(arbol)
+                if isinstance(n, ast.AsyncFunctionDef) and n.name == "narratives")
+    llamadas = {c.func.id for c in ast.walk(narr)
+                if isinstance(c, ast.Call) and isinstance(c.func, ast.Name)}
+    assert funcion in llamadas
+    assert not ({"insurance_entity_context", "pension_entity_context"} & llamadas), (
+        "la narrativa arma el contexto de la entidad sin la capacidad de pago")
