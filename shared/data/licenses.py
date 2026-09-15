@@ -431,6 +431,24 @@ LICENCIAS: Dict[str, Licencia] = {
               "excepción. Acá no hay excepción — hay una plantilla de portal que "
               "contradice al Decreto 103-22, que obliga a esa misma institución."),
     ),
+    ("CNZFE — Informe Estadístico publicado en cnzfe.gob.do; es el mismo cuadro que el "
+     "CNZFE publica bajo ODbL en datos.gob.do. Emisor público dominicano: reutilizable "
+     "con atribución (Ley 200-04, Decreto 103-22)."): Licencia(
+        terminos_url="https://cnzfe.gob.do/terminos-de-uso/",
+        verificado_el="2026-09-15",
+        atribucion=("Fuente: Consejo Nacional de Zonas Francas de Exportación (CNZFE), Informe "
+                    "Estadístico. Información pública de la República Dominicana."),
+        nota=("`shared.data.cnzfe_client.CNZFEInformeClient`: respaldo del CSV de datos.gob.do, "
+              "cuyos recursos del CNZFE responden HTTP 500 desde el 2026-09-14. Se leyeron el "
+              "2026-09-15 los Términos de uso y las Políticas de privacidad de cnzfe.gob.do: "
+              "reservan la propiedad intelectual del portal y prohíben «la comercialización en "
+              "cualquier forma» del material del sitio sin autorización escrita. Es la plantilla "
+              "de portal de la que habla el encabezado de este módulo, no el régimen del dato: "
+              "el MISMO Cuadro No. 1 (principales variables 2006-2025) lo publica el propio CNZFE "
+              "en datos.gob.do con `license_id: odc-odbl`, y rigen la Ley 200-04 y el Decreto "
+              "103-22. Se cita al productor. El cuadro atribuye exportaciones y gastos locales "
+              "al BCRD; `robots.txt` permite el rastreo."),
+    ),
     ("OC-SENI — informe mensual de transacciones económicas (IMTE) publicado sin login "
                "en apps.oc.org.do. Los Términos de uso del sitio (plantilla del CMS) no "
                "restringen la reutilización del dato; el IMTE es una publicación que el OC hace "
