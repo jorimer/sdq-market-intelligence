@@ -36,7 +36,7 @@ from modules.law_intel.scoring.fines import publicable as fines_publicable
 from modules.law_intel.scoring.pendiente import horizonte_de
 from modules.law_intel.scoring.pendiente import panel as panel_pendiente
 from modules.law_intel.scoring.pendiente import publicable as pendiente_publicable
-from modules.law_intel.scoring.semaforo import panel
+from modules.law_intel.scoring.semaforo import GLOSA_INDETERMINADO, panel
 from modules.law_intel.scoring.semaforo import resumen as resumen_semaforo
 from modules.law_intel.scoring.semaforo import tabla as tabla_semaforo
 from modules.law_intel.verificabilidad import publicable as verificabilidad_publicable
@@ -327,6 +327,7 @@ def law_ai_context(expediente_id: str, corte: str,
                              "repetir."),
             "sin_medicion": "No es incumplimiento. Es que el informe no lo mide.",
             "estancada": GLOSA_ESTANCADA,
+            "indeterminado": GLOSA_INDETERMINADO,
         },
         # ── Coherencia proceso-resultado ──
         "contradicciones_proceso_vs_resultado_computadas": [

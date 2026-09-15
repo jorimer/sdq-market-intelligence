@@ -140,25 +140,25 @@ class TestEstancarseNoEsRetroceder:
 
     def test_una_serie_plana_no_se_mueve_en_contra(self):
         v = evaluar(ind(metas={"2025": 41.5}), Binding(indicador="1.8", mejor="mayor", **VERIF),
-                    [("2020", 12.5), ("2024", 12.5)], corte="2025")
+                    [("2020", 12.5), ("2025", 12.5)], corte="2025")
         assert v.veredicto == "estancada" and v.trayectoria == "plana"
         assert "en contra" not in (v.motivo or "")
 
     def test_pero_tampoco_es_inocuo(self):
         """La meta avanza con los años: quedarse quieto ensancha la brecha."""
         v = evaluar(ind(metas={"2025": 41.5}), Binding(indicador="1.8", mejor="mayor", **VERIF),
-                    [("2020", 12.5), ("2024", 12.5)], corte="2025")
+                    [("2020", 12.5), ("2025", 12.5)], corte="2025")
         assert v.cumple is False
 
     def test_retroceder_de_verdad_sigue_llamandose_retroceder(self):
         v = evaluar(ind(metas={"2025": 41.5}), Binding(indicador="1.8", mejor="mayor", **VERIF),
-                    [("2020", 30.2), ("2024", 25.8)], corte="2025")
+                    [("2020", 30.2), ("2025", 25.8)], corte="2025")
         assert v.veredicto == "retrocede" and v.trayectoria == "se aleja"
 
     def test_cumplir_estancado_no_se_declara_como_alejarse(self):
         """Quien ya cumple y no se mueve tampoco «se aleja»: sigue cumpliendo, plano."""
         v = evaluar(ind(metas={"2025": 10.0}), Binding(indicador="1.8", mejor="menor", **VERIF),
-                    [("2020", 8.0), ("2024", 8.0)], corte="2025")
+                    [("2020", 8.0), ("2025", 8.0)], corte="2025")
         assert v.veredicto == "alcanzada" and v.trayectoria == "plana"
 
 
@@ -177,7 +177,7 @@ class TestUnUmbralNoAdmiteDeltaPeroSIVeredicto:
     def test_un_umbral_INCUMPLIDO_ahora_se_declara(self):
         v = evaluar(self._umbral({"2025": "< 4"}),
                     Binding(indicador="1.8", mejor="menor", **VERIF),
-                    [("2024", 5.97)], corte="2025")
+                    [("2025", 5.97)], corte="2025")
         assert v.veredicto == "no_alcanzada"
         assert v.cumple is False
         assert "NO lo cumple" in (v.motivo or "")
@@ -185,7 +185,7 @@ class TestUnUmbralNoAdmiteDeltaPeroSIVeredicto:
     def test_un_umbral_CUMPLIDO_tambien(self):
         v = evaluar(self._umbral({"2025": "< 4"}),
                     Binding(indicador="1.8", mejor="menor", **VERIF),
-                    [("2024", 3.1)], corte="2025")
+                    [("2025", 3.1)], corte="2025")
         assert v.veredicto == "alcanzada" and v.cumple is True
 
     def test_la_DISTANCIA_queda_en_None_a_proposito(self):
@@ -193,13 +193,13 @@ class TestUnUmbralNoAdmiteDeltaPeroSIVeredicto:
         fijó es un TECHO, no un objetivo puntual."""
         v = evaluar(self._umbral({"2025": "< 4"}),
                     Binding(indicador="1.8", mejor="menor", **VERIF),
-                    [("2024", 5.97)], corte="2025")
+                    [("2025", 5.97)], corte="2025")
         assert v.distancia is None
 
     def test_el_operador_MAYOR_QUE_se_juzga_al_reves(self):
         v = evaluar(self._umbral({"2025": ">2000"}),
                     Binding(indicador="1.8", mejor="mayor", **VERIF),
-                    [("2024", 2614.0)], corte="2025")
+                    [("2025", 2614.0)], corte="2025")
         assert v.veredicto == "alcanzada"
 
     def test_una_forma_AMBIGUA_no_se_adivina(self):
@@ -242,7 +242,7 @@ class TestUnEscalarROTULADOSeJuzgaConSuSujeto:
     def test_se_juzga_y_el_SUJETO_viaja_al_veredicto(self):
         v = evaluar(self._rot({"2025": "Matemáticas : 63.0"}),
                     Binding(indicador="1.8", mejor="menor", **VERIF),
-                    [("2019", 97.84)], corte="2025")
+                    [("2025", 97.84)], corte="2025")
         assert v.veredicto == "no_alcanzada"
         assert "Matemáticas" in (v.motivo or ""), "sin el sujeto no se ve que es una de tres"
         assert "97.84" in (v.motivo or "") and "63" in (v.motivo or "")
@@ -250,7 +250,7 @@ class TestUnEscalarROTULADOSeJuzgaConSuSujeto:
     def test_una_meta_rotulada_CUMPLIDA(self):
         v = evaluar(self._rot({"2025": "Matemáticas : 63.0"}),
                     Binding(indicador="1.8", mejor="menor", **VERIF),
-                    [("2019", 52.0)], corte="2025")
+                    [("2025", 52.0)], corte="2025")
         assert v.veredicto == "alcanzada" and v.cumple is True
 
     def test_una_meta_REDACTADA_de_verdad_sigue_sin_juzgarse(self):
@@ -273,7 +273,7 @@ class TestUnEscalarROTULADOSeJuzgaConSuSujeto:
         """El mismo 97,84 cumple o no según si el indicador mejora subiendo o bajando."""
         arriba = evaluar(self._rot({"2025": "Cobertura : 63.0"}),
                          Binding(indicador="1.8", mejor="mayor", **VERIF),
-                         [("2019", 97.84)], corte="2025")
+                         [("2025", 97.84)], corte="2025")
         assert arriba.veredicto == "alcanzada"
 
 
@@ -308,5 +308,5 @@ class TestUnaMetaREDACTADAQueEsUnNumero:
         """La vía que ya existía no se rompe: «Matemáticas : 63.0» se juzga como antes."""
         i = self._ind({"2025": "Matemáticas : 63.0"})
         v = evaluar(i, Binding(indicador="2.36", mejor="menor", **VERIF),
-                    [("2019", 97.84)], corte="2025")
+                    [("2025", 97.84)], corte="2025")
         assert v.veredicto == "no_alcanzada"
