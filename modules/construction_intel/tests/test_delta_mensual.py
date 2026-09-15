@@ -137,7 +137,8 @@ def test_el_producto_DECLARA_el_feed_con_sus_series_y_su_sujeto_en_las_dimension
     # primero: es el feed cuya forma fija este test.
     assert [x.clave for x in feeds] == [CLAVE_DEL_FEED, "dgcp_obras"]
     f = feeds[0]
-    assert (f.clave, f.cadence, f.axis) == (CLAVE_DEL_FEED, "monthly", "construction_intel")
+    # Trimestral: el dato es mensual y el MIVHED lo publica por trimestre (ficha de datos.gob.do).
+    assert (f.clave, f.cadence, f.axis) == (CLAVE_DEL_FEED, "quarterly", "construction_intel")
     assert set(f.series) == {SERIE_PERMISOS, SERIE_SQM}
     assert f.emisor_en_prosa == "el MIVHED"
     assert {d.clave_de_contexto for d in f.dimensiones} == {
@@ -289,7 +290,7 @@ def test_el_texto_NOMBRA_el_mes_y_DECLARA_la_ultima_publicacion(db, icc, monkeyp
     texto = _entregado(db).narratives[SECCION_DELTA]
     assert texto.startswith("Movimiento de diciembre de 2023.")
     assert "Es la última edición que publicó el MIVHED, el 20 de diciembre de 2023" in texto
-    assert "la de enero de 2024, de cadencia mensual" in texto
+    assert "la de enero de 2024, de cadencia trimestral" in texto
     assert f"no figuraba en la fuente en nuestra última descarga, del {_hoy_utc_largo()}." in texto
     assert "a la fecha de este informe" not in texto
     for clave in ("monthly", "quarterly", "annual"):
@@ -405,7 +406,7 @@ def test_el_feed_se_declara_como_SENAL_DE_FUENTE_con_su_propia_cadencia(db, icc)
     senales = ConstructionProduct(db).senales_de_fuentes()
     assert len(senales) == 1
     s = senales[0]
-    assert (s.clave, s.cadence) == (CLAVE_DEL_FEED, "monthly")
+    assert (s.clave, s.cadence) == (CLAVE_DEL_FEED, "quarterly")
     assert ultimo in s.detalle
 
 
@@ -417,7 +418,7 @@ def test_el_sensor_juzga_las_DOS_fuentes_del_eje_por_separado(db, icc):
     filas = {v.id: v for v in leer_fuentes_de_los_ejes(db) if v.eje == "construction"}
     assert set(filas) == {"construction", f"construction:{CLAVE_DEL_FEED}"}
     assert filas["construction"].cadencia == "annual"
-    assert filas[f"construction:{CLAVE_DEL_FEED}"].cadencia == "monthly"
+    assert filas[f"construction:{CLAVE_DEL_FEED}"].cadencia == "quarterly"
 
 
 def test_la_metodologia_NOMBRA_las_dos_cadencias(db, icc):
@@ -427,4 +428,5 @@ def test_la_metodologia_NOMBRA_las_dos_cadencias(db, icc):
     met = standard_sections(ConstructionProduct(db), ProductTier.deep_dive,
                             as_of=None).get("std_methodology", "")
     assert "**Cadencia:** anual" in met
-    assert "Fuentes sub-anuales" in met and "mensual" in met
+    # El feed del MIVHED es TRIMESTRAL: su ficha en datos.gob.do lo declara así.
+    assert "Fuentes sub-anuales" in met and "MIVHED · licencias emitidas (trimestral)" in met
