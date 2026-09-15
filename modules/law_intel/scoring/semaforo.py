@@ -38,7 +38,18 @@ VEREDICTOS = {
                               "lo que NO se certificó es que el nivel sea comparable con la "
                               "línea base que la ley fija"),
     "no_evaluable": "la meta no está en una escala que admita diferencia",
+    "indeterminado": ("hay meta vencida y observación, pero la observación es de un año anterior "
+                      "al de la meta: ese período no tiene dato propio y no se juzga con el de "
+                      "otro año"),
 }
+
+#: Cómo se lee `indeterminado` en el informe. Constante y no literal en un dict: la prosa que el
+#: modelo tiene que respetar vive en constantes (CLAUDE.md).
+GLOSA_INDETERMINADO = (
+    "No es incumplimiento ni cumplimiento. El período de la meta no tiene dato propio: la "
+    "observación más reciente es de un año anterior, y juzgar la meta con ella afirmaría algo "
+    "sobre un año que ningún dato cubre. Citá la observación con SU año y la meta con el suyo, "
+    "y no los compares como si fueran del mismo período.")
 
 Observacion = Tuple[str, float]     # (período, valor)
 
@@ -146,6 +157,37 @@ def evaluar(ind: Indicador, binding: Optional[Binding],
                          motivo="el binding está verificado y la serie no devolvió valor")
 
     p_obs, valor = obs[-1]
+    # EL PERÍODO DE LA META NECESITA DATO PROPIO (2026-09-15, decisión del dueño, regla
+    # estricta). Este motor tomaba `obs[-1]` sin mirar su año: al corte 2025, 21 de los 46
+    # veredictos de cumplimiento de la Ley 1-12 juzgaban la meta de 2025 con datos de 2024,
+    # 2023 y hasta 2019. «Alcanza la meta de 2025» sobre el dato de 2024 es una afirmación
+    # sobre un año que ningún dato cubre.
+    #
+    # Se compara el AÑO y no la cadena: «2025-06» es del año de la meta. Y solo se declara
+    # sobre una meta LEGIBLE — un umbral en prosa o un «>1,700» ambiguo sigue `no_evaluable`,
+    # que es otra respuesta: ahí lo que falta no es el dato, es poder leer la meta.
+    if str(p_obs)[:4] < str(periodo_meta)[:4]:
+        rotulo = None
+        if ind.escala == "umbral":
+            legible, objetivo = leer_umbral(meta) is not None, None
+        elif ind.escala == "redactada" and not isinstance(meta, (int, float)):
+            rotulo = leer_rotulado(meta)
+            legible, objetivo = rotulo is not None, (rotulo[1] if rotulo else None)
+        else:
+            legible = isinstance(meta, (int, float))
+            objetivo = float(meta) if legible else None
+        if legible:
+            v = round(float(valor), _DECIMALES)
+            distancia = (None if objetivo is None else
+                         round((v - objetivo) if binding.mejor == "menor" else (objetivo - v),
+                               _DECIMALES))
+            sujeto = f"{rotulo[0]}: " if rotulo else ""
+            return Veredicto(
+                ind.id, "indeterminado", meta_periodo=periodo_meta, meta=meta, observado=v,
+                periodo_observado=p_obs, distancia=distancia,
+                motivo=(f"{sujeto}la meta es de {periodo_meta} y la observación más reciente, "
+                        f"{v:g}, es de {p_obs}: ese período no tiene dato propio y no se juzga "
+                        f"con el de otro año"))
     if ind.escala == "umbral":
         return _veredicto_de_umbral(ind, meta, periodo_meta, valor, p_obs)
     # Una meta redactada que ES un número se juzga como número. Mandarla al lector de
