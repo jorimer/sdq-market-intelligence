@@ -111,7 +111,9 @@ MOROSIDAD_ESTRESADA_EN_EL_TEXTO = (
     "resuelta en 'posicion_frente_a_la_mediana_del_resto': COPIALA. NO restes la mora "
     "convencional de la estresada: salen de carteras distintas ('nota_de_carteras'). Si trae "
     "'disponible' en falso, decí en una frase que no se publica y por qué ('motivo'). No digas "
-    "que la estresada afecta el score: no puntúa.\n\n"
+    "que la estresada afecta el score: no puntúa. La cobertura de provisiones se mide contra la "
+    "mora CONVENCIONAL: no la compares con la estresada ni digas que su margen se estrecha "
+    "contra ella, porque lo castigado ya salió del balance y no lleva provisión.\n\n"
 )
 
 #: Cómo se escribe un trimestre (2026-09-15, feedback de Banco Santa Cruz: «si siempre es así,
@@ -124,7 +126,9 @@ TRAMOS_EN_CONTEXTO_EN_EL_TEXTO = (
     "aunque haya concentrado la mayor parte del movimiento: decí que es lo habitual y seguí. NO "
     "hables de estacionalidad ni de un patrón que se repite salvo que 'frente_a_su_historia' "
     "sea 'ordinario' y lo respalde su 'rango_historico_del_mismo_trimestre'; si dice 'historia "
-    "insuficiente', decilo en una frase y no supongas un patrón.\n\n"
+    "insuficiente', decilo en una frase y no supongas un patrón. Entre "
+    "'la_mitad_central_del_resto_va_desde' y 'la_mitad_central_del_resto_va_hasta' está la "
+    "MITAD de las instituciones del resto (el 50 % central), no el 75 %.\n\n"
 )
 
 TEMPLATES = {
