@@ -27,7 +27,9 @@ FUENTE_MIVHED = _MIVHED
 NOTA_DEL_FEED_MIVHED = (
     "El movimiento es un FLUJO de licencias de construcción emitidas (indicador líder: el "
     "permiso precede a la obra), no producción ejecutada: no escribas que el sector construyó "
-    "lo que apenas licenció. Los m² por provincia y por tipología son del mes, no del año. La "
+    "lo que apenas licenció. Los m² por provincia, por tipología, por municipio y por barrio o "
+    "sector son del mes, no del año. Nombra cada municipio con su provincia y cada barrio con "
+    "su municipio: hay nombres repetidos entre plazas distintas. La "
     "inversión del MIVHED no se sirve: es un costo estándar derivado de los m² con una tarifa "
     "fija, no un valor tasado.")
 

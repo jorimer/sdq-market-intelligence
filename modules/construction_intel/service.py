@@ -288,6 +288,20 @@ def ingest_observaciones_mensuales(db: Session,
                            license=licencia, published_at=publicado_el,
                            **{campo: nombre[:80]})
                 filas += 1
+        # Municipio y barrio/sector, con los niveles de arriba en la misma fila (decisión del
+        # dueño, 2026-09-15). El nombre suelto de un barrio no identifica la plaza.
+        for (prov, mun), d in (rec.get("by_municipio") or {}).items():
+            obs.upsert(db, sector_key=SECTOR_KEY_OBS, series_code=SERIE_SQM, period=periodo,
+                       value=float(d.get("sqm") or 0.0), unit="m2", frequency="monthly",
+                       nature=FLOW, source=emisor, license=licencia, published_at=publicado_el,
+                       provincia=prov[:80], municipio=mun[:80])
+            filas += 1
+        for (prov, mun, barrio), d in (rec.get("by_barrio") or {}).items():
+            obs.upsert(db, sector_key=SECTOR_KEY_OBS, series_code=SERIE_SQM, period=periodo,
+                       value=float(d.get("sqm") or 0.0), unit="m2", frequency="monthly",
+                       nature=FLOW, source=emisor, license=licencia, published_at=publicado_el,
+                       provincia=prov[:80], municipio=mun[:80], barrio=barrio[:80])
+            filas += 1
     db.commit()
     logger.info("MIVHED mensual: %d período(s), %d fila(s), %d permiso(s) sin mes legible",
                 len(periodos), filas, sin_mes)

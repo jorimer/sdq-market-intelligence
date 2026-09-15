@@ -44,7 +44,7 @@ class SectorObservation(UUIDMixin, Base):
     __tablename__ = "sector_observations"
     __table_args__ = (
         UniqueConstraint("sector_key", "series_code", "period", "provincia", "tipologia",
-                         name="uq_sector_observations_punto"),
+                         "municipio", "barrio", name="uq_sector_observations_punto"),
         Index("ix_sector_observations_eje_serie_periodo",
               "sector_key", "series_code", "period"),
         Index("ix_sector_observations_eje_periodo", "sector_key", "period"),
@@ -71,6 +71,13 @@ class SectorObservation(UUIDMixin, Base):
     provincia: Mapped[str] = mapped_column(
         String(80), nullable=False, default="", server_default="")
     tipologia: Mapped[str] = mapped_column(
+        String(80), nullable=False, default="", server_default="")
+    #: Municipio y barrio/sector (2026-09-15). Una fila de municipio lleva también su
+    #: provincia, y una de barrio su municipio y su provincia: el nombre suelto no identifica
+    #: la plaza. Por eso cada lector de una dimensión exige VACÍAS las de nivel más fino.
+    municipio: Mapped[str] = mapped_column(
+        String(80), nullable=False, default="", server_default="")
+    barrio: Mapped[str] = mapped_column(
         String(80), nullable=False, default="", server_default="")
 
     # ── Linaje ──

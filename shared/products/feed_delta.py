@@ -118,7 +118,7 @@ class Dimension:
 
     clave_de_contexto: str
     serie: str
-    campo: str            # "provincia" | "tipologia"
+    campo: str            # "provincia" | "tipologia" | "municipio" | "barrio"
     top: int = 5
 
 

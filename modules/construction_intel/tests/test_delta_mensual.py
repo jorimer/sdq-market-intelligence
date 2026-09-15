@@ -143,7 +143,9 @@ def test_el_producto_DECLARA_el_feed_con_sus_series_y_su_sujeto_en_las_dimension
     assert f.emisor_en_prosa == "el MIVHED"
     assert {d.clave_de_contexto for d in f.dimensiones} == {
         "metros_cuadrados_licenciados_por_provincia_del_mes",
-        "metros_cuadrados_licenciados_por_tipologia_del_mes"}
+        "metros_cuadrados_licenciados_por_tipologia_del_mes",
+        "metros_cuadrados_licenciados_por_municipio_del_mes",
+        "metros_cuadrados_licenciados_por_barrio_o_sector_del_mes"}
     assert f.fuente is not None and f.fuente.license, "el feed viaja sin licencia del emisor"
     assert "indicador líder" in f.nota
 
