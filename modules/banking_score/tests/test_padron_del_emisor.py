@@ -31,8 +31,10 @@ _QA = Path(__file__).resolve().parents[3] / "scripts" / "qa_simbad_per_entity.py
 
 #: Nombres que el emisor emite y que NO tenemos catalogados. Se declaran con su motivo —no
 #: se borran del mapa curado— porque la ausencia es el dato: son entidades supervisadas que
-#: la plataforma todavía no cubre. Hoy está vacío; el `sync-status` de producción lista
-#: aparte a BANCAMERICA y BELLBANK, que no están en `SIMBAD_TO_PROD`.
+#: la plataforma todavía no cubre. Hoy está vacío. BANCAMERICA y BELLBANK, que el
+#: `sync-status` listaba como no catalogadas, entraron al catálogo del cliente como salidas
+#: (inactivas); no están en `SIMBAD_TO_PROD` porque ese mapa se verificó por valores y no
+#: se cruzaron contra SIMBAD. Lo cubre `test_sib_sync.py::test_bancamerica_y_bellbank_...`.
 SIN_CATALOGAR: dict = {}
 
 #: Nombres cortos que el CLIENTE cataloga y que la siembra no trae. No es un defecto —son
