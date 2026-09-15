@@ -15,6 +15,10 @@ def test_la_plantilla_del_anio_lleva_la_instruccion_de_los_trimestres():
     assert "se_destaca" in TRAMOS_EN_CONTEXTO_EN_EL_TEXTO
     assert "estacionalidad" in TRAMOS_EN_CONTEXTO_EN_EL_TEXTO
     assert TRAMOS_EN_CONTEXTO_EN_EL_TEXTO in THIN_TEMPLATES["anio_por_trimestres"]
+    # «El 75 % de las instituciones» salió en el PDF regenerado de Santa Cruz: la mitad
+    # central contiene la MITAD, y la instrucción lo nombra.
+    assert "MITAD" in TRAMOS_EN_CONTEXTO_EN_EL_TEXTO
+    assert "no el 75" in TRAMOS_EN_CONTEXTO_EN_EL_TEXTO
 
 
 def _celdas(elementos):
