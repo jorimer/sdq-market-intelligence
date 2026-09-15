@@ -354,6 +354,21 @@ AI_CONTEXT_FILES = (
 )
 
 
+def contexto_de_la_aseguradora(payload: Dict[str, Any], rating: Dict[str, Any],
+                               peers: List[Dict[str, Any]]) -> Dict[str, Any]:
+    """El contexto de la sección de la aseguradora, con la capacidad de pago si el snapshot la trae.
+
+    La plantilla `insurance_entity` YA pide `capacidad_de_pago` con su lectura —la
+    persistencia de la póliza—, pero el contexto no la llevaba: estaba en el payload y el
+    modelo nunca la vio. Verificado en producción el 2026-09-15 (Cuna Mutual, cero menciones).
+    Es el defecto inverso de «servir el dato no alcanza»: pedirlo tampoco, si no se sirve."""
+    ctx = insurance_entity_context(rating, peers)
+    cap = (payload or {}).get("capacidad_de_pago")
+    if cap:
+        ctx["capacidad_de_pago"] = cap
+    return ctx
+
+
 class InsuranceProduct:
     """``SectorProduct`` de Seguros. ``db`` opcional (las muestras no tocan DB)."""
 
@@ -714,7 +729,7 @@ class InsuranceProduct:
                     mode=section_mode(tier, section, sections),
                     axis="insurance_intel", audience="inversionista")
                 return section, res.text
-            ctx = insurance_entity_context(rating, peers)
+            ctx = contexto_de_la_aseguradora(snapshot.payload, rating, peers)
             if section == "recommendation":
                 ctx["enfoque"] = ("Cierre ACCIONABLE y SINTÉTICO: la dimensión de mayor palanca "
                                   "dada la posición relativa (solvencia, siniestralidad), la "
