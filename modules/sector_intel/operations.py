@@ -97,6 +97,15 @@ def _run_tss_salario_sync(params, user_id, set_phase) -> Dict:
         db.close()
 
 
+def _run_tss_empleo_formal_sync(params, user_id, set_phase) -> Dict:
+    from modules.sector_intel.sectors_sync import tss_empleo_formal_sync
+    db = SessionLocal()
+    try:
+        return tss_empleo_formal_sync(db, set_phase=set_phase)
+    finally:
+        db.close()
+
+
 def _run_sector_snapshot(params, user_id, set_phase) -> Dict:
     """Backfill the IAI/SGPS over EVERY real period (BCRD) and purge any score
     outside that set (no fixture/seed remnants), publishing sector.updated."""
@@ -210,6 +219,13 @@ def register() -> None:
         "aplicada a todos los períodos (como la calidad regulatoria WGI). Anual.",
         _run_tss_salario_sync, default_interval_hours=8760,
         triggers=["sector-snapshot"],
+    ))
+    register_operation(Operation(
+        "tss-empleo-formal-sync", "Sincronizar empleo formal (TSS · cotizantes por actividad)",
+        "Trae los trabajadores cotizantes de la TSS por actividad económica y mes (Power BI) "
+        "y los guarda por sector (los 17). Es empleo FORMAL, sumado al perfil del sector "
+        "junto a la ocupación de la ENCFT, que no reemplaza. Solo meses completos. Mensual.",
+        _run_tss_empleo_formal_sync, default_interval_hours=720,
     ))
     register_operation(Operation(
         "sector-snapshot", "Backfill del índice sectorial (IAI/SGPS)",
