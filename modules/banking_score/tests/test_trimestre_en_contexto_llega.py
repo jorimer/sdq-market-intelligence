@@ -10,15 +10,14 @@ from modules.banking_score.reports.pdf_generator import (
 
 
 def test_la_plantilla_del_anio_lleva_la_instruccion_de_los_trimestres():
-    from shared.narrative.claude_engine import THIN_TEMPLATES, TRAMOS_EN_CONTEXTO_EN_EL_TEXTO
+    """Desde «hechos y lectura» (2026-09-15) la mitad central y sus cifras las escribe el código
+    (`test_hechos_y_lectura`); la plantilla solo pide destacar lo que el rótulo marca como
+    hallazgo, y sin cifras."""
+    from shared.narrative.claude_engine import LECTURA_SIN_CIFRAS_EN_EL_TEXTO, THIN_TEMPLATES
 
-    assert "se_destaca" in TRAMOS_EN_CONTEXTO_EN_EL_TEXTO
-    assert "estacionalidad" in TRAMOS_EN_CONTEXTO_EN_EL_TEXTO
-    assert TRAMOS_EN_CONTEXTO_EN_EL_TEXTO in THIN_TEMPLATES["anio_por_trimestres"]
-    # «El 75 % de las instituciones» salió en el PDF regenerado de Santa Cruz: la mitad
-    # central contiene la MITAD, y la instrucción lo nombra.
-    assert "MITAD" in TRAMOS_EN_CONTEXTO_EN_EL_TEXTO
-    assert "no el 75" in TRAMOS_EN_CONTEXTO_EN_EL_TEXTO
+    plantilla = THIN_TEMPLATES["anio_por_trimestres"]
+    assert LECTURA_SIN_CIFRAS_EN_EL_TEXTO in plantilla
+    assert "'es_hallazgo'" in plantilla and "'rotulo'" in plantilla
 
 
 def _celdas(elementos):

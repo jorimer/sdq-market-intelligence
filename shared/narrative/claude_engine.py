@@ -118,19 +118,19 @@ MOROSIDAD_ESTRESADA_EN_EL_TEXTO = (
     "no escribas «duplica» ni «el doble» si esa cifra no llega a 2.\n\n"
 )
 
-#: Cómo se escribe un trimestre (2026-09-15, feedback de Banco Santa Cruz: «si siempre es así,
-#: el motor debió resaltarlo o decir por qué es relevante»). El rótulo lo resuelve el código.
-TRAMOS_EN_CONTEXTO_EN_EL_TEXTO = (
-    "CADA TRIMESTRE EN SU CONTEXTO: 'contexto_de_los_tramos' trae, por trimestre, su 'rotulo' "
-    "ya resuelto contra el mismo trimestre de años anteriores de la entidad y contra el resto "
-    "del sistema en ese corte. COPIALO. Destacá como hallazgo SOLO los tramos con 'se_destaca' "
-    "verdadero, nombrando contra qué referencia lo son. Un tramo 'ordinario' no es un hallazgo "
-    "aunque haya concentrado la mayor parte del movimiento: decí que es lo habitual y seguí. NO "
-    "hables de estacionalidad ni de un patrón que se repite salvo que 'frente_a_su_historia' "
-    "sea 'ordinario' y lo respalde su 'rango_historico_del_mismo_trimestre'; si dice 'historia "
-    "insuficiente', decilo en una frase y no supongas un patrón. Entre "
-    "'la_mitad_central_del_resto_va_desde' y 'la_mitad_central_del_resto_va_hasta' está la "
-    "MITAD de las instituciones del resto (el 50 % central), no el 75 %.\n\n"
+#: HECHOS Y LECTURA (2026-09-15). El Deep Dive 2025 de Santa Cruz se regeneró cinco veces y cada
+#: vuelta trajo un error nuevo en una frase con número. Desde entonces, en el año por dentro y en
+#: su mapa sectorial las cifras y sus relaciones las escribe el código
+#: (`modules/banking_score/reports/hechos_y_lectura.py`) y el modelo solo interpreta, desde un
+#: contexto sin números. Esta instrucción es la mitad que el modelo lee; la que lo hace cumplir
+#: es `shared.narrative.lectura_sin_cifras`, en el lazo del guard.
+LECTURA_SIN_CIFRAS_EN_EL_TEXTO = (
+    "TU TEXTO NO LLEVA CIFRAS ('la_lectura_no_lleva_cifras'). Las cifras y sus relaciones las "
+    "escribe el sistema en la misma sección, junto a tu texto: no las repitas ni las escribas "
+    "con letras. Sin números, sin porcentajes, sin años y sin fechas. Toda relación que afirmes "
+    "—por encima, por debajo, mejora, deterioro, atípico— tiene que venir resuelta en el "
+    "contexto: copiala; si no está, no la afirmes. Tu aporte es la interpretación: qué "
+    "significa, qué mecanismo lo explica según lo servido y qué vigilar.\n\n"
 )
 
 TEMPLATES = {
@@ -582,35 +582,52 @@ THIN_TEMPLATES = {
         "servida, expresala en palabras sin número."
     ),
     "anio_por_trimestres": (
-        "Escribí el AÑO POR DENTRO de esta entidad financiera dominicana.\n"
+        "Escribí la LECTURA del año por dentro de esta entidad financiera dominicana: qué "
+        "significa el año para un comité de crédito.\n"
         "Contexto:\n{context}\n\n"
-        "Máximo 450 palabras. El sujeto es UNA entidad y el período es UN AÑO, leído como la "
-        "SERIE DE SUS TRIMESTRES.\n\n"
-        "LA PREGUNTA DE ESTE INFORME ES **CUÁNDO**, no cuánto. 'tramos' trae el movimiento de "
-        "cada trimestre con su dirección ya resuelta; 'tramo_que_mas_movio' dice cuál concentró "
-        "el movimiento y qué cuota del total representa. Esa cuota está COMPUTADA sobre el "
-        "movimiento en valor absoluto: copiala, no la recalcules ni la conviertas.\n\n"
-        "NO ES LA REVISIÓN ANUAL. Acá NO se compara contra años anteriores ni se habla de "
-        "tendencia plurianual: eso es otro producto y afirmarlo desde acá sería inventar un "
-        "horizonte que el contexto no trae. Si te falta el año anterior, no es un olvido.\n\n"
-        "LA LÍNEA BASE NO ES UN TRIMESTRE DEL AÑO. El primer punto de la serie lleva "
-        "'es_linea_base': es el cierre del año ANTERIOR y está para que el primer tramo exista. "
-        "No lo cuentes como un quinto trimestre.\n\n"
-        "Si 'camino.valle_intermedio' es verdadero, el peor momento NO fue diciembre: la entidad "
-        "cayó y se recuperó, y una lectura de extremos contaría un año que no ocurrió.\n\n"
-        "'tramos_por_dimension' dice QUÉ dimensión se movió en QUÉ trimestre. Es el sustento de "
-        "la respuesta; elegí lo que explica el movimiento en vez de recorrerlo todo.\n\n"
-        "CADA FILA DEL BALANCE TRAE SU VEREDICTO YA RESUELTO ('veredicto', con su "
-        "'veredicto_por_que'). COPIALO. NO deduzcas si subir fue bueno: morosidad que sube y "
-        "solvencia que baja son las DOS deterioros. 'no_aplica' es óptimo intermedio — ahí no "
-        "digas ni mejoró ni empeoró. Usá la 'unidad' de la fila al citar el cambio.\n\n"
-        "'cortes_faltantes' se DECLARA si no está vacío: un tramo sin su corte no se puede "
-        "medir, y callarlo haría pasar tres trimestres por cuatro.\n\n"
-        + TRAMOS_EN_CONTEXTO_EN_EL_TEXTO + MOROSIDAD_ESTRESADA_EN_EL_TEXTO +
-        "TÍTULOS DE SECCIÓN DESCRIPTIVOS Y SOBRIOS: nombran el asunto, no lo dramatizan. Sin "
-        "anglicismos: es 'dentro del año' o 'intraanual', no 'intrayear'.\n\n"
-        "No recalcules ninguna cifra: todas vienen resueltas. Si una relación no está servida, "
-        "expresala en palabras sin número."
+        + LECTURA_SIN_CIFRAS_EN_EL_TEXTO +
+        "Máximo 280 palabras, en tres o cuatro párrafos corridos: sin títulos y sin viñetas.\n\n"
+        "EL AÑO SE LEE POR SUS TRIMESTRES. La pregunta es CUÁNDO se movió y si eso es un "
+        "hallazgo. Destacá como hallazgo solo los trimestres con 'es_hallazgo' verdadero, con su "
+        "'rotulo' tal cual; uno 'ordinario' es lo habitual, aunque haya movido mucho. La unidad "
+        "es el trimestre: no hables de semestres. La línea base es el cierre del año anterior, "
+        "no un trimestre del año.\n\n"
+        "NO ES LA REVISIÓN ANUAL: no compares contra años anteriores ni hables de tendencia "
+        "plurianual.\n\n"
+        "Si 'el_punto_mas_bajo_fue_intermedio_y_no_el_cierre' es verdadero, el peor momento no "
+        "fue diciembre: decilo, porque una lectura de extremos contaría otro año.\n\n"
+        "EL MECANISMO: 'dimensiones_que_se_movieron' dice qué dimensión movió qué trimestre, y "
+        "'balance_apertura_contra_cierre' trae cada indicador con su 'veredicto' ya resuelto: "
+        "copialo, no deduzcas si un cambio fue mejora. Elegí lo que explica el año en vez de "
+        "recorrerlo todo.\n\n"
+        "LAS DOS MORAS, si viene 'morosidad_estresada': explicá en pocas líneas qué mide cada "
+        "una ('como_leer_las_dos_moras'), la posición de la estresada frente a la mediana del "
+        "resto del sistema y su múltiplo tal como viene ('multiplo_de_la_mediana_del_resto'). La "
+        "estresada no puntúa en el score. La cobertura de provisiones se mide contra la mora "
+        "convencional: no la compares con la estresada. Si 'disponible' es falso, decí en una "
+        "frase que no se publica.\n\n"
+        "Cerrá con qué vigilaría el comité al próximo corte."
+    ),
+    #: La lectura del MAPA SECTORIAL dentro del año por dentro: la misma regla de hechos y
+    #: lectura. El Deep Dive al corte sigue con `banking_sector_map`.
+    "banking_sector_map_lectura": (
+        "Escribí la LECTURA del mapa sectorial del libro de crédito de esta entidad: dónde está "
+        "su riesgo de crédito y si es de su originación o del sector.\n"
+        "Contexto:\n{context}\n\n"
+        + LECTURA_SIN_CIFRAS_EN_EL_TEXTO +
+        "Máximo 220 palabras, en dos o tres párrafos corridos: sin títulos y sin viñetas.\n\n"
+        "EMPEZÁ POR EL VEREDICTO: dónde se concentra el deterioro propio y cuánto pesa en su "
+        "cartera ('es_de_los_tres_mayores_de_su_cartera', "
+        "'grupo_de_sectores_de_mayor_peso_en_su_cartera'). 'atribucion' ya dice si el deterioro "
+        "es propio o compartido: copiala. Toda comparación es contra 'contra_que_se_compara': "
+        "nombrala así, nunca «el sector» a secas.\n\n"
+        "SI HAY TASA, LA LECTURA ES DOBLE: cobrar por encima del resto con deterioro propio es "
+        "precio del riesgo; cobrar similar o por debajo es riesgo no cobrado. Una cobertura de "
+        "provisión o una garantía por debajo del resto dicen que la entidad amortigua menos un "
+        "deterioro adicional.\n\n"
+        "LA GEOGRAFÍA, solo si dice algo: en 'provincias_de_mayor_peso_en_su_cartera' la mora se "
+        "compara con TODO el crédito del país en esa provincia, no con el resto.\n\n"
+        "Cerrá con el sector que vigilarías al próximo corte."
     ),
     "revision_anual": (
         "Escribí la REVISIÓN ANUAL de esta entidad financiera dominicana.\n"
@@ -2019,6 +2036,13 @@ STATIC_FALLBACKS = {
         "del que comparte con el sector. Se presenta como contexto explicativo de los "
         "indicadores de calidad de activos y no forma parte de la calificación standalone."
     ),
+    "banking_sector_map_lectura": (
+        "El mapa sectorial abre el libro de crédito de la entidad por sector económico y "
+        "compara su morosidad y su tasa con las del resto del sistema en cada uno de esos "
+        "sectores, lo que permite separar el deterioro atribuible a la originación propia "
+        "del que comparte con el sector. Se presenta como contexto explicativo de los "
+        "indicadores de calidad de activos y no forma parte de la calificación standalone."
+    ),
     "banking_support_context": (
         "El soporte estatal, la importancia sistémica y el techo soberano de la República "
         "Dominicana constituyen una capa de contexto estructural, presentada de forma "
@@ -2566,6 +2590,8 @@ class NarrativeEngine:
             deterministic_direction_errors, deterministic_uncited_figures,
             deterministic_unsupported, reescribir_relaciones_invertidas, verify_figures)
         from shared.narrative.presupuesto import cabe, queda
+        from shared.narrative.lectura_sin_cifras import (aviso as aviso_de_cifras, cifras_en,
+                                                         quitar_oraciones_con_cifras)
         from shared.narrative.terminos_vetados import (aviso as aviso_de_terminos,
                                                        excepciones_declaradas,
                                                        quitar_oraciones_con, terminos_en)
@@ -2624,9 +2650,12 @@ class NarrativeEngine:
         # Términos que el CONTEXTO del eje declara prohibidos (p. ej. «percentil» donde lo
         # servido es un puesto): se reparan en el MISMO reintento que las cifras.
         vetados = terminos_en(context, result.text)
+        # Una LECTURA que el contexto declara sin cifras (hechos y lectura): cualquier dígito
+        # es una falta, y se repara en el mismo reintento.
+        con_cifras = cifras_en(context, result.text)
         costo_del_intento = time.monotonic() - _t_intento
         sin_reintento_por_tiempo = False
-        if bad or wrong_dir or vetados:
+        if bad or wrong_dir or vetados or con_cifras:
             try:
                 for intento in range(1, _MAX_REINTENTOS_GUARD + 1):
                     # ¿ENTRA la regeneración en lo que queda del ensamblado? Si no, se
@@ -2653,6 +2682,8 @@ class NarrativeEngine:
                         notice += DIRECTION_CORRECTION_NOTICE.format(bad="; ".join(wrong_dir))
                     if vetados:
                         notice += aviso_de_terminos(context, vetados)
+                    if con_cifras:
+                        notice += aviso_de_cifras(con_cifras)
                     if intento == _MAX_REINTENTOS_GUARD:
                         notice += ULTIMO_INTENTO_NOTICE
                     _t_intento = time.monotonic()
@@ -2662,12 +2693,13 @@ class NarrativeEngine:
                     corrected.cost_estimate += result.cost_estimate
                     bad, wrong_dir, origen = _check(corrected.text)
                     vetados = terminos_en(context, corrected.text)
+                    con_cifras = cifras_en(context, corrected.text)
                     # Cada intento re-estima con SU propio costo: el segundo puede tardar más
                     # que el primero (el aviso de corrección alarga el prompt), y arrastrar la
                     # medición del primero subestimaría justo cuando queda menos margen.
                     costo_del_intento = time.monotonic() - _t_intento
                     result = corrected
-                    if not (bad or wrong_dir or vetados):
+                    if not (bad or wrong_dir or vetados or con_cifras):
                         break
                 result.guard_unsupported = bad + wrong_dir
                 result.guard_cifras = list(bad)
@@ -2714,6 +2746,20 @@ class NarrativeEngine:
                             "quitan %d oración(es): %s", template, vetados,
                             _MAX_REINTENTOS_GUARD, len(quitadas), quitadas)
                         result.text = texto_sin
+                # Una cifra que sobrevive en una lectura SIN cifras: se quitan sus oraciones. Y
+                # un texto que ya no lleva dígitos no tiene cifra ni relación entre cifras que
+                # marcar: las marcas del intento eran sobre oraciones que ya no existen, y
+                # dejarlas llegar a la superficie vetaría una sección correcta.
+                if con_cifras:
+                    texto_sin, quitadas = quitar_oraciones_con_cifras(result.text)
+                    if quitadas:
+                        logger.warning(
+                            "Guardrail (%s): la lectura sin cifras insistió tras %d "
+                            "reintento(s) — se quitan %d oración(es): %s", template,
+                            _MAX_REINTENTOS_GUARD, len(quitadas), quitadas)
+                        result.text = texto_sin
+                    bad, wrong_dir = [], []
+                    result.guard_unsupported, result.guard_cifras = [], []
                 # Lo que ni el modelo ni el sistema pudieron arreglar se deposita para que la
                 # superficie lo REGISTRE. Ya no veta: ver `shared/products/assembler`.
                 if wrong_dir:
