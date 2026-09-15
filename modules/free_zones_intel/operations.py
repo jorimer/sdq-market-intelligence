@@ -9,11 +9,16 @@ def _run_cnzfe_sync(params, user_id, set_phase) -> Dict:
     """Fetch CNZFE open data (free-zone fundamentals) and persist the IZF for every year."""
     from modules.free_zones_intel.service import backfill_scores
 
-    set_phase("descargando variables del sector zonas francas (CNZFE, datos.gob.do)")
+    from shared.data.cnzfe_client import cnzfe_client
+
+    set_phase("descargando variables del sector zonas francas (CNZFE: datos.gob.do o su "
+              "Informe Estadístico)")
     db = SessionLocal()
     try:
         set_phase("calculando IZF por año (atractividad del sector zonas francas)")
-        return backfill_scores(db)
+        resultado = backfill_scores(db)
+        # De dónde salió el dato: el CSV del portal o el PDF del CNZFE si el portal falló.
+        return {**resultado, "origen": cnzfe_client.ultimo_origen}
     finally:
         db.close()
 
