@@ -203,14 +203,14 @@ REGISTRY: List[CanonicalSeries] = [
     CanonicalSeries(
         key="tasa_ocupacion", concept="Tasa de ocupación", sector="mercado_de_trabajo",
         source_file="tasa_ocupacion.xls", base="%", frequency="trimestral",
-        homogenization="ojo quiebre ENFT→ENCFT (2021): tratar como dos tramos, no empalmar directo",
-        rationale="Mercado laboral. El cambio de encuesta en 2021 no es empalmable sin ajuste.",
+        homogenization="ojo quiebre ENFT→ENCFT (Q3-2014): tratar como dos tramos, no empalmar directo",
+        rationale="Mercado laboral. El cambio de encuesta en Q3-2014 no es empalmable sin ajuste.",
         robustness="yellow",
     ),
     CanonicalSeries(
         key="tasa_desocupacion", concept="Tasa de desocupación", sector="mercado_de_trabajo",
         source_file="tasa_desocupacion.xls", base="%", frequency="trimestral",
-        homogenization="idem (quiebre ENFT→ENCFT 2021)",
+        homogenization="idem (quiebre ENFT→ENCFT Q3-2014)",
         rationale="Desempleo abierto; indicador social y de holgura del mercado laboral.",
         robustness="yellow",
     ),

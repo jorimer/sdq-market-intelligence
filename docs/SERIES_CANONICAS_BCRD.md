@@ -68,7 +68,7 @@ Leyenda robustez: 🟢 extrae limpio y validable · 🟡 extrae pero requiere re
 ### Mercado de Trabajo
 | Serie | Archivo canónico | Base | Frec. | API | Homogeneización | Razón | Robustez |
 |---|---|---|---|---|---|---|---|
-| Tasa de ocupación | `tasa_ocupacion.xls` | % | trimestral | — | **ojo quiebre ENFT→ENCFT (2021)**: tratar como dos tramos | mercado laboral; cambio de encuesta no empalmable directo | 🟡 |
+| Tasa de ocupación | `tasa_ocupacion.xls` | % | trimestral | — | **ojo quiebre ENFT→ENCFT (Q3-2014)**: tratar como dos tramos | mercado laboral; cambio de encuesta no empalmable directo | 🟡 |
 | Tasa de desocupación | `tasa_desocupacion.xls` | % | trimestral | — | idem | desempleo abierto | 🟡 |
 
 ### Sector Turismo
