@@ -111,7 +111,9 @@ MOROSIDAD_ESTRESADA_EN_EL_TEXTO = (
     "resuelta en 'posicion_frente_a_la_mediana_del_resto': COPIALA. NO restes la mora "
     "convencional de la estresada: salen de carteras distintas ('nota_de_carteras'). Si trae "
     "'disponible' en falso, decí en una frase que no se publica y por qué ('motivo'). No digas "
-    "que la estresada afecta el score: no puntúa.\n\n"
+    "que la estresada afecta el score: no puntúa. La cobertura de provisiones se mide contra la "
+    "mora CONVENCIONAL: no la compares con la estresada ni digas que su margen se estrecha "
+    "contra ella, porque lo castigado ya salió del balance y no lleva provisión.\n\n"
 )
 
 #: Cómo se escribe un trimestre (2026-09-15, feedback de Banco Santa Cruz: «si siempre es así,
@@ -124,7 +126,9 @@ TRAMOS_EN_CONTEXTO_EN_EL_TEXTO = (
     "aunque haya concentrado la mayor parte del movimiento: decí que es lo habitual y seguí. NO "
     "hables de estacionalidad ni de un patrón que se repite salvo que 'frente_a_su_historia' "
     "sea 'ordinario' y lo respalde su 'rango_historico_del_mismo_trimestre'; si dice 'historia "
-    "insuficiente', decilo en una frase y no supongas un patrón.\n\n"
+    "insuficiente', decilo en una frase y no supongas un patrón. Entre "
+    "'la_mitad_central_del_resto_va_desde' y 'la_mitad_central_del_resto_va_hasta' está la "
+    "MITAD de las instituciones del resto (el 50 % central), no el 75 %.\n\n"
 )
 
 TEMPLATES = {
@@ -2560,6 +2564,8 @@ class NarrativeEngine:
             deterministic_direction_errors, deterministic_uncited_figures,
             deterministic_unsupported, reescribir_relaciones_invertidas, verify_figures)
         from shared.narrative.presupuesto import cabe, queda
+        from shared.narrative.terminos_vetados import (AVISO as AVISO_TERMINOS,
+                                                       quitar_oraciones_con, terminos_en)
 
         def _gen(user_msg):
             resp = _call_with_transient_retry(
@@ -2612,9 +2618,12 @@ class NarrativeEngine:
         _t_intento = time.monotonic()
         result = _gen(user)
         bad, wrong_dir, origen = _check(result.text)
+        # Términos que el CONTEXTO del eje declara prohibidos (p. ej. «percentil» donde lo
+        # servido es un puesto): se reparan en el MISMO reintento que las cifras.
+        vetados = terminos_en(context, result.text)
         costo_del_intento = time.monotonic() - _t_intento
         sin_reintento_por_tiempo = False
-        if bad or wrong_dir:
+        if bad or wrong_dir or vetados:
             try:
                 for intento in range(1, _MAX_REINTENTOS_GUARD + 1):
                     # ¿ENTRA la regeneración en lo que queda del ensamblado? Si no, se
@@ -2639,6 +2648,9 @@ class NarrativeEngine:
                         notice += CORRECTION_NOTICE.format(bad="; ".join(bad))
                     if wrong_dir:
                         notice += DIRECTION_CORRECTION_NOTICE.format(bad="; ".join(wrong_dir))
+                    if vetados:
+                        notice += AVISO_TERMINOS.format(
+                            terminos=", ".join(f"«{v}»" for v in vetados))
                     if intento == _MAX_REINTENTOS_GUARD:
                         notice += ULTIMO_INTENTO_NOTICE
                     _t_intento = time.monotonic()
@@ -2647,12 +2659,13 @@ class NarrativeEngine:
                     corrected.tokens_used += result.tokens_used
                     corrected.cost_estimate += result.cost_estimate
                     bad, wrong_dir, origen = _check(corrected.text)
+                    vetados = terminos_en(context, corrected.text)
                     # Cada intento re-estima con SU propio costo: el segundo puede tardar más
                     # que el primero (el aviso de corrección alarga el prompt), y arrastrar la
                     # medición del primero subestimaría justo cuando queda menos margen.
                     costo_del_intento = time.monotonic() - _t_intento
                     result = corrected
-                    if not (bad or wrong_dir):
+                    if not (bad or wrong_dir or vetados):
                         break
                 result.guard_unsupported = bad + wrong_dir
                 result.guard_cifras = list(bad)
@@ -2687,6 +2700,17 @@ class NarrativeEngine:
                         wrong_dir = [h for h in wrong_dir
                                      if h.split(":", 1)[0].strip() not in " ".join(reescritas)]
                         result.guard_unsupported = list(bad) + list(wrong_dir)
+                # Un término que sobrevive a los reintentos: se quitan las ORACIONES que lo
+                # usan. Quitar una afirmación falsa empobrece menos que publicarla, y el resto
+                # de la sección —correcto— se conserva.
+                if vetados:
+                    texto_sin, quitadas = quitar_oraciones_con(result.text, vetados)
+                    if quitadas:
+                        logger.warning(
+                            "Guardrail (%s): el término %s sobrevivió a %d reintento(s) — se "
+                            "quitan %d oración(es): %s", template, vetados,
+                            _MAX_REINTENTOS_GUARD, len(quitadas), quitadas)
+                        result.text = texto_sin
                 # Lo que ni el modelo ni el sistema pudieron arreglar se deposita para que la
                 # superficie lo REGISTRE. Ya no veta: ver `shared/products/assembler`.
                 if wrong_dir:

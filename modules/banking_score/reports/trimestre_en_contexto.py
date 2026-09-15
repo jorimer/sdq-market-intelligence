@@ -111,8 +111,13 @@ def _frente_al_sistema(cambio: float, del_resto: List[float]) -> tuple:
     if len(del_resto) < MIN_ENTIDADES_DEL_RESTO:
         return SIN_REFERENCIA_DEL_SISTEMA, None
     p25, mediana, p75 = statistics.quantiles(del_resto, n=4, method="inclusive")
-    ref = {"mediana_del_cambio_del_resto": round(mediana, 2), "p25_del_cambio_del_resto":
-           round(p25, 2), "p75_del_cambio_del_resto": round(p75, 2),
+    # El rango intercuartil se sirve con el nombre de lo que ES: la MITAD central. Servido como
+    # `p25_…`/`p75_…`, el Deep Dive de Santa Cruz regenerado (2026-09-15) escribió «el 75 % de
+    # las instituciones entre −2,17 y −0,22». La cifra 50 viaja para que no la deduzca.
+    ref = {"mediana_del_cambio_del_resto": round(mediana, 2),
+           "la_mitad_central_del_resto_va_desde": round(p25, 2),
+           "la_mitad_central_del_resto_va_hasta": round(p75, 2),
+           "pct_del_resto_dentro_de_la_mitad_central": 50,
            "n_entidades_del_resto": len(del_resto), "universo_del_resto": SISTEMA_LABEL}
     fuera = (cambio < p25 or cambio > p75) and abs(cambio - mediana) >= UMBRAL_TRAMO
     return (ATIPICO if fuera else ORDINARIO), ref
