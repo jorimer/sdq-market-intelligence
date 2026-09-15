@@ -62,11 +62,16 @@ def test_cascade_isolated_from_downstream_failures(monkeypatch, temp_ops):
     assert seen == ["ok"]
 
 
-def test_sector_intel_cascade_graph_is_wired():
+def test_sector_intel_cascade_graph_is_wired(temp_ops):
     """El grafo del eje sectorial: las 5 fuentes → sector-snapshot → sector-gate-e.
-    El recompute de readiness ya corre por el evento sector.updated (no por cascada)."""
+    El recompute de readiness ya corre por el evento sector.updated (no por cascada).
+
+    `temp_ops` no es opcional: `register()` NO es idempotente respecto del registro. Crea
+    Operation nuevas sin los triggers que `enganchar_cascada()` agregó al arrancar, y sin
+    restaurar rompía `shared/alerts/tests/test_cascada.py` al correr antes que él. Sobre un
+    registro limpio, además, se ve el grafo DECLARADO sin el `alerts-sweep` sumado."""
     import modules.sector_intel.operations as ops
-    ops.register()  # idempotente
+    ops.register()
     for src in ("bcrd-sectores-sync", "wgi-sectorial-sync", "encft-empleo-sync",
                 "enae-sync", "tss-salario-sync"):
         assert OPERATIONS[src].triggers == ["sector-snapshot"], src
