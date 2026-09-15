@@ -104,3 +104,27 @@ def test_el_IAI_y_el_IDM_declaran_el_veto_en_su_contexto():
     from modules.social_dev.ai_context import social_ai_context
     assert "percentil" in sector_ai_context({"iai_breakdown": {}})[CLAVE]
     assert "percentil" in social_ai_context("el_valle", {"breakdown": {}})[CLAVE]
+
+
+#: Literal y no importada: contra el código sin excepciones el test tiene que fallar por aserción.
+_EXCEPCIONES = "palabras_que_no_son_esos_terminos"
+
+
+def test_una_EXCEPCION_declarada_no_es_el_termino():
+    """La raíz alcanza las flexiones —«demandas», «demandada»—, pero «demandante» es otra palabra
+    (feed del OC-SENI, 2026-09-14). El contexto la DECLARA; sin declararla, la raíz la alcanza."""
+    veto = {CLAVE: {"demanda": "x"}, _EXCEPCIONES: ["demandante"]}
+    assert terminos_en(veto, "La parte demandante no aplica.") == []
+    assert terminos_en(veto, "Los Demandantes no aplican.") == []
+    assert terminos_en(veto, "Las demandas del sistema.") == ["demanda"]
+    assert terminos_en(veto, "La parte demandante y la demanda.") == ["demanda"]
+    assert terminos_en({CLAVE: {"demanda": "x"}}, "La parte demandante.") == ["demanda"]
+
+
+def test_al_quitar_oraciones_la_EXCEPCION_se_conserva(monkeypatch):
+    """Quitar usa el MISMO patrón que detectar: si no, la oración con «demandante» se iría con la
+    que sí usa el término."""
+    eng, llamadas = _motor(monkeypatch, ["La parte demandante no aplica. La demanda se lee."])
+    res = _generar(eng, {"x": 1, CLAVE: {"demanda": "x"}, _EXCEPCIONES: ["demandante"]})
+    assert len(llamadas) == 1 + _MAX_REINTENTOS_GUARD
+    assert res.text == "La parte demandante no aplica."

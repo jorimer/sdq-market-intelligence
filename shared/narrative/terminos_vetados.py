@@ -20,10 +20,15 @@ entra solo en la huella de su eje, así que declarar el veto rota únicamente lo
 from __future__ import annotations
 
 import re
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Optional, Sequence, Tuple
 
 #: Clave del contexto: ``{término: motivo}``. El modelo la lee, y el guard también.
 CLAVE = "terminos_que_el_texto_no_puede_usar"
+
+#: Clave del contexto: palabras que EMPIEZAN como un término y no lo son. La raíz alcanza las
+#: flexiones —«demanda» veta «demandas» y «demandada»—, pero «demandante» es otra palabra. Una
+#: excepción cubre también sus flexiones («demandantes»). Solo se declara donde hace falta.
+CLAVE_EXCEPCIONES = "palabras_que_no_son_esos_terminos"
 
 #: El aviso lleva el MOTIVO de cada término: es la instrucción de reescritura, y es propia del
 #: eje que lo declara. Antes cerraba con «cita el puesto», que es la del IAI, y cuando el año de
@@ -68,28 +73,47 @@ def aviso(context: Optional[Dict[str, Any]], vetados: List[str]) -> str:
         f"- «{t}»" + (f": {motivos[t]}" if motivos.get(t) else "") for t in vetados))
 
 
-def _patron(termino: str) -> "re.Pattern[str]":
+def excepciones_declaradas(context: Optional[Dict[str, Any]]) -> List[str]:
+    valor = (context or {}).get(CLAVE_EXCEPCIONES)
+    if isinstance(valor, (list, tuple)):
+        return [str(e) for e in valor if str(e).strip()]
+    return []
+
+
+def _sin_tildes(texto: str) -> str:
     palabras = []
-    for palabra in termino.split():
+    for palabra in texto.split():
         partes = []
         for letra in palabra:
             base = _SIN_TILDE.get(letra.lower(), letra.lower())
             partes.append(f"[{_VOCALES[base]}]" if base in _VOCALES else re.escape(letra))
         palabras.append("".join(partes))
-    return re.compile(rf"(?<!{_LETRA}){_ENTRE_PALABRAS.join(palabras)}{_LETRA}*", re.IGNORECASE)
+    return _ENTRE_PALABRAS.join(palabras)
+
+
+def _patron(termino: str, excepciones: Sequence[str] = ()) -> "re.Pattern[str]":
+    # La excepción se descarta en la MISMA posición donde empezaría el término, así que una
+    # oración con «demandante» y «demanda» sigue marcada por la segunda.
+    no_es = "".join(f"(?!{_sin_tildes(e)})" for e in excepciones)
+    return re.compile(rf"(?<!{_LETRA}){no_es}{_sin_tildes(termino)}{_LETRA}*", re.IGNORECASE)
 
 
 def terminos_en(context: Optional[Dict[str, Any]], texto: str) -> List[str]:
     """Los términos declarados por el contexto que aparecen en *texto*."""
-    return [t for t in terminos_declarados(context) if _patron(t).search(texto or "")]
+    excepciones = excepciones_declaradas(context)
+    return [t for t in terminos_declarados(context)
+            if _patron(t, excepciones).search(texto or "")]
 
 
-def quitar_oraciones_con(texto: str, terminos: List[str]) -> Tuple[str, List[str]]:
+def quitar_oraciones_con(texto: str, terminos: List[str],
+                         excepciones: Sequence[str] = ()) -> Tuple[str, List[str]]:
     """``(texto sin las oraciones que usan los términos, oraciones quitadas)``.
 
     Trabaja por línea para no deshacer el formato: los encabezados y las viñetas se conservan,
-    y una línea que se queda sin oraciones desaparece en vez de quedar vacía."""
-    patrones = [_patron(t) for t in terminos]
+    y una línea que se queda sin oraciones desaparece en vez de quedar vacía. *excepciones* son
+    las del contexto (:func:`excepciones_declaradas`): quitar con otro patrón que el que detectó
+    se llevaría oraciones limpias."""
+    patrones = [_patron(t, excepciones) for t in terminos]
     quitadas: List[str] = []
     lineas: List[str] = []
     for linea in (texto or "").split("\n"):

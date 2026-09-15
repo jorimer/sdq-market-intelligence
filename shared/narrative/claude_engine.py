@@ -2567,6 +2567,7 @@ class NarrativeEngine:
             deterministic_unsupported, reescribir_relaciones_invertidas, verify_figures)
         from shared.narrative.presupuesto import cabe, queda
         from shared.narrative.terminos_vetados import (aviso as aviso_de_terminos,
+                                                       excepciones_declaradas,
                                                        quitar_oraciones_con, terminos_en)
 
         def _gen(user_msg):
@@ -2705,7 +2706,8 @@ class NarrativeEngine:
                 # usan. Quitar una afirmación falsa empobrece menos que publicarla, y el resto
                 # de la sección —correcto— se conserva.
                 if vetados:
-                    texto_sin, quitadas = quitar_oraciones_con(result.text, vetados)
+                    texto_sin, quitadas = quitar_oraciones_con(
+                        result.text, vetados, excepciones_declaradas(context))
                     if quitadas:
                         logger.warning(
                             "Guardrail (%s): el término %s sobrevivió a %d reintento(s) — se "

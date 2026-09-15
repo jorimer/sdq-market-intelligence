@@ -344,7 +344,9 @@ class EnergyProduct:
         from shared.data import oc_seni_client as oc
         from shared.observations import service as obs
 
-        from modules.energy_intel.ai_context import FUENTE_OC_SENI, NOTA_DEL_FEED_IMTE
+        from modules.energy_intel.ai_context import (FUENTE_OC_SENI, MOTIVO_SIN_DEMANDA_IMTE,
+                                                     NOTA_DEL_FEED_IMTE,
+                                                     PALABRAS_QUE_NO_SON_DEMANDA)
 
         series = (oc.SERIE_INYECCIONES, oc.SERIE_RETIROS, oc.SERIE_RETIROS_DISTRIBUIDORAS,
                   oc.SERIE_PERDIDAS)
@@ -372,8 +374,9 @@ class EnergyProduct:
             cadence="monthly",
             nota=NOTA_DEL_FEED_IMTE,
             ultima_descarga=descarga,
-            # Las inyecciones son energía entregada al sistema, no demanda: se vigila en código.
-            terminos_vetados=("demanda",),
+            # Las inyecciones son energía entregada al sistema, no demanda: lo repara el motor.
+            terminos_vetados={"demanda": MOTIVO_SIN_DEMANDA_IMTE},
+            excepciones_de_terminos=PALABRAS_QUE_NO_SON_DEMANDA,
         ), self._feed_obra_electrica()]
 
     def _feed_obra_electrica(self) -> FeedDeclarado:
