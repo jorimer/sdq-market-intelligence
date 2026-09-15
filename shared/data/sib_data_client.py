@@ -128,6 +128,13 @@ SIB_ENTITY_CODES: Dict[str, Dict[str, Any]] = {
     "Empire":        {"sib_code": "EMPIRE",    "tipo_entidad": "BAC", "nombre": "Banco de Ahorro y Crédito Empire",     "nombre_sib": "BANCO DE AHORRO Y CREDITO EMPIRE",  "active": False},
     "Activo":        {"sib_code": "ACTIVO",    "tipo_entidad": "BM",  "nombre": "Banco Múltiple Activo",                 "nombre_sib": "BANCO MULTIPLE ACTIVO",            "active": False},
     "Reidco":        {"sib_code": "REIDCO",    "tipo_entidad": "CC",  "nombre": "Corporación de Crédito Reidco",         "nombre_sib": "CORPORACION DE CREDITO REIDCO",    "active": False},
+    # Banca múltiple que la SB sigue emitiendo en la ventana 2021– y que cada sync listaba como
+    # «no catalogada». Tipo verificado en la fuente: llegan en la lista de BM (sync del
+    # 2026-09-15). `sib_code` es la forma EXACTA que emite, porque solo lo exacto es seguro.
+    #  · Bancamérica: la Junta Monetaria ordenó su disolución el 28-ene-2022 (SB).
+    #  · Bellbank: absorbida por JMMB en 2022 (traspaso autorizado jun-2022, fusión oct-2022).
+    "Bancamérica":   {"sib_code": "BANCAMERICA", "tipo_entidad": "BM", "nombre": "Banco Múltiple de las Américas",     "nombre_sib": "BANCO MULTIPLE DE LAS AMERICAS",   "active": False},
+    "Bellbank":      {"sib_code": "BELLBANK",    "tipo_entidad": "BM", "nombre": "Banco Múltiple Bellbank",            "nombre_sib": "BANCO MULTIPLE BELLBANK",          "active": False},
 }
 
 # Intermediación cambiaria (estados .../eic). ARC = agentes de remesas y cambio;

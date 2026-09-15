@@ -44,5 +44,9 @@ def test_las_DOS_plantillas_que_la_leen_llevan_la_instruccion():
                                                 THIN_TEMPLATES)
 
     assert "NO restes" in MOROSIDAD_ESTRESADA_EN_EL_TEXTO
+    # El PDF regenerado de Santa Cruz (2026-09-15) dijo que la cobertura «se estrecha» sobre
+    # la mora estresada: lo castigado ya salió del balance y no lleva provisión.
+    assert "cobertura de provisiones se mide contra la mora CONVENCIONAL" in (
+        MOROSIDAD_ESTRESADA_EN_EL_TEXTO)
     for plantilla in ("subcomponent_focus", "anio_por_trimestres"):
         assert MOROSIDAD_ESTRESADA_EN_EL_TEXTO in THIN_TEMPLATES[plantilla], plantilla

@@ -55,7 +55,9 @@ class TestAlertaTemprana:
         from modules.insurance_intel.products import InsuranceProduct
         src = inspect.getsource(InsuranceProduct.narratives)
         i = src.index('section == "early_warning"')
-        j = src.index('ctx = insurance_entity_context', i)
+        # El contexto de la §1 se arma con `contexto_de_la_aseguradora` desde que lleva la
+        # capacidad de pago (2026-09-15); la regla es la misma: la §4 no cae en él.
+        j = src.index('ctx = contexto_de_la_aseguradora', i)
         assert "insurance_early_warning_context" in src[i:j], (
             "la §4 volvió a caer al contexto de la §1: publicará el mismo análisis")
 
