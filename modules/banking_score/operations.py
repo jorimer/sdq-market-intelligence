@@ -470,6 +470,48 @@ def _run_sectorial_al_dia(params, user_id, set_phase) -> Dict:
             "quedan": max(0, len(faltan) + len(incompletos) - cargados)}
 
 
+#: Cada cuánto el sync SIB que corre EN este proceso renueva el latido de la consola.
+_LATIDO_SIB_EN_PROCESO_SEG = 15.0
+
+
+def _correr_sib_con_latido(correr, set_phase, fase_inicial: str) -> Dict:
+    """Corre ``correr()`` en un hilo y, mientras vive, retransmite la fase del sync a la consola.
+
+    **Por qué existe (2026-09-15).** `run_backfill` escribe su avance en SU registro
+    (`sync-status`), no en el de la operación. Corrido en el hilo de la consola, la operación
+    latía una sola vez —al arrancar— y la consola la dio por «(interrumpido)» a los 30 minutos
+    con la carga viva: un informe de cliente se regeneró a media carga, y el guard «ya en curso»
+    quedó destrabado para disparar otra sincronización encima. La rama por worker ya latía
+    (`esperar_tarea`); ésta es la misma promesa para la rama en proceso.
+    """
+    import threading
+
+    salida: Dict = {}
+
+    def _hilo() -> None:
+        try:
+            salida["resultado"] = correr()
+        except BaseException as e:  # noqa: BLE001 — se re-lanza en el hilo de la consola
+            salida["error"] = e
+
+    hilo = threading.Thread(target=_hilo, name="sib-sync-en-proceso", daemon=True)
+    set_phase(fase_inicial)
+    hilo.start()
+    while True:
+        hilo.join(timeout=_LATIDO_SIB_EN_PROCESO_SEG)
+        if not hilo.is_alive():
+            break
+        try:
+            from modules.banking_score.sib_sync import get_sync_status
+            fase = (get_sync_status() or {}).get("phase")
+        except Exception:  # noqa: BLE001 — leer la fase nunca corta la carga
+            fase = None
+        set_phase(f"{fase_inicial} · {fase}" if fase else fase_inicial)
+    if "error" in salida:
+        raise salida["error"]
+    return salida["resultado"]
+
+
 def _run_sib_sync_liviano(params, user_id, set_phase) -> Dict:
     """Re-ingesta desde la SIB SIN el cubo de carteras. Es la mitad rápida del sync.
 
@@ -485,8 +527,9 @@ def _run_sib_sync_liviano(params, user_id, set_phase) -> Dict:
     Entre las dos cubren todo sin que ninguna corra horas.
     """
     from modules.banking_score.sib_sync import run_backfill
-    set_phase("re-ingesta SIB sin el cubo de carteras")
-    return _resultado_sib_para_consola(run_backfill(force=True, skip_carteras=True))
+    return _resultado_sib_para_consola(_correr_sib_con_latido(
+        lambda: run_backfill(force=True, skip_carteras=True), set_phase,
+        "re-ingesta SIB sin el cubo de carteras"))
 
 
 def _resultado_sib_para_consola(resultado: Dict) -> Dict:
@@ -518,9 +561,10 @@ def _run_sib_backfill(params, user_id, set_phase) -> Dict:  # noqa: ARG001
     only_tipos = p.get("only_tipos") or None
     if not (settings.USE_CELERY and settings.REDIS_URL):
         from modules.banking_score.sib_sync import run_backfill
-        set_phase("backfill SIB en ESTE proceso (sin broker)")
-        resultado = run_backfill(force=force, only_tipos=only_tipos,
-                                 skip_carteras=skip_carteras)
+        resultado = _correr_sib_con_latido(
+            lambda: run_backfill(force=force, only_tipos=only_tipos,
+                                 skip_carteras=skip_carteras),
+            set_phase, "backfill SIB en ESTE proceso (sin broker)")
         return _resultado_sib_para_consola({**resultado, "via": "proceso_web"})
 
     from modules.banking_score.tasks import sib_backfill_task
