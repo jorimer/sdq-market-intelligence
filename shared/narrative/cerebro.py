@@ -692,6 +692,18 @@ AUDIENCE_FRAMES: Dict[str, Dict[str, str]] = {
             "riesgo que la entidad aporta al sistema. Tu \"y por tanto\" final apunta a la prioridad "
             "de supervisión y la señal a monitorear, no a una decisión de negocio."
         ),
+        # Pedida por un alto funcionario de Banco Múltiple Santa Cruz (2026-09-15): «también
+        # veo las áreas comerciales» como usuarias del informe.
+        "comercial": (
+            "FRAME DE DECISIÓN — Audiencia: Áreas comerciales de una entidad financiera.\n"
+            "Decide: en qué segmentos y plazas crecer, cómo posicionar el precio frente a la "
+            "competencia y dónde defender o disputar participación.\n"
+            "Le importa: dónde presta la entidad contra dónde presta el país, en qué sectores cobra "
+            "más o menos que el resto y si ese diferencial paga el riesgo que la mora muestra, y "
+            "qué competidor gana o pierde terreno. Tu \"y por tanto\" final apunta a la oportunidad "
+            "o la amenaza comercial que los datos del SIB sostienen, sin inventar cuotas de "
+            "mercado ni precios que el contexto no trae."
+        ),
     },
     "sector_intel": {
         "inversionista": (

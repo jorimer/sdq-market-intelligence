@@ -26,6 +26,9 @@ AI_CONTEXT_FILES = (
     # La morosidad estresada oficial de la SIB (2026-09-15): total, desglose y posición
     # contra el resto del sistema viajan al contexto, así que su cómputo es receta.
     "reports/morosidad_estresada.py",
+    # Cada trimestre contra su historia y contra el sistema (2026-09-15): el rótulo que decide
+    # si un tramo es hallazgo viaja al contexto.
+    "reports/trimestre_en_contexto.py",
     # Las anclas del HHI viajan al contexto para que el modelo NO cite umbrales de memoria:
     # el boletín del 2026-09-06 publicó las bandas del DOJ, que esta plataforma descartó tras
     # medirlas. Si alguien recalibra los estratos, la caché tiene que enterarse.

@@ -114,6 +114,19 @@ MOROSIDAD_ESTRESADA_EN_EL_TEXTO = (
     "que la estresada afecta el score: no puntúa.\n\n"
 )
 
+#: Cómo se escribe un trimestre (2026-09-15, feedback de Banco Santa Cruz: «si siempre es así,
+#: el motor debió resaltarlo o decir por qué es relevante»). El rótulo lo resuelve el código.
+TRAMOS_EN_CONTEXTO_EN_EL_TEXTO = (
+    "CADA TRIMESTRE EN SU CONTEXTO: 'contexto_de_los_tramos' trae, por trimestre, su 'rotulo' "
+    "ya resuelto contra el mismo trimestre de años anteriores de la entidad y contra el resto "
+    "del sistema en ese corte. COPIALO. Destacá como hallazgo SOLO los tramos con 'se_destaca' "
+    "verdadero, nombrando contra qué referencia lo son. Un tramo 'ordinario' no es un hallazgo "
+    "aunque haya concentrado la mayor parte del movimiento: decí que es lo habitual y seguí. NO "
+    "hables de estacionalidad ni de un patrón que se repite salvo que 'frente_a_su_historia' "
+    "sea 'ordinario' y lo respalde su 'rango_historico_del_mismo_trimestre'; si dice 'historia "
+    "insuficiente', decilo en una frase y no supongas un patrón.\n\n"
+)
+
 TEMPLATES = {
     "executive_summary": (
         "Eres un analista financiero senior especializado en banca dominicana. "
@@ -587,7 +600,7 @@ THIN_TEMPLATES = {
         "digas ni mejoró ni empeoró. Usá la 'unidad' de la fila al citar el cambio.\n\n"
         "'cortes_faltantes' se DECLARA si no está vacío: un tramo sin su corte no se puede "
         "medir, y callarlo haría pasar tres trimestres por cuatro.\n\n"
-        + MOROSIDAD_ESTRESADA_EN_EL_TEXTO +
+        + TRAMOS_EN_CONTEXTO_EN_EL_TEXTO + MOROSIDAD_ESTRESADA_EN_EL_TEXTO +
         "TÍTULOS DE SECCIÓN DESCRIPTIVOS Y SOBRIOS: nombran el asunto, no lo dramatizan. Sin "
         "anglicismos: es 'dentro del año' o 'intraanual', no 'intrayear'.\n\n"
         "No recalcules ninguna cifra: todas vienen resueltas. Si una relación no está servida, "

@@ -15,10 +15,11 @@ from shared.narrative.cerebro import (
 
 def test_default_audience_banking_is_comite_credito():
     assert DEFAULT_AUDIENCE["banking"] == "comite_credito"
-    # the four pilot audiences are present and distinct
+    # the four pilot audiences + commercial teams (2026-09-15, feedback de Banco Santa Cruz)
+    # are present and distinct
     assert set(AUDIENCE_FRAMES["banking"]) == {
-        "comite_credito", "entidad", "inversionista", "supervisor"}
-    assert len(set(AUDIENCE_FRAMES["banking"].values())) == 4
+        "comite_credito", "entidad", "inversionista", "supervisor", "comercial"}
+    assert len(set(AUDIENCE_FRAMES["banking"].values())) == 5
 
 
 def test_build_system_includes_nucleus_and_axis():

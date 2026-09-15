@@ -1158,7 +1158,8 @@
       "comite_credito": "Comité de crédito",
       "entidad": "Entidad",
       "inversionista": "Inversionista",
-      "supervisor": "Supervisor"
+      "supervisor": "Supervisor",
+      "comercial": "Áreas comerciales"
     },
     "entAiUnavailable": "El análisis de IA no está disponible (clave de Anthropic no configurada). El detalle de arriba es completo.",
     "indEyebrowFallback": "Indicador",
