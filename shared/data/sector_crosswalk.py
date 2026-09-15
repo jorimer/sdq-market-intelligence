@@ -201,6 +201,25 @@ def salary_by_slug(activity_salary: Dict[str, float]) -> Dict[str, Optional[floa
     return out
 
 
+def cotizantes_by_slug(activity_counts: Dict[str, float]) -> Dict[str, Optional[float]]:
+    """TSS trabajadores cotizantes por actividad → por slug, SUMANDO (son conteos, no promedios).
+
+    agropecuario suma sus cuatro sub-actividades. Los slugs que comparten una actividad
+    (manufactura/ZF, otros servicios/servicios profesionales) reciben el MISMO total: es la
+    cifra del agregado, y quien la sirva tiene que decirlo (:func:`tss_shared_slugs`)."""
+    out: Dict[str, Optional[float]] = {}
+    for slug, activities in SLUG_TO_TSS_ACTIVITIES.items():
+        vals = [activity_counts[a] for a in activities if activity_counts.get(a) is not None]
+        out[slug] = round(sum(vals), 0) if vals else None
+    return out
+
+
+def tss_shared_slugs(slug: str) -> List[str]:
+    """Los OTROS slugs que comparten al menos una actividad TSS con *slug* (vacío si es propia)."""
+    mias = set(SLUG_TO_TSS_ACTIVITIES.get(slug, ()))
+    return sorted(s for s, acts in SLUG_TO_TSS_ACTIVITIES.items() if s != slug and mias & set(acts))
+
+
 # ── ENAE economic activity (ONE) → BCRD-17 sector crosswalk ───────────────────
 # The ENAE (Encuesta Nacional de Actividad Económica) publishes structural-financial
 # tables (income, costs, profit, profitability) at a **9-sector** resolution — a
