@@ -399,7 +399,10 @@ def _fuentes_compartidas() -> Tuple[FuenteCompartida, ...]:
                          _ultimo_de_serie_macro(_PREFIJO)),
         FuenteCompartida("canasta_por_quintil", "Costo de la canasta por quintil", "BCRD",
                          "monthly", _ultimo_de_serie_macro(_PREFIJO_CANASTA)),
-        FuenteCompartida("salario_minimo", "Salario mínimo de referencia", "MHE", "monthly",
+        # ANUAL y no mensual: la serie tiene fila por mes, pero solo cambia con un decreto y la
+        # tabla se publica hasta el cierre del año. Declarada mensual (#1204) marcaba
+        # congelado un dato correcto — 2025-12 a 258 días — y avisaba cada mes sin motivo.
+        FuenteCompartida("salario_minimo", "Salario mínimo de referencia", "MHE", "annual",
                          _ultimo_de_tema(_TEMA_SALARIO_REFERENCIA)),
         FuenteCompartida("salario_tss", "Salario promedio cotizable por actividad", "TSS",
                          "annual", _anio_del_salario_tss),
