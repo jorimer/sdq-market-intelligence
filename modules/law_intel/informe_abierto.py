@@ -457,8 +457,11 @@ def _leido_el(filas: Any, periodo: str) -> Optional[str]:
 
     **La agenda no sirve para esto y por eso se dejó de usar.** El informe decía «la última
     lectura registrada es del 2026-08-25» leyendo el `last_run_at` de la agenda, mientras el
-    dato que mostraba se había leído el 26: una corrida manual no mueve la agenda. El lector
-    entiende esa frase como «cuándo se leyó este dato», y respondía con otra cosa.
+    dato que mostraba se había leído el 26: entonces una corrida manual no movía la agenda.
+    El lector entiende esa frase como «cuándo se leyó este dato», y respondía con otra cosa.
+    Desde el 2026-09-15 una corrida manual SÍ mueve `last_run_at`, pero eso no rehabilita la
+    agenda para esto: sigue diciendo cuándo corrió la operación, no cuándo se leyó el dato de
+    ESTE período —una corrida puede no traer nada nuevo—.
 
     `None` cuando la serie no lo trae. No se sustituye por la fecha de la agenda: «cuándo
     corrió la operación» y «cuándo se leyó el dato» son afirmaciones distintas, y rellenar
@@ -628,7 +631,9 @@ def _cuando_se_actualiza(expediente_id: str, db: Any,
     **Cada dato de esta sección viene de donde ese dato vive.** La cadencia y la próxima
     corrida son hechos de la agenda. La ÚLTIMA LECTURA es un hecho del dato, y se recibe
     computada de la serie: usar el `last_run_at` de la agenda para eso publicó una fecha un
-    día vieja —una corrida manual no mueve la agenda— y el lector no tenía cómo saberlo.
+    día vieja —entonces una corrida manual no movía la agenda— y el lector no tenía cómo
+    saberlo. Desde el 2026-09-15 la corrida manual sí la mueve, y la separación se mantiene
+    igual: la agenda dice cuándo corrió la operación; la serie, cuándo se leyó su dato.
     """
     from modules.law_intel.obligaciones import cargar_obligaciones
 

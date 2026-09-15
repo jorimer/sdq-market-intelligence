@@ -206,6 +206,59 @@ def _finish_run(db: Session, run_id: str, status: str, summary=None, error=None)
     db.commit()
 
 
+def _marcar_corrida_en_la_agenda(db: Session, op_name: str, params: Optional[Dict]) -> None:
+    """Una corrida que HIZO el trabajo mueve la agenda, no solo la que disparó el scheduler.
+
+    ``run_due_schedules`` escribía ``last_run_at``/``next_run_at`` al disparar, y era el único
+    que las tocaba: una corrida manual quedaba invisible para la cadencia. Medido en prod el
+    2026-09-15 — ``macro-canonical-sync`` corrió el 6 de septiembre (108.861 registros,
+    «completado») y su agenda seguía en ``2026-08-22``, con la próxima calculada desde agosto;
+    la agendada vuelve a hacer el trabajo que alguien acaba de hacer a mano. Y la fecha se
+    PUBLICA: ``law_intel/informe_abierto.py`` la lee para decir cuándo corrió la operación, así
+    que una vieja es una afirmación falsa en un entregable.
+
+    Dos límites:
+
+    - **Solo en éxito.** Si un fallo moviera ``next_run_at``, aplazaría su propio reintento.
+    - **``next_run_at`` solo si la corrida hizo el trabajo de la agenda:** encendida y con SUS
+      parámetros. Un barrido manual acotado (``{"limit": 1}``) registra su ``last_run_at`` —
+      corrió, es un hecho— pero no pospone la corrida completa que sigue pendiente.
+
+    Best-effort: la agenda nunca puede tumbar una corrida que salió bien.
+    """
+    try:
+        fila = db.query(OperationSchedule).filter_by(operation=op_name).first()
+        if fila is None:                      # bajo demanda: no tiene agenda que mover
+            return
+        ahora = _dt()
+        valores: Dict[str, Any] = {"last_run_at": ahora}
+        if bool(fila.enabled) and dict(fila.params or {}) == dict(params or {}):
+            from shared.operations.calendario import proximo_disparo
+            op = OPERATIONS.get(op_name)
+            visto = None
+            leer = getattr(op, "periodo_actual", None)
+            if callable(leer):
+                try:
+                    visto = leer(db)
+                except Exception:  # noqa: BLE001 — la agenda nunca depende de esta lectura
+                    visto = None
+            # Mismo cálculo que el scheduler: con anclaje manda el calendario de la fuente, no
+            # la cadencia relativa (ver `shared.operations.calendario`).
+            valores["next_run_at"] = proximo_disparo(
+                getattr(op, "anclaje", None), ahora,
+                int(cast(Any, fila.interval_hours) or 1), visto)
+        # UPDATE explícito, como `run_due_schedules`: asignar al atributo mapeado es lo que
+        # mypy rechaza (Column[datetime]) y además deja la escritura en un solo statement.
+        db.execute(update(OperationSchedule)
+                   .where(OperationSchedule.operation == op_name)
+                   .values(**valores))
+        db.commit()
+    except Exception:  # noqa: BLE001 — best-effort: no puede romper la corrida
+        db.rollback()
+        logger.warning("no se pudo marcar en la agenda la corrida de %s", op_name,
+                       exc_info=True)
+
+
 def record_incident(db: Session, operation: str, *, summary=None, error=None,
                     origin: str = "event") -> str:
     """Registra un INCIDENTE puntual como ``OperationRun`` terminal (no una operación de la
@@ -296,6 +349,10 @@ def trigger(op_name: str, origin: str = "manual", user_id: Optional[str] = None,
                 write_status(db2, op_name, is_running=False, phase="completado",
                              last_run=_now(), last_result=result, error=None)
                 _finish_run(db2, run_id, "completed", summary=result)
+                # La corrida hizo el trabajo: la agenda lo registra aunque el disparo haya
+                # sido manual o en cascada. Sin esto la cadencia cuenta desde la última
+                # corrida AUTOMÁTICA y repite lo que alguien acaba de hacer a mano.
+                _marcar_corrida_en_la_agenda(db2, op_name, params)
                 _fire_cascade(op_name)
         except Exception as e:  # noqa: BLE001 — report into status + history
             logger.exception("Operación %s falló", op_name)
