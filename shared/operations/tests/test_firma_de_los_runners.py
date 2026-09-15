@@ -23,14 +23,23 @@ import pytest
 
 _RAIZ = pathlib.Path(__file__).resolve().parents[3]
 _FIRMA = ["params", "user_id", "set_phase"]
-_EXCLUIDOS = {".venv", "node_modules", ".git", "__pycache__", "frontend"}
+# ``.claude`` guarda los worktrees de las sesiones concurrentes: árboles COMPLETOS de otras
+# ramas, bajo la raíz de éste. Sin excluirlo, el barrido evalúa el código de esas ramas como
+# si fuera el tuyo —medido el 2026-08-24: 81 runners en un worktree limpio contra 840 en el
+# checkout principal con 10 worktrees— así que un runner mal firmado en la rama de otro te
+# rompe la suite, la corrida se vuelve diez veces más lenta, y la cota de
+# ``test_el_barrido_encuentra_runners`` deja de proteger porque el número la supera por
+# inflación. CI no lo ve (clona limpio); el desarrollo local sí.
+_EXCLUIDOS = {".venv", "node_modules", ".git", "__pycache__", "frontend", ".claude"}
 
 
 def _runners():
     """Todo ``def _run_*`` de nivel superior del árbol, con su archivo y línea."""
     out = []
     for p in sorted(_RAIZ.rglob("*.py")):
-        if _EXCLUIDOS & set(p.parts):
+        # Las partes RELATIVAS: con las absolutas, un directorio llamado `frontend` o
+        # `.venv` en la ruta del checkout vaciaría el barrido sin decir nada.
+        if _EXCLUIDOS & set(p.relative_to(_RAIZ).parts):
             continue
         try:
             arbol = ast.parse(p.read_text(encoding="utf-8"))
