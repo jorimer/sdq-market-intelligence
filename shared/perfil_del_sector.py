@@ -49,7 +49,8 @@ from shared.data.sector_crosswalk import (ENCFT_BRANCHES, IED_ACTIVITIES, SIB_SE
 from shared.reference.cartera_agregacion import _medidas, _sumar, _vacio
 from shared.reference.cartera_sectorial import CarteraSectorial
 from shared.reference.sector_variables import (IED_DIMENSION, LABOR_ENCFT_DIMENSION,
-                                               SECTOR_DIMENSION, SectorVariable)
+                                               LABOR_TSS_DIMENSION, SECTOR_DIMENSION,
+                                               SectorVariable)
 
 logger = logging.getLogger("sdq.perfil_del_sector")
 
@@ -333,6 +334,53 @@ def inversion_extranjera_del_sector(db: Session, slug: str,
     return out
 
 
+#: Lo que el modelo tiene que saber del empleo formal antes de citarlo. Viaja en el CONTEXTO y
+#: no en las plantillas: la huella de la caché de productos hashea TODAS las plantillas.
+QUE_MIDE_EL_EMPLEO_FORMAL = (
+    "Empleo FORMAL: trabajadores que cotizan a la seguridad social en la actividad, según el "
+    "registro de la TSS, al mes indicado. NO es la ocupación total: la ENCFT incluye el empleo "
+    "informal y por eso da cifras varias veces mayores. Son dos poblaciones distintas: cita "
+    "cada una con su nombre y su fecha, y no las restes ni las compares como si fueran la misma."
+)
+
+
+def empleo_formal_del_sector(db: Session, slug: str, corte: date) -> Optional[Dict[str, Any]]:
+    """Trabajadores cotizantes (TSS) del sector al último mes completo hasta *corte*, con su
+    variación contra el mismo mes del año anterior.
+
+    **El sujeto puede ser un agregado.** La TSS no separa manufactura local de zonas francas
+    ni otros servicios de servicios profesionales: esos slugs reciben la cifra de la actividad
+    compartida y la respuesta lo dice. Repartirla sería fabricar."""
+    from shared.data.sector_crosswalk import SLUG_TO_TSS_ACTIVITIES, tss_shared_slugs
+    from shared.data.tss_salary import VAR_COTIZANTES
+
+    serie = _serie(db, LABOR_TSS_DIMENSION, slug, VAR_COTIZANTES)
+    hasta = f"{corte.year}-{corte.month:02d}"
+    meses = sorted(m for m in serie if len(m) == 7 and m <= hasta)
+    if not meses:
+        return None
+    mes = meses[-1]
+    comparacion = f"{int(mes[:4]) - 1}{mes[4:]}"
+    base = serie.get(comparacion)
+    variacion = (round(100.0 * (serie[mes] / base - 1.0), 2)
+                 if isinstance(base, (int, float)) and base > 0 else None)
+    compartidos = tss_shared_slugs(slug)
+    out: Dict[str, Any] = {
+        "mes": mes,
+        "trabajadores_cotizantes_en_la_actividad": round(serie[mes], 0),
+        "variacion_interanual_pct": variacion,
+        "mes_de_comparacion": comparacion if variacion is not None else None,
+        "actividades_de_la_tss": list(SLUG_TO_TSS_ACTIVITIES.get(slug, ())),
+        "fuente": "TSS · trabajadores cotizantes",
+        "es_agregado": bool(compartidos),
+        "el_agregado_incluye": sorted([slug, *compartidos]) if compartidos else None,
+    }
+    if compartidos:
+        out["por_que_es_agregado"] = ("La TSS registra la actividad sin separar estos sectores: "
+                                      "la cifra es de todos ellos juntos.")
+    return out
+
+
 def perfil_del_sector(db: Session, slug: str, corte: date) -> Optional[Dict[str, Any]]:
     """Las lecturas disponibles de un sector, juntas. ``None`` si no hay ninguna.
 
@@ -350,7 +398,8 @@ def perfil_del_sector(db: Session, slug: str, corte: date) -> Optional[Dict[str,
                       ("actividad", lambda: actividad_del_sector(db, slug, anio)),
                       ("ocupacion", lambda: ocupacion_del_sector(db, slug, anio)),
                       ("inversion_extranjera",
-                       lambda: inversion_extranjera_del_sector(db, slug, anio))):
+                       lambda: inversion_extranjera_del_sector(db, slug, anio)),
+                      ("empleo_formal", lambda: empleo_formal_del_sector(db, slug, corte))):
         try:
             valor = fn()
         except Exception:  # noqa: BLE001 — ninguna lectura tumba al informe
@@ -368,7 +417,7 @@ def perfil_del_sector(db: Session, slug: str, corte: date) -> Optional[Dict[str,
         "lecturas_servidas": [k for k in bloque if k not in ("sector", "cobertura")],
         "lecturas_sin_dato_para_este_sector": [
             c for c in ("credito_del_sistema", "costo_laboral", "actividad", "ocupacion",
-                        "inversion_extranjera") if c not in bloque],
+                        "inversion_extranjera", "empleo_formal") if c not in bloque],
     }
     return bloque
 
@@ -491,6 +540,23 @@ def contexto_del_perfil_del_sector(perfil: Optional[Dict[str, Any]], sufijo: str
                 "el_agregado_incluye")
             bloque_i["por_que_la_fuente_no_los_separa"] = ied.get("por_que_es_agregado")
         out[f"inversion_extranjera_en_el_sector_{sufijo}"] = bloque_i
+    emp = {} if "empleo_formal" in omitir else (perfil.get("empleo_formal") or {})
+    if emp:
+        bloque_e = {
+            "mes_de_esta_capa": emp.get("mes"),
+            f"trabajadores_cotizantes_en_la_actividad_del_sector_{sufijo}": emp.get(
+                "trabajadores_cotizantes_en_la_actividad"),
+            f"variacion_interanual_de_los_cotizantes_del_sector_{sufijo}_pct": emp.get(
+                "variacion_interanual_pct"),
+            "mes_de_comparacion": emp.get("mes_de_comparacion"),
+            "que_mide": QUE_MIDE_EL_EMPLEO_FORMAL,
+            "fuente": emp.get("fuente"),
+        }
+        if emp.get("es_agregado"):
+            bloque_e["ojo_la_cifra_es_de_una_actividad_que_incluye"] = emp.get(
+                "el_agregado_incluye")
+            bloque_e["por_que_la_fuente_no_los_separa"] = emp.get("por_que_es_agregado")
+        out[f"empleo_formal_del_sector_{sufijo}"] = bloque_e
     return out
 
 
