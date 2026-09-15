@@ -155,4 +155,16 @@ def anio_por_trimestres(db: Session, bank: Bank, anio: int) -> Optional[Dict[str
         "camino": _camino(puntos),
         "cambios_de_banda": _bandas_del_anio(puntos),
         "balance": _balance(traj.get("indicators") or {}, cortes),
+        # La MOROSIDAD ESTRESADA oficial de la SIB a la apertura y al cierre (2026-09-15): la
+        # mora del balance compara mal entre entidades con políticas de castigo distintas.
+        "morosidad_estresada": _estresada_del_anio(db, bank, cortes),
     }
+
+
+def _estresada_del_anio(db: Session, bank: Bank, cortes: List[str]) -> Optional[Dict[str, Any]]:
+    from modules.banking_score.reports.morosidad_estresada import morosidad_estresada_del_anio
+    try:
+        return morosidad_estresada_del_anio(db, bank, cortes)
+    except Exception:  # noqa: BLE001 — el año por dentro nunca depende de este bloque
+        logger.exception("No se pudo computar la morosidad estresada del año de %s", bank.name)
+        return None

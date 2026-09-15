@@ -666,6 +666,12 @@ def _build_section_context(
             if r["indicador"] in ind]
         if razones:
             ctx["razones"] = razones
+        # LA MOROSIDAD ESTRESADA oficial de la SIB, en la dimensión donde se lee (2026-09-15):
+        # la mora convencional, la estresada y lo que la primera no ve, con la posición contra
+        # el resto del sistema ya resuelta. Viaja entera —también si no está disponible—
+        # porque la ausencia se declara con su motivo.
+        if sub_key == "calidad" and scoring_result.get("morosidad_estresada"):
+            ctx["morosidad_estresada"] = scoring_result["morosidad_estresada"]
         return ctx
 
     # Overview sections (executive summary, comparative, recommendation…) keep the

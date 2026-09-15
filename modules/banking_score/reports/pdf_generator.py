@@ -1331,6 +1331,53 @@ def _build_sector_map_table(mapa: Dict, styles) -> List:
     return elements
 
 
+def _build_estresada_table(bloque: Optional[Dict], styles) -> List:
+    """Las DOS moras de la entidad y lo que las separa, con el desglose oficial de la SIB.
+
+    Existe por el feedback de un alto funcionario de Banco Múltiple Santa Cruz (2026-09-15):
+    la mora convencional no compara entidades con políticas de castigo distintas, la
+    estresada sí. Va dentro de la sección de calidad de activos porque es el respaldo de su
+    párrafo. Si la estresada no está disponible, la tabla no se inventa: se declara el motivo.
+    """
+    if not bloque:
+        return []
+    corte = bloque.get("corte")
+    ttl = ("Morosidad convencional y estresada (definición SIB)"
+           + (f" · {corte}" if corte else ""))
+    elements: List = [Paragraph(ttl, styles["SDQSubHeading"])]
+    if not bloque.get("disponible"):
+        elements.append(Paragraph(_md_inline(str(bloque.get("motivo") or "")), styles["SDQSmall"]))
+        return elements
+
+    rows: List[List] = [["Medida", "% de su cartera"]]
+    rows.append(["Mora convencional publicada",
+                 _num(bloque.get("morosidad_convencional_publicada_de_la_entidad_pct"))])
+    rows.append(["Morosidad estresada (SIB)",
+                 _num(bloque.get("morosidad_estresada_de_la_entidad_pct"))])
+    for c in bloque.get("componentes_de_la_estresada_de_la_entidad") or []:
+        rows.append([Paragraph("· " + _md_inline(str(c.get("componente", ""))),
+                               styles["SDQSmall"]),
+                     _num(c.get("pct_de_la_cartera_de_la_entidad"))])
+    rows.append(["Lo que la mora convencional no ve (pp)",
+                 _pp(bloque.get("lo_que_la_mora_convencional_no_ve_pp"))])
+    if bloque.get("mediana_estresada_del_resto_del_sistema_pct") is not None:
+        rows.append(["Mediana estresada del resto del sistema",
+                     _num(bloque.get("mediana_estresada_del_resto_del_sistema_pct"))])
+        rows.append(["Diferencia con esa mediana (pp)",
+                     _pp(bloque.get("diferencia_con_la_mediana_del_resto_pp"))])
+    elements.append(_branded_table(rows, [3.60 * inch, 1.30 * inch], styles,
+                                   aligns=["LEFT", "RIGHT"]))
+    elements.append(Spacer(1, 0.08 * inch))
+    pie = str(bloque.get("definicion") or "") + " " + str(bloque.get("nota_de_carteras") or "")
+    if bloque.get("n_entidades_del_resto_del_sistema"):
+        pie += (f" La mediana es de las otras {bloque['n_entidades_del_resto_del_sistema']} "
+                f"{bloque.get('universo_del_resto_del_sistema') or 'instituciones de crédito'}"
+                ", excluida esta entidad.")
+    pie += " La morosidad estresada no entra al score."
+    elements.append(Paragraph(_md_inline(pie.strip()), styles["SDQSmall"]))
+    return elements
+
+
 def _build_system_sector_table(mapa: Dict, styles) -> List:
     """El libro de crédito del SISTEMA por sector. Otra tabla y no la de entidad con menos
     columnas: acá no hay contra qué comparar —el sujeto ES el agregado— así que las
@@ -1723,6 +1770,15 @@ async def generate_pdf_report(
     mapa_sis = scoring_result.get("mapa_sectorial_sistema")
     if mapa_sis:
         _colocar("mapa_sectorial_sistema", _build_system_sector_table(mapa_sis, styles))
+
+    # Las DOS moras (2026-09-15): en el corte, dentro de calidad de activos; en el año por
+    # dentro, el cierre del año junto a su lectura.
+    estresada = scoring_result.get("morosidad_estresada")
+    if estresada:
+        _colocar("calidad_activos", _build_estresada_table(estresada, styles))
+    estresada_anio = ((anio_dentro or {}).get("morosidad_estresada") or {}).get("cierre")
+    if estresada_anio:
+        _colocar("anio_por_trimestres", _build_estresada_table(estresada_anio, styles))
 
     # 4. Narrative sections (filtradas/ordenadas por el manifiesto si `sections`). Un único
     # salto de página separa el bloque de datos (tablas) de la narrativa; las tablas fluyen

@@ -1148,6 +1148,17 @@ class BankingProduct:
         scoring_result["trayectorias"] = entity_trajectories(
             db, bank, as_of=cast(date, rr.period_end))
         scoring_result["percentiles"] = period_percentiles(db, bank, rr.period_end)
+        # LA MOROSIDAD ESTRESADA oficial de la SIB, computada (2026-09-15, feedback de Banco
+        # Santa Cruz): la mora convencional no compara entidades con políticas de castigo
+        # distintas. No puntúa; va a la sección de calidad de activos.
+        try:
+            from modules.banking_score.reports.morosidad_estresada import (
+                morosidad_estresada_al_corte)
+            _estresada = morosidad_estresada_al_corte(db, bank, cast(date, rr.period_end))
+            if _estresada:
+                scoring_result["morosidad_estresada"] = _estresada
+        except Exception:  # noqa: BLE001 — el snapshot nunca depende de este bloque
+            logger.exception("No se pudo computar la morosidad estresada de %s", bank.name)
         # QUÉ MOVIÓ EL SCORE, ya descompuesto, DENTRO DEL PAYLOAD. Se computa acá y no en el
         # frontend por la misma razón por la que se computa para el modelo: una segunda
         # implementación de la misma cuenta es una segunda oportunidad de que discrepen, y
