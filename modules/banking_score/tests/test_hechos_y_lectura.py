@@ -95,6 +95,18 @@ def _dentro():
             {"indicador": "patrimonio_activos", "unidad": "%", "apertura": 10.92,
              "cierre": 10.86, "cambio": -0.06, "veredicto": "estable",
              "veredicto_por_que": "el movimiento no es material"},
+            # ÓPTIMO INTERMEDIO. Su `nivel_de_referencia` no es un nivel de nadie: el v6 de
+            # Santa Cruz publicó «Cierra por encima del nivel de referencia del modelo,
+            # -35.00 %» para la exposición inmobiliaria y «5.00 %» para la cartera sobre
+            # depósitos, que cerró en 72.81 %. Y el motivo arrastró el nombre de una clave
+            # del contexto a un documento de cliente.
+            {"indicador": "exposicion_re", "unidad": "%", "apertura": 9.54, "cierre": 11.63,
+             "cambio": 2.09, "score_apertura": 79.69, "score_cierre": 81.09,
+             "cambio_de_score": 1.40, "nivel_de_referencia": -35.0,
+             "contra_la_referencia": "por encima", "sentido_de_la_escala": "target",
+             "veredicto": "no_aplica",
+             "veredicto_por_que": ("indicador de óptimo intermedio: la vara es el óptimo, no "
+                                   "el promedio — leé 'posicion_vs_optimo'")},
         ],
         "morosidad_estresada": {
             "apertura": {"disponible": True, "morosidad_estresada_de_la_entidad_pct": 6.8412,
@@ -122,7 +134,8 @@ def _dentro():
 
 def _mapa():
     def _fila(sector, peso, atribucion, mora, mora_r, brecha, tasa=None, tasa_r=None,
-              spread=None, cob=None, cob_r=None, gar=None, gar_r=None, deuda=None):
+              spread=None, cob=None, cob_r=None, gar=None, gar_r=None, deuda=None,
+              material=True):
         return {"sector": sector, "deuda": deuda or peso * 1e9,
                 "peso_en_su_cartera_pct": peso, "mora_pct": mora,
                 "mora_del_resto_del_sector_pct": mora_r, "brecha_de_mora_pp": brecha,
@@ -132,7 +145,7 @@ def _mapa():
                 "cobertura_del_resto_del_sector_pct": cob_r,
                 "garantia_sobre_deuda_pct": gar, "garantia_del_resto_del_sector_pct": gar_r,
                 "dolarizacion_de_la_deuda_pct": 55.6, "atribucion": atribucion,
-                "material": True}
+                "material": material}
     sectores = [
         _fila("Y - CONSUMO DE BIENES Y SERVICIOS", 31.98, "idiosincratico_peor", 8.37, 4.18,
               4.19, 31.92, 27.02, 4.9, 83.21, 99.98, 10.0, 12.0),
@@ -142,6 +155,10 @@ def _mapa():
               0.36, 0.74, -0.38),
         _fila("A - AGRICULTURA, GANADERÍA, CAZA Y SILVICULTURA", 4.10, "idiosincratico_mejor",
               0.37, 1.71, -1.34),
+        # EXPOSICIÓN NO MATERIAL: el v6 narró «Pesca (0.00 % de su cartera, mora -2.00 pp
+        # frente al resto)». Una celda que la propia tabla marca como ruido no es un hallazgo.
+        _fila("B - PESCA", 0.0, "idiosincratico_mejor", 0.0, 2.0, -2.0, deuda=500.0,
+              material=False),
     ]
     return {
         "entidad": "Banco Múltiple Santa Cruz", "corte": "2025-12-31",
@@ -226,6 +243,37 @@ def test_el_mapa_escribe_cada_brecha_con_su_signo_y_su_poblacion():
     assert "**Distrito Nacional**: 78.06 % de su cartera contra 54.30 % del crédito del país" \
         in hechos
     assert "Agricultura, ganadería, caza y silvicultura" in hechos
+
+
+def test_un_optimo_intermedio_no_publica_un_nivel_de_referencia_que_no_lo_es():
+    """v6 de Santa Cruz: «Cierra por encima del nivel de referencia del modelo, -35.00 %».
+
+    En un indicador de óptimo intermedio la vara es el óptimo, no ese nivel: publicarlo da una
+    referencia que nadie puede usar —y una negativa, en un porcentaje de cartera—. Se omite."""
+    from modules.banking_score.reports.hechos_y_lectura import hechos_del_anio
+
+    hechos = hechos_del_anio(_dentro())
+    assert "Exposición inmobiliaria" in hechos, "la fixture tiene que llegar al texto"
+    assert "-35.00" not in hechos
+    assert "nivel de referencia del modelo, -" not in hechos
+
+
+def test_el_texto_no_nombra_una_clave_del_contexto():
+    """El motivo del óptimo intermedio arrastraba «leé 'posicion_vs_optimo'» a un documento de
+    cliente: vocabulario del sistema, el defecto que el banco ya había objetado."""
+    from modules.banking_score.reports.hechos_y_lectura import hechos_del_anio
+
+    hechos = hechos_del_anio(_dentro())
+    assert "posicion_vs_optimo" not in hechos
+    assert "leé" not in hechos
+
+
+def test_un_sector_sin_exposicion_material_no_se_narra():
+    from modules.banking_score.reports.hechos_y_lectura import hechos_del_mapa
+
+    hechos = hechos_del_mapa(_mapa())
+    assert "Pesca" not in hechos
+    assert "Agricultura, ganadería, caza y silvicultura" in hechos, "los materiales siguen"
 
 
 # ── 2 · El modelo lee un contexto SIN números ────────────────────────────────

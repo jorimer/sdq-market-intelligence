@@ -44,6 +44,24 @@ _ATRIBUCION = {
     "compartido_con_el_sector": "alineado con el resto del sistema en el mismo sector",
 }
 
+#: Un indicador de ÓPTIMO INTERMEDIO no tiene «nivel de referencia» que publicar: la vara es el
+#: óptimo. El v6 de Santa Cruz publicó «Cierra por encima del nivel de referencia del modelo,
+#: -35.00 %» para la exposición inmobiliaria y «5.00 %» para una cartera sobre depósitos que
+#: cerró en 72.81 %. La curva devuelve ese número porque se lo pide, no porque signifique algo.
+SENTIDO_DE_OPTIMO_INTERMEDIO = "target"
+MOTIVO_OPTIMO_INTERMEDIO = (
+    "es un indicador de óptimo intermedio: ni subir ni bajar es mejor por sí solo, porque la "
+    "vara es el óptimo y no el nivel del resto")
+
+#: Una clave del contexto entre comillas simples dentro de un motivo. El del óptimo intermedio
+#: terminaba en «— leé 'posicion_vs_optimo'», y eso salió impreso en un documento de cliente:
+#: vocabulario del sistema, que es justo lo que el banco ya había objetado.
+_CLAVE_CITADA = re.compile(r"\s*[—–-]?\s*(?:leé|lee|ver)?\s*'[a-z0-9_]+'", re.IGNORECASE)
+
+#: Por debajo de esto un sector no se narra: con el peso redondeado a cero, «Pesca (0.00 % de su
+#: cartera, mora -2.00 pp frente al resto)» ocupa el lugar de un hallazgo sin serlo.
+PESO_MINIMO_PARA_NARRAR_PCT = 0.01
+
 #: Lo que la lectura del mapa no puede traer porque su contexto no lo sirve. El v5 de Santa
 #: Cruz razonó sobre la dolarización del sector hotelero y sobre la inflación de la canasta y la
 #: holgura laboral del territorio, ninguna de ellas servida a esa sección.
@@ -277,6 +295,13 @@ def _cambio(v: float, unidad: str) -> str:
                                                 else f"{_s(v)}")
 
 
+def _motivo_del_veredicto(fila: Dict[str, Any]) -> str:
+    """El porqué del veredicto, dicho para un lector y sin nombres de claves del contexto."""
+    if str(fila.get("sentido_de_la_escala")) == SENTIDO_DE_OPTIMO_INTERMEDIO:
+        return MOTIVO_OPTIMO_INTERMEDIO
+    return _CLAVE_CITADA.sub("", str(fila.get("veredicto_por_que") or "")).strip()
+
+
 def _vinetas_del_balance(dentro: Dict[str, Any]) -> List[str]:
     orden = {"desfavorable": 0, "favorable": 1, "no_aplica": 2}
     filas = [f for f in dentro.get("balance") or []
@@ -286,14 +311,19 @@ def _vinetas_del_balance(dentro: Dict[str, Any]) -> List[str]:
     vinetas = []
     for f in moviles:
         u = str(f.get("unidad") or "")
+        optimo_intermedio = (str(f.get("sentido_de_la_escala"))
+                             == SENTIDO_DE_OPTIMO_INTERMEDIO)
         linea = (f"- **{_etiqueta_de_indicador(f['indicador'])}**: de {_valor(f['apertura'], u)} "
                  f"a {_valor(f['cierre'], u)} ({_cambio(f['cambio'], u)}): "
                  f"{_VEREDICTO.get(str(f.get('veredicto')), str(f.get('veredicto')))}, porque "
-                 f"{f.get('veredicto_por_que')}.")
+                 f"{_motivo_del_veredicto(f)}.")
         if _es_num(f.get("cambio_de_score")):
             linea += (f" Su score pasó de {_n(f['score_apertura'])} a {_n(f['score_cierre'])} "
                       f"({_s(f['cambio_de_score'])}).")
-        if _es_num(f.get("nivel_de_referencia")) and f.get("contra_la_referencia"):
+        # El nivel de referencia solo se publica donde SIGNIFICA algo: en un óptimo intermedio
+        # la vara es el óptimo, y ese nivel sale de invertir una curva que no lo representa.
+        if (not optimo_intermedio and _es_num(f.get("nivel_de_referencia"))
+                and f.get("contra_la_referencia")):
             linea += (f" Cierra {f['contra_la_referencia']} del nivel de referencia del modelo, "
                       f"{_valor(f['nivel_de_referencia'], u)}.")
         vinetas.append(linea)
@@ -482,6 +512,14 @@ def _medida(etiqueta: str, mia: Any, resto: Any, brecha: Any = None,
     return txt + (f" ({_s(brecha)} pp)" if _es_num(brecha) else "")
 
 
+def _narrable(sector: Dict[str, Any]) -> bool:
+    """¿Este sector es un hallazgo, o ruido? Una celda que la propia tabla marca como no
+    material —o cuyo peso redondea a cero— no se narra: ocupa el lugar de un hallazgo."""
+    peso: Any = sector.get("peso_en_su_cartera_pct")
+    return (sector.get("material") is not False and _es_num(peso)
+            and float(peso) >= PESO_MINIMO_PARA_NARRAR_PCT)
+
+
 def hechos_del_mapa(mapa: Optional[Dict[str, Any]]) -> str:
     """Las frases con cifras del mapa sectorial de la entidad, en markdown."""
     mapa = mapa or {}
@@ -517,7 +555,8 @@ def hechos_del_mapa(mapa: Optional[Dict[str, Any]]) -> str:
         frases.append(_cap("; ".join(partes)) + ".")
     bloques.append(" ".join(frases))
 
-    propios = [s for s in sectores if s.get("atribucion") == "idiosincratico_peor"]
+    propios = [s for s in sectores if s.get("atribucion") == "idiosincratico_peor"
+               and _narrable(s)]
     if propios:
         vinetas = []
         for s in propios:
@@ -540,7 +579,7 @@ def hechos_del_mapa(mapa: Optional[Dict[str, Any]]) -> str:
         if vinetas:
             bloques.append("**Sectores con deterioro propio**\n\n" + "\n".join(vinetas))
     mejores = [s for s in sectores if s.get("atribucion") == "idiosincratico_mejor"
-               and _es_num(s.get("peso_en_su_cartera_pct"))]
+               and _narrable(s)]
     if mejores:
         bloques.append("**Sectores donde le va mejor que al resto del sistema**: " + "; ".join(
             f"{_nombre_de_sector(s['sector'])} ({_pct(s['peso_en_su_cartera_pct'])} de su "
@@ -591,7 +630,7 @@ def contexto_de_la_lectura_del_mapa(mapa: Optional[Dict[str, Any]],
     sectores = mapa.get("sectores") or []
     tres_mayores = {s.get("sector") for s in sectores[:3]}
     relevantes = [s for s in sectores
-                  if s.get("atribucion") in _ATRIBUCION
+                  if s.get("atribucion") in _ATRIBUCION and _narrable(s)
                   and (s.get("sector") in tres_mayores
                        or s.get("atribucion") != "compartido_con_el_sector")]
     resumen = mapa.get("resumen") or {}
