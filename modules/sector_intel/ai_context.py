@@ -8,6 +8,7 @@ focused (plan §5.2). Module-local, mirrors :mod:`macro_political_risk.ai_contex
 from typing import Any, Dict, List, Optional
 
 from shared.narrative.derived import derived_figures
+from shared.narrative.terminos_vetados import CLAVE as CLAVE_TERMINOS_VETADOS
 
 _DIM_LABELS = {
     "sector": "Sector (tamaño y crecimiento, BCRD)",
@@ -159,6 +160,15 @@ def economic_structure_ai_context(structure: Dict[str, Any]) -> Dict[str, Any]:
     }
 
 
+#: Lo que el texto del IAI no puede decir, con su motivo. Lo vigila el guard del motor
+#: (`shared.narrative.terminos_vetados`): el #1047 lo dejó solo en la plantilla y en producción,
+#: el 2026-09-15, salió «cae en el percentil inferior de la distribución» sobre un puesto 7 de 17.
+TERMINOS_VETADOS_DEL_IAI = {
+    "percentil": ("el IAI ubica al sector por su PUESTO entre los que tienen dato y por una "
+                  "escala min-max del panel; ninguna de las dos es un percentil"),
+}
+
+
 def sector_ai_context(
     latest: Dict[str, Any],
     sector_name: Optional[str] = None,
@@ -206,6 +216,7 @@ def sector_ai_context(
         "iai_band": latest.get("iai_band"),
         "sgps_score": latest.get("sgps_score"),
         "direction": "mayor score = mayor atractivo de inversión",
+        CLAVE_TERMINOS_VETADOS: dict(TERMINOS_VETADOS_DEL_IAI),
         "dimensions": rows,
         "strongest_dimension": strongest,
         "weakest_dimension": weakest,
