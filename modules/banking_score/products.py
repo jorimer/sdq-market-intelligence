@@ -87,6 +87,19 @@ SYSTEM_LABEL = "Sistema Bancario Dominicano"
 #: Un período con forma de AÑO. `2025` sí; `2025-12-31` no — ése es un corte.
 _ES_ANIO = re.compile(r"^\d{4}$")
 
+
+def _fin_del_corte(as_of: Optional[str]) -> Optional[date]:
+    """El último día del corte de un informe: `2025` → 2025-12-31; `2025-12-31` tal cual."""
+    s = str(as_of or "").strip()
+    if not s:
+        return None
+    if _ES_ANIO.match(s):
+        return date(int(s), 12, 31)
+    try:
+        return date.fromisoformat(s[:10])
+    except ValueError:
+        return None
+
 # Datos demo SINTÉTICOS de la muestra de conversión (sin DB, sin entidad real). KPIs del
 # Anexo del catálogo: CAR ~16.8%, morosidad ~1.9%, ROE ~19.4%, eficiencia ~56%, liquidez
 # ~31%. Bandas resultantes: Ejecución Competitiva · Resiliencia Sólida. Fuente única de la
@@ -940,7 +953,7 @@ class BankingProduct:
             detail=f"{n} entidades calificadas en {latest}.",
         )
 
-    def variable_signals(self) -> Dict[str, Any]:
+    def variable_signals(self, as_of: Optional[str] = None) -> Dict[str, Any]:
         """Procedencia POR INDICADOR del Banking Score, para el Data Registry.
 
         **Lo que arregla.** Sin esto el eje caía a `_product_level_fallback`, que emite una
@@ -964,8 +977,14 @@ class BankingProduct:
         from shared.registry.signals import GAP, REAL, VariableSignal
 
         db = self._require_db()
-        latest = (db.query(func.max(RatingResult.period_end))
-                  .filter(RatingResult.model_type == ModelType.deterministic).scalar())
+        # AL CORTE del informe cuando lo trae (`as_of`): la metodología de un Deep Dive 2025 no
+        # puede declarar la cobertura de junio de 2026 (ver `report_sections._provenance_md`).
+        consulta = (db.query(func.max(RatingResult.period_end))
+                    .filter(RatingResult.model_type == ModelType.deterministic))
+        fin_del_corte = _fin_del_corte(as_of)
+        if fin_del_corte is not None:
+            consulta = consulta.filter(RatingResult.period_end <= fin_del_corte)
+        latest = consulta.scalar()
         if latest is None:
             return {"period": None, "signals": []}
 
@@ -1389,7 +1408,7 @@ class BankingProduct:
             from modules.banking_score.reports.anio_por_trimestres import (
                 CORRECCION_DE_TERMINOS_DEL_ANIO, quitar_oraciones_con_terminos_vetados,
                 terminos_vetados_en_el_anio)
-            vetados = terminos_vetados_en_el_anio(texto)
+            vetados = terminos_vetados_en_el_anio(texto, dentro)
             if vetados:
                 logger.warning("Año por trimestres de %s con términos vetados %s: se regenera "
                                "con la corrección", snapshot.entity_name, vetados)
@@ -1399,11 +1418,11 @@ class BankingProduct:
                     template="anio_por_trimestres", mode="deep",
                     axis="banking", audience="comite_credito")
                 texto = res.text
-                persistentes = terminos_vetados_en_el_anio(texto)
+                persistentes = terminos_vetados_en_el_anio(texto, dentro)
                 if persistentes:
                     logger.warning("Año por trimestres de %s: %s persisten tras corregir; se "
                                    "quitan esas oraciones", snapshot.entity_name, persistentes)
-                    texto = quitar_oraciones_con_terminos_vetados(texto)
+                    texto = quitar_oraciones_con_terminos_vetados(texto, dentro)
             salida = {"anio_por_trimestres": texto}
             # El mapa, cuando el cierre lo tiene. Va como sección propia y no dentro del
             # contexto del año: son dos sujetos —la serie del score y el libro por sector— y

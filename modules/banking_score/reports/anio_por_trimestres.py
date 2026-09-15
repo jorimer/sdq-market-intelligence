@@ -46,9 +46,28 @@ _TRAMO_LABEL = {3: "primer trimestre", 6: "segundo trimestre",
 #: eficiencia a «intensidad estacional» sobre dos trimestres que el rótulo computado declaraba
 #: atípicos frente a su historia, con la plantilla prohibiéndolo; y llamó «umbral mínimo» al
 #: nivel de referencia del modelo, que no es el mínimo de nadie. Una nota al modelo no es un guard.
-TERMINOS_VETADOS_DEL_ANIO = (r"estacional\w*", r"umbral(?:es)?\s+m[ií]nimos?")
+#: «factores intraanuales de calendario» salió en la vuelta siguiente: la misma especulación,
+#: dicha con otras palabras.
+TERMINOS_VETADOS_DEL_ANIO = (r"estacional\w*", r"umbral(?:es)?\s+m[ií]nimos?",
+                             r"(?:factores?\s+)?(?:intraanuales?\s+)?de\s+calendario",
+                             r"efecto\s+calendario")
 
 _VETADOS_RE = [re.compile(r"(?<![\wáéíóúñ])" + p, re.IGNORECASE) for p in TERMINOS_VETADOS_DEL_ANIO]
+
+#: Un MÚLTIPLO afirmado contra la razón servida. «una mora estresada que ya duplica ampliamente
+#: la mediana» sobre 9,06 contra 4,78 —1,9 veces— (Santa Cruz, 2026-09-15). Solo se veta si la
+#: razón está servida: sin ella no hay contra qué juzgar, y un veto a ciegas mordería prosa real.
+_MULTIPLOS = ((2.0, re.compile(r"(?<![\wáéíóúñ])(?:duplic\w*|el\s+doble)", re.IGNORECASE)),
+              (3.0, re.compile(r"(?<![\wáéíóúñ])(?:triplic\w*|el\s+triple)", re.IGNORECASE)))
+
+
+def _patrones(dentro: Optional[Dict[str, Any]]) -> List["re.Pattern[str]"]:
+    patrones = list(_VETADOS_RE)
+    cierre = (((dentro or {}).get("morosidad_estresada") or {}).get("cierre") or {})
+    veces = cierre.get("veces_la_mediana_del_resto")
+    if isinstance(veces, (int, float)):
+        patrones += [p for umbral, p in _MULTIPLOS if veces < umbral]
+    return patrones
 
 #: Lo que se agrega al contexto en el segundo intento si el texto usó un término vetado.
 CORRECCION_DE_TERMINOS_DEL_ANIO = (
@@ -58,26 +77,30 @@ CORRECCION_DE_TERMINOS_DEL_ANIO = (
     "copiá el rótulo de cada trimestre y nombrá el nivel de referencia como tal.")
 
 
-def terminos_vetados_en_el_anio(texto: str) -> List[str]:
-    """Los términos vetados que aparecen en *texto*, como aparecen, sin repetir."""
+def terminos_vetados_en_el_anio(texto: str,
+                                dentro: Optional[Dict[str, Any]] = None) -> List[str]:
+    """Los términos vetados que aparecen en *texto*, como aparecen, sin repetir. Con *dentro*
+    (el año servido) se vetan además los múltiplos que su razón no sostiene."""
     halladas: List[str] = []
-    for patron in _VETADOS_RE:
+    for patron in _patrones(dentro):
         for m in patron.finditer(texto or ""):
             if m.group(0).lower() not in halladas:
                 halladas.append(m.group(0).lower())
     return halladas
 
 
-def quitar_oraciones_con_terminos_vetados(texto: str) -> str:
+def quitar_oraciones_con_terminos_vetados(texto: str,
+                                          dentro: Optional[Dict[str, Any]] = None) -> str:
     """Quita SOLO las oraciones que contienen un término vetado; conserva párrafos y el resto.
 
     Es el último recurso, después de regenerar con la corrección: la especulación que el dato
     niega no se publica, pero tampoco se niega un informe entero por una oración."""
+    patrones = _patrones(dentro)
     lineas = []
     for linea in (texto or "").split("\n"):
         oraciones = re.split(r"(?<=[.!?])\s+", linea)
         lineas.append(" ".join(o for o in oraciones
-                               if not any(p.search(o) for p in _VETADOS_RE)))
+                               if not any(p.search(o) for p in patrones)))
     return "\n".join(lineas)
 
 

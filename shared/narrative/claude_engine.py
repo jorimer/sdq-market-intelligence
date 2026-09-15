@@ -113,7 +113,9 @@ MOROSIDAD_ESTRESADA_EN_EL_TEXTO = (
     "'disponible' en falso, decí en una frase que no se publica y por qué ('motivo'). No digas "
     "que la estresada afecta el score: no puntúa. La cobertura de provisiones se mide contra la "
     "mora CONVENCIONAL: no la compares con la estresada ni digas que su margen se estrecha "
-    "contra ella, porque lo castigado ya salió del balance y no lleva provisión.\n\n"
+    "contra ella, porque lo castigado ya salió del balance y no lleva provisión. Si comparás "
+    "la estresada con la mediana como un múltiplo, usá 'veces_la_mediana_del_resto' tal cual: "
+    "no escribas «duplica» ni «el doble» si esa cifra no llega a 2.\n\n"
 )
 
 #: Cómo se escribe un trimestre (2026-09-15, feedback de Banco Santa Cruz: «si siempre es así,
