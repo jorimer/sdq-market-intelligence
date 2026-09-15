@@ -21,7 +21,6 @@ tendría contra qué medirse. Va marcado como tal.
 from __future__ import annotations
 
 import logging
-import re
 from datetime import date
 from typing import Any, Dict, List, Optional
 
@@ -41,67 +40,57 @@ UMBRAL_TRAMO = 0.5
 _TRAMO_LABEL = {3: "primer trimestre", 6: "segundo trimestre",
                 9: "tercer trimestre", 12: "cuarto trimestre"}
 
-#: Lenguaje que el dato del AÑO POR DENTRO no sostiene, vigilado en CÓDIGO. El Deep Dive 2025 de
-#: Banco Múltiple Santa Cruz regenerado en producción (2026-09-15) atribuyó la oscilación de
-#: eficiencia a «intensidad estacional» sobre dos trimestres que el rótulo computado declaraba
-#: atípicos frente a su historia, con la plantilla prohibiéndolo; y llamó «umbral mínimo» al
-#: nivel de referencia del modelo, que no es el mínimo de nadie. Una nota al modelo no es un guard.
-#: «factores intraanuales de calendario» salió en la vuelta siguiente: la misma especulación,
-#: dicha con otras palabras.
-TERMINOS_VETADOS_DEL_ANIO = (r"estacional\w*", r"umbral(?:es)?\s+m[ií]nimos?",
-                             r"(?:factores?\s+)?(?:intraanuales?\s+)?de\s+calendario",
-                             r"efecto\s+calendario")
-
-_VETADOS_RE = [re.compile(r"(?<![\wáéíóúñ])" + p, re.IGNORECASE) for p in TERMINOS_VETADOS_DEL_ANIO]
+#: Lenguaje que el dato del AÑO POR DENTRO no sostiene. El Deep Dive 2025 de Banco Múltiple Santa
+#: Cruz regenerado en producción (2026-09-15) atribuyó la oscilación de eficiencia a «intensidad
+#: estacional» sobre dos trimestres que el rótulo computado declaraba atípicos frente a su
+#: historia, con la plantilla prohibiéndolo; y llamó «umbral mínimo» al nivel de referencia del
+#: modelo, que no es el mínimo de nadie. «factores intraanuales de calendario» salió en la vuelta
+#: siguiente: la misma especulación, dicha con otras palabras.
+#:
+#: Se DECLARA en el contexto (`shared.narrative.terminos_vetados`) y lo repara el lazo del guard
+#: del motor. El año tuvo detector, corrección y regeneración propios en `products.py`: dos
+#: mecanismos para lo mismo, con avisos distintos y un segundo lazo que regeneraba por fuera del
+#: presupuesto del motor. Los términos se buscan como palabra, con sus flexiones y sin depender
+#: de la tilde: «estacional» cubre «estacionalidad»; «de calendario», los «factores intraanuales».
+MOTIVO_ESTACIONAL = (
+    "un patrón que se repite solo se afirma con el rótulo de 'contexto_de_los_tramos' que lo "
+    "respalda: copiá el rótulo de cada trimestre en vez de atribuirle una causa de calendario")
+MOTIVO_UMBRAL_MINIMO = (
+    "el nivel de referencia del modelo no es el mínimo de nadie: nombralo como nivel de "
+    "referencia")
+TERMINOS_VETADOS_DEL_ANIO: Dict[str, str] = {
+    "estacional": MOTIVO_ESTACIONAL,
+    "de calendario": MOTIVO_ESTACIONAL,
+    "efecto calendario": MOTIVO_ESTACIONAL,
+    "umbral mínimo": MOTIVO_UMBRAL_MINIMO,
+    "umbrales mínimos": MOTIVO_UMBRAL_MINIMO,
+}
 
 #: Un MÚLTIPLO afirmado contra la razón servida. «una mora estresada que ya duplica ampliamente
-#: la mediana» sobre 9,06 contra 4,78 —1,9 veces— (Santa Cruz, 2026-09-15). Solo se veta si la
-#: razón está servida: sin ella no hay contra qué juzgar, y un veto a ciegas mordería prosa real.
-_MULTIPLOS = ((2.0, re.compile(r"(?<![\wáéíóúñ])(?:duplic\w*|el\s+doble)", re.IGNORECASE)),
-              (3.0, re.compile(r"(?<![\wáéíóúñ])(?:triplic\w*|el\s+triple)", re.IGNORECASE)))
+#: la mediana» sobre 9,06 contra 4,78 —1,9 veces— (Santa Cruz, 2026-09-15). Solo se declara si la
+#: razón está servida y no lo alcanza: sin ella no hay contra qué juzgar, y un veto a ciegas
+#: mordería prosa real. «duplic» es la raíz: cubre «duplica», «duplicó», «duplicar».
+MOTIVO_MULTIPLO = (
+    "la morosidad estresada al cierre no alcanza ese múltiplo de la mediana del resto del "
+    "sistema: si comparás, citá 'veces_la_mediana_del_resto' tal cual")
+_MULTIPLOS = ((2.0, ("duplic", "el doble", "del doble")),
+              (3.0, ("triplic", "el triple", "del triple")))
 
 
-def _patrones(dentro: Optional[Dict[str, Any]]) -> List["re.Pattern[str]"]:
-    patrones = list(_VETADOS_RE)
-    cierre = (((dentro or {}).get("morosidad_estresada") or {}).get("cierre") or {})
-    veces = cierre.get("veces_la_mediana_del_resto")
-    if isinstance(veces, (int, float)):
-        patrones += [p for umbral, p in _MULTIPLOS if veces < umbral]
-    return patrones
+def terminos_vetados_del_anio(dentro: Optional[Dict[str, Any]]) -> Dict[str, str]:
+    """``{término: motivo}`` que el texto de *dentro* (el año servido) no puede usar.
 
-#: Lo que se agrega al contexto en el segundo intento si el texto usó un término vetado.
-CORRECCION_DE_TERMINOS_DEL_ANIO = (
-    "El texto anterior usó {terminos}. Ese lenguaje no lo sostiene el dato de este año: un "
-    "patrón que se repite solo se afirma con el rótulo de 'contexto_de_los_tramos' que lo "
-    "respalda, y el nivel de referencia del modelo no es un mínimo. Reescribí sin esos términos: "
-    "copiá el rótulo de cada trimestre y nombrá el nivel de referencia como tal.")
-
-
-def terminos_vetados_en_el_anio(texto: str,
-                                dentro: Optional[Dict[str, Any]] = None) -> List[str]:
-    """Los términos vetados que aparecen en *texto*, como aparecen, sin repetir. Con *dentro*
-    (el año servido) se vetan además los múltiplos que su razón no sostiene."""
-    halladas: List[str] = []
-    for patron in _patrones(dentro):
-        for m in patron.finditer(texto or ""):
-            if m.group(0).lower() not in halladas:
-                halladas.append(m.group(0).lower())
-    return halladas
-
-
-def quitar_oraciones_con_terminos_vetados(texto: str,
-                                          dentro: Optional[Dict[str, Any]] = None) -> str:
-    """Quita SOLO las oraciones que contienen un término vetado; conserva párrafos y el resto.
-
-    Es el último recurso, después de regenerar con la corrección: la especulación que el dato
-    niega no se publica, pero tampoco se niega un informe entero por una oración."""
-    patrones = _patrones(dentro)
-    lineas = []
-    for linea in (texto or "").split("\n"):
-        oraciones = re.split(r"(?<=[.!?])\s+", linea)
-        lineas.append(" ".join(o for o in oraciones
-                               if not any(p.search(o) for p in patrones)))
-    return "\n".join(lineas)
+    Los fijos, más los múltiplos que su razón servida no sostiene. Se COMPUTA desde el mismo
+    dato que lee el modelo, así que «duplica» se veta exactamente cuando la razón no llega."""
+    terminos = dict(TERMINOS_VETADOS_DEL_ANIO)
+    estresada = (dentro or {}).get("morosidad_estresada")
+    cierre = estresada.get("cierre") if isinstance(estresada, dict) else None
+    veces = cierre.get("veces_la_mediana_del_resto") if isinstance(cierre, dict) else None
+    if isinstance(veces, (int, float)) and not isinstance(veces, bool):
+        for umbral, formas in _MULTIPLOS:
+            if veces < umbral:
+                terminos.update(dict.fromkeys(formas, MOTIVO_MULTIPLO))
+    return terminos
 
 
 def _tramos(puntos: List[Dict[str, Any]]) -> List[Dict[str, Any]]:

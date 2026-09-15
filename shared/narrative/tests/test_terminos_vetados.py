@@ -48,6 +48,26 @@ def test_se_detecta_como_palabra_y_con_sus_flexiones():
     assert terminos_en({CLAVE: {"tasa": "x"}}, "la tasa del crédito") == ["tasa"]
 
 
+def test_se_detecta_sin_tilde_y_con_espacios_de_mas():
+    """El modelo a veces pierde una tilde o duplica un espacio; el veto no puede depender de eso.
+    Un salto de línea NO une: quitar trabaja por línea y no podría sacar lo que detectó."""
+    veto = {CLAVE: {"umbral mínimo": "x"}}
+    assert terminos_en(veto, "sobre el umbral minimo del modelo") == ["umbral mínimo"]
+    assert terminos_en(veto, "sobre el Umbral  Mínimos del modelo") == ["umbral mínimo"]
+    assert terminos_en({CLAVE: {"minimo": "x"}}, "el mínimo") == ["minimo"]
+    assert terminos_en(veto, "el umbral\nmínimo") == []
+
+
+def test_el_aviso_trae_el_MOTIVO_de_cada_termino(monkeypatch):
+    """El motivo es la instrucción de reescritura: sin él, el aviso de un eje le dice al modelo
+    lo que corresponde a otro («cita el puesto» no le sirve al año de un banco)."""
+    eng, llamadas = _motor(monkeypatch, ["Cae en el percentil inferior.",
+                                         "Ocupa el puesto 7 de 17."])
+    _generar(eng, {"x": 1, **_VETO})
+    aviso = llamadas[1]["messages"][0]["content"].partition("CORRECCIÓN OBLIGATORIA — TÉRMINOS")[2]
+    assert "«percentil»" in aviso and "lo servido es un puesto" in aviso
+
+
 def test_con_el_termino_se_REGENERA_con_el_aviso(monkeypatch):
     eng, llamadas = _motor(monkeypatch, ["Cae en el percentil inferior.",
                                          "Ocupa el puesto 7 de 17."])
