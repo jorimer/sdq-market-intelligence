@@ -29,6 +29,10 @@ class TestElHelperLeeLoQueLosProductosSirven:
         ("2026-06-30T00:00:00", date(2026, 6, 30)),
         ("2025-12", date(2025, 12, 28)),
         ("2024-02", date(2024, 2, 28)),          # febrero: el 28 es seguro siempre
+        # El año suelto es el período de los productos ANUALES. Caía a HOY y un informe de
+        # 2025 citaba inflación hasta julio de 2026 (producción, 2026-09-15).
+        ("2025", date(2025, 12, 31)),
+        ("2024", date(2024, 12, 31)),
     ])
     def test_los_formatos_que_los_productos_sellan(self, periodo, esperado):
         assert corte_del_periodo(periodo) == esperado
@@ -83,3 +87,48 @@ def test_el_helper_es_UNO_solo_y_seguros_lo_DELEGA():
         "seguros volvió a tener su propia copia del helper")
     # Y sigue funcionando para sus llamadores.
     assert ins._corte_del_periodo("2025-12-31") == date(2025, 12, 31)
+
+
+#: Toda superficie que sirve la capa macro dentro de un documento fechado. Se descubre con
+#: `ast` y se contrasta contra esta lista: una superficie nueva que la llame sin estar acá
+#: hace fallar el test, en vez de quedar fuera como quedaron los cinco ejes del #1042.
+_TODAS_LAS_SUPERFICIES = {
+    "app/products_monetary_policy.py", "modules/banking_score/products.py",
+    "modules/banking_score/products_year_review.py", "modules/construction_intel/products.py",
+    "modules/energy_intel/products.py", "modules/free_zones_intel/products.py",
+    "modules/insurance_intel/products.py", "modules/pension_intel/products.py",
+    "modules/social_dev/products.py", "modules/telecom_intel/products.py",
+    "modules/tourism_intel/products.py",
+}
+_LECTURAS_FECHADAS = {"capacidad_de_pago", "holgura_donde_opera", "holgura_donde_presta",
+                      "holgura_de_la_region"}
+
+
+def _llamadas_a_la_capa(ruta):
+    import pathlib
+    arbol = ast.parse(pathlib.Path(ruta).read_text(encoding="utf-8"))
+    return [n for n in ast.walk(arbol) if isinstance(n, ast.Call)
+            and isinstance(n.func, ast.Name) and n.func.id in _LECTURAS_FECHADAS]
+
+
+def test_el_barrido_ve_TODAS_las_superficies_que_leen_la_capa():
+    import pathlib
+    raiz = pathlib.Path(__file__).resolve().parents[2]
+    halladas = set()
+    for ruta in list(raiz.glob("modules/*/products*.py")) + list(raiz.glob("app/products_*.py")):
+        if _llamadas_a_la_capa(ruta):
+            halladas.add(str(ruta.relative_to(raiz)))
+    assert halladas == _TODAS_LAS_SUPERFICIES, (
+        f"superficies nuevas: {sorted(halladas - _TODAS_LAS_SUPERFICIES)} · "
+        f"ya no la leen: {sorted(_TODAS_LAS_SUPERFICIES - halladas)}")
+
+
+@pytest.mark.parametrize("ruta", sorted(_TODAS_LAS_SUPERFICIES))
+def test_ninguna_superficie_lee_la_capa_a_HOY(ruta):
+    import pathlib
+    raiz = pathlib.Path(__file__).resolve().parents[2]
+    for c in _llamadas_a_la_capa(raiz / ruta):
+        corte = c.args[1] if len(c.args) > 1 else None
+        es_hoy = (isinstance(corte, ast.Call) and isinstance(corte.func, ast.Attribute)
+                  and corte.func.attr == "today")
+        assert not es_hoy, f"{ruta}:{c.lineno} lee la capa macro a la fecha de descarga"
