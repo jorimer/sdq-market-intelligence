@@ -116,7 +116,7 @@ def test_con_la_serie_completa_el_semaforo_por_fin_juzga_AVANCE(monkeypatch):
     leer = mod.proveedor_registro(None)
 
     ind = Indicador(id="2.46", eje=2, nombre="Mujeres regidoras", escala="numerica",
-                    metas={"2025": 41.5})
+                    metas={"2024": 41.5})
     b = Binding(indicador="2.46", serie="social_dev:women_councillors", fuente="cepal",
                 mejor="mayor", estado="verificado")
     v = evaluar(ind, b, leer("social_dev:women_councillors"), corte="2025")
@@ -126,7 +126,7 @@ def test_con_la_serie_completa_el_semaforo_por_fin_juzga_AVANCE(monkeypatch):
     # El Senado NO retrocede: está clavado. Con un solo punto los dos salían idénticos
     # («no_alcanzada»), y son dos diagnósticos distintos que piden dos acciones distintas.
     ind_s = Indicador(id="2.43", eje=2, nombre="Mujeres senadoras", escala="numerica",
-                     metas={"2025": 41.5})
+                     metas={"2024": 41.5})
     b_s = Binding(indicador="2.43", serie="social_dev:women_senate", fuente="uip",
                   mejor="mayor", estado="verificado")
     vs = evaluar(ind_s, b_s, leer("social_dev:women_senate"), corte="2025")
