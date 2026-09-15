@@ -3,7 +3,7 @@ from __future__ import annotations
 
 import logging
 from datetime import date
-from typing import Any, Dict, Iterable, List, Optional
+from typing import Any, Dict, Iterable, List, Optional, Tuple
 
 from sqlalchemy.orm import Session
 
@@ -17,7 +17,8 @@ def upsert(db: Session, *, sector_key: str, series_code: str, period: str,
            frequency: Optional[str] = None, nature: Optional[str] = None,
            provincia: str = "", tipologia: str = "",
            source: Optional[str] = None, published_at: Optional[date] = None,
-           license: Optional[str] = None) -> SectorObservation:
+           license: Optional[str] = None, municipio: str = "",
+           barrio: str = "") -> SectorObservation:
     """Escribe (o reemplaza) UN punto. No commitea — el llamador decide.
 
     ``value=None`` se persiste como NULL: un dato ausente es NULL, jamás 0.0. Escribir un
@@ -29,11 +30,14 @@ def upsert(db: Session, *, sector_key: str, series_code: str, period: str,
                    SectorObservation.series_code == series_code,
                    SectorObservation.period == period,
                    SectorObservation.provincia == provincia,
-                   SectorObservation.tipologia == tipologia)
+                   SectorObservation.tipologia == tipologia,
+                   SectorObservation.municipio == municipio,
+                   SectorObservation.barrio == barrio)
            .first())
     if row is None:
         row = SectorObservation(sector_key=sector_key, series_code=series_code,
-                                period=period, provincia=provincia, tipologia=tipologia)
+                                period=period, provincia=provincia, tipologia=tipologia,
+                                municipio=municipio, barrio=barrio)
         db.add(row)
     row.value = value
     row.unit = unit
@@ -47,7 +51,8 @@ def upsert(db: Session, *, sector_key: str, series_code: str, period: str,
 
 def serie(db: Session, *, sector_key: str, series_code: str,
           provincia: str = "", tipologia: str = "",
-          hasta: Optional[str] = None) -> List[SectorObservation]:
+          hasta: Optional[str] = None, municipio: str = "",
+          barrio: str = "") -> List[SectorObservation]:
     """La serie completa de un punto de medición, ascendente por período.
 
     Los períodos son ``AAAA-MM`` / ``AAAA-QN`` / ``AAAA``: cadenas de ancho fijo que ordenan
@@ -59,7 +64,9 @@ def serie(db: Session, *, sector_key: str, series_code: str,
          .filter(SectorObservation.sector_key == sector_key,
                  SectorObservation.series_code == series_code,
                  SectorObservation.provincia == provincia,
-                 SectorObservation.tipologia == tipologia))
+                 SectorObservation.tipologia == tipologia,
+                 SectorObservation.municipio == municipio,
+                 SectorObservation.barrio == barrio))
     if hasta:
         q = q.filter(SectorObservation.period <= hasta)
     return q.order_by(SectorObservation.period.asc()).all()
@@ -70,7 +77,9 @@ def codigos(db: Session, *, sector_key: str) -> List[str]:
     rows = (db.query(SectorObservation.series_code)
             .filter(SectorObservation.sector_key == sector_key,
                     SectorObservation.provincia == "",
-                    SectorObservation.tipologia == "")
+                    SectorObservation.tipologia == "",
+                    SectorObservation.municipio == "",
+                    SectorObservation.barrio == "")
             .distinct().all())
     return sorted(r[0] for r in rows)
 
@@ -140,24 +149,38 @@ def ultima_escritura(db: Session, *, sector_key: str,
     return valor.date() if isinstance(valor, datetime) else valor
 
 
+#: Qué columnas identifican cada dimensión y cuáles tienen que venir VACÍAS. Una fila de
+#: barrio lleva su municipio y su provincia; sin exigir vacío lo más fino, el total de una
+#: provincia sumaría también sus municipios y sus barrios — la misma plaza tres veces.
+_DIMENSIONES: Dict[str, Tuple[Tuple[str, ...], Tuple[str, ...]]] = {
+    "provincia": (("provincia",), ("tipologia", "municipio", "barrio")),
+    "tipologia": (("tipologia",), ("provincia", "municipio", "barrio")),
+    "municipio": (("provincia", "municipio"), ("tipologia", "barrio")),
+    "barrio": (("provincia", "municipio", "barrio"), ("tipologia",)),
+}
+
+
 def por_dimension(db: Session, *, sector_key: str, series_code: str, period: str,
                   campo: str) -> List[Dict[str, Any]]:
-    """Las filas de *period* desagregadas por ``provincia`` o ``tipologia``, de mayor a menor.
+    """Las filas de *period* desagregadas por una dimensión, de mayor a menor.
 
     Es el microdato que el agregado anual tiraba, y la diferencia entre «el sector creció»
-    y «tal plaza concentra tal cosa».
+    y «tal plaza concentra tal cosa». Un municipio sale con su provincia y un barrio con su
+    municipio y su provincia: el nombre suelto no dice de qué plaza es.
     """
-    if campo not in ("provincia", "tipologia"):
-        raise ValueError("La dimensión debe ser 'provincia' o 'tipologia'.")
-    col = getattr(SectorObservation, campo)
-    rows = (db.query(SectorObservation)
-            .filter(SectorObservation.sector_key == sector_key,
-                    SectorObservation.series_code == series_code,
-                    SectorObservation.period == period,
-                    col != "")
-            .all())
-    salida = [{campo: getattr(r, campo), "valor": r.value, "unidad": r.unit}
-              for r in rows if r.value is not None]
+    if campo not in _DIMENSIONES:
+        raise ValueError("La dimensión debe ser 'provincia', 'tipologia', 'municipio' o "
+                         "'barrio'.")
+    llenas, vacias = _DIMENSIONES[campo]
+    q = (db.query(SectorObservation)
+         .filter(SectorObservation.sector_key == sector_key,
+                 SectorObservation.series_code == series_code,
+                 SectorObservation.period == period,
+                 getattr(SectorObservation, campo) != ""))
+    for c in vacias:
+        q = q.filter(getattr(SectorObservation, c) == "")
+    salida = [{**{c: getattr(r, c) for c in llenas}, "valor": r.value, "unidad": r.unit}
+              for r in q.all() if r.value is not None]
     return sorted(salida, key=lambda d: -(d["valor"] or 0.0))
 
 

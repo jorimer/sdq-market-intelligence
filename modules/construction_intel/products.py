@@ -287,6 +287,12 @@ class ConstructionProduct:
                           "provincia"),
                 Dimension("metros_cuadrados_licenciados_por_tipologia_del_mes", SERIE_SQM,
                           "tipologia"),
+                # Municipio y barrio/sector (decisión del dueño, 2026-09-15): cada fila trae
+                # los niveles de arriba, porque el nombre suelto no identifica la plaza.
+                Dimension("metros_cuadrados_licenciados_por_municipio_del_mes", SERIE_SQM,
+                          "municipio"),
+                Dimension("metros_cuadrados_licenciados_por_barrio_o_sector_del_mes", SERIE_SQM,
+                          "barrio"),
             ),
             ultima_descarga=descarga,
         ), self._feed_obra_publica()]

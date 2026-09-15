@@ -37,6 +37,8 @@ _COL_TYPOLOGY = ("tipologia",)
 _COL_SQM = ("metros cuadrados",)
 _COL_INVESTMENT = ("inversion total",)
 _COL_PROVINCE = ("provincia",)
+_COL_MUNICIPIO = ("municipio",)
+_COL_BARRIO = ("barrio/sector", "barrio sector", "barrio")
 
 
 def _norm(s: str) -> str:
@@ -210,6 +212,10 @@ def parse_licenses_mensual(text: str) -> Dict[str, Any]:
             idx["investment"] = i
         elif n in _COL_PROVINCE:
             idx["province"] = i
+        elif n in _COL_MUNICIPIO:
+            idx["municipio"] = i
+        elif n in _COL_BARRIO:
+            idx["barrio"] = i
     if "year" not in idx or "month" not in idx:
         # Sin columna de mes no hay serie mensual que construir. Devolver el anual
         # re-etiquetado sería inventar doce puntos donde el emisor declaró uno.
@@ -229,7 +235,8 @@ def parse_licenses_mensual(text: str) -> Dict[str, Any]:
             continue
         periodo = f"{int(ys):04d}-{mes:02d}"
         rec = out.setdefault(periodo, {"permits": 0, "sqm": 0.0, "investment": 0.0,
-                                       "by_typology": {}, "by_province": {}})
+                                       "by_typology": {}, "by_province": {},
+                                       "by_municipio": {}, "by_barrio": {}})
         rec["permits"] += 1
         sqm = _num(row[idx["sqm"]]) if "sqm" in idx and idx["sqm"] < len(row) else None
         inv = (_num(row[idx["investment"]])
@@ -247,6 +254,20 @@ def parse_licenses_mensual(text: str) -> Dict[str, Any]:
             d = rec["by_province"].setdefault(p, {"permits": 0, "sqm": 0.0})
             d["permits"] += 1
             d["sqm"] += sqm_val
+            # MUNICIPIO y BARRIO viajan con los niveles de arriba en la llave: hay barrios con el
+            # mismo nombre en municipios distintos («CENTRO», «LOS JARDINES») y municipios con
+            # nombres que se repiten en otra provincia. Sumar por nombre suelto fundiría plazas
+            # que el emisor separa.
+            if "municipio" in idx and idx["municipio"] < len(row):
+                m = row[idx["municipio"]].strip().upper() or "SIN MUNICIPIO"
+                dm = rec["by_municipio"].setdefault((p, m), {"permits": 0, "sqm": 0.0})
+                dm["permits"] += 1
+                dm["sqm"] += sqm_val
+                if "barrio" in idx and idx["barrio"] < len(row):
+                    b = row[idx["barrio"]].strip().upper() or "SIN BARRIO"
+                    db_ = rec["by_barrio"].setdefault((p, m, b), {"permits": 0, "sqm": 0.0})
+                    db_["permits"] += 1
+                    db_["sqm"] += sqm_val
 
     return {"periodos": out, "sin_mes": sin_mes}
 
