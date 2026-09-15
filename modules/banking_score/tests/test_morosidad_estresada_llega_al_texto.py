@@ -48,5 +48,10 @@ def test_las_DOS_plantillas_que_la_leen_llevan_la_instruccion():
     # la mora estresada: lo castigado ya salió del balance y no lleva provisión.
     assert "cobertura de provisiones se mide contra la mora CONVENCIONAL" in (
         MOROSIDAD_ESTRESADA_EN_EL_TEXTO)
-    for plantilla in ("subcomponent_focus", "anio_por_trimestres"):
-        assert MOROSIDAD_ESTRESADA_EN_EL_TEXTO in THIN_TEMPLATES[plantilla], plantilla
+    assert MOROSIDAD_ESTRESADA_EN_EL_TEXTO in THIN_TEMPLATES["subcomponent_focus"]
+    # El año por dentro escribe sus cifras en código («hechos y lectura», 2026-09-15): su
+    # plantilla lee el múltiplo como rótulo y conserva la regla de la cobertura.
+    anio = THIN_TEMPLATES["anio_por_trimestres"]
+    assert "'multiplo_de_la_mediana_del_resto'" in anio
+    assert "cobertura de provisiones se mide contra la mora convencional" in anio
+    assert "no puntúa" in anio
