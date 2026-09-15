@@ -44,8 +44,10 @@ ALCANZAN = ("alcanzada", "en_trayectoria")
 NO_ALCANZAN = ("no_alcanzada", "no_alcanzara", "retrocede", "estancada")
 
 #: Veredictos que NO entran al juicio del fin: o no hay medición, o la meta no se resta, o
-#: hay serie sin certificar que el nivel sea comparable. Ninguno es incumplimiento.
-SIN_VEREDICTO = ("sin_dato", "sin_medicion", "no_evaluable", "medido_sin_certificar")
+#: hay serie sin certificar que el nivel sea comparable, o el período de la meta no tiene dato
+#: propio (`indeterminado`). Ninguno es incumplimiento.
+SIN_VEREDICTO = ("sin_dato", "sin_medicion", "no_evaluable", "medido_sin_certificar",
+                 "indeterminado")
 
 #: Cuántos indicadores del fin hay que estar juzgando para poder decir algo del fin. Con dos,
 #: una sola observación decide la mayoría y el enunciado se vuelve una anécdota con forma de
