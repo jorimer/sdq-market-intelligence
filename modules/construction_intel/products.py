@@ -274,7 +274,12 @@ class ConstructionProduct:
             etiquetas=ETIQUETAS_DEL_FEED,
             axis="construction_intel",
             fuente=FUENTE_MIVHED,
-            cadence="monthly",
+            # TRIMESTRAL: el dato es mensual pero el MIVHED lo PUBLICA por trimestre. Lo declara
+            # su ficha en datos.gob.do («Periodicidad: trimestral») y lo confirma el historial
+            # del conjunto (oct-2024, ene/abr/jul-2025, ene/abr/jul-2026). Declarado mensual, el
+            # sensor lo marcaba congelado a los 77 días de una edición al día y el encabezado del
+            # informe afirmaba que «la de julio, de cadencia mensual, no figuraba» (2026-09-15).
+            cadence="quarterly",
             nota=NOTA_DEL_FEED_MIVHED,
             # El microdato que el agregado anual descartaba. El sujeto viaja en la clave.
             dimensiones=(
