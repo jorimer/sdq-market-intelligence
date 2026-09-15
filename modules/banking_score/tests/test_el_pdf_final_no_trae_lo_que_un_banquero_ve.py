@@ -14,12 +14,16 @@ Tercera revisión completa del Deep Dive 2025 de Banco Múltiple Santa Cruz en p
    período» mientras el texto citaba las dos cifras: la procedencia se leía del ÚLTIMO período
    del panel (2026-06-30, sin cubo de cartera), no del corte del informe.
 """
+import asyncio
 import datetime as dt
+from types import SimpleNamespace
 
 import pytest
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
+
+from shared.narrative.terminos_vetados import terminos_en
 
 from shared.auth.models import User  # noqa: F401 — registra users para las FK
 from shared.database.base import Base
@@ -57,32 +61,64 @@ def test_contexto_como_palabra_de_la_prosa_no_se_toca():
 
 
 # ── 3 · Un múltiplo que la razón servida no sostiene ─────────────────────────
+#
+# El veto es CONDICIONAL a la razón servida y lo declara el CONTEXTO del año, que ya la trae:
+# «duplica» entra a la lista solo si 'veces_la_mediana_del_resto' no llega a 2. Se juzga con el
+# detector general sobre el contexto que la RUTA le entrega al motor.
 
 def _dentro(veces):
     return {"morosidad_estresada": {"cierre": {"disponible": True,
                                                "veces_la_mediana_del_resto": veces}}}
 
 
-def test_duplica_se_veta_si_la_razon_servida_no_llega_a_dos():
-    from modules.banking_score.reports.anio_por_trimestres import terminos_vetados_en_el_anio
+def _contexto_servido(monkeypatch, dentro):
+    from modules.banking_score.products import BankingProduct
+    from shared.narrative import claude_engine
+    from shared.products import ProductSnapshot, ProductTier
 
+    vistos = []
+
+    async def _fake_generate(*, context, template, mode, axis, audience):
+        vistos.append(context)
+        return SimpleNamespace(text="El año se movió.")
+
+    monkeypatch.setattr(claude_engine.narrative_engine, "generate", _fake_generate)
+    snapshot = ProductSnapshot(tier=ProductTier.deep_dive, period="2025",
+                               payload={"anio_por_trimestres": dentro},
+                               entity_name="Banco Múltiple Santa Cruz")
+    asyncio.run(BankingProduct().narratives(ProductTier.deep_dive, snapshot))
+    return vistos[0]
+
+
+def test_duplica_se_veta_si_la_razon_servida_no_llega_a_dos(monkeypatch):
     frase = "una mora estresada que ya duplica ampliamente la mediana del sistema"
-    assert terminos_vetados_en_el_anio(frase, _dentro(1.9))
-    assert terminos_vetados_en_el_anio(frase, _dentro(2.3)) == []
+    assert terminos_en(_contexto_servido(monkeypatch, _dentro(1.9)), frase)
+    assert terminos_en(_contexto_servido(monkeypatch, _dentro(2.3)), frase) == []
 
 
-def test_sin_razon_servida_no_se_inventa_un_veto():
-    from modules.banking_score.reports.anio_por_trimestres import terminos_vetados_en_el_anio
+def test_cada_multiplo_con_su_umbral(monkeypatch):
+    bajo_dos = _contexto_servido(monkeypatch, _dentro(1.9))
+    for frase in ("la mora duplicó la mediana", "es el doble de la mediana",
+                  "más del doble de la mediana", "triplica la mediana"):
+        assert terminos_en(bajo_dos, frase), frase
+    bajo_tres = _contexto_servido(monkeypatch, _dentro(2.3))
+    assert terminos_en(bajo_tres, "más del triple de la mediana")
+    assert terminos_en(bajo_tres, "es el doble de la mediana") == []
+    assert terminos_en(_contexto_servido(monkeypatch, _dentro(3.1)), "triplica la mediana") == []
 
-    assert terminos_vetados_en_el_anio("la mora casi duplica la del año anterior") == []
+
+def test_sin_razon_servida_no_se_inventa_un_veto(monkeypatch):
+    for dentro in ({"morosidad_estresada": None}, _dentro(None), _dentro(True)):
+        ctx = _contexto_servido(monkeypatch, dentro)
+        assert terminos_en(ctx, "intensidad estacional"), "los términos fijos se declaran igual"
+        assert terminos_en(ctx, "la mora casi duplica la del año anterior") == [], dentro
 
 
 # ── 4 · La estacionalidad dicha con otras palabras ───────────────────────────
 
-def test_factores_de_calendario_es_la_misma_especulacion():
-    from modules.banking_score.reports.anio_por_trimestres import terminos_vetados_en_el_anio
-
-    assert terminos_vetados_en_el_anio(
+def test_factores_de_calendario_es_la_misma_especulacion(monkeypatch):
+    assert terminos_en(
+        _contexto_servido(monkeypatch, _dentro(1.9)),
         "respondió a factores intraanuales de calendario o de reconocimiento de ingresos")
 
 

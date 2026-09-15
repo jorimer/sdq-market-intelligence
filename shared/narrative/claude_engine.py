@@ -2566,7 +2566,7 @@ class NarrativeEngine:
             deterministic_direction_errors, deterministic_uncited_figures,
             deterministic_unsupported, reescribir_relaciones_invertidas, verify_figures)
         from shared.narrative.presupuesto import cabe, queda
-        from shared.narrative.terminos_vetados import (AVISO as AVISO_TERMINOS,
+        from shared.narrative.terminos_vetados import (aviso as aviso_de_terminos,
                                                        quitar_oraciones_con, terminos_en)
 
         def _gen(user_msg):
@@ -2651,8 +2651,7 @@ class NarrativeEngine:
                     if wrong_dir:
                         notice += DIRECTION_CORRECTION_NOTICE.format(bad="; ".join(wrong_dir))
                     if vetados:
-                        notice += AVISO_TERMINOS.format(
-                            terminos=", ".join(f"«{v}»" for v in vetados))
+                        notice += aviso_de_terminos(context, vetados)
                     if intento == _MAX_REINTENTOS_GUARD:
                         notice += ULTIMO_INTENTO_NOTICE
                     _t_intento = time.monotonic()

@@ -25,28 +25,58 @@ from typing import Any, Dict, List, Optional, Tuple
 #: Clave del contexto: ``{término: motivo}``. El modelo la lee, y el guard también.
 CLAVE = "terminos_que_el_texto_no_puede_usar"
 
+#: El aviso lleva el MOTIVO de cada término: es la instrucción de reescritura, y es propia del
+#: eje que lo declara. Antes cerraba con «cita el puesto», que es la del IAI, y cuando el año de
+#: banca pasó a este mecanismo esa frase le habría pedido un puesto que su contexto no trae.
 AVISO = (
-    "\n\nCORRECCIÓN OBLIGATORIA — TÉRMINOS: el texto anterior usó {terminos}, que no "
-    "describe(n) las cifras que se te sirvieron (ver '" + CLAVE + "' en el contexto). "
-    "Reescribe esas oraciones sin esos términos: si hablas de la posición, cita el puesto tal "
-    "como viene en el contexto, con su población."
+    "\n\nCORRECCIÓN OBLIGATORIA — TÉRMINOS: el texto anterior usó términos que no describen "
+    "las cifras que se te sirvieron (ver '" + CLAVE + "' en el contexto):\n{terminos}\n"
+    "Reescribe esas oraciones sin esos términos, siguiendo el motivo de cada uno: di lo que la "
+    "cifra servida sí sostiene, tal como viene en el contexto y con su población."
 )
 
 _LETRA = r"[\wáéíóúüñÁÉÍÓÚÜÑ]"
 _ORACION = re.compile(r"(?<=[.!?…])\s+")
 
+#: Una vocal del término acepta su forma con y sin tilde: el modelo a veces la pierde, y el veto
+#: no puede depender de eso. La «ñ» NO se pliega: «año» y «ano» son palabras distintas.
+_VOCALES = {"a": "aá", "e": "eé", "i": "ií", "o": "oó", "u": "uúü"}
+_SIN_TILDE = {"á": "a", "é": "e", "í": "i", "ó": "o", "ú": "u", "ü": "u"}
+#: Entre palabras, cualquier espacio salvo el salto de línea: `quitar_oraciones_con` trabaja por
+#: línea, y detectar lo que no puede quitar dejaría el término publicado.
+_ENTRE_PALABRAS = r"[^\S\n]+"
 
-def terminos_declarados(context: Optional[Dict[str, Any]]) -> List[str]:
+
+def motivos_declarados(context: Optional[Dict[str, Any]]) -> Dict[str, str]:
+    """``{término: motivo}`` tal como lo declara el contexto; una lista sin motivos da ``""``."""
     valor = (context or {}).get(CLAVE)
     if isinstance(valor, dict):
-        return [str(t) for t in valor if str(t).strip()]
+        return {str(t): str(m or "") for t, m in valor.items() if str(t).strip()}
     if isinstance(valor, (list, tuple)):
-        return [str(t) for t in valor if str(t).strip()]
-    return []
+        return {str(t): "" for t in valor if str(t).strip()}
+    return {}
+
+
+def terminos_declarados(context: Optional[Dict[str, Any]]) -> List[str]:
+    return list(motivos_declarados(context))
+
+
+def aviso(context: Optional[Dict[str, Any]], vetados: List[str]) -> str:
+    """El :data:`AVISO` para *vetados*, cada término con el motivo que declaró su contexto."""
+    motivos = motivos_declarados(context)
+    return AVISO.format(terminos="\n".join(
+        f"- «{t}»" + (f": {motivos[t]}" if motivos.get(t) else "") for t in vetados))
 
 
 def _patron(termino: str) -> "re.Pattern[str]":
-    return re.compile(rf"(?<!{_LETRA}){re.escape(termino)}{_LETRA}*", re.IGNORECASE)
+    palabras = []
+    for palabra in termino.split():
+        partes = []
+        for letra in palabra:
+            base = _SIN_TILDE.get(letra.lower(), letra.lower())
+            partes.append(f"[{_VOCALES[base]}]" if base in _VOCALES else re.escape(letra))
+        palabras.append("".join(partes))
+    return re.compile(rf"(?<!{_LETRA}){_ENTRE_PALABRAS.join(palabras)}{_LETRA}*", re.IGNORECASE)
 
 
 def terminos_en(context: Optional[Dict[str, Any]], texto: str) -> List[str]:

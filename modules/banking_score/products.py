@@ -1397,33 +1397,20 @@ class BankingProduct:
         # la anexa; el gate de degradación la cubre igual (ver `assembler`).
         dentro = snapshot.payload.get("anio_por_trimestres")
         if dentro:
+            from modules.banking_score.reports.anio_por_trimestres import (
+                terminos_vetados_del_anio)
+            from shared.narrative.terminos_vetados import CLAVE as CLAVE_TERMINOS_VETADOS
             ctx = {"period": snapshot.period, "entity_name": snapshot.entity_name,
-                   "anio_por_trimestres": dentro}
+                   "anio_por_trimestres": dentro,
+                   # LENGUAJE QUE EL DATO NIEGA (2026-09-15, Santa Cruz): se declara en el
+                   # contexto y lo repara el lazo del guard del motor. Se computa ACÁ, desde el
+                   # año servido, y no dentro del payload: un snapshot armado antes de este
+                   # cambio no traería la lista, y el veto desaparecería sin aviso.
+                   CLAVE_TERMINOS_VETADOS: terminos_vetados_del_anio(dentro)}
             res = await narrative_engine.generate(
                 context=ctx, template="anio_por_trimestres", mode="deep",
                 axis="banking", audience="comite_credito")
-            texto = res.text
-            # LENGUAJE QUE EL DATO NIEGA, vigilado en código (2026-09-15, Santa Cruz): se
-            # regenera UNA vez con la corrección; si insiste, se quita solo esa oración.
-            from modules.banking_score.reports.anio_por_trimestres import (
-                CORRECCION_DE_TERMINOS_DEL_ANIO, quitar_oraciones_con_terminos_vetados,
-                terminos_vetados_en_el_anio)
-            vetados = terminos_vetados_en_el_anio(texto, dentro)
-            if vetados:
-                logger.warning("Año por trimestres de %s con términos vetados %s: se regenera "
-                               "con la corrección", snapshot.entity_name, vetados)
-                res = await narrative_engine.generate(
-                    context={**ctx, "correccion_de_terminos": CORRECCION_DE_TERMINOS_DEL_ANIO
-                             .format(terminos=", ".join(f"«{v}»" for v in vetados))},
-                    template="anio_por_trimestres", mode="deep",
-                    axis="banking", audience="comite_credito")
-                texto = res.text
-                persistentes = terminos_vetados_en_el_anio(texto, dentro)
-                if persistentes:
-                    logger.warning("Año por trimestres de %s: %s persisten tras corregir; se "
-                                   "quitan esas oraciones", snapshot.entity_name, persistentes)
-                    texto = quitar_oraciones_con_terminos_vetados(texto, dentro)
-            salida = {"anio_por_trimestres": texto}
+            salida = {"anio_por_trimestres": res.text}
             # El mapa, cuando el cierre lo tiene. Va como sección propia y no dentro del
             # contexto del año: son dos sujetos —la serie del score y el libro por sector— y
             # meterlos en un mismo prompt hace que el modelo elija uno.
