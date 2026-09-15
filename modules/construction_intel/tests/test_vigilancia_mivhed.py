@@ -116,6 +116,27 @@ def test_sin_nada_ingerido_todavia_cualquier_mes_es_novedad(db, monkeypatch):
     assert _correr()["hay_novedad"] is True and len(disparos) == 1
 
 
+def test_un_mes_nuevo_del_MIVHED_se_ve_aunque_la_DGCP_ya_este_mas_adelante(db, monkeypatch):
+    """Producción, 2026-09-15: la sonda decía «último período nuestro: 2026-07» con el MIVHED
+    en junio, porque tomaba el último período de TODO el eje y la DGCP (Fase 7) ya iba en
+    julio. Con la DGCP en agosto, un julio nuevo del MIVHED no contaba como novedad."""
+    from datetime import date
+
+    from shared.data import dgcp_ocds_client as dg
+    from shared.observations import service as obs
+
+    _tenemos_junio(db)
+    obs.upsert(db, sector_key="construction", series_code=dg.SERIE_OBRAS, period="2026-08",
+               value=109.0, unit="conteo", frequency="monthly", source="DGCP",
+               published_at=date(2026, 9, 7))
+    db.commit()
+    _fuente(monkeypatch, csv=_CSV_JULIO, publicado_el="2026-07-21")
+    disparos = _disparos(monkeypatch)
+    r = _correr()
+    assert r["ultimo_periodo_nuestro"] == "2026-06", "comparó contra el período de la DGCP"
+    assert r["hay_novedad"] is True and [n for n, _ in disparos] == ["mivhed-construction-sync"]
+
+
 # ── No ingiere, y un fallo no se disfraza de verificación ───────────────────────
 
 def test_la_sonda_NO_ingiere_nada(db, monkeypatch):

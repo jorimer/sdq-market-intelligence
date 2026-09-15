@@ -63,7 +63,8 @@ def _run_vigilancia_mivhed(params, user_id, set_phase) -> Dict:
     """
     from datetime import datetime, timezone
 
-    from modules.construction_intel.service import SECTOR_KEY_OBS, guardar_verificacion
+    from modules.construction_intel.service import (SECTOR_KEY_OBS, SERIE_PERMISOS, SERIE_SQM,
+                                                    guardar_verificacion)
     from shared.data.mivhed_client import mivhed_client, parse_licenses_mensual
     from shared.observations import service as obs
     from shared.operations.service import trigger
@@ -83,8 +84,14 @@ def _run_vigilancia_mivhed(params, user_id, set_phase) -> Dict:
     en_fuente = max(periodos)
     db = SessionLocal()
     try:
-        tenemos = obs.ultimo_periodo(db, sector_key=SECTOR_KEY_OBS)
-        publicada_nuestra = obs.ultima_publicacion(db, sector_key=SECTOR_KEY_OBS)
+        # Acotado a las series del MIVHED. Desde la Fase 7 el eje también guarda la obra pública
+        # de la DGCP, que publica con otro calendario: sin el filtro, «nuestro último período»
+        # era el de la DGCP (julio) y no el del MIVHED (junio), y un mes nuevo del MIVHED que la
+        # DGCP ya hubiera pasado no se veía como novedad — el sync no se disparaba.
+        del_mivhed = [SERIE_PERMISOS, SERIE_SQM]
+        tenemos = obs.ultimo_periodo(db, sector_key=SECTOR_KEY_OBS, series=del_mivhed)
+        publicada_nuestra = obs.ultima_publicacion(db, sector_key=SECTOR_KEY_OBS,
+                                                   series=del_mivhed)
         hay_mes_nuevo = tenemos is None or en_fuente > tenemos
         hay_republicacion = bool(publicado_el and (
             publicada_nuestra is None or publicado_el > publicada_nuestra.isoformat()))
