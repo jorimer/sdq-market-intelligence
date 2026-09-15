@@ -95,3 +95,17 @@ def test_un_trimestre_se_mide_desde_su_CIERRE_y_no_desde_su_inicio(db):
     v = next(x for x in _veredictos_compartidos(db, hoy=date(2026, 9, 15))
              if x.clave == "encft_trimestral")
     assert v.dias_desde_el_periodo_del_dato == 168 and v.estado == CONGELADA
+
+
+def test_el_salario_minimo_de_diciembre_NO_se_marca_congelado_en_septiembre(db):
+    """Producción, 2026-09-15: con cadencia mensual la fila 2025-12 salía congelada (258 días) y
+    avisaba a los administradores cada mes. La serie solo cambia por decreto y se publica al
+    cierre del año: es una fuente anual."""
+    from modules.social_dev.models.models import SocialIndicator
+    from shared.capacidad_de_pago import _TEMA_SALARIO_REFERENCIA
+    db.add(SocialIndicator(theme=_TEMA_SALARIO_REFERENCIA, entity_key="salario_minimo",
+                           period="2025-12", value=27989.0, unit="RD$/mes", source="MHE"))
+    db.commit()
+    v = next(x for x in _veredictos_compartidos(db, hoy=date(2026, 9, 15))
+             if x.clave == "salario_minimo")
+    assert v.cadencia == "annual" and v.estado == AL_DIA, v.motivo
