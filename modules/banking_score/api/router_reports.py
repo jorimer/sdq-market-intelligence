@@ -703,6 +703,16 @@ async def generate_report(
         except Exception:  # noqa: BLE001 — el informe nunca depende de estos bloques
             logger.exception("No se pudo enriquecer el informe de %s con pares/amplitud",
                              bank.name)
+        # La MISMA morosidad estresada que sirve la ruta de productos: dos superficies
+        # emitiendo el mismo documento no pueden diferir en qué mora comparan.
+        try:
+            from modules.banking_score.reports.morosidad_estresada import (
+                morosidad_estresada_al_corte)
+            _estresada = morosidad_estresada_al_corte(db, bank, pe)
+            if _estresada:
+                scoring_result["morosidad_estresada"] = _estresada
+        except Exception:  # noqa: BLE001 — el informe nunca depende de este bloque
+            logger.exception("No se pudo computar la morosidad estresada de %s", bank.name)
 
     from modules.banking_score.reports.narrative import REPORT_SECTIONS
     _secs = REPORT_SECTIONS.get(report_type) or []

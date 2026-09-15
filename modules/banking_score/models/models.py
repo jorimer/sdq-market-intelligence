@@ -190,6 +190,17 @@ class BankingData(UUIDMixin, Base):
     #   exposicion_re_pct = deuda hipotecaria / deuda    (indicadores/riesgo-credito)
     castigos_pct = Column(Numeric(10, 4), nullable=True)
     exposicion_re_pct = Column(Numeric(10, 4), nullable=True)
+    # MOROSIDAD ESTRESADA oficial de la SIB (catálogo I.027) y sus componentes, cada uno
+    # componente / carteraTotal de UNA fila de indicadores/morosidad-estresada. Los castigos
+    # son `castigos_pct`. NO puntúa: la mora y los castigos ya están en el score (ver la
+    # migración e5c9a2d7b416). Se sirve al texto del informe.
+    morosidad_estresada_pct = Column(Numeric(10, 4), nullable=True)
+    estresada_vencido_pct = Column(Numeric(10, 4), nullable=True)
+    estresada_cobranza_pct = Column(Numeric(10, 4), nullable=True)
+    estresada_tc31a60_pct = Column(Numeric(10, 4), nullable=True)
+    estresada_reestructurado_rea_pct = Column(Numeric(10, 4), nullable=True)
+    estresada_reestructurado_temporal_pct = Column(Numeric(10, 4), nullable=True)
+    estresada_adjudicado_pct = Column(Numeric(10, 4), nullable=True)
 
     # ── Metadata ──
     source = Column(Enum(DataSource), default=DataSource.manual)

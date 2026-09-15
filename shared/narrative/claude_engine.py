@@ -98,6 +98,22 @@ def _apply_lang(prompt: str, lang: str) -> str:
     return prompt + directive if directive else prompt
 
 # Prompt templates using SCQA (Situation-Complication-Question-Answer) framework
+#: Cómo se escriben las DOS moras (2026-09-15, feedback de Banco Múltiple Santa Cruz: la
+#: comparable entre entidades es la estresada, no la convencional). Vive en constante porque
+#: la usan dos plantillas y porque un literal partido deja de existir como frase en el fuente.
+MOROSIDAD_ESTRESADA_EN_EL_TEXTO = (
+    "MOROSIDAD ESTRESADA: si el contexto trae 'morosidad_estresada', explicá en pocas líneas "
+    "las dos moras y lo que las separa: la convencional ('morosidad_convencional_publicada_"
+    "de_la_entidad_pct', la base de la cobertura), la estresada oficial de la SIB "
+    "('morosidad_estresada_de_la_entidad_pct', la que compara entidades) y lo que la "
+    "convencional no ve ('lo_que_la_mora_convencional_no_ve_pp', con su "
+    "'mayor_componente_fuera_de_la_vencida'). La posición contra el resto del sistema viene "
+    "resuelta en 'posicion_frente_a_la_mediana_del_resto': COPIALA. NO restes la mora "
+    "convencional de la estresada: salen de carteras distintas ('nota_de_carteras'). Si trae "
+    "'disponible' en falso, decí en una frase que no se publica y por qué ('motivo'). No digas "
+    "que la estresada afecta el score: no puntúa.\n\n"
+)
+
 TEMPLATES = {
     "executive_summary": (
         "Eres un analista financiero senior especializado en banca dominicana. "
@@ -481,7 +497,8 @@ THIN_TEMPLATES = {
         "refleja su score, el indicador que más lo sube y el que más lo baja (con sus valores "
         "y scores), "
         "posición vs pares si se provee, y un veredicto puntual con qué vigilar. NO repitas el "
-        "panorama global del banco ni otros sub-componentes."
+        "panorama global del banco ni otros sub-componentes.\n\n"
+        + MOROSIDAD_ESTRESADA_EN_EL_TEXTO
     ),
     "anuario_sistema": (
         "Escribí la lectura del AÑO del sistema bancario dominicano.\n"
@@ -570,6 +587,7 @@ THIN_TEMPLATES = {
         "digas ni mejoró ni empeoró. Usá la 'unidad' de la fila al citar el cambio.\n\n"
         "'cortes_faltantes' se DECLARA si no está vacío: un tramo sin su corte no se puede "
         "medir, y callarlo haría pasar tres trimestres por cuatro.\n\n"
+        + MOROSIDAD_ESTRESADA_EN_EL_TEXTO +
         "TÍTULOS DE SECCIÓN DESCRIPTIVOS Y SOBRIOS: nombran el asunto, no lo dramatizan. Sin "
         "anglicismos: es 'dentro del año' o 'intraanual', no 'intrayear'.\n\n"
         "No recalcules ninguna cifra: todas vienen resueltas. Si una relación no está servida, "
