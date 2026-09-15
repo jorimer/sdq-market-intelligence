@@ -1801,13 +1801,13 @@
       },
       "section": {
         "macro_pulse": "Pulso macroeconómico",
-        "risk_assessment": "Evaluación de riesgo",
+        "risk_assessment": "Evaluación de riesgos",
         "peer_position": "Posición en el panel",
         "governance": "Gobernanza institucional (WGI 2025)",
         "irc_pulse": "Pulso de resiliencia climática",
         "irc_assessment": "Evaluación de resiliencia (IRC)",
         "panel_position": "Posición en el panel",
-        "recommendation": "Recomendación",
+        "recommendation": "Lectura para decisión",
         "limitations": "Limitaciones",
         "std_methodology": "Metodología y fuentes",
         "std_sources": "Fuentes y referencias",
@@ -1848,7 +1848,67 @@
         "conclusion_y_responsabilidad": "Conclusión y responsabilidad",
         "fuentes_y_procedencia": "Fuentes y procedencia",
         "anexo_planillas_del_modelo": "Anexo · Planillas del modelo",
-        "anexo_panel_de_transacciones": "Anexo · Panel de transacciones: vías abiertas y descartes"
+        "anexo_panel_de_transacciones": "Anexo · Panel de transacciones: vías abiertas y descartes",
+        "std_glossary": "Glosario",
+        "executive_summary": "Resumen ejecutivo",
+        "solidez_financiera": "Solidez financiera",
+        "calidad_activos": "Calidad de activos",
+        "eficiencia_rentabilidad": "Eficiencia y rentabilidad",
+        "liquidez": "Liquidez",
+        "diversificacion": "Diversificación",
+        "comparative": "Análisis comparativo",
+        "entorno_operativo": "Entorno operativo",
+        "mapa_sectorial": "Mapa sectorial del crédito",
+        "soporte_soberano": "Soporte y techo soberano",
+        "early_warning": "Alerta temprana",
+        "anio_por_trimestres": "El año por trimestres",
+        "anio_del_sistema": "El año del sistema",
+        "mapa_sectorial_sistema": "El crédito del sistema por sector",
+        "revision_anual": "Revisión anual",
+        "contexto_de_mercado": "Contexto de mercado",
+        "insurance_pulse": "Pulso del mercado asegurador",
+        "insurance_assessment": "Solidez de la aseguradora (ISF)",
+        "market_context": "Contexto del mercado (mezcla y estructura)",
+        "portfolio_context": "Cartera de inversiones del sistema (contexto de riesgo)",
+        "social_pulse": "Pulso del desarrollo social",
+        "social_assessment": "Evaluación del desarrollo (IDM)",
+        "inequality": "Distribución entre demarcaciones",
+        "geographic_concentration": "Concentración geográfica (socios)",
+        "mechanism": "Mecanismo y escenario: el sector bisagra",
+        "tpm_snapshot": "Postura y trayectoria de la TPM",
+        "mp_evaluation": "Evaluación de la política monetaria",
+        "forecast": "Pronóstico del modelo (regla de Taylor + clasificador)",
+        "nowcast": "Nowcast del trimestre en curso",
+        "trajectory": "Trayectoria proyectada",
+        "sectoral": "Lectura sectorial",
+        "scenarios": "Escenarios a 3-8 trimestres (sin track record)",
+        "forecast_track_record": "Desempeño de nuestras proyecciones anteriores",
+        "methodology": "Cómo se construye cada cifra",
+        "estado_de_la_ley": "Dónde está la ley frente a lo que se propuso",
+        "logrado": "Lo que se logró",
+        "no_logrado": "Lo que no se logró",
+        "pendiente": "Lo que queda por delante",
+        "coherencia_proceso": "Proceso declarado contra resultado medido",
+        "verificabilidad": "Quién produce la evidencia con la que se juzga",
+        "brechas": "Qué parte de la ley este informe no puede juzgar",
+        "recomendaciones": "Qué se puede exigir, y con qué instrumento"
+      },
+      "sectionBySector": {
+        "banking": {
+          "recommendation": "Recomendación"
+        },
+        "insurance": {
+          "peer_positioning": "Posición competitiva frente al mercado"
+        },
+        "macro": {
+          "risk_assessment": "Evaluación de riesgo-país (IRMP)"
+        },
+        "pension": {
+          "peer_positioning": "Posición competitiva frente a las AFP"
+        },
+        "valuation": {
+          "limitations": "Limitaciones y condiciones"
+        }
       },
       "dimensionsTitle": "Dimensiones (score 0–100)",
       "risk": {

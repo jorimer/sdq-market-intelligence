@@ -1801,13 +1801,13 @@
       },
       "section": {
         "macro_pulse": "Pouls macroéconomique",
-        "risk_assessment": "Évaluation du risque",
+        "risk_assessment": "Évaluation des risques",
         "peer_position": "Position dans le panel",
         "governance": "Gouvernance institutionnelle (WGI 2025)",
         "irc_pulse": "Pouls de résilience climatique",
         "irc_assessment": "Évaluation de la résilience (IRC)",
         "panel_position": "Position dans le panel",
-        "recommendation": "Recommandation",
+        "recommendation": "Lecture pour la prise de décision",
         "limitations": "Limites",
         "std_methodology": "Méthodologie et sources",
         "std_sources": "Sources et références",
@@ -1848,7 +1848,67 @@
         "conclusion_y_responsabilidad": "Conclusion et responsabilité",
         "fuentes_y_procedencia": "Sources et provenance",
         "anexo_planillas_del_modelo": "Annexe · Tableaux du modèle",
-        "anexo_panel_de_transacciones": "Annexe · Panel de transactions : pistes ouvertes et exclusions"
+        "anexo_panel_de_transacciones": "Annexe · Panel de transactions : pistes ouvertes et exclusions",
+        "std_glossary": "Glossaire",
+        "executive_summary": "Résumé exécutif",
+        "solidez_financiera": "Solidité financière",
+        "calidad_activos": "Qualité des actifs",
+        "eficiencia_rentabilidad": "Efficience et rentabilité",
+        "liquidez": "Liquidité",
+        "diversificacion": "Diversification",
+        "comparative": "Analyse comparative",
+        "entorno_operativo": "Environnement opérationnel",
+        "mapa_sectorial": "Carte sectorielle du crédit",
+        "soporte_soberano": "Soutien et plafond souverains",
+        "early_warning": "Alerte précoce",
+        "anio_por_trimestres": "L'année trimestre par trimestre",
+        "anio_del_sistema": "L'année du système",
+        "mapa_sectorial_sistema": "Le crédit du système par secteur",
+        "revision_anual": "Revue annuelle",
+        "contexto_de_mercado": "Contexte de marché",
+        "insurance_pulse": "Pouls du marché de l'assurance",
+        "insurance_assessment": "Solidité de l'assureur (ISF)",
+        "market_context": "Contexte du marché (composition et structure)",
+        "portfolio_context": "Portefeuille d'investissement du système (contexte de risque)",
+        "social_pulse": "Pouls du développement social",
+        "social_assessment": "Évaluation du développement (IDM)",
+        "inequality": "Répartition entre municipalités",
+        "geographic_concentration": "Concentration géographique (partenaires)",
+        "mechanism": "Mécanisme et scénario : le secteur charnière",
+        "tpm_snapshot": "Orientation et trajectoire du taux directeur (TPM)",
+        "mp_evaluation": "Évaluation de la politique monétaire",
+        "forecast": "Prévision du modèle (règle de Taylor + classifieur)",
+        "nowcast": "Nowcast du trimestre en cours",
+        "trajectory": "Trajectoire projetée",
+        "sectoral": "Lecture sectorielle",
+        "scenarios": "Scénarios à 3-8 trimestres (sans historique de performance)",
+        "forecast_track_record": "Performance de nos projections antérieures",
+        "methodology": "Comment chaque chiffre est construit",
+        "estado_de_la_ley": "Où en est la loi par rapport à ce qu'elle s'était proposé",
+        "logrado": "Ce qui a été atteint",
+        "no_logrado": "Ce qui n'a pas été atteint",
+        "pendiente": "Ce qui reste à parcourir",
+        "coherencia_proceso": "Processus déclaré face au résultat mesuré",
+        "verificabilidad": "Qui produit les preuves sur lesquelles repose le jugement",
+        "brechas": "Quelle partie de la loi ce rapport ne peut pas juger",
+        "recomendaciones": "Ce qui peut être exigé, et par quel instrument"
+      },
+      "sectionBySector": {
+        "banking": {
+          "recommendation": "Recommandation"
+        },
+        "insurance": {
+          "peer_positioning": "Position concurrentielle face au marché"
+        },
+        "macro": {
+          "risk_assessment": "Évaluation du risque pays (IRMP)"
+        },
+        "pension": {
+          "peer_positioning": "Position concurrentielle face aux AFP"
+        },
+        "valuation": {
+          "limitations": "Limites et conditions"
+        }
       },
       "dimensionsTitle": "Dimensions (score 0–100)",
       "risk": {
