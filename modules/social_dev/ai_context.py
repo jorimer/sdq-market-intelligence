@@ -9,6 +9,7 @@ mirrors :mod:`macro_political_risk.ai_context`.
 from typing import Any, Dict, List, Optional
 
 from shared.narrative.derived import derived_figures
+from shared.narrative.terminos_vetados import CLAVE as CLAVE_TERMINOS_VETADOS
 
 _DIM_LABELS = {
     "health": "Salud",
@@ -34,6 +35,14 @@ def _provenance(dim_key: str, sources: Optional[Dict[str, str]]) -> str:
     if live == 0:
         return "rúbrica declarada"
     return "real" if live == total else "parcial (real + rúbrica)"
+
+
+#: Lo que el texto del IDM no puede decir, con su motivo (ver `shared.narrative.terminos_vetados`).
+#: Producción, 2026-09-15: El Valle, puesto 9 de 10, salió como «el percentil más bajo».
+TERMINOS_VETADOS_DEL_IDM = {
+    "percentil": ("la región se ubica por su PUESTO ('rank' de 'n_regions'); con diez regiones "
+                  "no hay percentil que citar"),
+}
 
 
 def social_ai_context(
@@ -73,6 +82,7 @@ def social_ai_context(
         "development_score": score.get("development_score"),
         "band": score.get("band"),
         "direction": "mayor score = mayor desarrollo/bienestar",
+        CLAVE_TERMINOS_VETADOS: dict(TERMINOS_VETADOS_DEL_IDM),
         "rank": rank,
         "n_regions": n_regions,
         "distribution": distribution,  # mean/spread/cv across regions (inequality)
