@@ -37,6 +37,11 @@ ENAE_DIMENSION = "enae"
 #: Las 9 actividades del cuadro de IED del BCRD, tercera resolución del mismo mapa. Es el
 #: desenlace de inversión del Gate E, no un insumo del índice.
 IED_DIMENSION = "ied_bcrd"
+#: Los 17 slugs del BCRD con los TRABAJADORES COTIZANTES de la TSS, por mes. Es empleo FORMAL
+#: —quien aporta a la seguridad social—, no la ocupación total de la ENCFT, que incluye el
+#: informal y da cifras varias veces mayores. Entró el 2026-09-15 como lectura SUMADA, no
+#: como reemplazo de `labor_encft` (decisión del dueño).
+LABOR_TSS_DIMENSION = "labor_tss"
 
 
 class SectorVariable(UUIDMixin, Base):

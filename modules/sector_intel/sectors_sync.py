@@ -360,6 +360,66 @@ def enae_sync(db: Session, set_phase: Optional[Callable[[str], None]] = None) ->
     }
 
 
+def filas_de_empleo_formal(filas: List[Any]) -> Dict[str, Any]:
+    """De ``[(actividad, AAAA-MM, cotizantes)]`` a lo que se persiste, sin tocar la base.
+
+    Solo los meses COMPLETOS (ver ``tss_salary.meses_completos``) y por slug BCRD-17."""
+    from shared.data.sector_crosswalk import cotizantes_by_slug
+    from shared.data.tss_salary import meses_completos
+
+    por_mes: Dict[str, Dict[str, float]] = {}
+    for actividad, mes, valor in filas:
+        por_mes.setdefault(mes, {})
+        por_mes[mes][actividad] = por_mes[mes].get(actividad, 0.0) + float(valor)
+    totales = {m: sum(v.values()) for m, v in por_mes.items()}
+    completos, descartados = meses_completos(totales)
+    salida = []
+    for mes in completos:
+        for slug, valor in cotizantes_by_slug(por_mes[mes]).items():
+            if valor is not None:
+                salida.append((slug, mes, valor))
+    return {"filas": salida, "meses": completos, "descartados": descartados}
+
+
+def tss_empleo_formal_sync(db: Session,
+                           set_phase: Optional[Callable[[str], None]] = None,
+                           filas: Optional[List[Any]] = None) -> Dict:
+    """Trabajadores cotizantes de la TSS por sector y mes → ``si_variables`` (``labor_tss``).
+
+    Empleo FORMAL, SUMADO al perfil del sector junto a la ocupación de la ENCFT —no la
+    reemplaza: miden poblaciones distintas (decisión del dueño, 2026-09-15)—. La dimensión se
+    REESCRIBE entera en cada corrida: el reporte trae todos sus meses, y un mes que llegó
+    incompleto la vez anterior tiene que poder completarse. ``filas`` permite probarlo sin red.
+    """
+    from shared.data.tss_salary import LICENSE, VAR_COTIZANTES, TSSSalaryClient
+    from shared.reference.sector_variables import LABOR_TSS_DIMENSION
+
+    set_phase = set_phase or (lambda _m: None)
+    if filas is None:
+        set_phase("descargando trabajadores cotizantes por actividad (TSS · Power BI)")
+        try:
+            filas = TSSSalaryClient(mode="live").fetch_cotizantes()
+        except Exception as e:  # noqa: BLE001 — best-effort; report, don't crash the op
+            logger.warning("TSS empleo formal sync falló: %s", e)
+            return {"error": f"cotizantes TSS no disponibles: {e}", "meses": 0,
+                    "errors": [str(e)]}
+    plan = filas_de_empleo_formal(filas)
+    if not plan["filas"]:
+        return {"error": "el reporte TSS no trajo meses completos", "meses": 0,
+                "descartados": plan["descartados"], "errors": ["sin meses completos"]}
+    set_phase(f"persistiendo {len(plan['meses'])} meses de empleo formal por sector")
+    db.query(SectorVariable).filter(SectorVariable.dimension == LABOR_TSS_DIMENSION).delete(
+        synchronize_session=False)
+    for slug, mes, valor in plan["filas"]:
+        db.add(SectorVariable(sector_code=slug, dimension=LABOR_TSS_DIMENSION,
+                              variable=VAR_COTIZANTES, period=mes, value=valor,
+                              source="TSS", license=LICENSE))
+    db.commit()
+    return {"meses": len(plan["meses"]), "primer_mes": plan["meses"][0],
+            "ultimo_mes_completo": plan["meses"][-1], "descartados": plan["descartados"],
+            "filas": len(plan["filas"]), "errors": []}
+
+
 def tss_salario_sync(db: Session, set_phase: Optional[Callable[[str], None]] = None) -> Dict:
     """Fetch TSS salary-by-activity, map to per-slug ``operating_cost`` and persist
     it as the AppSetting the IAI assembly reads. Best-effort.
