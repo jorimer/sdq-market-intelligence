@@ -536,12 +536,15 @@ class LawProduct:
             return []
         norma = cargar(disponibles[0]).norma
         _, respuesta = consultar_novedades(self._db, norma=norma)
+        from modules.law_intel.novedades import COMPLETO, SIN_NOVEDADES, veredicto_del_mes
+
         _, hasta = ventana_del_mes_cerrado(_date.today())
-        concluyente = bool(((respuesta or {}).get("alcance") or {}).get("vacio_es_concluyente"))
-        frescura = (_date.today() - hasta).days if concluyente else None
+        # El MISMO veredicto que lee la sección del cliente: el panel y el informe no pueden
+        # contradecirse sobre si el mes está cubierto.
+        estado = veredicto_del_mes(respuesta)
+        frescura = (_date.today() - hasta).days if estado in (COMPLETO, SIN_NOVEDADES) else None
         detalle = ("sin respuesta de JurisAI" if respuesta is None else
-                   f"mes cerrado hasta {hasta.isoformat()} · "
-                   f"{'concluyente' if concluyente else 'no concluyente'} · "
+                   f"mes cerrado hasta {hasta.isoformat()} · {estado} · "
                    f"{len((respuesta or {}).get('resultados') or [])} normas nuevas que citan la {norma}")
         return [SenalDeFuente(clave="jurisai", etiqueta="JurisAI", cadence="monthly",
                               freshness_days=frescura, detalle=detalle)]
