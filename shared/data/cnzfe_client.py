@@ -9,11 +9,32 @@ the authoritative base for a free-zone attractiveness/health index.
 
 CSV URLs change when CNZFE republishes, so we resolve the current CSV resource via the
 CKAN ``package_show`` API, then fetch it. The file is UTF-8 (BOM) and comma-separated.
+
+**Respaldo: el Informe Estadístico del propio CNZFE (2026-09-15).** Desde el 2026-09-14
+datos.gob.do lista los recursos del CNZFE pero su descarga responde HTTP 500 —CSV, XLSX y ODS,
+con la URL corta y con la completa—, mientras los recursos de otras organizaciones que apuntan
+a su propio servidor (MIVHED) bajan bien: la falla es del almacén de archivos del portal. El
+mismo cuadro ("Cuadro No. 1 — Evolución de las principales variables", 2006-2025, las nueve
+columnas) viene en el PDF anual que el CNZFE publica en ``cnzfe.gob.do``. Si el CSV falla, se
+lee de ahí y el resultado dice de dónde salió (``ultimo_origen``).
+
+Dos detalles de ese camino, verificados: ``cnzfe.gob.do`` sirve una cadena TLS que termina en
+«AAA Certificate Services», raíz que certifi ya no trae, así que la verificación falla aunque
+el certificado es válido. NO se apaga la verificación: se agrega el intermedio oficial «SSL.com
+TLS Transit ECC CA R2» emitido por «SSL.com TLS ECC Root CA 2022», que sí está en certifi
+(``certs/ssl_com_tls_transit_ecc_ca_r2.crt``, bajado de su AIA; ``.crt`` y no ``.pem``
+porque ``.gitignore`` excluye todo ``*.pem`` —con razón: suelen ser claves— y un certificado
+público ignorado desaparece del deploy sin que ningún test local lo note). Y el texto de la página se
+extrae con pypdfium2: pdfplumber no decodifica las fuentes de ese cuadro.
 """
 import csv
 import io
 import logging
-from typing import Dict, Optional
+import pathlib
+import re
+from typing import Dict, Optional, Tuple
+
+from shared.data.base_client import check_license_for
 
 logger = logging.getLogger("sdq.data.cnzfe")
 
@@ -115,14 +136,142 @@ class CNZFEClient:
                 return r["url"]
         raise RuntimeError(f"CNZFE: sin recurso CSV para '{slug}'")
 
-    def _fetch_csv(self, slug: str) -> str:
+    #: De dónde salieron las variables en la última lectura: el CSV del portal o el informe.
+    ultimo_origen: Optional[str] = None
+
+    def _descargar(self, url: str) -> Tuple[int, str, bytes]:
         import httpx
-        url = self._resolve_csv(slug)
         with httpx.Client(timeout=120, follow_redirects=True, headers=_HEADERS) as http:
-            return http.get(url).content.decode("utf-8-sig")
+            r = http.get(url)
+        return r.status_code, r.headers.get("content-type", ""), r.content
+
+    def _fetch_csv(self, slug: str) -> str:
+        url = self._resolve_csv(slug)
+        status, tipo, contenido = self._descargar(url)
+        # El portal responde su página de error en HTML: leída como CSV daba «no devolvió
+        # variables», que ocultaba el HTTP 500.
+        if status != 200 or "html" in tipo.lower():
+            raise RuntimeError(f"CNZFE: el recurso CSV de '{slug}' respondió HTTP {status} ({url})")
+        return contenido.decode("utf-8-sig")
 
     def free_zone_vars(self) -> Dict[int, Dict[str, float]]:
-        return parse_free_zone_vars(self._fetch_csv(SLUG_VARS))
+        try:
+            variables = parse_free_zone_vars(self._fetch_csv(SLUG_VARS))
+            if not variables:
+                raise RuntimeError("CNZFE: el CSV de datos.gob.do no trajo filas legibles")
+        except Exception as e:  # noqa: BLE001 — cualquier falla del portal cae al informe
+            logger.warning("CNZFE: datos.gob.do no entregó el CSV (%s); se lee el Informe "
+                           "Estadístico del CNZFE", e)
+            variables = cnzfe_informe_client.free_zone_vars()
+            self.ultimo_origen = (f"Informe Estadístico del CNZFE, Cuadro No. 1 (PDF, "
+                                  f"cnzfe.gob.do); datos.gob.do falló: {e}")
+            return variables
+        self.ultimo_origen = "datos.gob.do (CSV del CNZFE)"
+        return variables
 
 
+_INFORMES = "https://cnzfe.gob.do/publicaciones/informes-estadisticos/"
+_CA_CNZFE = pathlib.Path(__file__).parent / "certs" / "ssl_com_tls_transit_ecc_ca_r2.crt"
+_RE_INFORME = re.compile(
+    r"https://cnzfe\.gob\.do/wp-content/uploads/\d{4}/\d{2}/Informe-Estadistico-(\d{4})"
+    r"[^\"'\s<>]*\.pdf", re.IGNORECASE)
+
+#: Columnas del Cuadro No. 1, en su orden. El texto del PDF no conserva el encabezado en
+#: orden, así que el orden se fija acá y las etiquetas se EXIGEN presentes: si el CNZFE agrega
+#: o quita una columna, la lectura falla en vez de correr los valores de lugar.
+_COLUMNAS_CUADRO_1 = ("parks", "companies", "jobs", "exports_musd", "investment_musd",
+                      "local_spend_musd", "wage_operator_rd", "wage_technician_rd",
+                      "occupied_area_sqft")
+_ETIQUETAS_CUADRO_1 = ("parques", "empresas", "empleos", "exportaciones", "inversion total",
+                       "gastos locales", "operarios", "tecnicos", "area de naves")
+_NUMERO = re.compile(r"-?(\d{1,3}(,\d{3})+|\d+)(\.\d+)?")
+
+
+def ultimo_informe(html: str) -> Tuple[int, str]:
+    """``(año, url)`` del Informe Estadístico más reciente enlazado en la página de informes."""
+    hallados: Dict[int, str] = {}
+    for m in _RE_INFORME.finditer(html):
+        hallados.setdefault(int(m.group(1)), m.group(0))
+    if not hallados:
+        raise RuntimeError("CNZFE: la página de informes estadísticos no enlaza ningún "
+                           "Informe-Estadistico-AAAA.pdf")
+    anio = max(hallados)
+    return anio, hallados[anio]
+
+
+def texto_del_cuadro_1(pdf: bytes) -> str:
+    """El texto de la página del Cuadro No. 1 (principales variables), extraído con pypdfium2."""
+    import pypdfium2 as pdfium
+    doc = pdfium.PdfDocument(pdf)
+    try:
+        for i in range(len(doc)):
+            texto = doc[i].get_textpage().get_text_range()
+            n = _norm(texto)
+            if re.search(r"cuadro no\.? ?1\b", n) and "principales variables" in n:
+                return texto
+    finally:
+        doc.close()
+    raise RuntimeError("CNZFE: el informe no trae el Cuadro No. 1 de principales variables")
+
+
+def parse_cuadro_1(texto: str) -> Dict[int, Dict[str, float]]:
+    """``{año: {campo: valor}}`` del Cuadro No. 1. Falla cerrado ante cualquier cambio de forma."""
+    # Las etiquetas se buscan fuera de la nota de fuente: «Fuente de exportaciones y gastos
+    # locales» las nombra y daba por presente una columna que ya no estaba.
+    n = _norm(" ".join(linea for linea in texto.splitlines()
+                       if not _norm(linea).startswith("fuente")))
+    faltan = [e for e in _ETIQUETAS_CUADRO_1 if e not in n]
+    if faltan:
+        raise RuntimeError(f"CNZFE: el Cuadro No. 1 cambió de estructura; faltan las columnas "
+                           f"{faltan}")
+    out: Dict[int, Dict[str, float]] = {}
+    for linea in texto.splitlines():
+        partes = linea.split()
+        if not partes or not re.fullmatch(r"(19|20)\d{2}", partes[0]):
+            continue
+        valores = partes[1:]
+        if (len(valores) != len(_COLUMNAS_CUADRO_1)
+                or not all(_NUMERO.fullmatch(v) for v in valores)):
+            raise RuntimeError(f"CNZFE: fila del Cuadro No. 1 con {len(valores)} valores en vez de "
+                               f"{len(_COLUMNAS_CUADRO_1)}: {linea.strip()!r}")
+        out[int(partes[0])] = {c: float(v.replace(",", ""))
+                               for c, v in zip(_COLUMNAS_CUADRO_1, valores)}
+    if len(out) < 5:
+        raise RuntimeError(f"CNZFE: el Cuadro No. 1 trajo {len(out)} años legibles")
+    return out
+
+
+class CNZFEInformeClient:
+    """El Informe Estadístico anual del CNZFE en su propio sitio: respaldo del CSV del portal."""
+
+    source = "CNZFE — Informe Estadístico (cnzfe.gob.do)"
+    license = ("CNZFE — Informe Estadístico publicado en cnzfe.gob.do; es el mismo cuadro que el "
+               "CNZFE publica bajo ODbL en datos.gob.do. Emisor público dominicano: reutilizable "
+               "con atribución (Ley 200-04, Decreto 103-22).")
+    license_ok = True
+
+    def _ssl(self):
+        import ssl
+
+        import certifi
+        ctx = ssl.create_default_context(cafile=certifi.where())
+        ctx.load_verify_locations(cafile=str(_CA_CNZFE))
+        return ctx
+
+    def _get(self, url: str) -> bytes:
+        import httpx
+        with httpx.Client(timeout=180, follow_redirects=True, headers=_HEADERS,
+                          verify=self._ssl()) as http:
+            r = http.get(url)
+        if r.status_code != 200:
+            raise RuntimeError(f"CNZFE: {url} respondió HTTP {r.status_code}")
+        return r.content
+
+    def free_zone_vars(self) -> Dict[int, Dict[str, float]]:
+        check_license_for(self.source, self.license, self.license_ok)
+        _, url = ultimo_informe(self._get(_INFORMES).decode("utf-8", "replace"))
+        return parse_cuadro_1(texto_del_cuadro_1(self._get(url)))
+
+
+cnzfe_informe_client = CNZFEInformeClient()
 cnzfe_client = CNZFEClient()
