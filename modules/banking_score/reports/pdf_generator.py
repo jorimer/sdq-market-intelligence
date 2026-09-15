@@ -815,7 +815,8 @@ def _build_anio_por_trimestres_tables(dentro: Dict, styles) -> List:
         for p in serie:
             filas.append([
                 str(p.get("corte", ""))[:7],
-                f"{p['score']:.2f}" if isinstance(p.get("score"), (int, float)) else "—",
+                f"{p['score_global']:.2f}" if isinstance(p.get("score_global"), (int, float))
+                else "—",
                 f"{p['resiliencia']:.2f}" if isinstance(p.get("resiliencia"), (int, float)) else "—",
                 str(p.get("banda") or "—"),
                 # La línea base se MARCA: sin eso el año parecería tener cinco trimestres.
@@ -842,8 +843,10 @@ def _build_anio_por_trimestres_tables(dentro: Dict, styles) -> List:
         for t in tramos:
             filas.append([
                 str(t.get("tramo", "")),
-                f"{t['score_desde']:.2f}" if isinstance(t.get("score_desde"), (int, float)) else "—",
-                f"{t['score_hasta']:.2f}" if isinstance(t.get("score_hasta"), (int, float)) else "—",
+                f"{t['score_global_desde']:.2f}"
+                if isinstance(t.get("score_global_desde"), (int, float)) else "—",
+                f"{t['score_global_hasta']:.2f}"
+                if isinstance(t.get("score_global_hasta"), (int, float)) else "—",
                 f"{t['cambio']:+.2f}" if isinstance(t.get("cambio"), (int, float)) else "—",
                 str(t.get("direccion") or "—"),
                 Paragraph(_md_inline(str(lectura.get(t.get("tramo")) or "—")),

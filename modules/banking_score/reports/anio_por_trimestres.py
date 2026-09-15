@@ -21,6 +21,7 @@ tendría contra qué medirse. Va marcado como tal.
 from __future__ import annotations
 
 import logging
+import re
 from datetime import date
 from typing import Any, Dict, List, Optional
 
@@ -40,6 +41,45 @@ UMBRAL_TRAMO = 0.5
 _TRAMO_LABEL = {3: "primer trimestre", 6: "segundo trimestre",
                 9: "tercer trimestre", 12: "cuarto trimestre"}
 
+#: Lenguaje que el dato del AÑO POR DENTRO no sostiene, vigilado en CÓDIGO. El Deep Dive 2025 de
+#: Banco Múltiple Santa Cruz regenerado en producción (2026-09-15) atribuyó la oscilación de
+#: eficiencia a «intensidad estacional» sobre dos trimestres que el rótulo computado declaraba
+#: atípicos frente a su historia, con la plantilla prohibiéndolo; y llamó «umbral mínimo» al
+#: nivel de referencia del modelo, que no es el mínimo de nadie. Una nota al modelo no es un guard.
+TERMINOS_VETADOS_DEL_ANIO = (r"estacional\w*", r"umbral(?:es)?\s+m[ií]nimos?")
+
+_VETADOS_RE = [re.compile(r"(?<![\wáéíóúñ])" + p, re.IGNORECASE) for p in TERMINOS_VETADOS_DEL_ANIO]
+
+#: Lo que se agrega al contexto en el segundo intento si el texto usó un término vetado.
+CORRECCION_DE_TERMINOS_DEL_ANIO = (
+    "El texto anterior usó {terminos}. Ese lenguaje no lo sostiene el dato de este año: un "
+    "patrón que se repite solo se afirma con el rótulo de 'contexto_de_los_tramos' que lo "
+    "respalda, y el nivel de referencia del modelo no es un mínimo. Reescribí sin esos términos: "
+    "copiá el rótulo de cada trimestre y nombrá el nivel de referencia como tal.")
+
+
+def terminos_vetados_en_el_anio(texto: str) -> List[str]:
+    """Los términos vetados que aparecen en *texto*, como aparecen, sin repetir."""
+    halladas: List[str] = []
+    for patron in _VETADOS_RE:
+        for m in patron.finditer(texto or ""):
+            if m.group(0).lower() not in halladas:
+                halladas.append(m.group(0).lower())
+    return halladas
+
+
+def quitar_oraciones_con_terminos_vetados(texto: str) -> str:
+    """Quita SOLO las oraciones que contienen un término vetado; conserva párrafos y el resto.
+
+    Es el último recurso, después de regenerar con la corrección: la especulación que el dato
+    niega no se publica, pero tampoco se niega un informe entero por una oración."""
+    lineas = []
+    for linea in (texto or "").split("\n"):
+        oraciones = re.split(r"(?<=[.!?])\s+", linea)
+        lineas.append(" ".join(o for o in oraciones
+                               if not any(p.search(o) for p in _VETADOS_RE)))
+    return "\n".join(lineas)
+
 
 def _tramos(puntos: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
     """El movimiento de CADA tramo, no solo los extremos del año."""
@@ -58,10 +98,13 @@ def _tramos(puntos: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
         out.append({
             "tramo": _TRAMO_LABEL.get(mes, corte[:7]),
             "desde": str(antes["period_end"]), "hasta": corte,
-            "score_desde": round(float(s0), 2), "score_hasta": round(float(s1), 2),
+            # El SUJETO en la clave: servido como `score_desde` el texto publicó «el score de
+            # solidez abrió en 64.15» sobre el global (Santa Cruz, 2026-09-15).
+            "score_global_desde": round(float(s0), 2),
+            "score_global_hasta": round(float(s1), 2),
             "cambio": delta,
             "direccion": direccion,
-            # `score_hasta` es el GLOBAL; la banda sale del eje de Resiliencia. Va su número.
+            # La banda sale del eje de Resiliencia, no del score global. Va su número.
             "resiliencia_desde": antes.get("resiliencia"),
             "resiliencia_hasta": despues.get("resiliencia"),
             "banda_hasta": despues.get("banda_resiliencia"),
@@ -151,7 +194,7 @@ def anio_por_trimestres(db: Session, bank: Bank, anio: int) -> Optional[Dict[str
             "de cada tramo. La comparación contra los años anteriores y la tendencia "
             "plurianual son el otro producto, «SDQ Banking · Revisión Anual»."),
         "serie": [{"corte": str(p["period_end"]),
-                   "score": round(float(p["score"]), 2),
+                   "score_global": round(float(p["score"]), 2),
                    "resiliencia": p.get("resiliencia"),
                    "banda": p.get("banda_resiliencia"),
                    "es_linea_base": str(p["period_end"]) == cortes[0]}
