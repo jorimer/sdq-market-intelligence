@@ -27,6 +27,7 @@ from typing import Any, Dict, List, Optional
 from sqlalchemy.orm import Session
 
 from modules.banking_score.models.models import Bank
+from modules.banking_score.reports.trimestre_en_contexto import COMO_LEER_EL_ROTULO
 
 logger = logging.getLogger("sdq.banking.anio_por_trimestres")
 
@@ -132,6 +133,16 @@ def anio_por_trimestres(db: Session, bank: Bank, anio: int) -> Optional[Dict[str
 
     faltantes = [c for c in cortes if c not in {str(p["period_end"]) for p in puntos}]
     tramos = _tramos(puntos)
+    # CADA TRIMESTRE EN SU CONTEXTO (2026-09-15, feedback de Banco Santa Cruz): contra el
+    # mismo trimestre de años anteriores y contra el resto del sistema en ese corte. Sin
+    # esto, «concentró el 51 % del movimiento» no dice si es un hallazgo o lo de siempre.
+    contexto = _contexto_de_los_tramos(db, bank, anio, tramos)
+    mayor = _tramo_que_mas_movio(tramos)
+    if mayor and contexto:
+        del_mayor = next((c for c in contexto if c["tramo"] == mayor["tramo"]), None)
+        if del_mayor:
+            mayor["rotulo"] = del_mayor["rotulo"]
+            mayor["se_destaca"] = del_mayor["se_destaca"]
     return {
         "anio": anio,
         "entidad": bank.name,
@@ -150,7 +161,9 @@ def anio_por_trimestres(db: Session, bank: Bank, anio: int) -> Optional[Dict[str
         "linea_base": cortes[0],
         "cortes_faltantes": faltantes,
         "tramos": tramos,
-        "tramo_que_mas_movio": _tramo_que_mas_movio(tramos),
+        "tramo_que_mas_movio": mayor,
+        "contexto_de_los_tramos": contexto,
+        "como_leer_el_contexto_de_los_tramos": COMO_LEER_EL_ROTULO,
         "tramos_por_dimension": _tramos_por_dimension(traj.get("sub") or {}, cortes),
         "camino": _camino(puntos),
         "cambios_de_banda": _bandas_del_anio(puntos),
@@ -159,6 +172,16 @@ def anio_por_trimestres(db: Session, bank: Bank, anio: int) -> Optional[Dict[str
         # mora del balance compara mal entre entidades con políticas de castigo distintas.
         "morosidad_estresada": _estresada_del_anio(db, bank, cortes),
     }
+
+
+def _contexto_de_los_tramos(db: Session, bank: Bank, anio: int,
+                            tramos: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    from modules.banking_score.reports.trimestre_en_contexto import contexto_de_los_tramos
+    try:
+        return contexto_de_los_tramos(db, bank, anio, tramos)
+    except Exception:  # noqa: BLE001 — el año por dentro nunca depende de este bloque
+        logger.exception("No se pudo poner en contexto los trimestres de %s", bank.name)
+        return []
 
 
 def _estresada_del_anio(db: Session, bank: Bank, cortes: List[str]) -> Optional[Dict[str, Any]]:

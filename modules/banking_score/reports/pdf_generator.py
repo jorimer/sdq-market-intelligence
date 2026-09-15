@@ -834,17 +834,28 @@ def _build_anio_por_trimestres_tables(dentro: Dict, styles) -> List:
     tramos = dentro.get("tramos") or []
     if tramos:
         elementos.append(Paragraph("Movimiento de cada trimestre", styles["SDQHeading"]))
-        filas = [["Trimestre", "Desde", "Hasta", "Cambio", "Dirección"]]
+        # La LECTURA de cada tramo, resuelta contra su historia y contra el sistema
+        # (2026-09-15): sin ella la tabla dice cuánto se movió y no si eso es un hallazgo.
+        lectura = {c.get("tramo"): c.get("rotulo")
+                   for c in (dentro.get("contexto_de_los_tramos") or [])}
+        filas = [["Trimestre", "Desde", "Hasta", "Cambio", "Dirección", "Lectura"]]
         for t in tramos:
             filas.append([
                 str(t.get("tramo", "")),
                 f"{t['score_desde']:.2f}" if isinstance(t.get("score_desde"), (int, float)) else "—",
                 f"{t['score_hasta']:.2f}" if isinstance(t.get("score_hasta"), (int, float)) else "—",
                 f"{t['cambio']:+.2f}" if isinstance(t.get("cambio"), (int, float)) else "—",
-                str(t.get("direccion") or "—")])
+                str(t.get("direccion") or "—"),
+                Paragraph(_md_inline(str(lectura.get(t.get("tramo")) or "—")),
+                          styles["SDQSmall"])])
         elementos.append(_branded_table(
-            filas, [1.7 * inch, 0.9 * inch, 0.9 * inch, 0.9 * inch, 1.2 * inch],
+            filas, [1.35 * inch, 0.7 * inch, 0.7 * inch, 0.7 * inch, 0.9 * inch, 1.65 * inch],
             styles, font_size=9.5, padding=5))
+        if lectura:
+            elementos.append(Paragraph(
+                "«Lectura» compara cada trimestre con el mismo trimestre de años anteriores de "
+                "la entidad y con el cambio del resto de las instituciones de crédito en ese "
+                "corte. Solo un trimestre atípico es un hallazgo.", styles["SDQSmall"]))
         mayor = dentro.get("tramo_que_mas_movio") or {}
         if mayor.get("cuota_del_movimiento_pct") is not None:
             elementos.append(Spacer(1, 0.08 * inch))
