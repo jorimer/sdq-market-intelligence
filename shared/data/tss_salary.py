@@ -285,7 +285,7 @@ class TSSSalaryClient(FixtureBackedClient):
         out: List[Tuple[str, str, float]] = []
         for actividad, periodo, valor in filas:
             key, mes = activity_key(actividad), periodo_mensual(periodo)
-            if key and key != DROP_ACTIVITY and mes and valor is not None:
+            if key and key != DROP_ACTIVITY and mes and isinstance(valor, (int, float)):
                 out.append((key, mes, float(valor)))
         if len({k for k, _, _ in out}) < MIN_ACTIVITIES:
             raise TSSSalaryError("el reporte TSS de cotizantes trajo menos actividades que las "
