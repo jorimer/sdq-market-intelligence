@@ -4,6 +4,8 @@ Cubre: (1) el artefacto real del bug BPD, (2) variantes de auto-corrección/duda
 español e inglés, (3) tags de razonamiento, (4) — crítico — que NO muerda prosa
 financiera legítima donde "espera", "corrección" o "un momento" son palabras reales.
 """
+import pytest
+
 from shared.narrative.sanitize import flag_register_violations, strip_meta_commentary
 
 
@@ -103,6 +105,30 @@ def test_no_false_positive_correccion_noun():
     clean, removed = strip_meta_commentary(txt)
     assert clean == txt
     assert not removed
+
+
+@pytest.mark.parametrize("txt", [
+    # LITERAL del Deep Dive de Banco Múltiple Santa Cruz 2025, antes del saneador. El PDF que
+    # recibió el banco decía «una ganancia seguida de, pues eso confirmaría»: el saneador leyó
+    # «corrección—» como una auto-corrección y borró el sustantivo que cerraba el inciso.
+    ("La segunda señal es si el patrón estacional de eficiencia en el primer trimestre se "
+     "repite —una ganancia seguida de corrección—, pues eso confirmaría que la fortaleza de "
+     "ese indicador no es estructural."),
+    "El tipo de cambio registró un alza —y luego una corrección— durante el semestre.",
+    "Los desembolsos quedaron en lista —con plazo de espera— hasta el cierre.",
+])
+def test_no_false_positive_sustantivo_que_cierra_un_inciso(txt):
+    """La raya también CIERRA un inciso. Tras un determinante o una preposición, «corrección»
+    y «espera» son sustantivos de la oración, no el modelo corrigiéndose."""
+    clean, removed = strip_meta_commentary(txt)
+    assert clean == txt
+    assert not removed
+
+
+def test_la_interjeccion_tras_determinante_sigue_sin_existir_y_la_real_se_quita():
+    """Los dientes: el artefacto real no va precedido de determinante y se sigue quitando."""
+    clean, removed = strip_meta_commentary("La mora es 2.1 %. Corrección —la mora es 3.0 %.")
+    assert removed and "Corrección" not in clean and "3.0 %" in clean
 
 
 def test_no_false_positive_a_ver_absent():

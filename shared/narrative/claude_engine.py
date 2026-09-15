@@ -2216,10 +2216,11 @@ def _legacy_system() -> str:
     """
     from shared.narrative.cerebro import (
         DIRECTION_DISCIPLINE, EPISTEMIC_STANDARD, INDICATOR_SEMANTICS, NO_META_COMMENTARY,
-        REGISTER_NEUTRO, SCOPE_DISCIPLINE)
+        REGISTER_NEUTRO, SCOPE_DISCIPLINE, UMBRAL_DISCIPLINE)
     return (REGISTER_NEUTRO + "\n\n" + EPISTEMIC_STANDARD
             + "\n\n" + DIRECTION_DISCIPLINE + "\n\n" + INDICATOR_SEMANTICS
-            + "\n\n" + SCOPE_DISCIPLINE + "\n\n" + NO_META_COMMENTARY)
+            + "\n\n" + SCOPE_DISCIPLINE + "\n\n" + UMBRAL_DISCIPLINE
+            + "\n\n" + NO_META_COMMENTARY)
 
 
 def _uses_cerebro(template: str, axis: Optional[str]) -> bool:

@@ -624,8 +624,17 @@ def formas_derivadas(clave: str, v: float) -> set:
 # producto». El falso positivo no vetaba: rompía el producto.
 #
 # Es una familia DISTINTA de las tres anteriores. Aquéllas eran una FORMA de un número servido
-# (redondeo, razón en porcentaje, peso en un contenedor); ésta no corresponde a ningún número
-# del contexto y no debería.
+# (redondeo, razón en porcentaje, peso en un contenedor); ésta es una CONDICIÓN.
+#
+# **La exención se cerró el 2026-09-15.** Eximir toda cifra prospectiva dejó pasar el «si la
+# cobertura desciende de 120 %» del Deep Dive de Banco Múltiple Santa Cruz: un umbral que no
+# existía en el código ni en el contexto, en la frase que el comité lee como recomendación, y
+# que un funcionario del banco objetó por escrito. Hoy el umbral pasa si está SERVIDO —el
+# contexto sirve `nivel_de_referencia` desde el 2026-08-27— y si no, se MARCA con su propio
+# aviso (`AVISO_UMBRAL_NO_SERVIDO`). La forma prospectiva se sigue reconociendo: decide qué se
+# le pide al modelo, no si la cifra se publica. Lo que evita repetir el 502 del 2026-08-26 es
+# el tope de dos reintentos con presupuesto de tiempo (`claude_engine`) y la regla en el
+# prompt (`cerebro.UMBRAL_DISCIPLINE`). Casos: `tests/test_umbral_prospectivo.py`.
 #
 # El disparador se acota a marcas PROSPECTIVAS —subjuntivo y futuro— porque son las que un
 # texto no usa para afirmar un hecho del período: «caiga», «cruce», «supere» describen algo
@@ -674,6 +683,15 @@ _VERBOS_DE_UMBRAL = (
 
 _PROSPECTIVO = re.compile(
     rf"\b(?:{_CONECTORES_IRREALIS}|{_VERBOS_DE_UMBRAL})\b", re.I)
+
+
+#: La marca de un umbral no servido. Viaja dentro de CORRECTION_NOTICE, así que es también la
+#: instrucción de reparación: no manda a borrar la condición, manda a anclarla o a decirla sin
+#: número — la lectura de riesgo sobrevive, el número inventado no.
+AVISO_UMBRAL_NO_SERVIDO = (
+    "umbral de una condición futura que el contexto no sirve; usá el nivel servido que "
+    "corresponda (p. ej. 'nivel_de_referencia') nombrando qué es, o escribí la condición "
+    "sin número")
 
 
 def _es_umbral_prospectivo(texto: str, pos: int) -> bool:
@@ -748,10 +766,12 @@ def deterministic_uncited_figures(context: dict, text: str) -> List[str]:
 
             if _cubre(known) or _cubre(derivadas) or m.group(0).strip() in seen:
                 continue
-            # Un UMBRAL de una frase prospectiva no es una cita: ver `_es_umbral_prospectivo`.
-            if _es_umbral_prospectivo(text or "", m.start()):
-                continue
             seen.add(m.group(0).strip())
+            # Un UMBRAL no servido se marca con SU aviso, no con el de cita: ver
+            # `_es_umbral_prospectivo` y el cierre de la exención del 2026-09-15.
+            if _es_umbral_prospectivo(text or "", m.start()):
+                flags.append(f"{m.group(0).strip()}: {AVISO_UMBRAL_NO_SERVIDO}")
+                continue
             # La marca dice QUÉ se intentó. Un veto que solo dice «no aparece» se lee como
             # «el modelo inventó», y dos veces en una semana esa lectura fue equivocada.
             flags.append(f"{m.group(0).strip()}: no coincide con ningún valor servido ni con "
