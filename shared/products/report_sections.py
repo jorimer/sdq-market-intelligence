@@ -267,11 +267,12 @@ def _methodology_md(sig, val, as_of: Optional[str] = None, *,
     detail = getattr(sig, "detail", None) if sig else None
     if detail and not _periodo_posterior(detail, as_of or ""):
         lines.append(f"**Lectura del dato:** {detail}")
-    if val is not None:
-        note = f" {val.notes}" if getattr(val, "notes", None) else ""
-        score = getattr(val, "score", None)
-        score_txt = f" (score de validación {score:.2f})" if isinstance(score, (int, float)) else ""
-        lines.append(f"**Validación:**{note}{score_txt}")
+    # `val` ya NO se publica (2026-09-15). La línea «Validación: … (score de validación 1.00)»
+    # imprimía un número de gate DECLARADO y una frase escrita a mano como si fueran un
+    # veredicto; salió así en el Deep Dive que recibió Banco Múltiple Santa Cruz, mientras el
+    # veredicto computado de banca decía otra cosa. El veredicto vigente vive en el reporte del
+    # motor (`shared/products/credenciales`) y se afirma en material comercial, no en cada
+    # informe. El parámetro se conserva: lo pasan todos los llamadores y lo lee el gate G5.
     return "\n\n".join(lines)
 
 
