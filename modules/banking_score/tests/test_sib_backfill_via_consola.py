@@ -87,6 +87,48 @@ class TestElRunnerTraduceLosFallosDeRunBackfill:
         assert ops._run_sib_sync_liviano({}, None, lambda _f: None)["error"] == "SIB caída"
 
 
+class TestSinWorkerLaConsolaSigueLatiendo:
+    """El sync que corre EN el proceso latía una sola vez, al arrancar.
+
+    Pasó en producción el 2026-09-15: `sib-sync-liviano` —re-ingesta de 40+ minutos— quedó
+    «(interrumpido)» a los 30 minutos con la carga viva, porque la consola da por muerto lo que
+    no late en ese lapso y `run_backfill` escribe su avance en OTRO registro. Quien leía la
+    consola regeneró un informe a media carga; y el guard «ya en curso» quedó destrabado para
+    disparar una segunda sincronización encima. El backfill por worker ya latía; éste no.
+    """
+
+    @staticmethod
+    def _backfill_lento(fases_publicadas):
+        import time as _t
+
+        def run_backfill(**kw):
+            for f in ("extrayendo BM (1/7)", "extrayendo AC (7/7)", "calculando ratings"):
+                fases_publicadas.append(f)
+                _t.sleep(0.05)
+            return {"status": "completed", "records": 3}
+        return run_backfill
+
+    def test_el_sync_liviano_late_mientras_corre_y_retransmite_la_fase(self, monkeypatch):
+        publicadas, vistas = [], []
+        monkeypatch.setattr("modules.banking_score.sib_sync.run_backfill",
+                            self._backfill_lento(publicadas))
+        monkeypatch.setattr("modules.banking_score.sib_sync.get_sync_status",
+                            lambda *a, **k: {"phase": publicadas[-1] if publicadas else ""})
+        monkeypatch.setattr(ops, "_LATIDO_SIB_EN_PROCESO_SEG", 0.01, raising=False)
+        r = ops._run_sib_sync_liviano({}, None, vistas.append)
+        assert r["records"] == 3 and "error" not in r
+        assert len(vistas) >= 4, f"la consola latió {len(vistas)} vez/veces: queda muda"
+        assert any("calculando ratings" in v for v in vistas), vistas
+
+    def test_un_fallo_del_backfill_sigue_llegando_como_error(self, monkeypatch):
+        def revienta(**kw):
+            raise RuntimeError("proxy SIB 504")
+        monkeypatch.setattr("modules.banking_score.sib_sync.run_backfill", revienta)
+        monkeypatch.setattr(ops, "_LATIDO_SIB_EN_PROCESO_SEG", 0.01, raising=False)
+        with pytest.raises(RuntimeError, match="proxy SIB 504"):
+            ops._run_sib_sync_liviano({}, None, lambda _f: None)
+
+
 class TestConBrokerEsperaAlWorker:
     def test_una_tarea_que_FALLA_devuelve_error(self, con_broker):
         con_broker(_Tarea(falla=RuntimeError("StringDataRightTruncation")))

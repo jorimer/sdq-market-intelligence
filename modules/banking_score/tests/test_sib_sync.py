@@ -277,6 +277,35 @@ def test_match_or_create_respects_active_flag(Session):
     assert defunct.bank_type == BankType.banca_multiple
 
 
+def test_bancamerica_y_bellbank_se_catalogan_como_salidas(Session):
+    """Cada sync las listaba como «Entidades del SIB no catalogadas» y sus trimestres
+    2021–2022 no entraban. Las dos SALIERON del sistema: Bancamérica la disolvió la Junta
+    Monetaria el 28-ene-2022 y Bellbank la absorbió JMMB en 2022. Van inactivas, como Empire,
+    Activo y Reidco: su historia se conserva y quedan fuera de las vistas actuales.
+
+    El tipo sale de la fuente: la SB las emite en la lista de banca múltiple (log del sync del
+    2026-09-15, junto a ACTIVO, ADEMI, BANESCO, BANRESERVAS, BHD).
+    """
+    from shared.data.sib_data_client import SIBDataClient as C
+
+    assert C._match_entity_name("BANCAMERICA") == "Bancamérica"
+    assert C._match_entity_name("BELLBANK") == "Bellbank"
+
+    db = Session()
+    for short, nombre in (("Bancamérica", "Banco Múltiple de las Américas"),
+                          ("Bellbank", "Banco Múltiple Bellbank")):
+        bank, created = sib_sync._match_or_create_bank(db, short)
+        assert created and bank.is_active is False, short
+        assert bank.bank_type == BankType.banca_multiple, short
+        assert bank.name == nombre
+
+    # Un alias nuevo no puede robarle la forma emitida a otra entidad de banca múltiple:
+    # rutearía su balance a la que no es y nada fallaría (el caso «BON» de Bonao/Bonanza).
+    for emitido, esperado in (("JMMB", "JMMB"), ("ACTIVO", "Activo"), ("BANESCO", "Banesco"),
+                              ("BANRESERVAS", "Banreservas")):
+        assert C._match_entity_name(emitido) == esperado, emitido
+
+
 def test_cambiaria_auto_registers_via_meta(Session):
     """A cambiaria from the EIC feed (not in the static catalog) is auto-created
     with bank_type cambiaria using the per-run _entity_meta side-channel."""

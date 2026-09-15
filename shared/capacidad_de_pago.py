@@ -89,7 +89,12 @@ def corte_del_periodo(periodo: Any) -> date:
     puede importar de otro, así que la única forma de no duplicarla es que viva junto a la
     lectura que la necesita.
 
-    Acepta ``AAAA-MM-DD`` y ``AAAA-MM`` (que resuelve al 28, seguro en cualquier mes).
+    Acepta ``AAAA-MM-DD``, ``AAAA-MM`` (que resuelve al 28, seguro en cualquier mes) y
+    ``AAAA``, que resuelve al 31 de diciembre de ese año. El año suelto es el período de los
+    productos ANUALES (construcción, zonas francas, turismo, telecom, el IDM, el rating de
+    seguros) y caía a HOY: un informe de 2025 citaba «octubre 2020 – julio 2026» (verificado
+    en producción el 2026-09-15). Para un año EN CURSO el 31 de diciembre es futuro, y da
+    igual: cada lectura se poda por corte, así que trae lo último publicado hasta hoy.
 
     Un período ilegible cae a HOY y NO a una fecha inventada: la lectura se poda por corte,
     así que una fecha falsa serviría contexto de un momento que el informe no describe.
@@ -101,6 +106,8 @@ def corte_del_periodo(periodo: Any) -> date:
             return _d.fromisoformat(t[:10])
         if len(t) >= 7:
             return _d(int(t[:4]), int(t[5:7]), 28)
+        if len(t) == 4 and t.isdigit():
+            return _d(int(t), 12, 31)
     except (ValueError, TypeError):
         pass
     return _d.today()
@@ -258,19 +265,30 @@ _TEMAS_LABORALES = {
 }
 
 
-def _ultimo_valor_de(db: Session, tema: str, entidad: str,
-                     hasta: str) -> Optional[float]:
-    """El último valor de un tema para UNA entidad (un dominio geográfico)."""
+def _ultimo_punto_de(db: Session, tema: str, entidad: str,
+                     hasta: str) -> Optional[Tuple[str, float]]:
+    """``(período, valor)`` del último dato de un tema para UNA entidad hasta *hasta*.
+
+    Devuelve el PERÍODO de la fila leída porque quien rotula un año tiene que rotular el del
+    dato y no el del corte: «hasta 2026» trae la ENCFT regional de 2025 —la anual no está
+    publicada— y se servía como «2026»."""
     from modules.social_dev.models.models import SocialIndicator
 
-    fila = (db.query(SocialIndicator.value)
+    fila = (db.query(SocialIndicator.period, SocialIndicator.value)
             .filter(SocialIndicator.theme == tema,
                     SocialIndicator.entity_key == entidad,
                     SocialIndicator.value.isnot(None),
                     SocialIndicator.period <= hasta)
             .order_by(SocialIndicator.period.desc())
             .first())
-    return float(fila[0]) if fila else None
+    return (str(fila[0]), float(fila[1])) if fila else None
+
+
+def _ultimo_valor_de(db: Session, tema: str, entidad: str,
+                     hasta: str) -> Optional[float]:
+    """El último valor de un tema para UNA entidad (un dominio geográfico)."""
+    punto = _ultimo_punto_de(db, tema, entidad, hasta)
+    return punto[1] if punto else None
 
 
 def _ultimo_valor(db: Session, tema: str, hasta: str) -> Optional[float]:
@@ -439,21 +457,28 @@ def mercado_laboral_por_region(db: Session, corte: date) -> Optional[Dict[str, A
     contra lo que la SIB publica: si reagrupa una provincia, se entera el test y no el
     lector.
     """
-    anio = str(corte.year)
+    hasta = str(corte.year)
     tabla: Dict[str, Dict[str, Any]] = {}
+    periodos_leidos = set()
     for clave, etiqueta in (("subutilizacion_su4_regional_anual", "subutilizacion_amplia_su4_pct"),
                             ("desocupacion_su1_regional_anual", "desocupacion_abierta_su1_pct"),
                             ("ocupacion_regional_anual", "tasa_de_ocupacion_pct")):
         for dominio in _DOMINIOS_ENCFT:
-            v = _ultimo_valor_de(db, clave, dominio, anio)
-            if v is not None:
-                tabla.setdefault(dominio, {})[etiqueta] = v
+            punto = _ultimo_punto_de(db, clave, dominio, hasta)
+            if punto is not None:
+                tabla.setdefault(dominio, {})[etiqueta] = punto[1]
+                periodos_leidos.add(punto[0])
+    # El año es el del DATO leído, nunca el del corte. Si los dominios no comparten año se
+    # rotula el más reciente y se declaran todos, en vez de afirmar uno solo.
+    anio = max(periodos_leidos) if periodos_leidos else hasta
     if len(tabla) < 2:
         logger.info("Holgura por región omitida hasta %s: menos de dos dominios", anio)
         return None
     anchas = {d: v["subutilizacion_amplia_su4_pct"] for d, v in tabla.items()
               if v.get("subutilizacion_amplia_su4_pct") is not None}
     out: Dict[str, Any] = {"anio": anio, "por_dominio": tabla}
+    if len(periodos_leidos) > 1:
+        out["anios_de_los_dominios"] = sorted(periodos_leidos)
     if len(anchas) >= 2:
         peor = max(anchas, key=lambda d: anchas[d])
         mejor = min(anchas, key=lambda d: anchas[d])
