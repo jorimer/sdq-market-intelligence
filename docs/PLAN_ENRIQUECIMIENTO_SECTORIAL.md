@@ -323,6 +323,8 @@ la fuente no tiene.
 | decisión 1 · `si_variables` a `shared/` + 3 lecturas + telecom | **tomada** 2026-09-01 (#1043) |
 | decisión 2 · el costo del capital en el IAI | **tomada** 2026-09-01 (#1045) |
 | lo que salió de verificar en prod | (#1044 · #1046 · #1047 · #1048) |
+| revisión en producción · 4 defectos | **cerrada** 2026-09-15 (#1200 · #1201 · #1202 · #1204 · #1208) |
+| lectura nueva · empleo formal (TSS) | **cerrada** 2026-09-15 (#1205) |
 
 
 ---
@@ -419,3 +421,48 @@ payload; eso se arregló en el PR #1050.
 El producto sigue declarado **descriptivo** en su `ESTADO_BACKTEST`. El estado vigente se pide
 a la plataforma (`GET /api/v1/sector-intel/validation`), nunca se copia acá — y al pedirlo, se
 lee `veredicto_contra_el_tamano` junto al IC, no el IC solo.
+
+
+---
+
+## Revisión en producción — 2026-09-15
+
+Se pidieron 14 informes por HTTP para comprobar que lo repartido por este plan llega bien a
+cada eje. **Llegó**: el cubo, el perfil del sector, la capacidad de pago y la holgura están en
+los payloads de los productos revisados, y el mapa sectorial sin cubo se declara (#1070). Se
+encontraron cuatro defectos. Los cuatro se arreglaron y se verificaron en producción ese mismo
+día.
+
+| # | defecto | PR | verificado |
+|---|---|---|---|
+| 1 | `corte_del_periodo("2025")` caía a HOY: los ejes ANUALES servían la capa macro de 2026 dentro de informes 2025/2024 («inflación por quintil octubre 2020 – julio 2026» en construcción 2025) | #1200 | construcción 2025 → inflación hasta 2025-12, trimestre 2025-Q4 |
+| 2 | la holgura por dominio rotulaba el año del CORTE y no el del dato («2026» con valores de 2025) | #1200 | holgura rotulada 2025 |
+| 3 | el IAI volvió a escribir «percentil» sobre un puesto 7 de 17: la regla del #1047 era solo de plantilla | #1202 | guard determinista de términos vetados declarados en el contexto; agropecuario y El Valle sin «percentil» |
+| 4 | seguros y pensiones servían `capacidad_de_pago` y el texto la mencionaba cero veces: la plantilla la pedía y el contexto no la llevaba | #1201 | Cuna Mutual 13 menciones, AFP Reservas 7 |
+
+**Por qué el test de la fase 0 no vio el defecto 1.** Probaba formatos trimestrales y mensuales
+en tres superficies; los cinco ejes que recibieron la capa en la fase 6 quedaron fuera. Ahora un
+barrido con `ast` descubre toda superficie que lee la capa (11) y la contrasta con una lista.
+
+### Fuentes compartidas en el sensor (#1204 · #1208)
+
+Las capas de este plan viajan dentro de informes de otros ejes y ningún eje las declaraba, así
+que el sensor de fuentes no tenía fila para ninguna. Ahora son diez filas `compartidas:<fuente>`
+—cubo de crédito, ENCFT por dominio y trimestral, IPC y canasta por quintil, salario mínimo,
+salario TSS, ocupación por rama, SIUBEN, MINERD—, juzgadas con el mismo criterio que los ejes.
+El estado vigente se pide a la plataforma (`GET /api/v1/operations/fuentes`), no se copia acá.
+
+### Lectura nueva: empleo formal (#1205)
+
+Decisión del dueño (2026-09-15): la TSS entra como **empleo formal**, SUMADA a la ocupación de la
+ENCFT y no en su lugar. Miden poblaciones distintas —cotizantes a la seguridad social contra
+ocupados totales, informales incluidos— y la TSS arranca en 2024-01, sin la historia que usa el
+Gate E.
+
+| lectura | fuente | resolución |
+|---|---|---|
+| empleo formal | TSS · trabajadores cotizantes | 17 slugs, mensual desde 2024-01 (solo meses completos); manufactura/ZF y otros servicios/servicios profesionales, agregados declarados |
+
+`tss-empleo-formal-sync` (mensual) escribe `si_variables` con `labor_tss`. El bloque de contexto
+lleva `que_mide`, que prohíbe restarla o compararla con la ENCFT. Va en el contexto y no en las
+plantillas: la huella de la caché de productos hashea TODAS las plantillas.
