@@ -151,6 +151,25 @@ def _es_sustantivo_que_cierra_inciso(m: re.Match) -> bool:
                 and _DETERMINANTE_PREVIO.search(m.string[:m.start()]))
 
 
+# ── Vocabulario del SISTEMA filtrado a un documento de cliente ────────────────
+# Deep Dive 2025 de Banco Múltiple Santa Cruz regenerado en producción (2026-09-15): «la
+# sobre-representación es de 23.76 puntos porcentuales, calculada en el contexto» y «El
+# contexto de atribución lo califica como idiosincrático». «Contexto» es la palabra con que las
+# plantillas le hablan al modelo; en el PDF no significa nada para el lector. Se REEMPLAZA la
+# frase y no se borra la oración: la cifra y la atribución son reales.
+def _atribucion(m: re.Match) -> str:
+    return ("La" if m.group(1) == "E" else "la") + " atribución"
+
+
+_CONTEXTO_INTERNO = (
+    (re.compile(r"\b([Ee])l\s+contexto\s+de\s+atribuci[óo]n\b"), _atribucion),
+    (re.compile(r",?\s*(?:calculad|servid|provist|indicad|declarad)[oa]s?\s+en\s+el\s+contexto\b",
+                re.IGNORECASE), lambda m: ""),
+    (re.compile(r",?\s*seg[uú]n\s+el\s+contexto(?:\s+servido)?\b", re.IGNORECASE),
+     lambda m: ""),
+)
+
+
 # ── Auto-referencias del asistente (nunca en un informe) ──────────────────────
 _SELF_REFERENCE = re.compile(
     r"[^.\n]*\b("
@@ -246,6 +265,12 @@ def strip_meta_commentary(text: str) -> Tuple[str, List[str]]:
     # 4) interjecciones de auto-corrección / duda
     text = _capture(_INTERJECTION, text, conservar=_es_sustantivo_que_cierra_inciso)
     text = _capture(_INTERJECTION_COMMA, text)
+    # 5) vocabulario del sistema filtrado al texto de cliente: se reemplaza la frase
+    for patron, reemplazo in _CONTEXTO_INTERNO:
+        def _sub_ctx(m: re.Match, r=reemplazo) -> str:
+            removed.append(m.group(0).strip())
+            return r(m)
+        text = patron.sub(_sub_ctx, text)
 
     if removed:
         text = _tidy(text)
