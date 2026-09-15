@@ -160,6 +160,10 @@ def _inline(text: str) -> str:
     `**negrita con *cursiva* adentro**` perdía la negrita y dejaba asteriscos sueltos.
     """
     text = _GLYPH_RE.sub("", text)
+    # El signo de pesos ESCAPADO en markdown. El Deep Dive 2025 de Banco Múltiple Santa Cruz
+    # (2026-09-15) imprimió «RD\$28,686 millones» ocho veces: el modelo escapa el `$` y ReportLab
+    # no lo interpreta. Solo el `$`: desescapar `*` o `_` acá cambiaría la cursiva de abajo.
+    text = text.replace("\\$", "$")
     text = text.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
     # DESPUÉS del escape, nunca antes: insertada antes, la entidad quedaría `&amp;nbsp;` y el
     # cliente leería «0.38&nbsp;%» literal, que es peor que el defecto que vino a arreglar.

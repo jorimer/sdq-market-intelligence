@@ -59,10 +59,8 @@ def test_SIN_la_referencia_el_guard_vetaba():
     """La prueba de que el hueco era la causa. Sin este caso, el de arriba pasaría igual si
     el guard hubiese dejado de mirar, y no sabría distinguirlo.
 
-    Se usa **la segunda** frase, no las dos: la primera («puede cruzar») está cubierta
-    ADEMÁS por la regla del umbral prospectivo, así que quitarle la referencia no la hace
-    fallar. Son dos defensas independientes sobre la misma cifra y conviene no confundirlas
-    — parametrizar las dos acá haría fallar el test por el motivo equivocado.
+    Se usa la frase de HECHO; la prospectiva tiene su propio caso abajo, porque sin la
+    referencia se marca con un aviso distinto (el de umbral) y conviene no confundirlos.
     """
     frase = "La entidad aún mantiene provisiones por encima del 100% de su cartera vencida"
     ctx = _contexto_con_referencia()
@@ -70,14 +68,17 @@ def test_SIN_la_referencia_el_guard_vetaba():
     assert deterministic_uncited_figures(ctx, frase) != []
 
 
-def test_la_frase_PROSPECTIVA_esta_cubierta_por_las_DOS_defensas():
-    """Cinturón y tirantes, declarado: si mañana se afloja una, la otra sostiene — y este
-    test dice cuál es cuál en vez de dejarlo a la arqueología."""
+def test_la_frase_PROSPECTIVA_la_sostiene_SOLO_la_referencia_servida():
+    """Hasta el 2026-09-15 eran dos defensas: la referencia servida y la exención de todo
+    umbral prospectivo. La exención se cerró —dejó pasar un 120 % inventado en el Deep Dive
+    de Banco Múltiple Santa Cruz— y hoy el umbral pasa solo si está servido. Sin la
+    referencia, se marca con el aviso de UMBRAL."""
     prospectiva = ("la cobertura puede cruzar por debajo del 100% sin que se requiera un "
                    "deterioro adicional")
     sin_ref = _contexto_con_referencia()
     del sin_ref["revision_anual"]["balance"][0]["nivel_de_referencia"]
-    assert deterministic_uncited_figures(sin_ref, prospectiva) == [], "la regla prospectiva"
+    marcas = deterministic_uncited_figures(sin_ref, prospectiva)
+    assert marcas and all("umbral" in m for m in marcas), marcas
     assert deterministic_uncited_figures(_contexto_con_referencia(), prospectiva) == []
 
 

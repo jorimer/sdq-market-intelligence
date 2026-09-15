@@ -237,6 +237,33 @@ def test_named_snapshot_by_name_and_id(db):
     assert snap2.entity_name == "Banco Nombrado SA"
 
 
+def test_el_snapshot_nombrado_trae_la_morosidad_estresada(db):
+    """Por la RUTA del producto, no por el motor: el bloque computado tiene que viajar en el
+    payload que leen la narrativa y el PDF (feedback de Banco Santa Cruz, 2026-09-15)."""
+    pe = date(2024, 12, 31)
+    bank = _seed_rating(db, "Banco Estresado SA", 64, period=pe)
+    componentes = dict(estresada_vencido_pct=2.0, estresada_cobranza_pct=0.1,
+                       estresada_tc31a60_pct=0.0, estresada_reestructurado_rea_pct=2.4,
+                       estresada_reestructurado_temporal_pct=0.1, castigos_pct=3.0,
+                       estresada_adjudicado_pct=0.0)
+    db.add(BankingData(bank_id=bank.id, period_end=pe, morosidad_pct=2.4,
+                       morosidad_estresada_pct=7.6, **componentes))
+    for i, total in enumerate((4.0, 5.0, 6.0)):
+        otro = Bank(name=f"Banco Resto {i} SA", bank_type=BankType.banca_multiple)
+        db.add(otro)
+        db.flush()
+        db.add(BankingData(bank_id=otro.id, period_end=pe, morosidad_estresada_pct=total))
+    db.commit()
+
+    snap = BankingProduct(db).snapshot(ProductTier.insight, "2024-12-31",
+                                       scope="Banco Estresado SA")
+    bloque = snap.payload["scoring_result"].get("morosidad_estresada")
+    assert bloque, "el bloque no llegó al payload del producto"
+    assert bloque["morosidad_estresada_de_la_entidad_pct"] == 7.6
+    assert bloque["mediana_estresada_del_resto_del_sistema_pct"] == 5.0
+    assert bloque["posicion_frente_a_la_mediana_del_resto"] == "por encima"
+
+
 def test_scope_options_lists_active_entities(db):
     """scope_options alimenta el selector del catálogo: id (value), nombre (label) y tipo
     (group) de las entidades activas CON rating, ordenadas por nombre. value resuelve en

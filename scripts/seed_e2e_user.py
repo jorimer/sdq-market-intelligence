@@ -21,12 +21,12 @@ from shared.auth.jwt_handler import hash_password  # noqa: E402
 from shared.auth.models import User, UserRole  # noqa: E402
 from shared.config.settings import settings  # noqa: E402
 from shared.database.session import SessionLocal  # noqa: E402
+from scripts.e2e_credentials import e2e_password  # noqa: E402
 
 logging.basicConfig(level=logging.INFO, format="%(levelname)s: %(message)s")
 logger = logging.getLogger("sdq.seed.e2e_user")
 
 E2E_EMAIL = "claude@sdqconsulting.com.do"
-E2E_PASSWORD = "Claude1234"
 E2E_FULL_NAME = "Claude E2E (testing)"
 
 
@@ -47,7 +47,7 @@ def seed_e2e_user(deactivate: bool = False) -> None:
         if user is None:
             user = User(
                 email=E2E_EMAIL,
-                password_hash=hash_password(E2E_PASSWORD),
+                password_hash=hash_password(e2e_password()),
                 full_name=E2E_FULL_NAME,
                 role=UserRole.admin,
                 is_active=True,
@@ -56,7 +56,7 @@ def seed_e2e_user(deactivate: bool = False) -> None:
             action = "creado"
         else:
             # Restore to a known-good state after a deployment.
-            user.password_hash = hash_password(E2E_PASSWORD)
+            user.password_hash = hash_password(e2e_password())
             user.role = UserRole.admin
             user.is_active = True
             user.failed_login_attempts = 0

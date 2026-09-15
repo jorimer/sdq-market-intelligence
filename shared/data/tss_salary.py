@@ -48,6 +48,18 @@ DROP_ACTIVITY = "no_identificado"  # the residual bucket (activity_key form) —
 VAR_SALARY = "avg_salary"
 UNIT_SALARY = "RD$/mes (salario promedio cotizable)"
 LICENSE = "datos públicos TSS/SDSS — uso con cita"
+
+#: Empleo formal (2026-09-15). ``Trabajadores Cotizantes`` es una COLUMNA de ``Query1``, no una
+#: medida: se pide sumada y agrupada por ``Periodo``, que es MENSUAL — sumar el año contaría a
+#: cada trabajador doce veces.
+COTIZANTES_PROP = "Trabajadores Cotizantes"
+PERIODO_PROP = "Periodo"
+VAR_COTIZANTES = "trabajadores_cotizantes"
+UNIT_COTIZANTES = "trabajadores cotizantes"
+#: Un mes se da por COMPLETO si su total no cae más de 1% contra el anterior. El reporte
+#: publica el mes en curso mientras llega: medido el 2026-09-15, 2026-06 venía 2,8% abajo y
+#: 2026-07 con 12.153 cotizantes contra 2,4 millones.
+UMBRAL_MES_COMPLETO = 0.99
 MIN_ACTIVITIES = 15   # below this the report structure changed → fail closed
 
 
@@ -121,6 +133,58 @@ def build_query(model_id: int) -> dict:
         "cancelQueries": [],
         "modelId": model_id,
     }
+
+
+def build_query_cotizantes(model_id: int) -> dict:
+    """Trabajadores cotizantes SUMADOS por ``ACT_ECO2_BC`` × ``Periodo`` (mensual)."""
+    def col(prop):
+        return {"Column": {"Expression": {"SourceRef": {"Source": "q"}}, "Property": prop}}
+
+    return {
+        "version": "1.0.0",
+        "queries": [{
+            "Query": {"Commands": [{"SemanticQueryDataShapeCommand": {
+                "Query": {
+                    "Version": 2,
+                    "From": [{"Name": "q", "Entity": ENTITY, "Type": 0}],
+                    "Select": [
+                        {**col(ACTIVITY_PROP), "Name": "q." + ACTIVITY_PROP},
+                        {**col(PERIODO_PROP), "Name": "q." + PERIODO_PROP},
+                        {"Aggregation": {"Expression": col(COTIZANTES_PROP), "Function": 0},
+                         "Name": "q.cotizantes"},
+                    ],
+                },
+                "Binding": {
+                    "Primary": {"Groupings": [{"Projections": [0, 1, 2]}]},
+                    "DataReduction": {"DataVolume": 4, "Primary": {"Window": {"Count": 30000}}},
+                    "Version": 1,
+                },
+            }}]},
+            "QueryId": "",
+            "ApplicationContext": {"DatasetId": "x", "Sources": [{"ReportId": "x"}]},
+        }],
+        "cancelQueries": [],
+        "modelId": model_id,
+    }
+
+
+def periodo_mensual(valor: object) -> Optional[str]:
+    """``202605`` → ``2026-05``. ``None`` si no es un mes legible (nunca se inventa)."""
+    t = re.sub(r"\D", "", str(valor or ""))
+    if len(t) != 6:
+        return None
+    anio, mes = int(t[:4]), int(t[4:])
+    return f"{anio:04d}-{mes:02d}" if 1 <= mes <= 12 and 1990 <= anio <= 2100 else None
+
+
+def meses_completos(totales: Dict[str, float]) -> Tuple[List[str], List[str]]:
+    """``(meses completos, meses descartados)``: se recortan desde el FINAL los que caen más de
+    :data:`UMBRAL_MES_COMPLETO` contra el mes anterior, porque son meses que siguen llegando."""
+    meses = sorted(m for m, v in totales.items() if v)
+    descartados: List[str] = []
+    while len(meses) >= 2 and totales[meses[-1]] < UMBRAL_MES_COMPLETO * totales[meses[-2]]:
+        descartados.insert(0, meses.pop())
+    return meses, descartados
 
 
 def build_salary_records(
@@ -197,6 +261,36 @@ class TSSSalaryClient(FixtureBackedClient):
             decoded = decode_dsr(resp.json())
         records = build_salary_records(decoded)
         return _filter(records, series, period)
+
+    def fetch_cotizantes(self) -> List[Tuple[str, str, float]]:  # pragma: no cover - network I/O
+        """``[(activity_key, AAAA-MM, trabajadores cotizantes)]`` de TODOS los meses del reporte."""
+        import httpx
+
+        self.check_license()
+        res_key = powerbi.resource_key(VIEW_TOKEN)
+        api = powerbi.resolve_api_host(VIEW_URL)
+        with httpx.Client(http2=False, timeout=90, headers=powerbi.browser_headers()) as client:
+            model_id = powerbi.fetch_model_id(client, api, res_key)
+            resp = client.post(
+                f"{api}/public/reports/querydata?synchronous=true",
+                headers=powerbi.api_headers(res_key),
+                json=build_query_cotizantes(model_id),
+            )
+            resp.raise_for_status()
+            try:
+                filas = powerbi.decode_dsr_rows(resp.json(), min_cols=3)
+            except powerbi.PowerBIError as e:
+                raise TSSSalaryError(str(e).replace("el reporte cambió",
+                                                    "el reporte TSS cambió")) from e
+        out: List[Tuple[str, str, float]] = []
+        for actividad, periodo, valor in filas:
+            key, mes = activity_key(actividad), periodo_mensual(periodo)
+            if key and key != DROP_ACTIVITY and mes and isinstance(valor, (int, float)):
+                out.append((key, mes, float(valor)))
+        if len({k for k, _, _ in out}) < MIN_ACTIVITIES:
+            raise TSSSalaryError("el reporte TSS de cotizantes trajo menos actividades que las "
+                                 f"esperadas (≥{MIN_ACTIVITIES}) — ¿cambió la estructura?")
+        return out
 
     # ── Fixture (offline / tests) ─────────────────────────────────
     def _fetch_fixture(self, series: Optional[str], period: Optional[str]) -> List[Record]:

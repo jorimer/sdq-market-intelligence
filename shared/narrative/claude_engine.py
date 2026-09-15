@@ -98,6 +98,41 @@ def _apply_lang(prompt: str, lang: str) -> str:
     return prompt + directive if directive else prompt
 
 # Prompt templates using SCQA (Situation-Complication-Question-Answer) framework
+#: Cómo se escriben las DOS moras (2026-09-15, feedback de Banco Múltiple Santa Cruz: la
+#: comparable entre entidades es la estresada, no la convencional). Vive en constante porque
+#: la usan dos plantillas y porque un literal partido deja de existir como frase en el fuente.
+MOROSIDAD_ESTRESADA_EN_EL_TEXTO = (
+    "MOROSIDAD ESTRESADA: si el contexto trae 'morosidad_estresada', explicá en pocas líneas "
+    "las dos moras y lo que las separa: la convencional ('morosidad_convencional_publicada_"
+    "de_la_entidad_pct', la base de la cobertura), la estresada oficial de la SIB "
+    "('morosidad_estresada_de_la_entidad_pct', la que compara entidades) y lo que la "
+    "convencional no ve ('lo_que_la_mora_convencional_no_ve_pp', con su "
+    "'mayor_componente_fuera_de_la_vencida'). La posición contra el resto del sistema viene "
+    "resuelta en 'posicion_frente_a_la_mediana_del_resto': COPIALA. NO restes la mora "
+    "convencional de la estresada: salen de carteras distintas ('nota_de_carteras'). Si trae "
+    "'disponible' en falso, decí en una frase que no se publica y por qué ('motivo'). No digas "
+    "que la estresada afecta el score: no puntúa. La cobertura de provisiones se mide contra la "
+    "mora CONVENCIONAL: no la compares con la estresada ni digas que su margen se estrecha "
+    "contra ella, porque lo castigado ya salió del balance y no lleva provisión. Si comparás "
+    "la estresada con la mediana como un múltiplo, usá 'veces_la_mediana_del_resto' tal cual: "
+    "no escribas «duplica» ni «el doble» si esa cifra no llega a 2.\n\n"
+)
+
+#: Cómo se escribe un trimestre (2026-09-15, feedback de Banco Santa Cruz: «si siempre es así,
+#: el motor debió resaltarlo o decir por qué es relevante»). El rótulo lo resuelve el código.
+TRAMOS_EN_CONTEXTO_EN_EL_TEXTO = (
+    "CADA TRIMESTRE EN SU CONTEXTO: 'contexto_de_los_tramos' trae, por trimestre, su 'rotulo' "
+    "ya resuelto contra el mismo trimestre de años anteriores de la entidad y contra el resto "
+    "del sistema en ese corte. COPIALO. Destacá como hallazgo SOLO los tramos con 'se_destaca' "
+    "verdadero, nombrando contra qué referencia lo son. Un tramo 'ordinario' no es un hallazgo "
+    "aunque haya concentrado la mayor parte del movimiento: decí que es lo habitual y seguí. NO "
+    "hables de estacionalidad ni de un patrón que se repite salvo que 'frente_a_su_historia' "
+    "sea 'ordinario' y lo respalde su 'rango_historico_del_mismo_trimestre'; si dice 'historia "
+    "insuficiente', decilo en una frase y no supongas un patrón. Entre "
+    "'la_mitad_central_del_resto_va_desde' y 'la_mitad_central_del_resto_va_hasta' está la "
+    "MITAD de las instituciones del resto (el 50 % central), no el 75 %.\n\n"
+)
+
 TEMPLATES = {
     "executive_summary": (
         "Eres un analista financiero senior especializado en banca dominicana. "
@@ -481,7 +516,8 @@ THIN_TEMPLATES = {
         "refleja su score, el indicador que más lo sube y el que más lo baja (con sus valores "
         "y scores), "
         "posición vs pares si se provee, y un veredicto puntual con qué vigilar. NO repitas el "
-        "panorama global del banco ni otros sub-componentes."
+        "panorama global del banco ni otros sub-componentes.\n\n"
+        + MOROSIDAD_ESTRESADA_EN_EL_TEXTO
     ),
     "anuario_sistema": (
         "Escribí la lectura del AÑO del sistema bancario dominicano.\n"
@@ -570,6 +606,7 @@ THIN_TEMPLATES = {
         "digas ni mejoró ni empeoró. Usá la 'unidad' de la fila al citar el cambio.\n\n"
         "'cortes_faltantes' se DECLARA si no está vacío: un tramo sin su corte no se puede "
         "medir, y callarlo haría pasar tres trimestres por cuatro.\n\n"
+        + TRAMOS_EN_CONTEXTO_EN_EL_TEXTO + MOROSIDAD_ESTRESADA_EN_EL_TEXTO +
         "TÍTULOS DE SECCIÓN DESCRIPTIVOS Y SOBRIOS: nombran el asunto, no lo dramatizan. Sin "
         "anglicismos: es 'dentro del año' o 'intraanual', no 'intrayear'.\n\n"
         "No recalcules ninguna cifra: todas vienen resueltas. Si una relación no está servida, "
@@ -2216,10 +2253,11 @@ def _legacy_system() -> str:
     """
     from shared.narrative.cerebro import (
         DIRECTION_DISCIPLINE, EPISTEMIC_STANDARD, INDICATOR_SEMANTICS, NO_META_COMMENTARY,
-        REGISTER_NEUTRO, SCOPE_DISCIPLINE)
+        REGISTER_NEUTRO, SCOPE_DISCIPLINE, UMBRAL_DISCIPLINE)
     return (REGISTER_NEUTRO + "\n\n" + EPISTEMIC_STANDARD
             + "\n\n" + DIRECTION_DISCIPLINE + "\n\n" + INDICATOR_SEMANTICS
-            + "\n\n" + SCOPE_DISCIPLINE + "\n\n" + NO_META_COMMENTARY)
+            + "\n\n" + SCOPE_DISCIPLINE + "\n\n" + UMBRAL_DISCIPLINE
+            + "\n\n" + NO_META_COMMENTARY)
 
 
 def _uses_cerebro(template: str, axis: Optional[str]) -> bool:
@@ -2528,6 +2566,9 @@ class NarrativeEngine:
             deterministic_direction_errors, deterministic_uncited_figures,
             deterministic_unsupported, reescribir_relaciones_invertidas, verify_figures)
         from shared.narrative.presupuesto import cabe, queda
+        from shared.narrative.terminos_vetados import (aviso as aviso_de_terminos,
+                                                       excepciones_declaradas,
+                                                       quitar_oraciones_con, terminos_en)
 
         def _gen(user_msg):
             resp = _call_with_transient_retry(
@@ -2580,9 +2621,12 @@ class NarrativeEngine:
         _t_intento = time.monotonic()
         result = _gen(user)
         bad, wrong_dir, origen = _check(result.text)
+        # Términos que el CONTEXTO del eje declara prohibidos (p. ej. «percentil» donde lo
+        # servido es un puesto): se reparan en el MISMO reintento que las cifras.
+        vetados = terminos_en(context, result.text)
         costo_del_intento = time.monotonic() - _t_intento
         sin_reintento_por_tiempo = False
-        if bad or wrong_dir:
+        if bad or wrong_dir or vetados:
             try:
                 for intento in range(1, _MAX_REINTENTOS_GUARD + 1):
                     # ¿ENTRA la regeneración en lo que queda del ensamblado? Si no, se
@@ -2607,6 +2651,8 @@ class NarrativeEngine:
                         notice += CORRECTION_NOTICE.format(bad="; ".join(bad))
                     if wrong_dir:
                         notice += DIRECTION_CORRECTION_NOTICE.format(bad="; ".join(wrong_dir))
+                    if vetados:
+                        notice += aviso_de_terminos(context, vetados)
                     if intento == _MAX_REINTENTOS_GUARD:
                         notice += ULTIMO_INTENTO_NOTICE
                     _t_intento = time.monotonic()
@@ -2615,12 +2661,13 @@ class NarrativeEngine:
                     corrected.tokens_used += result.tokens_used
                     corrected.cost_estimate += result.cost_estimate
                     bad, wrong_dir, origen = _check(corrected.text)
+                    vetados = terminos_en(context, corrected.text)
                     # Cada intento re-estima con SU propio costo: el segundo puede tardar más
                     # que el primero (el aviso de corrección alarga el prompt), y arrastrar la
                     # medición del primero subestimaría justo cuando queda menos margen.
                     costo_del_intento = time.monotonic() - _t_intento
                     result = corrected
-                    if not (bad or wrong_dir):
+                    if not (bad or wrong_dir or vetados):
                         break
                 result.guard_unsupported = bad + wrong_dir
                 result.guard_cifras = list(bad)
@@ -2655,6 +2702,18 @@ class NarrativeEngine:
                         wrong_dir = [h for h in wrong_dir
                                      if h.split(":", 1)[0].strip() not in " ".join(reescritas)]
                         result.guard_unsupported = list(bad) + list(wrong_dir)
+                # Un término que sobrevive a los reintentos: se quitan las ORACIONES que lo
+                # usan. Quitar una afirmación falsa empobrece menos que publicarla, y el resto
+                # de la sección —correcto— se conserva.
+                if vetados:
+                    texto_sin, quitadas = quitar_oraciones_con(
+                        result.text, vetados, excepciones_declaradas(context))
+                    if quitadas:
+                        logger.warning(
+                            "Guardrail (%s): el término %s sobrevivió a %d reintento(s) — se "
+                            "quitan %d oración(es): %s", template, vetados,
+                            _MAX_REINTENTOS_GUARD, len(quitadas), quitadas)
+                        result.text = texto_sin
                 # Lo que ni el modelo ni el sistema pudieron arreglar se deposita para que la
                 # superficie lo REGISTRE. Ya no veta: ver `shared/products/assembler`.
                 if wrong_dir:

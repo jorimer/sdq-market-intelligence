@@ -12,13 +12,14 @@ import pytest
 
 from shared.data.bcrd_sectors import sector_catalog
 from shared.perfil_del_sector import (actividad_del_sector, corte_del_cubo_para_el_anio,
-                                      credito_al_sector,
+                                      credito_al_sector, empleo_formal_del_sector,
                                       inversion_extranjera_del_sector, letras_del_slug,
                                       ocupacion_del_sector, perfil_del_sector,
                                       salario_del_sector)
 from shared.reference.cartera_sectorial import CarteraSectorial
 from shared.reference.sector_variables import (IED_DIMENSION, LABOR_ENCFT_DIMENSION,
-                                               SECTOR_DIMENSION, SectorVariable)
+                                               LABOR_TSS_DIMENSION, SECTOR_DIMENSION,
+                                               SectorVariable)
 
 CORTE = date(2025, 12, 31)
 
@@ -153,7 +154,7 @@ class TestLoQueNoHayNoSeInventa:
         p = perfil_del_sector(db_session, "construccion", CORTE)
         assert p["cobertura"]["lecturas_servidas"] == ["credito_del_sistema"]
         assert p["cobertura"]["lecturas_sin_dato_para_este_sector"] == [
-            "costo_laboral", "actividad", "ocupacion", "inversion_extranjera"]
+            "costo_laboral", "actividad", "ocupacion", "inversion_extranjera", "empleo_formal"]
 
 
 class TestElSalarioTraeSuAnio:
@@ -244,6 +245,9 @@ def test_las_DOS_PUNTAS_del_contrato_usan_las_mismas_claves(db_session):
         _var(db_session, LABOR_ENCFT_DIMENSION, "otros_servicios", "employment", anio, 1488383.0)
         _var(db_session, IED_DIMENSION, "turismo", "ied_usd_mm", anio, 1120.5)
         _var(db_session, IED_DIMENSION, "comercio_industria", "ied_usd_mm", anio, 890.1)
+    for mes, v in (("2024-12", 79402.0), ("2025-12", 84514.0)):
+        _var(db_session, LABOR_TSS_DIMENSION, "construccion", "trabajadores_cotizantes", mes, v)
+        _var(db_session, LABOR_TSS_DIMENSION, "zonas_francas", "trabajadores_cotizantes", mes, v)
     db_session.commit()
 
     emisores = (
@@ -254,6 +258,8 @@ def test_las_DOS_PUNTAS_del_contrato_usan_las_mismas_claves(db_session):
         lambda: ocupacion_del_sector(db_session, "salud", 2025),          # rama agregada
         lambda: inversion_extranjera_del_sector(db_session, "turismo", 2025),        # directa
         lambda: inversion_extranjera_del_sector(db_session, "manufactura_local", 2025),  # agg
+        lambda: empleo_formal_del_sector(db_session, "construccion", CORTE),       # propia
+        lambda: empleo_formal_del_sector(db_session, "zonas_francas", CORTE),      # agregada
     )
     emite = set()
     for fn in emisores:
@@ -270,7 +276,7 @@ def test_las_DOS_PUNTAS_del_contrato_usan_las_mismas_claves(db_session):
            and isinstance(n.args[0], ast.Constant) and isinstance(n.args[0].value, str)}
     # Éstas son claves del PERFIL (el diccionario de afuera), no de una fila.
     lee -= {"credito_del_sistema", "costo_laboral", "actividad", "ocupacion",
-            "inversion_extranjera"}
+            "inversion_extranjera", "empleo_formal"}
     del_salario = {"salario_promedio_cotizable_del_sector_dop_mes", "anio", "fuente"}
     huerfanas = lee - emite - del_salario
     assert not huerfanas, (

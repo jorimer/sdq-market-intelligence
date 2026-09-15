@@ -650,3 +650,34 @@ class TestLaHolguraDondePresta:
     def test_las_rutas_que_emiten_un_informe_lo_SIRVEN(self, archivo):
         import pathlib
         assert "holgura_donde_presta" in pathlib.Path(archivo).read_text()
+
+
+
+class TestElAnioDeLaHolguraEsElDelDato:
+    """Producción, 2026-09-15: con corte 2026 la holgura se rotulaba «2026» y traía los MISMOS
+    valores que la Revisión Anual rotulaba «2025». La ENCFT regional anual de 2026 no existe."""
+
+    @pytest.fixture()
+    def db_regional(self, db):
+        for dominio, su4 in (("ozama", 13.7), ("norte", 6.5), ("sur", 14.0), ("este", 9.3)):
+            db.add(SocialIndicator(theme="subutilizacion_su4_regional_anual", entity_key=dominio,
+                                   period="2025", value=su4, unit="%", source="BCRD"))
+        db.commit()
+        return db
+
+    def test_un_corte_de_2026_rotula_el_2025_que_leyo(self, db_regional):
+        r = I.mercado_laboral_por_region(db_regional, CORTE)
+        assert r["anio"] == "2025"
+        assert "anios_de_los_dominios" not in r
+
+    def test_si_los_dominios_no_comparten_anio_se_DECLARAN(self, db_regional):
+        db_regional.add(SocialIndicator(theme="subutilizacion_su4_regional_anual",
+                                        entity_key="ozama", period="2026", value=12.0,
+                                        unit="%", source="BCRD"))
+        db_regional.commit()
+        r = I.mercado_laboral_por_region(db_regional, CORTE)
+        assert r["anio"] == "2026" and r["anios_de_los_dominios"] == ["2025", "2026"]
+
+    def test_la_holgura_de_la_region_hereda_el_anio_del_dato(self, db_regional):
+        r = I.holgura_de_la_region(db_regional, CORTE, "el_valle")
+        assert r is not None and r["anio"] == "2025"

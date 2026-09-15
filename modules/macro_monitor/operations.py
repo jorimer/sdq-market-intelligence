@@ -359,21 +359,24 @@ def _run_excel_batch(params, user_id, set_phase) -> Dict:  # noqa: ARG001
 def _run_canonical_ingest_manual(params, user_id, set_phase) -> Dict:  # noqa: ARG001
     """Ingesta del set canónico pedida desde la pantalla: lo que dispara ``POST /excel/ingest-canonical``.
 
-    NO es ``macro-canonical-sync``: no poda, no puntúa pronósticos ni rehace el snapshot, y
-    con ``persist`` escribe todos los archivos canónicos (no solo los verificados). Conserva
-    exactamente lo que hacía la ruta; lo que cambia es que el desenlace del worker llega a
-    ``status.error`` en vez de perderse.
+    NO es ``macro-canonical-sync``: no poda, no puntúa pronósticos ni rehace el snapshot. Pero
+    con ``persist`` escribe con el MISMO alcance, ``PERSISTIBLES_VERIFICADOS``: sin él,
+    ``None`` escribe todo el canónico y el botón reintroduce los empates que la agendada evita.
+    Con ``persist=False`` el alcance no cambia nada —acota lo que se escribe, no lo que se
+    lee— y el reporte sale completo. En el worker, el alcance lo resuelve la propia tarea.
     """
     from shared.config.settings import settings
 
     persist = bool((params or {}).get("persist"))
     if not (settings.USE_CELERY and settings.REDIS_URL):
+        from shared.data.bcrd_excel.canonical import PERSISTIBLES_VERIFICADOS
         from modules.macro_monitor.service import ingest_canonical
 
         set_phase("ingesta canónica en ESTE proceso (sin broker)")
         db = SessionLocal()
         try:
-            return {**ingest_canonical(db, persist=persist), "via": "proceso_web"}
+            return {**ingest_canonical(db, persist=persist, alcance=PERSISTIBLES_VERIFICADOS),
+                    "via": "proceso_web"}
         finally:
             db.close()
 

@@ -21,6 +21,18 @@ from typing import Dict, Any, Optional, List, Tuple
 
 from shared.data.base_client import Record, SourceClient
 
+#: Componentes de la MOROSIDAD ESTRESADA oficial (catálogo SIB I.027) salvo los castigos, que
+#: ya viajan como `castigos_pct`: columna de `banking_data` → campo de la fila de
+#: `indicadores/morosidad-estresada`. Castigos y adjudicaciones son acumulados de 12 meses.
+_COMPONENTES_ESTRESADA: Dict[str, str] = {
+    "estresada_vencido_pct": "vencido",
+    "estresada_cobranza_pct": "cobranza",
+    "estresada_tc31a60_pct": "tc31a60",
+    "estresada_reestructurado_rea_pct": "reestructuradoRea",
+    "estresada_reestructurado_temporal_pct": "reestructuradoTemporal",
+    "estresada_adjudicado_pct": "adjudicado",
+}
+
 
 def _norm(s: str) -> str:
     """Uppercase + strip diacritics, so 'Índice de Crédito' matches 'INDICE DE
@@ -116,6 +128,13 @@ SIB_ENTITY_CODES: Dict[str, Dict[str, Any]] = {
     "Empire":        {"sib_code": "EMPIRE",    "tipo_entidad": "BAC", "nombre": "Banco de Ahorro y Crédito Empire",     "nombre_sib": "BANCO DE AHORRO Y CREDITO EMPIRE",  "active": False},
     "Activo":        {"sib_code": "ACTIVO",    "tipo_entidad": "BM",  "nombre": "Banco Múltiple Activo",                 "nombre_sib": "BANCO MULTIPLE ACTIVO",            "active": False},
     "Reidco":        {"sib_code": "REIDCO",    "tipo_entidad": "CC",  "nombre": "Corporación de Crédito Reidco",         "nombre_sib": "CORPORACION DE CREDITO REIDCO",    "active": False},
+    # Banca múltiple que la SB sigue emitiendo en la ventana 2021– y que cada sync listaba como
+    # «no catalogada». Tipo verificado en la fuente: llegan en la lista de BM (sync del
+    # 2026-09-15). `sib_code` es la forma EXACTA que emite, porque solo lo exacto es seguro.
+    #  · Bancamérica: la Junta Monetaria ordenó su disolución el 28-ene-2022 (SB).
+    #  · Bellbank: absorbida por JMMB en 2022 (traspaso autorizado jun-2022, fusión oct-2022).
+    "Bancamérica":   {"sib_code": "BANCAMERICA", "tipo_entidad": "BM", "nombre": "Banco Múltiple de las Américas",     "nombre_sib": "BANCO MULTIPLE DE LAS AMERICAS",   "active": False},
+    "Bellbank":      {"sib_code": "BELLBANK",    "tipo_entidad": "BM", "nombre": "Banco Múltiple Bellbank",            "nombre_sib": "BANCO MULTIPLE BELLBANK",          "active": False},
 }
 
 # Intermediación cambiaria (estados .../eic). ARC = agentes de remesas y cambio;
@@ -2183,6 +2202,13 @@ class SIBDataClient(SourceClient):
         # castigos / carteraTotal — both from the SAME endpoint → unit-safe ratio.
         castigos = None
         castigos_pct = None
+        # MOROSIDAD ESTRESADA oficial (catálogo SIB I.027), de la MISMA fila: vencida +
+        # cobranza + TC 31-60 + reestructurados REA y temporales + castigos 12m +
+        # adjudicaciones 12m, sobre la cartera. Un componente AUSENTE queda None y deja la
+        # estresada en None: publicarla sin él la subestimaría en silencio. Un 0 publicado
+        # por la fuente es un cero. NO puntúa (ver la migración e5c9a2d7b416).
+        estresada: Dict[str, Optional[float]] = {k: None for k in _COMPONENTES_ESTRESADA}
+        morosidad_estresada_pct = None
         for r in period_data.get("morosidad_estresada", []):
             try:
                 ct = float(r.get("carteraTotal") or 0)
@@ -2192,6 +2218,16 @@ class SIBDataClient(SourceClient):
             if ct > 0:
                 castigos = cg
                 castigos_pct = round(cg / ct * 100, 4)
+                for clave, campo in _COMPONENTES_ESTRESADA.items():
+                    try:
+                        v = r.get(campo)
+                        estresada[clave] = None if v is None else round(float(v) / ct * 100, 4)
+                    except (TypeError, ValueError):
+                        estresada[clave] = None
+                if r.get("castigos") is not None and None not in estresada.values():
+                    morosidad_estresada_pct = round(
+                        (sum(v for v in estresada.values() if v is not None)
+                         + float(r["castigos"]) / ct * 100), 4)
                 break
 
         # real-estate exposure % from indicadores/riesgo-credito: gross debt in the
@@ -2278,6 +2314,9 @@ class SIBDataClient(SourceClient):
             # Cartera-quality ratios (fase 2) — each from a single SIB endpoint.
             "castigos_pct": castigos_pct,
             "exposicion_re_pct": exposicion_re_pct,
+            # Morosidad estresada oficial SIB y su desglose (los castigos son `castigos_pct`).
+            "morosidad_estresada_pct": morosidad_estresada_pct,
+            **estresada,
         }
 
     # ── Bulk extraction for all entities ───────────────────────

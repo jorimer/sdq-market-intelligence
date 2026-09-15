@@ -7,6 +7,11 @@ import time
 import urllib.error
 import urllib.request
 
+try:  # `python scripts/<script>.py` pone scripts/ en sys.path; `-m scripts.<script>`, la raíz
+    from e2e_credentials import e2e_password
+except ImportError:  # pragma: no cover
+    from scripts.e2e_credentials import e2e_password
+
 BASE = "https://sdq-market-intelligence-production.up.railway.app"
 # (eje, path-template, 2 audiencias)
 CASES = [
@@ -37,7 +42,7 @@ def _req(path, token, tries=6):
 
 tok = json.loads(urllib.request.urlopen(urllib.request.Request(
     BASE + "/api/v1/auth/login", data=json.dumps(
-        {"email": "claude@sdqconsulting.com.do", "password": "Claude1234"}).encode(),
+        {"email": "claude@sdqconsulting.com.do", "password": e2e_password()}).encode(),
     headers={"Content-Type": "application/json"}, method="POST")).read())["access_token"]
 
 # espera de deploy via trade (cache-miss)

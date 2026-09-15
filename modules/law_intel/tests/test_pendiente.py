@@ -34,12 +34,17 @@ class TestUnaMetaPendienteNoSePuedeINCUMPLIR:
 
     def test_UNA_sola_observacion_no_produce_veredicto_de_incumplimiento(self):
         """El defecto que este módulo evita. Con el corte movido al horizonte, el semáforo
-        devuelve `no_alcanzada` sobre una meta de 2030: dice que ya falló algo que todavía
-        tiene cinco años por delante."""
+        devolvía `no_alcanzada` sobre una meta de 2030: decía que ya falló algo que todavía
+        tiene cinco años por delante.
+
+        Desde 2026-09-15 el semáforo tampoco lo afirma por su lado: la observación es de 2024 y
+        la meta de 2030, así que ese período no tiene dato propio y sale `indeterminado`. El
+        contraste se mantiene: el semáforo NO juzga, y lo pendiente sí dice la distancia."""
         ind = _ind({"2025": 50.0, "2030": 80.0})
         obs = [("2024", 40.0)]
         del_semaforo = evaluar_vencida(ind, _binding(), obs, "2030")
-        assert del_semaforo.veredicto == "no_alcanzada"          # lo que NO se publica
+        assert del_semaforo.veredicto == "indeterminado"
+        assert del_semaforo.cumple is None, "una meta sin dato de su período no se da por fallada"
 
         de_lo_pendiente = evaluar(ind, _binding(), obs, "2030")
         assert de_lo_pendiente.estado == "sin_trayectoria"

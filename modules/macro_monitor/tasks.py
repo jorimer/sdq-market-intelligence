@@ -25,11 +25,14 @@ def excel_batch_task(self, **kwargs) -> dict:
 @celery_app.task(name="macro.ingest_canonical", bind=True)
 def ingest_canonical_task(self, persist: bool = False) -> dict:  # noqa: ARG001
     """Ingest only the canonical series in the Celery worker."""
+    from shared.data.bcrd_excel.canonical import PERSISTIBLES_VERIFICADOS
     from shared.database.session import SessionLocal
     from modules.macro_monitor.service import ingest_canonical
 
     db = SessionLocal()
     try:
-        return ingest_canonical(db, persist=persist)
+        # El alcance se resuelve ACÁ y no viaja en el mensaje: una tarea encolada escribe con
+        # la lista vigente al correr. Mismo alcance que `macro-canonical-sync`.
+        return ingest_canonical(db, persist=persist, alcance=PERSISTIBLES_VERIFICADOS)
     finally:
         db.close()

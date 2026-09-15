@@ -16,6 +16,7 @@ from shared.narrative.cerebro import (
     INDICATOR_SEMANTICS,
     NO_META_COMMENTARY,
     REGISTER_NEUTRO,
+    UMBRAL_DISCIPLINE,
 )
 from shared.narrative.numeric_guard import _parse_unsupported
 
@@ -25,7 +26,8 @@ from shared.narrative.numeric_guard import _parse_unsupported
 # más cara de este repo es la del guard que vive en un motor y falta en el otro.
 _LEGACY_SYSTEM = (REGISTER_NEUTRO + "\n\n" + EPISTEMIC_STANDARD + "\n\n"
                   + DIRECTION_DISCIPLINE + "\n\n" + INDICATOR_SEMANTICS
-                  + "\n\n" + SCOPE_DISCIPLINE + "\n\n" + NO_META_COMMENTARY)
+                  + "\n\n" + SCOPE_DISCIPLINE + "\n\n" + UMBRAL_DISCIPLINE
+                  + "\n\n" + NO_META_COMMENTARY)
 
 
 class _FakeMsg:

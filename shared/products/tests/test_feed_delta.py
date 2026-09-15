@@ -16,7 +16,7 @@ import asyncio
 import json
 import inspect
 from datetime import date
-from typing import Any, Dict
+from typing import Any, Dict, Mapping
 
 import pytest
 from fastapi import FastAPI
@@ -567,18 +567,14 @@ def test_el_ensamblador_anexa_el_delta_DESPUES_de_los_gates_del_indice_y_ANTES_d
 
 # ── La RUTA: el entregable sale por HTTP con el ensamblador real ────────────────────
 
-def test_por_HTTP_el_informe_trae_la_seccion_en_el_orden_y_lista_lo_omitido(db, producto,
-                                                                             monkeypatch):
-    """Un test del motor no es un test de la ruta. Acá solo se falsea el MODELO; el
-    ensamblador, la caché y el orden son los reales."""
+def _cliente_http(db, producto, monkeypatch):
+    """El router REAL de productos, con el producto de prueba activado y un usuario enterprise."""
     from shared.auth.dependencies import get_current_user
     from shared.database.session import get_db
     from shared.products import router as prod_router
     from shared.products.access import AccessTier
     from shared.products.models import ProductActivation
 
-    _feed_fresco(db)
-    _motor(monkeypatch)
     db.add(ProductActivation(sector_key=EJE, tier="deep_dive", is_active=True))
     db.commit()
     monkeypatch.setattr(prod_router, "get_product", lambda sector, db: producto)
@@ -591,7 +587,23 @@ def test_por_HTTP_el_informe_trae_la_seccion_en_el_orden_y_lista_lo_omitido(db, 
     app.include_router(prod_router.router, prefix="/api/v1/products")
     app.dependency_overrides[get_db] = lambda: db
     app.dependency_overrides[get_current_user] = lambda: _U()
-    c = TestClient(app)
+    return TestClient(app)
+
+
+def _informe_por_http(db, producto, monkeypatch) -> Dict[str, Any]:
+    r = _cliente_http(db, producto, monkeypatch).get(
+        f"/api/v1/products/{EJE}/deep_dive/report?scope=x")
+    assert r.status_code == 200, r.text
+    return r.json()
+
+
+def test_por_HTTP_el_informe_trae_la_seccion_en_el_orden_y_lista_lo_omitido(db, producto,
+                                                                             monkeypatch):
+    """Un test del motor no es un test de la ruta. Acá solo se falsea el MODELO; el
+    ensamblador, la caché y el orden son los reales."""
+    _feed_fresco(db)
+    _motor(monkeypatch)
+    c = _cliente_http(db, producto, monkeypatch)
 
     r = c.get(f"/api/v1/products/{EJE}/deep_dive/report?scope=x")
     assert r.status_code == 200, r.text
@@ -751,7 +763,47 @@ def test_una_ventana_COMPLETA_con_base_no_recibe_la_regla_de_lectura():
     assert "se_lee_como" not in _serie_para_el_modelo({"serie": "x", "ventana_movil_12m": ventana})["ventana_movil_12m"]
 
 
-# ── Términos vetados: se vigilan en código, no solo en la nota (2026-09-14) ─────────
+# ── Términos vetados: los DECLARA el feed y los repara el MOTOR (2026-09-14 / 09-15) ─────
+#
+# «La demanda del sistema eléctrico se acentúa» salió en prod con la nota del feed prohibiéndola.
+# El delta tuvo detector, corrección y regeneración propios; hoy declara sus términos bajo la
+# clave de `shared.narrative.terminos_vetados` y el lazo del guard del motor los repara en el
+# mismo reintento que las cifras. Estos tests corren el MOTOR REAL con el cliente falseado: con
+# `narrative_engine.generate` falseado no probarían nada del mecanismo.
+
+MOTIVO_PRUEBA = "las series son cosas contadas, no pedidas: nombrá cada serie con su etiqueta"
+
+#: Literal y no importada: contra el código sin excepciones el test tiene que fallar por aserción.
+CLAVE_EXCEPCIONES = "palabras_que_no_son_esos_terminos"
+
+
+class _Msg:
+    def __init__(self, text):
+        self.content = [type("C", (), {"text": text})()]
+        self.usage = type("U", (), {"input_tokens": 10, "output_tokens": 20})()
+
+
+def _motor_real(monkeypatch, textos):
+    """El motor REAL (`_generate_guarded`) con el cliente falseado. Devuelve el mensaje de
+    usuario de cada llamada de REDACCIÓN, en orden (las del juez no se cuentan)."""
+    eng, llamadas, cola = ce.narrative_engine, [], list(textos)
+
+    class _Cliente:
+        class messages:
+            @staticmethod
+            def create(**kw):
+                if "verificador" in (kw.get("system") or ""):
+                    return _Msg('{"unsupported": []}')
+                llamadas.append(kw["messages"][0]["content"])
+                return _Msg(cola.pop(0) if len(cola) > 1 else cola[0])
+
+    monkeypatch.setattr(eng, "_get_client", lambda: _Cliente())
+    monkeypatch.setattr(eng, "_get_cached", lambda key: None)
+    monkeypatch.setattr(eng, "_set_cache", lambda key, result: None)
+    monkeypatch.setattr(ce.settings, "ANTHROPIC_MODEL", "test-model", raising=False)
+    monkeypatch.setattr(ce.settings, "ANTHROPIC_GUARD_MODEL", "test-judge", raising=False)
+    return llamadas
+
 
 def _motor_secuencia(monkeypatch, textos):
     """Un motor falso que devuelve *textos* en orden y registra el contexto de cada llamada."""
@@ -765,44 +817,56 @@ def _motor_secuencia(monkeypatch, textos):
     return llamadas
 
 
-def _producto_con_veto(db, monkeypatch, terminos=("demanda",)):
+def _producto_con_veto(db, monkeypatch, **kw):
     from shared.products import registry
 
-    p = _Producto(db, feeds=[_feed(terminos_vetados=terminos)])
+    kw.setdefault("terminos_vetados", {"demanda": MOTIVO_PRUEBA})
+    p = _Producto(db, feeds=[_feed(**kw)])
     monkeypatch.setitem(registry._REGISTRY, EJE, lambda _db: p)
     _feed_fresco(db)
     return p
 
 
-def test_el_termino_vetado_se_detecta_como_PALABRA_entera():
-    from shared.products.feed_delta import terminos_vetados_en
+def test_con_un_termino_vetado_el_MOTOR_regenera_con_el_aviso_y_el_MOTIVO(db, monkeypatch):
+    """Una sola regeneración, la del motor, con el aviso general y el motivo del feed. «demandas»
+    es una flexión: el detector viejo del delta la dejaba pasar."""
+    from shared.narrative.terminos_vetados import CLAVE
 
-    feeds = [_feed(terminos_vetados=("demanda",))]
-    assert terminos_vetados_en("La Demanda del sistema se acentúa.", feeds) == ["demanda"]
-    assert terminos_vetados_en("La parte demandante no aplica; demandas no.", feeds) == []
-    assert terminos_vetados_en("La demanda.", [_feed()]) == [], "sin veto declarado no se vigila nada"
-
-
-def test_con_un_termino_vetado_se_narra_OTRA_vez_con_la_correccion(db, monkeypatch):
     p = _producto_con_veto(db, monkeypatch)
-    llamadas = _motor_secuencia(monkeypatch, ["La demanda crece.", "Las cosas contadas suben."])
+    llamadas = _motor_real(monkeypatch, ["Las demandas de cosas se leen en el período.",
+                                         "Las cosas contadas se leen en el período."])
     narr, omitidas = _anexar(p)
     assert omitidas == []
-    assert narr[SECCION_DELTA].endswith("Las cosas contadas suben.")
-    assert len(llamadas) == 2
-    assert "«demanda»" in llamadas[1]["context"]["correccion_de_terminos"]
-    assert "correccion_de_terminos" not in llamadas[0]["context"]
+    assert narr[SECCION_DELTA].endswith("Las cosas contadas se leen en el período.")
+    assert len(llamadas) == 2, "la regeneración no la hizo el lazo del motor"
+    aviso = llamadas[1].partition("CORRECCIÓN OBLIGATORIA — TÉRMINOS")[2]
+    assert "«demanda»" in aviso and MOTIVO_PRUEBA in aviso
+    assert CLAVE in llamadas[0], "el modelo no lee los términos en su contexto"
+    assert not any("correccion_de_terminos" in m for m in llamadas), "volvió la corrección propia"
 
 
-def test_si_el_termino_persiste_la_seccion_se_OMITE_y_no_se_cachea(db, monkeypatch):
-    from shared.products.feed_delta import OMITIDA_TERMINO
+def test_si_el_termino_PERSISTE_se_quita_la_ORACION_y_la_seccion_se_publica(db, monkeypatch):
+    from shared.narrative.claude_engine import _MAX_REINTENTOS_GUARD
 
     p = _producto_con_veto(db, monkeypatch)
-    _motor_secuencia(monkeypatch, ["La demanda crece.", "La demanda sigue creciendo."])
+    llamadas = _motor_real(monkeypatch, [
+        "Las cosas contadas se leen en el período. La demanda de cosas se lee aparte."])
     narr, omitidas = _anexar(p)
-    assert SECCION_DELTA not in narr
-    assert [o["motivo"] for o in omitidas] == [OMITIDA_TERMINO]
-    assert db.query(FeedDeltaCache).count() == 0
+    assert omitidas == []
+    assert len(llamadas) == 1 + _MAX_REINTENTOS_GUARD
+    assert narr[SECCION_DELTA].endswith("Las cosas contadas se leen en el período.")
+    assert "demanda" not in narr[SECCION_DELTA].lower()
+    assert db.query(FeedDeltaCache).one().texto == "Las cosas contadas se leen en el período."
+
+
+def test_una_palabra_que_EMPIEZA_como_el_termino_y_no_lo_es_no_se_toca(db, monkeypatch):
+    """«demandante» no es «demanda». El detector general acepta flexiones por la raíz, así que
+    la excepción se DECLARA; sin ella, esta oración se quitaría."""
+    p = _producto_con_veto(db, monkeypatch, excepciones_de_terminos=("demandante",))
+    llamadas = _motor_real(monkeypatch, ["La parte demandante no aplica a estas cosas."])
+    narr, omitidas = _anexar(p)
+    assert omitidas == [] and len(llamadas) == 1
+    assert narr[SECCION_DELTA].endswith("La parte demandante no aplica a estas cosas.")
 
 
 def test_un_texto_CACHEADO_con_el_termino_no_se_sirve(db, monkeypatch):
@@ -810,7 +874,7 @@ def test_un_texto_CACHEADO_con_el_termino_no_se_sirve(db, monkeypatch):
     _motor_secuencia(monkeypatch, ["Las cosas contadas suben."])
     _anexar(p)
     fila = db.query(FeedDeltaCache).one()
-    fila.texto = "La demanda del sistema se acentúa."
+    fila.texto = "Las demandas del sistema se acentúan."
     db.commit()
     llamadas = _motor_secuencia(monkeypatch, ["Las cosas contadas suben de nuevo."])
     narr, _ = _anexar(p)
@@ -818,16 +882,47 @@ def test_un_texto_CACHEADO_con_el_termino_no_se_sirve(db, monkeypatch):
     assert "demanda" not in narr[SECCION_DELTA].lower()
 
 
-def test_el_feed_del_IMTE_veta_DEMANDA(db):
-    from modules.energy_intel.products import EnergyProduct
+def test_el_contexto_DECLARA_los_terminos_bajo_la_clave_del_motor_solo_si_el_feed_los_declara(
+        db, monkeypatch):
+    from shared.narrative.terminos_vetados import CLAVE
 
-    feed = next(f for f in EnergyProduct(db).feeds_mensuales() if f.clave == "oc_seni_imte")
-    assert "demanda" in feed.terminos_vetados
-
-
-def test_el_contexto_nombra_los_terminos_vetados_solo_si_el_feed_los_declara(db, monkeypatch):
-    p = _producto_con_veto(db, monkeypatch)
+    p = _producto_con_veto(db, monkeypatch, excepciones_de_terminos=("demandante",))
     llamadas = _motor_secuencia(monkeypatch, ["Las cosas contadas suben."])
     _anexar(p)
-    lectura = llamadas[0]["context"]["lecturas_por_emisor"][0]
-    assert lectura["terminos_que_no_describen_estas_series"] == ["demanda"]
+    contexto = llamadas[0]["context"]
+    assert contexto[CLAVE] == {"demanda": MOTIVO_PRUEBA}
+    assert contexto[CLAVE_EXCEPCIONES] == ["demandante"]
+    assert "terminos_que_no_describen_estas_series" not in contexto["lecturas_por_emisor"][0]
+
+    # Sin veto declarado las claves no aparecen: la huella de esos feeds no cambia.
+    sin_veto = contexto_del_delta({"lecturas": [{"clave": "prueba_mensual", "emisor": "E",
+                                                 "etiqueta": "E", "periodo": "2026-06"}]},
+                                  [_feed()], "2025")
+    assert CLAVE not in sin_veto and CLAVE_EXCEPCIONES not in sin_veto
+
+
+def test_el_feed_del_IMTE_veta_DEMANDA_con_su_motivo_y_no_DEMANDANTE(db):
+    from modules.energy_intel.products import EnergyProduct
+    from shared.narrative.terminos_vetados import CLAVE, terminos_en
+
+    feed = next(f for f in EnergyProduct(db).feeds_mensuales() if f.clave == "oc_seni_imte")
+    assert isinstance(feed.terminos_vetados, Mapping) and feed.terminos_vetados.get("demanda")
+    contexto = contexto_del_delta({"lecturas": [{"clave": feed.clave, "emisor": feed.emisor,
+                                                 "etiqueta": feed.etiqueta, "periodo": "2026-06"}]},
+                                  [feed], "2025")
+    assert CLAVE in contexto
+    assert terminos_en(contexto, "La demanda del sistema eléctrico se acentúa.") == ["demanda"]
+    assert terminos_en(contexto, "La energía demandada creció.") == ["demanda"]
+    assert terminos_en(contexto, "La parte demandante no aplica.") == []
+
+
+def test_por_HTTP_el_termino_vetado_no_llega_al_informe(db, monkeypatch):
+    """La ruta, con el ensamblador y el motor reales: solo se falsea el cliente del modelo."""
+    p = _producto_con_veto(db, monkeypatch)
+    _motor_real(monkeypatch, [
+        "Las cosas contadas se leen en el período. La demanda de cosas se lee aparte."])
+    body = _informe_por_http(db, p, monkeypatch)
+    assert body["commercial"]["secciones_omitidas"] == []
+    texto = body["narratives"][SECCION_DELTA]
+    assert texto.endswith("Las cosas contadas se leen en el período.")
+    assert "demanda" not in texto.lower()

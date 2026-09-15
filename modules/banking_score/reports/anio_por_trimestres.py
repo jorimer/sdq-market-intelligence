@@ -27,6 +27,7 @@ from typing import Any, Dict, List, Optional
 from sqlalchemy.orm import Session
 
 from modules.banking_score.models.models import Bank
+from modules.banking_score.reports.trimestre_en_contexto import COMO_LEER_EL_ROTULO
 
 logger = logging.getLogger("sdq.banking.anio_por_trimestres")
 
@@ -38,6 +39,58 @@ UMBRAL_TRAMO = 0.5
 #: fecha: «2025-03» no le dice a nadie que es el primer trimestre.
 _TRAMO_LABEL = {3: "primer trimestre", 6: "segundo trimestre",
                 9: "tercer trimestre", 12: "cuarto trimestre"}
+
+#: Lenguaje que el dato del AÑO POR DENTRO no sostiene. El Deep Dive 2025 de Banco Múltiple Santa
+#: Cruz regenerado en producción (2026-09-15) atribuyó la oscilación de eficiencia a «intensidad
+#: estacional» sobre dos trimestres que el rótulo computado declaraba atípicos frente a su
+#: historia, con la plantilla prohibiéndolo; y llamó «umbral mínimo» al nivel de referencia del
+#: modelo, que no es el mínimo de nadie. «factores intraanuales de calendario» salió en la vuelta
+#: siguiente: la misma especulación, dicha con otras palabras.
+#:
+#: Se DECLARA en el contexto (`shared.narrative.terminos_vetados`) y lo repara el lazo del guard
+#: del motor. El año tuvo detector, corrección y regeneración propios en `products.py`: dos
+#: mecanismos para lo mismo, con avisos distintos y un segundo lazo que regeneraba por fuera del
+#: presupuesto del motor. Los términos se buscan como palabra, con sus flexiones y sin depender
+#: de la tilde: «estacional» cubre «estacionalidad»; «de calendario», los «factores intraanuales».
+MOTIVO_ESTACIONAL = (
+    "un patrón que se repite solo se afirma con el rótulo de 'contexto_de_los_tramos' que lo "
+    "respalda: copiá el rótulo de cada trimestre en vez de atribuirle una causa de calendario")
+MOTIVO_UMBRAL_MINIMO = (
+    "el nivel de referencia del modelo no es el mínimo de nadie: nombralo como nivel de "
+    "referencia")
+TERMINOS_VETADOS_DEL_ANIO: Dict[str, str] = {
+    "estacional": MOTIVO_ESTACIONAL,
+    "de calendario": MOTIVO_ESTACIONAL,
+    "efecto calendario": MOTIVO_ESTACIONAL,
+    "umbral mínimo": MOTIVO_UMBRAL_MINIMO,
+    "umbrales mínimos": MOTIVO_UMBRAL_MINIMO,
+}
+
+#: Un MÚLTIPLO afirmado contra la razón servida. «una mora estresada que ya duplica ampliamente
+#: la mediana» sobre 9,06 contra 4,78 —1,9 veces— (Santa Cruz, 2026-09-15). Solo se declara si la
+#: razón está servida y no lo alcanza: sin ella no hay contra qué juzgar, y un veto a ciegas
+#: mordería prosa real. «duplic» es la raíz: cubre «duplica», «duplicó», «duplicar».
+MOTIVO_MULTIPLO = (
+    "la morosidad estresada al cierre no alcanza ese múltiplo de la mediana del resto del "
+    "sistema: si comparás, citá 'veces_la_mediana_del_resto' tal cual")
+_MULTIPLOS = ((2.0, ("duplic", "el doble", "del doble")),
+              (3.0, ("triplic", "el triple", "del triple")))
+
+
+def terminos_vetados_del_anio(dentro: Optional[Dict[str, Any]]) -> Dict[str, str]:
+    """``{término: motivo}`` que el texto de *dentro* (el año servido) no puede usar.
+
+    Los fijos, más los múltiplos que su razón servida no sostiene. Se COMPUTA desde el mismo
+    dato que lee el modelo, así que «duplica» se veta exactamente cuando la razón no llega."""
+    terminos = dict(TERMINOS_VETADOS_DEL_ANIO)
+    estresada = (dentro or {}).get("morosidad_estresada")
+    cierre = estresada.get("cierre") if isinstance(estresada, dict) else None
+    veces = cierre.get("veces_la_mediana_del_resto") if isinstance(cierre, dict) else None
+    if isinstance(veces, (int, float)) and not isinstance(veces, bool):
+        for umbral, formas in _MULTIPLOS:
+            if veces < umbral:
+                terminos.update(dict.fromkeys(formas, MOTIVO_MULTIPLO))
+    return terminos
 
 
 def _tramos(puntos: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
@@ -57,10 +110,13 @@ def _tramos(puntos: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
         out.append({
             "tramo": _TRAMO_LABEL.get(mes, corte[:7]),
             "desde": str(antes["period_end"]), "hasta": corte,
-            "score_desde": round(float(s0), 2), "score_hasta": round(float(s1), 2),
+            # El SUJETO en la clave: servido como `score_desde` el texto publicó «el score de
+            # solidez abrió en 64.15» sobre el global (Santa Cruz, 2026-09-15).
+            "score_global_desde": round(float(s0), 2),
+            "score_global_hasta": round(float(s1), 2),
             "cambio": delta,
             "direccion": direccion,
-            # `score_hasta` es el GLOBAL; la banda sale del eje de Resiliencia. Va su número.
+            # La banda sale del eje de Resiliencia, no del score global. Va su número.
             "resiliencia_desde": antes.get("resiliencia"),
             "resiliencia_hasta": despues.get("resiliencia"),
             "banda_hasta": despues.get("banda_resiliencia"),
@@ -132,6 +188,16 @@ def anio_por_trimestres(db: Session, bank: Bank, anio: int) -> Optional[Dict[str
 
     faltantes = [c for c in cortes if c not in {str(p["period_end"]) for p in puntos}]
     tramos = _tramos(puntos)
+    # CADA TRIMESTRE EN SU CONTEXTO (2026-09-15, feedback de Banco Santa Cruz): contra el
+    # mismo trimestre de años anteriores y contra el resto del sistema en ese corte. Sin
+    # esto, «concentró el 51 % del movimiento» no dice si es un hallazgo o lo de siempre.
+    contexto = _contexto_de_los_tramos(db, bank, anio, tramos)
+    mayor = _tramo_que_mas_movio(tramos)
+    if mayor and contexto:
+        del_mayor = next((c for c in contexto if c["tramo"] == mayor["tramo"]), None)
+        if del_mayor:
+            mayor["rotulo"] = del_mayor["rotulo"]
+            mayor["se_destaca"] = del_mayor["se_destaca"]
     return {
         "anio": anio,
         "entidad": bank.name,
@@ -140,7 +206,7 @@ def anio_por_trimestres(db: Session, bank: Bank, anio: int) -> Optional[Dict[str
             "de cada tramo. La comparación contra los años anteriores y la tendencia "
             "plurianual son el otro producto, «SDQ Banking · Revisión Anual»."),
         "serie": [{"corte": str(p["period_end"]),
-                   "score": round(float(p["score"]), 2),
+                   "score_global": round(float(p["score"]), 2),
                    "resiliencia": p.get("resiliencia"),
                    "banda": p.get("banda_resiliencia"),
                    "es_linea_base": str(p["period_end"]) == cortes[0]}
@@ -150,9 +216,33 @@ def anio_por_trimestres(db: Session, bank: Bank, anio: int) -> Optional[Dict[str
         "linea_base": cortes[0],
         "cortes_faltantes": faltantes,
         "tramos": tramos,
-        "tramo_que_mas_movio": _tramo_que_mas_movio(tramos),
+        "tramo_que_mas_movio": mayor,
+        "contexto_de_los_tramos": contexto,
+        "como_leer_el_contexto_de_los_tramos": COMO_LEER_EL_ROTULO,
         "tramos_por_dimension": _tramos_por_dimension(traj.get("sub") or {}, cortes),
         "camino": _camino(puntos),
         "cambios_de_banda": _bandas_del_anio(puntos),
         "balance": _balance(traj.get("indicators") or {}, cortes),
+        # La MOROSIDAD ESTRESADA oficial de la SIB a la apertura y al cierre (2026-09-15): la
+        # mora del balance compara mal entre entidades con políticas de castigo distintas.
+        "morosidad_estresada": _estresada_del_anio(db, bank, cortes),
     }
+
+
+def _contexto_de_los_tramos(db: Session, bank: Bank, anio: int,
+                            tramos: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    from modules.banking_score.reports.trimestre_en_contexto import contexto_de_los_tramos
+    try:
+        return contexto_de_los_tramos(db, bank, anio, tramos)
+    except Exception:  # noqa: BLE001 — el año por dentro nunca depende de este bloque
+        logger.exception("No se pudo poner en contexto los trimestres de %s", bank.name)
+        return []
+
+
+def _estresada_del_anio(db: Session, bank: Bank, cortes: List[str]) -> Optional[Dict[str, Any]]:
+    from modules.banking_score.reports.morosidad_estresada import morosidad_estresada_del_anio
+    try:
+        return morosidad_estresada_del_anio(db, bank, cortes)
+    except Exception:  # noqa: BLE001 — el año por dentro nunca depende de este bloque
+        logger.exception("No se pudo computar la morosidad estresada del año de %s", bank.name)
+        return None

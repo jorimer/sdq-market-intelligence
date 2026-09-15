@@ -7,6 +7,11 @@ import time
 import urllib.error
 import urllib.request
 
+try:  # `python scripts/<script>.py` pone scripts/ en sys.path; `-m scripts.<script>`, la raíz
+    from e2e_credentials import e2e_password
+except ImportError:  # pragma: no cover
+    from scripts.e2e_credentials import e2e_password
+
 BASE = "https://sdq-market-intelligence-production.up.railway.app"
 AUDIENCES = ["comite_credito", "entidad", "inversionista", "supervisor"]
 WANT = ["popular", "bhd", "santa cruz", "bdi", "reservas"]
@@ -33,7 +38,7 @@ def _req(method, path, token=None, body=None, tries=5):
 
 
 token = _req("POST", "/api/v1/auth/login",
-             body={"email": "claude@sdqconsulting.com.do", "password": "Claude1234"})["access_token"]
+             body={"email": "claude@sdqconsulting.com.do", "password": e2e_password()})["access_token"]
 cat = _req("GET", "/api/v1/banking-score/banks", token)
 banks = cat if isinstance(cat, list) else cat.get("banks", cat.get("items", []))
 chosen = {}

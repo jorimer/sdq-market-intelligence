@@ -302,6 +302,25 @@ SCOPE_DISCIPLINE = (
     "sostiene."
 )
 
+# Defensa PRIMARIA contra el UMBRAL DE MEMORIA (2026-09-15, Deep Dive de Banco Múltiple Santa
+# Cruz): «si la cobertura de provisiones desciende de 120 %, la señal dejaría de ser de alerta
+# temprana y pasaría a requerir ajuste». El 120 no estaba en el código ni en el contexto, y el
+# informe citaba páginas antes el 100 % de referencia. Un alto funcionario del banco preguntó
+# de dónde salía, y agregó lo que el modelo no puede saber desde afuera: el apetito de riesgo
+# lo fija el consejo de cada entidad. La red es `numeric_guard` (marca el umbral no servido);
+# la regla nace acá, en las DOS rutas.
+UMBRAL_DISCIPLINE = (
+    "UMBRALES Y ESCENARIOS (regla dura): una condición futura —'si la cobertura desciende "
+    "de…', 'un avance adicional de… activaría…'— lleva número SOLO si ese número viene "
+    "servido en el contexto (por ejemplo 'nivel_de_referencia', un mínimo normativo o un "
+    "umbral declarado), y al citarlo se nombra QUÉ es: el nivel en que un indicador puntúa 50 "
+    "no es un mínimo regulatorio, y ninguno de los dos es un umbral de alerta. Si el número no "
+    "viene servido, escribí la condición en palabras, sin cifra. No fijes umbrales de alerta "
+    "ni magnitudes de escenario por criterio propio. EL APETITO DE RIESGO de una entidad lo "
+    "fija su consejo y es información interna: no lo infieras, ni afirmes que un nivel está "
+    "dentro o fuera de él."
+)
+
 # ── POR MÓDULO — Doctrina del eje ─────────────────────────────────────────────
 
 AXIS_DOCTRINE: Dict[str, str] = {
@@ -672,6 +691,18 @@ AUDIENCE_FRAMES: Dict[str, Dict[str, str]] = {
             "de activos antes de volverse crítico), el cumplimiento de umbrales prudenciales, y el "
             "riesgo que la entidad aporta al sistema. Tu \"y por tanto\" final apunta a la prioridad "
             "de supervisión y la señal a monitorear, no a una decisión de negocio."
+        ),
+        # Pedida por un alto funcionario de Banco Múltiple Santa Cruz (2026-09-15): «también
+        # veo las áreas comerciales» como usuarias del informe.
+        "comercial": (
+            "FRAME DE DECISIÓN — Audiencia: Áreas comerciales de una entidad financiera.\n"
+            "Decide: en qué segmentos y plazas crecer, cómo posicionar el precio frente a la "
+            "competencia y dónde defender o disputar participación.\n"
+            "Le importa: dónde presta la entidad contra dónde presta el país, en qué sectores cobra "
+            "más o menos que el resto y si ese diferencial paga el riesgo que la mora muestra, y "
+            "qué competidor gana o pierde terreno. Tu \"y por tanto\" final apunta a la oportunidad "
+            "o la amenaza comercial que los datos del SIB sostienen, sin inventar cuotas de "
+            "mercado ni precios que el contexto no trae."
         ),
     },
     "sector_intel": {
@@ -1181,6 +1212,7 @@ def build_system(axis: str, audience: Optional[str], mode: str) -> str:
     parts.append(ATTRIBUTION_DISCIPLINE)
     parts.append(INDICATOR_SEMANTICS)
     parts.append(SCOPE_DISCIPLINE)
+    parts.append(UMBRAL_DISCIPLINE)
     if mode in ("detailed", "deep"):
         parts.append(DEPTH_DIRECTIVE)
     # Última instrucción del system: la salida es final, sin meta-comentario ni auto-corrección.

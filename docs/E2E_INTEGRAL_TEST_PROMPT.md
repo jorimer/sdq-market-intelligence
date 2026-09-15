@@ -57,10 +57,10 @@ Cualquier otra brecha —técnica, de datos, de cobertura extensible, de calidad
 
 - **Recorrido:** producción en vivo (Railway). Frontend y API de prod.
 - **Cuentas de verificación:**
-  - `claude@sdqconsulting.com.do` / `Claude1234` — **admin** (dispara syncs y refresh:
+  - `claude@sdqconsulting.com.do` (contraseña en `SDQ_E2E_PASSWORD`) — **admin** (dispara syncs y refresh:
     `POST /macro-monitor/refresh`, `POST /pension-intel/sync`, operaciones, admin de
     tarifario/usuarios). Es **free**, así que **no** ve `deep_dive`.
-  - `reporting-qa@sdqconsulting.com.do` / `Reporting1234` — **enterprise/viewer**, para
+  - `reporting-qa@sdqconsulting.com.do` (contraseña en `SDQ_REPORTING_QA_PASSWORD`) — **enterprise/viewer**, para
     probar `deep_dive` y superficies de cliente de pago.
   - Usa la cuenta correcta según lo que estés probando; muchos hallazgos de "no se ve el
     deep dive" son en realidad la cuenta free.

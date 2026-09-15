@@ -31,7 +31,9 @@ def test_insight_has_methodology_not_sources():
     assert "BCRD" in md and "ONE" in md          # fuentes
     assert "90%" in md                            # cobertura
     assert "120 días" in md                       # frescura
-    assert "preliminar" in md.lower()             # validación honesta
+    # La nota de validación ya NO se publica (2026-09-15): la línea salía escrita a mano en
+    # los informes de cliente. Ver `test_la_metodologia_no_publica_validacion_escrita`.
+    assert "preliminar" not in md.lower() and "0.55" not in md
 
 
 def test_deep_has_methodology_and_sources():

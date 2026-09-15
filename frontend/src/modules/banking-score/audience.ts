@@ -8,6 +8,7 @@ export const AUDIENCES = [
   "entidad",
   "inversionista",
   "supervisor",
+  "comercial",
 ] as const;
 
 export type Audience = (typeof AUDIENCES)[number];

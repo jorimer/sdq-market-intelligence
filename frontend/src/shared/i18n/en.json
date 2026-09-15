@@ -1158,7 +1158,8 @@
       "comite_credito": "Credit committee",
       "entidad": "The entity",
       "inversionista": "Investor",
-      "supervisor": "Supervisor"
+      "supervisor": "Supervisor",
+      "comercial": "Commercial teams"
     },
     "entAiUnavailable": "AI analysis is unavailable (Anthropic key not configured). The detail above is complete.",
     "indEyebrowFallback": "Indicator",

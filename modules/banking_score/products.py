@@ -87,6 +87,19 @@ SYSTEM_LABEL = "Sistema Bancario Dominicano"
 #: Un período con forma de AÑO. `2025` sí; `2025-12-31` no — ése es un corte.
 _ES_ANIO = re.compile(r"^\d{4}$")
 
+
+def _fin_del_corte(as_of: Optional[str]) -> Optional[date]:
+    """El último día del corte de un informe: `2025` → 2025-12-31; `2025-12-31` tal cual."""
+    s = str(as_of or "").strip()
+    if not s:
+        return None
+    if _ES_ANIO.match(s):
+        return date(int(s), 12, 31)
+    try:
+        return date.fromisoformat(s[:10])
+    except ValueError:
+        return None
+
 # Datos demo SINTÉTICOS de la muestra de conversión (sin DB, sin entidad real). KPIs del
 # Anexo del catálogo: CAR ~16.8%, morosidad ~1.9%, ROE ~19.4%, eficiencia ~56%, liquidez
 # ~31%. Bandas resultantes: Ejecución Competitiva · Resiliencia Sólida. Fuente única de la
@@ -940,7 +953,7 @@ class BankingProduct:
             detail=f"{n} entidades calificadas en {latest}.",
         )
 
-    def variable_signals(self) -> Dict[str, Any]:
+    def variable_signals(self, as_of: Optional[str] = None) -> Dict[str, Any]:
         """Procedencia POR INDICADOR del Banking Score, para el Data Registry.
 
         **Lo que arregla.** Sin esto el eje caía a `_product_level_fallback`, que emite una
@@ -964,8 +977,14 @@ class BankingProduct:
         from shared.registry.signals import GAP, REAL, VariableSignal
 
         db = self._require_db()
-        latest = (db.query(func.max(RatingResult.period_end))
-                  .filter(RatingResult.model_type == ModelType.deterministic).scalar())
+        # AL CORTE del informe cuando lo trae (`as_of`): la metodología de un Deep Dive 2025 no
+        # puede declarar la cobertura de junio de 2026 (ver `report_sections._provenance_md`).
+        consulta = (db.query(func.max(RatingResult.period_end))
+                    .filter(RatingResult.model_type == ModelType.deterministic))
+        fin_del_corte = _fin_del_corte(as_of)
+        if fin_del_corte is not None:
+            consulta = consulta.filter(RatingResult.period_end <= fin_del_corte)
+        latest = consulta.scalar()
         if latest is None:
             return {"period": None, "signals": []}
 
@@ -1148,6 +1167,17 @@ class BankingProduct:
         scoring_result["trayectorias"] = entity_trajectories(
             db, bank, as_of=cast(date, rr.period_end))
         scoring_result["percentiles"] = period_percentiles(db, bank, rr.period_end)
+        # LA MOROSIDAD ESTRESADA oficial de la SIB, computada (2026-09-15, feedback de Banco
+        # Santa Cruz): la mora convencional no compara entidades con políticas de castigo
+        # distintas. No puntúa; va a la sección de calidad de activos.
+        try:
+            from modules.banking_score.reports.morosidad_estresada import (
+                morosidad_estresada_al_corte)
+            _estresada = morosidad_estresada_al_corte(db, bank, cast(date, rr.period_end))
+            if _estresada:
+                scoring_result["morosidad_estresada"] = _estresada
+        except Exception:  # noqa: BLE001 — el snapshot nunca depende de este bloque
+            logger.exception("No se pudo computar la morosidad estresada de %s", bank.name)
         # QUÉ MOVIÓ EL SCORE, ya descompuesto, DENTRO DEL PAYLOAD. Se computa acá y no en el
         # frontend por la misma razón por la que se computa para el modelo: una segunda
         # implementación de la misma cuenta es una segunda oportunidad de que discrepen, y
@@ -1367,8 +1397,16 @@ class BankingProduct:
         # la anexa; el gate de degradación la cubre igual (ver `assembler`).
         dentro = snapshot.payload.get("anio_por_trimestres")
         if dentro:
+            from modules.banking_score.reports.anio_por_trimestres import (
+                terminos_vetados_del_anio)
+            from shared.narrative.terminos_vetados import CLAVE as CLAVE_TERMINOS_VETADOS
             ctx = {"period": snapshot.period, "entity_name": snapshot.entity_name,
-                   "anio_por_trimestres": dentro}
+                   "anio_por_trimestres": dentro,
+                   # LENGUAJE QUE EL DATO NIEGA (2026-09-15, Santa Cruz): se declara en el
+                   # contexto y lo repara el lazo del guard del motor. Se computa ACÁ, desde el
+                   # año servido, y no dentro del payload: un snapshot armado antes de este
+                   # cambio no traería la lista, y el veto desaparecería sin aviso.
+                   CLAVE_TERMINOS_VETADOS: terminos_vetados_del_anio(dentro)}
             res = await narrative_engine.generate(
                 context=ctx, template="anio_por_trimestres", mode="deep",
                 axis="banking", audience="comite_credito")
@@ -1515,7 +1553,7 @@ class BankingProduct:
                 "anio_por_trimestres", snapshot.entity_name or "Entidad",
                 # El mapa viaja en el `scoring_result` porque es de ahí que el generador
                 # lo lee para dibujar su tabla; sin él saldría el párrafo sin las columnas.
-                {"overall_score": cierre.get("score") or 0,
+                {"overall_score": cierre.get("score_global") or 0,
                  "banda_ejecucion": None, "banda_resiliencia": cierre.get("banda"),
                  "sub_components": {}, "indicators": {},
                  **({"mapa_sectorial": snapshot.payload["mapa_sectorial"]}

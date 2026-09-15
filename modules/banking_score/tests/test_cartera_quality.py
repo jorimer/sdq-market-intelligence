@@ -135,6 +135,64 @@ def test_map_computes_exposicion_re_pct_from_riesgo_credito():
     assert mapped["exposicion_re_pct"] == 30.0
 
 
+#: Fila REAL de producción: Santa Cruz, 2025-03, `indicadores/morosidad-estresada` (leída el
+#: 2026-09-15 al verificar el feedback del banco). No es un número de fantasía: es la entidad
+#: que pidió la medida.
+_FILA_SANTA_CRUZ_2025_03 = {
+    "periodo": "2025-03", "tipoEntidad": "BANCOS MÚLTIPLES", "entidad": "SANTA CRUZ",
+    "vencido": 1726588796, "cobranza": 52057210, "tc31a60": 0,
+    "reestructuradoRea": 1915324027.93, "reestructuradoTemporal": 42729601.46,
+    "castigos": 2445257546.99, "adjudicado": 10872199.43, "carteraTotal": 81354592539,
+}
+_COMPONENTES_ESTRESADA = ("estresada_vencido_pct", "estresada_cobranza_pct",
+                          "estresada_tc31a60_pct", "estresada_reestructurado_rea_pct",
+                          "estresada_reestructurado_temporal_pct", "castigos_pct",
+                          "estresada_adjudicado_pct")
+
+
+def test_map_computes_morosidad_estresada_oficial_con_sus_componentes():
+    """Catálogo SIB I.027: (vencida + cobranza + TC 31-60 + reestructurados REA y temporales
+    + castigos 12m + adjudicaciones 12m) / cartera — todo de la MISMA fila."""
+    f = _FILA_SANTA_CRUZ_2025_03
+    mapped = _client()._map_to_sdq_fields({"morosidad_estresada": [dict(f)]})
+    numerador = sum(f[k] for k in ("vencido", "cobranza", "tc31a60", "reestructuradoRea",
+                                   "reestructuradoTemporal", "castigos", "adjudicado"))
+    esperado = numerador / f["carteraTotal"] * 100
+    assert esperado > 7, "la fixture tiene que ejercitar los reestructurados, no solo la mora"
+    assert mapped.get("morosidad_estresada_pct") == pytest.approx(esperado, abs=1e-3)
+    componentes = [mapped.get(k) for k in _COMPONENTES_ESTRESADA]
+    assert None not in componentes, componentes
+    # El desglose RECONCILIA con el total: el informe lo va a mostrar sumando.
+    assert sum(componentes) == pytest.approx(mapped["morosidad_estresada_pct"], abs=1e-3)
+    # Un cero PUBLICADO por la fuente es un cero, no una ausencia.
+    assert mapped.get("estresada_tc31a60_pct") == 0.0
+
+
+def test_un_componente_ausente_no_se_rellena_con_cero():
+    """Sin un componente no hay estresada: publicarla sin él la subestimaría en silencio."""
+    fila = dict(_FILA_SANTA_CRUZ_2025_03)
+    del fila["reestructuradoRea"]
+    mapped = _client()._map_to_sdq_fields({"morosidad_estresada": [fila]})
+    assert "estresada_reestructurado_rea_pct" in mapped
+    assert mapped["estresada_reestructurado_rea_pct"] is None
+    assert mapped.get("morosidad_estresada_pct", "ausente") is None
+    assert mapped.get("castigos_pct") is not None      # lo demás se sigue midiendo
+
+
+def test_la_estresada_NO_entra_al_score():
+    """Decisión del dueño (2026-09-15): mora y castigos ya puntúan; la estresada los contiene
+    y sumarla contaría dos veces el mismo hecho. Va al TEXTO del informe, no al motor."""
+    import pathlib
+
+    import modules.banking_score.scoring as scoring
+
+    fuentes = sorted(pathlib.Path(scoring.__file__).parent.glob("*.py"))
+    assert len(fuentes) >= 5, "el barrido no encontró el motor: no probó nada"
+    for f in fuentes:
+        texto = f.read_text(encoding="utf-8").replace("morosidad-estresada", "")
+        assert "estresada" not in texto, f"{f.name} usa la estresada: doble conteo en el score"
+
+
 def test_map_no_cartera_quality_when_endpoints_empty():
     mapped = _client()._map_to_sdq_fields({})
     assert mapped["castigos_pct"] is None

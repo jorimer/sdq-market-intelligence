@@ -23,7 +23,7 @@ falso positivo sobre español financiero legítimo.
 """
 import logging
 import re
-from typing import List, Tuple
+from typing import Callable, List, Optional, Tuple
 
 logger = logging.getLogger(__name__)
 
@@ -128,6 +128,48 @@ _INTERJECTION_COMMA = re.compile(
     re.IGNORECASE,
 )
 
+# ── La raya también CIERRA un inciso ──────────────────────────────────────────
+# Defecto 2026-09-15 (Deep Dive de Banco Múltiple Santa Cruz, PDF entregado al banco): el
+# modelo escribió «—una ganancia seguida de corrección—, pues eso confirmaría…» y el PDF dijo
+# «una ganancia seguida de, pues eso confirmaría…». `_INTERJECTION` leyó «corrección—» como
+# auto-corrección: la raya que CIERRA un inciso tiene la misma forma que la que interrumpe.
+#
+# Lo que las distingue es la palabra de antes. La interjección no lleva determinante ni
+# preposición («adecuada espera —»); el sustantivo sí («seguida de corrección—», «una
+# corrección—», «plazo de espera—»). Se exceptúan solo los marcadores que ADMITEN ser
+# sustantivo; «corrijo» o «me equivoqué» no tienen lectura de sustantivo y se siguen quitando.
+_SUSTANTIVABLE = re.compile(r"(?:correcci[óo]n|espera|un\s+moment[oo])\s*[—–]", re.IGNORECASE)
+_DETERMINANTE_PREVIO = re.compile(
+    r"\b(?:de|del|la|las|el|los|una|un|al|sin|con|su|sus|esta|esa|otra|por|para|tras|en|y|o|"
+    r"nueva|leve|fuerte|gran|mayor|menor|primera|segunda|posible|cierta)\s+$",
+    re.IGNORECASE,
+)
+
+
+def _es_sustantivo_que_cierra_inciso(m: re.Match) -> bool:
+    return bool(_SUSTANTIVABLE.match(m.group(0))
+                and _DETERMINANTE_PREVIO.search(m.string[:m.start()]))
+
+
+# ── Vocabulario del SISTEMA filtrado a un documento de cliente ────────────────
+# Deep Dive 2025 de Banco Múltiple Santa Cruz regenerado en producción (2026-09-15): «la
+# sobre-representación es de 23.76 puntos porcentuales, calculada en el contexto» y «El
+# contexto de atribución lo califica como idiosincrático». «Contexto» es la palabra con que las
+# plantillas le hablan al modelo; en el PDF no significa nada para el lector. Se REEMPLAZA la
+# frase y no se borra la oración: la cifra y la atribución son reales.
+def _atribucion(m: re.Match) -> str:
+    return ("La" if m.group(1) == "E" else "la") + " atribución"
+
+
+_CONTEXTO_INTERNO = (
+    (re.compile(r"\b([Ee])l\s+contexto\s+de\s+atribuci[óo]n\b"), _atribucion),
+    (re.compile(r",?\s*(?:calculad|servid|provist|indicad|declarad)[oa]s?\s+en\s+el\s+contexto\b",
+                re.IGNORECASE), lambda m: ""),
+    (re.compile(r",?\s*seg[uú]n\s+el\s+contexto(?:\s+servido)?\b", re.IGNORECASE),
+     lambda m: ""),
+)
+
+
 # ── Auto-referencias del asistente (nunca en un informe) ──────────────────────
 _SELF_REFERENCE = re.compile(
     r"[^.\n]*\b("
@@ -201,8 +243,11 @@ def strip_meta_commentary(text: str) -> Tuple[str, List[str]]:
 
     removed: List[str] = []
 
-    def _capture(pattern: re.Pattern, s: str, *, whole: bool = False) -> str:
+    def _capture(pattern: re.Pattern, s: str, *, whole: bool = False,
+                 conservar: Optional[Callable[[re.Match], bool]] = None) -> str:
         def _sub(m: re.Match) -> str:
+            if conservar is not None and conservar(m):
+                return m.group(0)
             frag = m.group(0).strip()
             if frag:
                 removed.append(frag)
@@ -218,8 +263,14 @@ def strip_meta_commentary(text: str) -> Tuple[str, List[str]]:
     # 3) auto-referencias del asistente (barre la clausula que las contiene)
     text = _capture(_SELF_REFERENCE, text, whole=True)
     # 4) interjecciones de auto-corrección / duda
-    text = _capture(_INTERJECTION, text)
+    text = _capture(_INTERJECTION, text, conservar=_es_sustantivo_que_cierra_inciso)
     text = _capture(_INTERJECTION_COMMA, text)
+    # 5) vocabulario del sistema filtrado al texto de cliente: se reemplaza la frase
+    for patron, reemplazo in _CONTEXTO_INTERNO:
+        def _sub_ctx(m: re.Match, r=reemplazo) -> str:
+            removed.append(m.group(0).strip())
+            return r(m)
+        text = patron.sub(_sub_ctx, text)
 
     if removed:
         text = _tidy(text)

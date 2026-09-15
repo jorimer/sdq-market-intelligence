@@ -8,6 +8,11 @@ import time
 import urllib.error
 import urllib.request
 
+try:  # `python scripts/<script>.py` pone scripts/ en sys.path; `-m scripts.<script>`, la raíz
+    from e2e_credentials import e2e_password
+except ImportError:  # pragma: no cover
+    from scripts.e2e_credentials import e2e_password
+
 BASE = "https://sdq-market-intelligence-production.up.railway.app"
 AUDIENCES = ["inversionista", "empresa", "financiador", "formulador_politica"]
 N_SECTORS = 4
@@ -32,7 +37,7 @@ def _req(method, path, token=None, body=None, tries=6):
 
 
 token = _req("POST", "/api/v1/auth/login",
-             body={"email": "claude@sdqconsulting.com.do", "password": "Claude1234"})["access_token"]
+             body={"email": "claude@sdqconsulting.com.do", "password": e2e_password()})["access_token"]
 sectors = [s["code"] for s in _req("GET", "/api/v1/sector-intel/sectors", token)["sectors"]
            if s.get("is_active")][:N_SECTORS]
 print("sectores:", sectors, file=sys.stderr)
